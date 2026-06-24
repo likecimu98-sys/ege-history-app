@@ -482,6 +482,22 @@
                 const hwIds = getAllKnownIds();
                 const canonicalId = resolveUserId(u);
                 if (!hwIds.includes(canonicalId)) hwIds.push(canonicalId);
+
+                // ── ДИАГНОСТИКА ВЫРАВНИВАНИЯ AUTH (см. AUTH.md) ──────────────────
+                // Включается флагом: localStorage.setItem('ege_auth_debug','1') + перезагрузка.
+                // Показывает, совпадает ли request.auth.uid с ID документа ученика —
+                // от этого зависит, можно ли включать строгие правила владения Firestore.
+                // Безопасно: только console.log за флагом, ничего не пишет и не меняет.
+                if (localStorage.getItem('ege_auth_debug')) {
+                    console.log('[AuthDiag]', JSON.stringify({
+                        authUid: u.uid,
+                        isAnonymous: u.isAnonymous,
+                        providers: (u.providerData || []).map(p => p.providerId),
+                        canonicalDocId: canonicalId,
+                        identitySource: (typeof getIdentitySource === 'function' ? getIdentitySource(canonicalId) : '?'),
+                        match_authUid_equals_docId: u.uid === canonicalId
+                    }));
+                }
                 
                 function _handleHwSnapshot(docSnap) {
                     if (!docSnap.exists()) return;
