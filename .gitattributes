@@ -1,0 +1,14 @@
+# Единые переводы строк (LF) для текстовых файлов — чтобы Windows-CRLF
+# не засорял диффы. Бинарники не трогаем.
+* text=auto eol=lf
+
+*.png  binary
+*.jpg  binary
+*.jpeg binary
+*.webp binary
+*.svg  text eol=lf
+*.ico  binary
+*.woff  binary
+*.woff2 binary
+*.ttf   binary
+*.pdf   binary
