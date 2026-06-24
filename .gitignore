@@ -1,0 +1,11 @@
+node_modules/
+output.rebuilt.css
+output.css.bak
+output.css.pre-rebuild
+*.bak
+*.p2bak
+*.p3bak
+*.phase1bak
+*.log
+.DS_Store
+.claude/settings.local.json

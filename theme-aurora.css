@@ -1,0 +1,1174 @@
+/* ═══════════════════════════════════════════════════════════
+   AURORA NEON THEME  —  EGE History Trainer
+   Подключается ПОСЛЕ output.css, перебивает Tailwind-цвета
+   ═══════════════════════════════════════════════════════════ */
+
+/* ── ПЕРЕМЕННЫЕ ─────────────────────────────────────────── */
+:root {
+  --a-bg:      #070b14;
+  --a-s1:      #0d1527;   /* surface */
+  --a-s2:      #0a1020;   /* deeper surface */
+  --a-s3:      #121f36;   /* elevated */
+  --a-b1:      #3b82f6;   /* electric blue */
+  --a-b2:      #8b5cf6;   /* violet */
+  --a-b3:      #ec4899;   /* pink */
+  --a-txt:     #f0f4ff;
+  --a-muted:   #6b8fd4;
+  --a-border:  rgba(59,130,246,.18);
+  --a-glow1:   rgba(59,130,246,.35);
+  --a-glow2:   rgba(139,92,246,.35);
+  --a-glow3:   rgba(236,72,153,.35);
+}
+
+/* ── BODY & HTML ────────────────────────────────────────── */
+html, body {
+  background-color: var(--a-bg) !important;
+  color: var(--a-txt) !important;
+}
+body { color: var(--a-txt) !important; }
+
+/* ── ГЛОБАЛЬНЫЕ ЦВЕТА ТЕКСТА ────────────────────────────── */
+.text-gray-800, .text-gray-900, .text-slate-800, .text-gray-700 { color: var(--a-txt) !important; }
+.text-gray-500, .text-gray-400, .text-gray-600                  { color: var(--a-muted) !important; }
+.dark .dark\:text-gray-300, .dark .dark\:text-gray-400          { color: var(--a-muted) !important; }
+
+/* ── ФОНЫ ПОВЕРХНОСТЕЙ ──────────────────────────────────── */
+.bg-white, .bg-gray-50, .bg-gray-100 { background-color: var(--a-s1) !important; }
+.dark .dark\:bg-\[#121212\]          { background-color: var(--a-bg) !important; }
+.dark .dark\:bg-\[#1e1e1e\]          { background-color: var(--a-s1) !important; }
+.dark .dark\:bg-\[#181818\]          { background-color: var(--a-s2) !important; }
+.dark .dark\:bg-\[#2c2c2c\]          { background-color: var(--a-s3) !important; }
+.dark body                            { background-color: var(--a-bg) !important; }
+
+/* ── ГРАНИЦЫ ────────────────────────────────────────────── */
+.border-gray-100, .border-gray-200, .border-gray-300 { border-color: var(--a-border) !important; }
+.dark .dark\:border-\[#2c2c2c\]                       { border-color: var(--a-border) !important; }
+.dark .dark\:border-\[#3f3f46\]                       { border-color: rgba(59,130,246,.12) !important; }
+
+/* ══════════════════════════════════════════════════════════
+   ШАПКА
+   ══════════════════════════════════════════════════════════ */
+#main-header {
+  background-color: transparent !important;
+  border-bottom: none !important;
+  box-shadow: none !important;
+}
+
+#top-stats-bar {
+  background: rgba(7,11,20,.85) !important;
+  border: 1px solid var(--a-border) !important;
+  box-shadow:
+    0 4px 24px rgba(0,0,0,.6),
+    0 0 0 1px rgba(59,130,246,.08) inset,
+    0 0 40px rgba(59,130,246,.04) !important;
+  backdrop-filter: blur(16px) !important;
+  -webkit-backdrop-filter: blur(16px) !important;
+}
+
+/* Статы в шапке — неоновые цвета */
+#stat-learned {
+  color: var(--a-b1) !important;
+  text-shadow: 0 0 10px rgba(59,130,246,.7) !important;
+}
+#stat-solved {
+  color: var(--a-b2) !important;
+  text-shadow: 0 0 10px rgba(139,92,246,.7) !important;
+}
+#stat-days {
+  color: var(--a-b3) !important;
+  text-shadow: 0 0 10px rgba(236,72,153,.7) !important;
+}
+
+/* EGE-кольцо */
+#ege-ring {
+  stroke: var(--a-b1) !important;
+  filter: drop-shadow(0 0 4px rgba(59,130,246,.8)) !important;
+}
+#stat-ege {
+  color: var(--a-b1) !important;
+  text-shadow: 0 0 10px rgba(59,130,246,.8) !important;
+}
+
+/* Кнопка EGE — кликабельный вид */
+[data-action="openEGEModal"] {
+  cursor: pointer !important;
+  transition: filter .2s, transform .2s !important;
+}
+[data-action="openEGEModal"]:hover {
+  filter: drop-shadow(0 0 8px rgba(59,130,246,.9)) !important;
+  transform: scale(1.08) !important;
+}
+
+/* Кнопки в шапке: достижения, дзен, тема */
+#main-header button {
+  background: rgba(59,130,246,.07) !important;
+  border: 1px solid rgba(59,130,246,.2) !important;
+  transition: background .2s, box-shadow .2s !important;
+}
+#main-header button:hover {
+  background: rgba(59,130,246,.15) !important;
+  box-shadow: 0 0 12px rgba(59,130,246,.25) !important;
+}
+
+/* КНОПКА ДЗЕН — особый акцент */
+[data-action="toggleFocusMode"]:not(#zen-exit-btn) {
+  background: rgba(20,184,166,.1) !important;
+  border: 1px solid rgba(20,184,166,.3) !important;
+  box-shadow: 0 0 8px rgba(20,184,166,.15) !important;
+}
+[data-action="toggleFocusMode"]:not(#zen-exit-btn):hover {
+  background: rgba(20,184,166,.2) !important;
+  box-shadow: 0 0 16px rgba(20,184,166,.4) !important;
+}
+
+/* ══════════════════════════════════════════════════════════
+   ЛОББИ — КАРТОЧКИ ЗАДАНИЙ
+   ══════════════════════════════════════════════════════════ */
+[data-action="quickStartGame"],
+[data-action="pickTaskForMode"],
+[data-action="startVisualTrainer"],
+[data-action="confirmTaskPick"] {
+  background: rgba(13,21,39,.9) !important;
+  border-color: var(--a-border) !important;
+  box-shadow: 0 2px 12px rgba(0,0,0,.3) !important;
+  transition: transform .2s, box-shadow .2s, border-color .2s !important;
+  backdrop-filter: blur(8px) !important;
+}
+[data-action="quickStartGame"]:hover,
+[data-action="pickTaskForMode"]:hover,
+[data-action="startVisualTrainer"]:hover {
+  border-color: rgba(59,130,246,.4) !important;
+  box-shadow: 0 8px 32px rgba(59,130,246,.15), 0 0 0 1px rgba(59,130,246,.3) !important;
+}
+
+/* Иконки в карточках заданий — неоновые круги */
+[data-action="quickStartGame"] .bg-emerald-50,
+[data-action="quickStartGame"] .dark\:bg-emerald-900\/30 {
+  background: rgba(16,185,129,.12) !important;
+  box-shadow: 0 0 16px rgba(16,185,129,.2) !important;
+}
+[data-action="quickStartGame"] .bg-blue-50,
+[data-action="quickStartGame"] .dark\:bg-blue-900\/30 {
+  background: rgba(59,130,246,.12) !important;
+  box-shadow: 0 0 16px rgba(59,130,246,.2) !important;
+}
+[data-action="quickStartGame"] .bg-purple-50,
+[data-action="quickStartGame"] .dark\:bg-purple-900\/30 {
+  background: rgba(168,85,247,.12) !important;
+  box-shadow: 0 0 16px rgba(168,85,247,.2) !important;
+}
+[data-action="quickStartGame"] .bg-amber-50,
+[data-action="quickStartGame"] .dark\:bg-amber-900\/30 {
+  background: rgba(245,158,11,.12) !important;
+  box-shadow: 0 0 16px rgba(245,158,11,.2) !important;
+}
+
+/* Прогресс-бары — с неоновым свечением */
+#progress-bar-task3 { background: linear-gradient(90deg,#10b981,#34d399) !important; box-shadow: 0 0 6px rgba(16,185,129,.6) !important; }
+#progress-bar-task4 { background: linear-gradient(90deg,#3b82f6,#60a5fa) !important; box-shadow: 0 0 6px rgba(59,130,246,.6) !important; }
+#progress-bar-task5 { background: linear-gradient(90deg,#a855f7,#c084fc) !important; box-shadow: 0 0 6px rgba(168,85,247,.6) !important; }
+#progress-bar-task7 { background: linear-gradient(90deg,#f59e0b,#fcd34d) !important; box-shadow: 0 0 6px rgba(245,158,11,.6) !important; }
+
+/* Подложки прогресс-баров */
+.bg-gray-100.rounded-full { background: rgba(255,255,255,.06) !important; }
+.dark .dark\:bg-\[#2c2c2c\].rounded-full { background: rgba(255,255,255,.06) !important; }
+
+/* Режимы — иконки-кружки */
+[data-action="pickTaskForMode"] .bg-orange-50  { background: rgba(251,146,60,.12) !important; box-shadow: 0 0 14px rgba(251,146,60,.2) !important; }
+[data-action="pickTaskForMode"] .bg-emerald-50 { background: rgba(16,185,129,.12) !important; box-shadow: 0 0 14px rgba(16,185,129,.2) !important; }
+[data-action="pickTaskForMode"] .bg-rose-50    { background: rgba(251,113,133,.12) !important; box-shadow: 0 0 14px rgba(251,113,133,.2) !important; }
+[data-action="pickTaskForMode"] .bg-indigo-50  { background: rgba(99,102,241,.12) !important; box-shadow: 0 0 14px rgba(99,102,241,.2) !important; }
+[data-action="pickTaskForMode"] .bg-sky-50,
+[data-action="pickTaskForMode"] .dark\:bg-sky-900\/30 { background: rgba(14,165,233,.14) !important; box-shadow: 0 0 14px rgba(14,165,233,.22) !important; }
+
+/* ══════════════════════════════════════════════════════════
+   PvP БАННЕР
+   ══════════════════════════════════════════════════════════ */
+[data-action="startDuelSearch"] {
+  background: linear-gradient(135deg,
+    rgba(59,130,246,.18) 0%,
+    rgba(139,92,246,.18) 50%,
+    rgba(236,72,153,.12) 100%) !important;
+  border: 1px solid rgba(139,92,246,.4) !important;
+  box-shadow:
+    0 8px 32px rgba(59,130,246,.15),
+    0 0 0 1px rgba(139,92,246,.2) !important;
+}
+[data-action="startDuelSearch"]:hover {
+  box-shadow:
+    0 12px 40px rgba(59,130,246,.25),
+    0 0 0 1px rgba(139,92,246,.4) !important;
+}
+[data-action="startDuelSearch"] h4 {
+  background: linear-gradient(to right,#60a5fa,#a78bfa);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* ══════════════════════════════════════════════════════════
+   СПЕЦОПЕРАЦИИ (Детектив / Красный карандаш)
+   ══════════════════════════════════════════════════════════ */
+[data-action="pickTaskForMode"][data-arg="detective"] {
+  background: rgba(13,21,39,.95) !important;
+  border: 2px dashed rgba(236,72,153,.4) !important;
+  box-shadow: 0 0 20px rgba(236,72,153,.08) !important;
+}
+[data-action="pickTaskForMode"][data-arg="detective"]:hover {
+  border-color: rgba(236,72,153,.7) !important;
+  box-shadow: 0 0 32px rgba(236,72,153,.2) !important;
+}
+[data-action="pickTaskForMode"][data-arg="redpencil"] {
+  background: rgba(13,21,39,.95) !important;
+  border-color: rgba(239,68,68,.3) !important;
+}
+
+/* ══════════════════════════════════════════════════════════
+   ИГРОВОЙ ЭКРАН
+   ══════════════════════════════════════════════════════════ */
+#game-header {
+  background: rgba(7,11,20,.8) !important;
+  border-color: var(--a-border) !important;
+  backdrop-filter: blur(12px) !important;
+}
+#table-container {
+  background: var(--a-s1) !important;
+  border-color: var(--a-border) !important;
+}
+#pool-panel {
+  background: var(--a-s2) !important;
+  border-color: var(--a-border) !important;
+}
+#table-head {
+  background: var(--a-s3) !important;
+}
+
+/* DnD слоты */
+.dnd-slot {
+  background-color: rgba(13,21,39,.7) !important;
+  border-color: rgba(59,130,246,.3) !important;
+}
+.dnd-slot:hover {
+  border-color: var(--a-b1) !important;
+  background-color: rgba(59,130,246,.08) !important;
+  box-shadow: 0 0 8px rgba(59,130,246,.2) !important;
+}
+.dnd-slot.has-item {
+  border-color: rgba(59,130,246,.55) !important;
+  background-color: rgba(59,130,246,.05) !important;
+  box-shadow: none !important;
+}
+.dnd-slot.correct-slot {
+  border-color: #10b981 !important;
+  background-color: rgba(16,185,129,.08) !important;
+  box-shadow: 0 0 12px rgba(16,185,129,.3) !important;
+}
+.dnd-slot.incorrect-slot {
+  border-color: #f43f5e !important;
+  background-color: rgba(244,63,94,.08) !important;
+  box-shadow: 0 0 12px rgba(244,63,94,.3) !important;
+}
+.slot-ready {
+  border-color: var(--a-b1) !important;
+  background-color: rgba(59,130,246,.1) !important;
+  box-shadow: 0 0 0 3px rgba(59,130,246,.25), 0 0 16px rgba(59,130,246,.3) !important;
+}
+
+/* DnD фишки */
+.dnd-chip {
+  background: rgba(13,21,39,.9) !important;
+  border-color: rgba(59,130,246,.3) !important;
+  color: var(--a-txt) !important;
+  box-shadow: 0 0 0 0 transparent !important;
+}
+.dnd-chip:hover { border-color: var(--a-b1) !important; }
+.dnd-chip.selected {
+  border-color: var(--a-b1) !important;
+  background: rgba(59,130,246,.12) !important;
+  box-shadow: 0 0 0 3px rgba(59,130,246,.25), 0 0 12px rgba(59,130,246,.2) !important;
+}
+
+/* ══════════════════════════════════════════════════════════
+   КНОПКИ ДЕЙСТВИЙ
+   ══════════════════════════════════════════════════════════ */
+#check-btn-sure {
+  background: linear-gradient(135deg,#059669,#10b981) !important;
+  box-shadow: 0 4px 16px rgba(16,185,129,.4) !important;
+  border: none !important;
+}
+#check-btn-sure:hover { box-shadow: 0 4px 24px rgba(16,185,129,.6) !important; }
+
+#check-btn-doubt {
+  background: linear-gradient(135deg,#4f46e5,#8b5cf6) !important;
+  box-shadow: 0 4px 16px rgba(139,92,246,.4) !important;
+  border: none !important;
+}
+#check-btn-doubt:hover { box-shadow: 0 4px 24px rgba(139,92,246,.6) !important; }
+
+#next-btn {
+  background: linear-gradient(135deg,#2563eb,#3b82f6) !important;
+  box-shadow: 0 4px 20px rgba(59,130,246,.5) !important;
+}
+#reveal-btn { color: var(--a-muted) !important; }
+#reveal-btn:hover { color: #f97316 !important; }
+
+/* Кнопка «Сохранить» в настройках */
+[data-action="applyGlobalSettings"] {
+  background: linear-gradient(135deg,#2563eb,#7c3aed) !important;
+  box-shadow: 0 8px 24px rgba(59,130,246,.4) !important;
+}
+
+/* Кнопки Flashcard */
+.bg-emerald-500 { background: linear-gradient(135deg,#059669,#10b981) !important; box-shadow: 0 4px 16px rgba(16,185,129,.4) !important; }
+.bg-blue-600    { background: linear-gradient(135deg,#2563eb,#3b82f6) !important; box-shadow: 0 4px 16px rgba(59,130,246,.35) !important; }
+
+/* ══════════════════════════════════════════════════════════
+   НИЖНЕЕ МЕНЮ
+   ══════════════════════════════════════════════════════════ */
+#bottom-nav {
+  background: rgba(4,7,16,.97) !important;
+  border-top: 1px solid rgba(59,130,246,.2) !important;
+  box-shadow: 0 -4px 20px rgba(0,0,0,.6) !important;
+  backdrop-filter: blur(16px) !important;
+  -webkit-backdrop-filter: blur(16px) !important;
+}
+#bottom-nav button { color: var(--a-muted) !important; }
+#bottom-nav button:hover,
+#bottom-nav button.active-nav { color: var(--a-b1) !important; }
+
+/* ══════════════════════════════════════════════════════════
+   МОДАЛЬНЫЕ ОКНА
+   ══════════════════════════════════════════════════════════ */
+/* Подложки модалок */
+.bg-gray-50.rounded-t-3xl,
+.bg-gray-50.rounded-3xl,
+[id$="-modal"] .bg-white,
+[id$="-modal"] .bg-gray-50,
+#pg-sheet,
+#tp-sheet {
+  background: var(--a-s1) !important;
+  border-color: var(--a-border) !important;
+}
+
+/* Заголовки модалок */
+[id$="-modal"] .bg-blue-50  { background: rgba(59,130,246,.08) !important; }
+[id$="-modal"] .bg-rose-50  { background: rgba(236,72,153,.08) !important; }
+[id$="-modal"] .bg-gray-50  { background: var(--a-s2) !important; }
+
+/* Селекты */
+select {
+  background: var(--a-s3) !important;
+  color: var(--a-txt) !important;
+  border-color: var(--a-border) !important;
+}
+input[type="number"], input[type="text"] {
+  background: var(--a-s3) !important;
+  color: var(--a-txt) !important;
+  border-color: var(--a-border) !important;
+}
+
+/* Чекбокс */
+input[type="checkbox"] {
+  border-color: var(--a-border) !important;
+  background: var(--a-s3) !important;
+}
+input[type="checkbox"]:checked { background-color: var(--a-b1) !important; border-color: var(--a-b1) !important; }
+
+/* Кнопки-пилюли выбора строк */
+.pg-row-btn { background: var(--a-s3) !important; border-color: var(--a-border) !important; color: var(--a-muted) !important; }
+.pg-row-btn.bg-blue-50 { background: rgba(59,130,246,.12) !important; border-color: var(--a-b1) !important; color: var(--a-b1) !important; }
+
+/* Кнопки выбора задания в task-picker */
+[data-action="confirmTaskPick"] { background: var(--a-s3) !important; border-color: var(--a-border) !important; }
+[data-action="confirmTaskPick"]:hover { border-color: var(--a-b1) !important; box-shadow: 0 0 12px rgba(59,130,246,.2) !important; }
+
+/* ══════════════════════════════════════════════════════════
+   ДЗЕН / ФЛОАТИНГ КНОПКА
+   ══════════════════════════════════════════════════════════ */
+#zen-exit-btn {
+  background: linear-gradient(135deg,#0d9488,#14b8a6) !important;
+  box-shadow: 0 0 24px rgba(20,184,166,.6) !important;
+  border-color: rgba(20,184,166,.4) !important;
+}
+#zen-exit-btn:hover {
+  box-shadow: 0 0 36px rgba(20,184,166,.9) !important;
+}
+
+/* ══════════════════════════════════════════════════════════
+   TOAST / УВЕДОМЛЕНИЯ
+   ══════════════════════════════════════════════════════════ */
+#joke-toast .text-slate-50 { color: var(--a-txt) !important; }
+
+/* ══════════════════════════════════════════════════════════
+   FLASHCARDS
+   ══════════════════════════════════════════════════════════ */
+[id="flashcard-area"] .bg-white,
+[id="flashcard-area"] .dark\:bg-\[#1e1e1e\] {
+  background: var(--a-s1) !important;
+  border-color: var(--a-border) !important;
+}
+
+/* ══════════════════════════════════════════════════════════
+   STUDY КАРТОЧКИ
+   ══════════════════════════════════════════════════════════ */
+#study-area .bg-white { background: var(--a-s1) !important; }
+#study-area .bg-gray-50 { background: var(--a-s2) !important; }
+
+/* ══════════════════════════════════════════════════════════
+   СКРОЛЛ
+   ══════════════════════════════════════════════════════════ */
+.custom-scroll::-webkit-scrollbar-thumb { background: rgba(59,130,246,.3) !important; }
+.custom-scroll::-webkit-scrollbar-thumb:hover { background: rgba(59,130,246,.5) !important; }
+
+/* ══════════════════════════════════════════════════════════
+   ОНБОРДИНГ
+   ══════════════════════════════════════════════════════════ */
+#onboarding-overlay .bg-white { background: var(--a-s1) !important; }
+#onboarding-overlay .bg-blue-50  { background: rgba(59,130,246,.1) !important; }
+#onboarding-overlay .bg-amber-50 { background: rgba(245,158,11,.08) !important; }
+#onboarding-overlay .bg-gray-50  { background: var(--a-s3) !important; }
+#onboarding-overlay .bg-emerald-50 { background: rgba(16,185,129,.08) !important; }
+#onboarding-overlay .bg-purple-50  { background: rgba(168,85,247,.08) !important; }
+[data-action="nextOnbStep"],
+[data-action="finishOnboarding"].bg-emerald-500 {
+  background: linear-gradient(135deg,#2563eb,#7c3aed) !important;
+  box-shadow: 0 4px 16px rgba(59,130,246,.4) !important;
+}
+
+/* ══════════════════════════════════════════════════════════
+   DUEl HEADER
+   ══════════════════════════════════════════════════════════ */
+#duel-header {
+  background: linear-gradient(135deg,#0f172a,#1e1b4b,#1a0533) !important;
+  border-color: rgba(139,92,246,.4) !important;
+  box-shadow: 0 4px 20px rgba(139,92,246,.25) !important;
+}
+
+/* ══════════════════════════════════════════════════════════
+   СКЕЛЕТОН-ЭКРАН
+   ══════════════════════════════════════════════════════════ */
+#app-skeleton {
+  background: var(--a-bg) !important;
+}
+.sk-card {
+  background: rgba(13,21,39,.95) !important;
+  border-color: rgba(59,130,246,.2) !important;
+  box-shadow: 0 8px 40px rgba(59,130,246,.15) !important;
+}
+.sk-bar { background: linear-gradient(90deg,var(--a-b1),var(--a-b2)) !important; }
+.sk-title { color: var(--a-b1) !important; text-shadow: 0 0 8px rgba(59,130,246,.5); }
+.sk-bar-wrap { background: rgba(59,130,246,.1) !important; border-color: rgba(59,130,246,.2) !important; }
+
+/* ══════════════════════════════════════════════════════════
+   КРАСНЫЙ КАРАНДАШ — пергамент всегда виден независимо от темы
+   ══════════════════════════════════════════════════════════ */
+.paper-bg {
+  background-color: #f4ecd8 !important;
+  color: #2c241b !important;
+  background-image: radial-gradient(#d1c1a5 1px, transparent 1px) !important;
+  background-size: 20px 20px !important;
+}
+.dark .paper-bg {
+  background-color: #2a2621 !important;
+  color: #e5e0d8 !important;
+  background-image: radial-gradient(#3d362d 1px, transparent 1px) !important;
+}
+/* текст внутри пергамента — явно наследует, не берёт глобальный a-txt */
+#rp-content,
+#rp-content * {
+  color: inherit !important;
+}
+/* crossed-out слова в красном карандаше */
+#rp-content .crossed { color: #dc2626 !important; text-decoration: line-through; }
+.dark #rp-content .crossed { color: #f87171 !important; }
+/* заголовок и счётчик красного карандаша */
+#rp-title { color: var(--a-txt) !important; }
+#rp-counter { background-color: rgba(239,68,68,.15) !important; border-color: rgba(239,68,68,.3) !important; color: #f87171 !important; }
+
+/* ══════════════════════════════════════════════════════════
+   СИСТЕМА СКИНОВ — переопределяют CSS-переменные
+   Тёмная/светлая тема продолжают работать внутри скина
+   ══════════════════════════════════════════════════════════ */
+
+/* ── 1. КЛАССИКА (оригинальный вид, светлый / тёмный) ── */
+body.skin-classic {
+  --a-bg:     #f8fafc;
+  --a-s1:     #ffffff;
+  --a-s2:     #f1f5f9;
+  --a-s3:     #e2e8f0;
+  --a-b1:     #2563eb;
+  --a-b2:     #7c3aed;
+  --a-b3:     #e11d48;
+  --a-txt:    #1e293b;
+  --a-muted:  #64748b;
+  --a-border: #e2e8f0;
+}
+body.skin-classic #top-stats-bar { background: rgba(255,255,255,.95) !important; box-shadow: 0 2px 16px rgba(0,0,0,.08) !important; }
+body.skin-classic #bottom-nav    { background: rgba(255,255,255,.97) !important; border-top-color: #e2e8f0 !important; box-shadow: 0 -2px 8px rgba(0,0,0,.06) !important; }
+body.skin-classic [data-action="quickStartGame"],
+body.skin-classic [data-action="pickTaskForMode"] { background: #ffffff !important; }
+body.skin-classic .dnd-slot  { background-color: #f8fafc !important; border-color: #cbd5e1 !important; }
+body.skin-classic .dnd-chip  { background: #ffffff !important; border-color: #cbd5e1 !important; color: #1e293b !important; }
+/* Классика: тёмная тема */
+html.dark body.skin-classic {
+  --a-bg:     #121212;
+  --a-s1:     #1e1e1e;
+  --a-s2:     #181818;
+  --a-s3:     #2c2c2c;
+  --a-txt:    #d1d5db;
+  --a-muted:  #9ca3af;
+  --a-border: #374151;
+}
+html.dark body.skin-classic #top-stats-bar { background: rgba(24,24,24,.95) !important; box-shadow: 0 2px 16px rgba(0,0,0,.4) !important; }
+html.dark body.skin-classic #bottom-nav    { background: rgba(14,14,14,.97) !important; border-top-color: #374151 !important; }
+html.dark body.skin-classic [data-action="quickStartGame"],
+html.dark body.skin-classic [data-action="pickTaskForMode"] { background: #1e1e1e !important; }
+
+/* ── 2. КОНСТРУКТИВИЗМ ── */
+body.skin-constructivism {
+  --a-bg:     #f2ece0;
+  --a-s1:     #fffdf7;
+  --a-s2:     #ede8dc;
+  --a-s3:     #e2ddd0;
+  --a-b1:     #cc0000;
+  --a-b2:     #8b0000;
+  --a-b3:     #e8c619;
+  --a-txt:    #111111;
+  --a-muted:  #555555;
+  --a-border: rgba(204,0,0,.2);
+}
+body.skin-constructivism #top-stats-bar { background: #111111 !important; border-color: rgba(232,198,25,.3) !important; }
+body.skin-constructivism #bottom-nav    { background: #111111 !important; border-top: 3px solid #cc0000 !important; box-shadow: none !important; }
+body.skin-constructivism #stat-learned  { color: #e8c619 !important; text-shadow: none !important; }
+body.skin-constructivism #stat-solved   { color: #fff !important; text-shadow: none !important; }
+body.skin-constructivism #stat-days     { color: #cc0000 !important; text-shadow: none !important; }
+body.skin-constructivism #stat-ege,body.skin-constructivism #ege-ring { color:#e8c619!important;stroke:#e8c619!important;filter:none!important;text-shadow:none!important;}
+body.skin-constructivism #bottom-nav button { color: #888 !important; }
+body.skin-constructivism #bottom-nav button.active-nav,
+body.skin-constructivism #bottom-nav button:hover { color: #e8c619 !important; }
+body.skin-constructivism [data-action="quickStartGame"],
+body.skin-constructivism [data-action="pickTaskForMode"] { background: #fffdf7 !important; border: 2px solid rgba(204,0,0,.2) !important; border-radius: 0 !important; }
+body.skin-constructivism [data-action="quickStartGame"]:hover,
+body.skin-constructivism [data-action="pickTaskForMode"]:hover { border-color: #cc0000 !important; box-shadow: 4px 4px 0 #cc0000 !important; }
+body.skin-constructivism .dnd-slot { background-color: #fffdf7 !important; border-color: rgba(204,0,0,.3) !important; border-radius: 4px !important; }
+body.skin-constructivism .dnd-chip { background: #fffdf7 !important; border-color: rgba(204,0,0,.25) !important; color: #111 !important; border-radius: 4px !important; }
+body.skin-constructivism #main-header button { background: rgba(204,0,0,.1) !important; border-color: rgba(204,0,0,.3) !important; border-radius: 4px !important; }
+/* Конструктивизм тёмная */
+html.dark body.skin-constructivism {
+  --a-bg: #1a0a0a; --a-s1: #2d0a0a; --a-s2: #1a0000; --a-s3: #3d1010;
+  --a-txt: #f5e0d0; --a-muted: #c08070; --a-border: rgba(204,0,0,.3);
+}
+
+/* ── 3. ВЕЙПОРВЭЙВ ── */
+body.skin-vaporwave {
+  --a-bg:     #0f0520;
+  --a-s1:     #1a0533;
+  --a-s2:     #0a0318;
+  --a-s3:     #200840;
+  --a-b1:     #ff71ce;
+  --a-b2:     #01cdfe;
+  --a-b3:     #b967ff;
+  --a-txt:    #f0e6ff;
+  --a-muted:  #7b6fa0;
+  --a-border: rgba(185,103,255,.25);
+}
+body.skin-vaporwave #top-stats-bar { background: rgba(15,5,32,.9) !important; border-color: rgba(185,103,255,.4) !important; box-shadow: 0 0 30px rgba(185,103,255,.15) !important; }
+body.skin-vaporwave #bottom-nav    { background: rgba(10,3,24,.97) !important; border-top-color: rgba(185,103,255,.2) !important; }
+body.skin-vaporwave #stat-learned  { color: #ff71ce !important; text-shadow: 0 0 10px rgba(255,113,206,.6) !important; }
+body.skin-vaporwave #stat-solved   { color: #01cdfe !important; text-shadow: 0 0 10px rgba(1,205,254,.6) !important; }
+body.skin-vaporwave #stat-days     { color: #b967ff !important; text-shadow: 0 0 10px rgba(185,103,255,.6) !important; }
+body.skin-vaporwave #stat-ege      { color: #01cdfe !important; text-shadow: 0 0 10px rgba(1,205,254,.7) !important; }
+body.skin-vaporwave #ege-ring      { stroke: #01cdfe !important; filter: drop-shadow(0 0 4px rgba(1,205,254,.8)) !important; }
+body.skin-vaporwave #bottom-nav button.active-nav,
+body.skin-vaporwave #bottom-nav button:hover { color: #ff71ce !important; }
+body.skin-vaporwave [data-action="startDuelSearch"] h4 { background: linear-gradient(to right,#ff71ce,#01cdfe) !important; -webkit-background-clip: text !important; }
+/* Вейпорвэйв всегда тёмный — .dark не влияет */
+
+/* ── 4. САКУРА ── */
+body.skin-sakura {
+  --a-bg:     #fdf5f7;
+  --a-s1:     #ffffff;
+  --a-s2:     #fff0f4;
+  --a-s3:     #ffe4ec;
+  --a-b1:     #e879a0;
+  --a-b2:     #4a7c59;
+  --a-b3:     #c2344b;
+  --a-txt:    #2d1b25;
+  --a-muted:  #c4a0b0;
+  --a-border: rgba(232,121,160,.2);
+}
+body.skin-sakura #top-stats-bar { background: rgba(255,255,255,.95) !important; border-color: rgba(232,121,160,.3) !important; box-shadow: 0 2px 16px rgba(232,121,160,.12) !important; }
+body.skin-sakura #bottom-nav    { background: rgba(255,248,251,.97) !important; border-top-color: rgba(232,121,160,.2) !important; box-shadow: 0 -2px 12px rgba(232,121,160,.1) !important; }
+body.skin-sakura #stat-learned  { color: #4a7c59 !important; text-shadow: none !important; }
+body.skin-sakura #stat-solved   { color: #e879a0 !important; text-shadow: none !important; }
+body.skin-sakura #stat-days     { color: #c2344b !important; text-shadow: none !important; }
+body.skin-sakura #stat-ege      { color: #e879a0 !important; text-shadow: none !important; }
+body.skin-sakura #ege-ring      { stroke: #e879a0 !important; filter: drop-shadow(0 0 3px rgba(232,121,160,.5)) !important; }
+body.skin-sakura #bottom-nav button { color: #c4a0b0 !important; }
+body.skin-sakura #bottom-nav button.active-nav,
+body.skin-sakura #bottom-nav button:hover { color: #e879a0 !important; }
+body.skin-sakura #main-header button { background: rgba(232,121,160,.08) !important; border-color: rgba(232,121,160,.25) !important; }
+body.skin-sakura [data-action="toggleFocusMode"]:not(#zen-exit-btn) { background: rgba(74,124,89,.1) !important; border-color: rgba(74,124,89,.3) !important; box-shadow: none !important; }
+body.skin-sakura [data-action="quickStartGame"],
+body.skin-sakura [data-action="pickTaskForMode"] { background: #ffffff !important; border-color: rgba(232,121,160,.2) !important; }
+body.skin-sakura [data-action="quickStartGame"]:hover,
+body.skin-sakura [data-action="pickTaskForMode"]:hover { border-color: rgba(232,121,160,.5) !important; box-shadow: 0 4px 20px rgba(232,121,160,.15) !important; }
+body.skin-sakura .dnd-slot { background-color: #fff0f4 !important; border-color: rgba(232,121,160,.3) !important; }
+body.skin-sakura .dnd-chip { background: #ffffff !important; border-color: rgba(232,121,160,.25) !important; color: #2d1b25 !important; }
+/* Сакура тёмная */
+html.dark body.skin-sakura {
+  --a-bg: #1a0a10; --a-s1: #2d1020; --a-s2: #1a0810; --a-s3: #3d1828;
+  --a-txt: #f5d5e0; --a-muted: #a06070; --a-border: rgba(232,121,160,.2);
+}
+html.dark body.skin-sakura #top-stats-bar { background: rgba(26,10,16,.95) !important; }
+html.dark body.skin-sakura #bottom-nav    { background: rgba(14,5,10,.97) !important; }
+
+/* ── 5. ТЕРМИНАЛ ── */
+body.skin-terminal {
+  --a-bg:     #000000;
+  --a-s1:     #001100;
+  --a-s2:     #000800;
+  --a-s3:     #001a00;
+  --a-b1:     #00ff41;
+  --a-b2:     #00cc33;
+  --a-b3:     #00aa22;
+  --a-txt:    #00ff41;
+  --a-muted:  rgba(0,255,65,.5);
+  --a-border: rgba(0,255,65,.2);
+}
+body.skin-terminal #top-stats-bar { background: rgba(0,8,0,.9) !important; border-color: rgba(0,255,65,.3) !important; box-shadow: 0 0 20px rgba(0,255,65,.08) !important; }
+body.skin-terminal #bottom-nav    { background: rgba(0,4,0,.97) !important; border-top: 1px solid rgba(0,255,65,.3) !important; }
+body.skin-terminal #stat-learned,
+body.skin-terminal #stat-solved,
+body.skin-terminal #stat-days     { color: #00ff41 !important; text-shadow: 0 0 8px rgba(0,255,65,.6) !important; }
+body.skin-terminal #stat-ege      { color: #00ff41 !important; text-shadow: 0 0 8px rgba(0,255,65,.6) !important; }
+body.skin-terminal #ege-ring      { stroke: #00ff41 !important; filter: drop-shadow(0 0 3px rgba(0,255,65,.8)) !important; }
+body.skin-terminal #bottom-nav button { color: rgba(0,255,65,.4) !important; }
+body.skin-terminal #bottom-nav button.active-nav,
+body.skin-terminal #bottom-nav button:hover { color: #00ff41 !important; }
+body.skin-terminal #main-header button { background: rgba(0,255,65,.06) !important; border-color: rgba(0,255,65,.25) !important; border-radius: 4px !important; }
+body.skin-terminal [data-action="quickStartGame"],
+body.skin-terminal [data-action="pickTaskForMode"] { background: rgba(0,17,0,.8) !important; border: 1px solid rgba(0,255,65,.25) !important; border-radius: 4px !important; }
+body.skin-terminal [data-action="quickStartGame"]:hover,
+body.skin-terminal [data-action="pickTaskForMode"]:hover { border-color: #00ff41 !important; box-shadow: 0 0 12px rgba(0,255,65,.2) !important; }
+body.skin-terminal .dnd-slot { background-color: rgba(0,17,0,.7) !important; border-color: rgba(0,255,65,.3) !important; border-radius: 4px !important; }
+body.skin-terminal .dnd-chip { background: rgba(0,17,0,.9) !important; border-color: rgba(0,255,65,.3) !important; color: #00ff41 !important; border-radius: 4px !important; }
+body.skin-terminal .bg-white,.skin-terminal .bg-gray-50 { background-color: #001100 !important; }
+/* Терминал всегда тёмный */
+
+/* ── 6. MIDNIGHT OIL ── */
+body.skin-midnight {
+  --a-bg:     #0d0a1e;
+  --a-s1:     #14082c;
+  --a-s2:     #0a0616;
+  --a-s3:     #1e0e3c;
+  --a-b1:     #a78bfa;
+  --a-b2:     #f59e0b;
+  --a-b3:     #fb7185;
+  --a-txt:    #e2d9f3;
+  --a-muted:  #9ca3af;
+  --a-border: rgba(124,58,237,.25);
+}
+body.skin-midnight #top-stats-bar { background: rgba(13,10,30,.9) !important; border-color: rgba(124,58,237,.35) !important; box-shadow: 0 4px 24px rgba(0,0,0,.6), 0 0 30px rgba(124,58,237,.08) !important; }
+body.skin-midnight #bottom-nav    { background: rgba(8,5,18,.97) !important; border-top-color: rgba(124,58,237,.2) !important; }
+body.skin-midnight #stat-learned  { color: #a78bfa !important; text-shadow: 0 0 8px rgba(167,139,250,.5) !important; }
+body.skin-midnight #stat-solved   { color: #f59e0b !important; text-shadow: 0 0 8px rgba(245,158,11,.5) !important; }
+body.skin-midnight #stat-days     { color: #fb7185 !important; text-shadow: 0 0 8px rgba(251,113,133,.5) !important; }
+body.skin-midnight #stat-ege      { color: #f59e0b !important; text-shadow: 0 0 8px rgba(245,158,11,.7) !important; }
+body.skin-midnight #ege-ring      { stroke: #f59e0b !important; filter: drop-shadow(0 0 3px rgba(245,158,11,.7)) !important; }
+body.skin-midnight #bottom-nav button.active-nav,
+body.skin-midnight #bottom-nav button:hover { color: #a78bfa !important; }
+body.skin-midnight #main-header button { background: rgba(124,58,237,.08) !important; border-color: rgba(124,58,237,.25) !important; }
+body.skin-midnight [data-action="toggleFocusMode"]:not(#zen-exit-btn) { background: rgba(245,158,11,.1) !important; border-color: rgba(245,158,11,.3) !important; box-shadow: 0 0 8px rgba(245,158,11,.15) !important; }
+/* Midnight всегда тёмный */
+
+/* ── 7. УЧЁНАЯ АКАДЕМИЯ (Scholar Minimal) ── */
+body.skin-scholar {
+  --a-bg:     #fafaf8;
+  --a-s1:     #ffffff;
+  --a-s2:     #f5f2ee;
+  --a-s3:     #ede9e2;
+  --a-b1:     #4a7c59;
+  --a-b2:     #b45309;
+  --a-b3:     #dc2626;
+  --a-txt:    #1a1a2e;
+  --a-muted:  #7c7164;
+  --a-border: #e8e4dd;
+}
+body.skin-scholar #top-stats-bar { background: rgba(255,255,255,.96) !important; border-color: #e8e4dd !important; box-shadow: 0 1px 8px rgba(0,0,0,.06) !important; }
+body.skin-scholar #bottom-nav    { background: rgba(255,255,255,.97) !important; border-top-color: #e8e4dd !important; box-shadow: 0 -2px 8px rgba(0,0,0,.05) !important; }
+body.skin-scholar #stat-learned  { color: #4a7c59 !important; text-shadow: none !important; }
+body.skin-scholar #stat-solved   { color: #b45309 !important; text-shadow: none !important; }
+body.skin-scholar #stat-days     { color: #dc2626 !important; text-shadow: none !important; }
+body.skin-scholar #stat-ege      { color: #b45309 !important; text-shadow: none !important; }
+body.skin-scholar #ege-ring      { stroke: #b45309 !important; filter: drop-shadow(0 0 2px rgba(180,83,9,.4)) !important; }
+body.skin-scholar #bottom-nav button { color: #7c7164 !important; }
+body.skin-scholar #bottom-nav button.active-nav,
+body.skin-scholar #bottom-nav button:hover { color: #4a7c59 !important; }
+body.skin-scholar #main-header button { background: rgba(74,124,89,.06) !important; border-color: #e8e4dd !important; }
+body.skin-scholar [data-action="toggleFocusMode"]:not(#zen-exit-btn) { background: rgba(74,124,89,.08) !important; border-color: rgba(74,124,89,.3) !important; box-shadow: none !important; }
+body.skin-scholar [data-action="quickStartGame"],
+body.skin-scholar [data-action="pickTaskForMode"] { background: #ffffff !important; border-color: #e8e4dd !important; }
+body.skin-scholar [data-action="quickStartGame"]:hover,
+body.skin-scholar [data-action="pickTaskForMode"]:hover { border-color: rgba(74,124,89,.4) !important; box-shadow: 0 4px 16px rgba(74,124,89,.1) !important; }
+body.skin-scholar .dnd-slot { background-color: #f5f2ee !important; border-color: #ccc6bc !important; }
+body.skin-scholar .dnd-chip { background: #ffffff !important; border-color: #ccc6bc !important; color: #1a1a2e !important; }
+/* Учёная академия тёмная */
+html.dark body.skin-scholar {
+  --a-bg: #1a1710; --a-s1: #2d2a20; --a-s2: #141210; --a-s3: #3d3828;
+  --a-txt: #e8e0d0; --a-muted: #a09080; --a-border: rgba(180,83,9,.2);
+}
+html.dark body.skin-scholar #top-stats-bar { background: rgba(26,23,16,.95) !important; }
+html.dark body.skin-scholar #bottom-nav    { background: rgba(14,12,8,.97) !important; }
+
+/* ══════════════════════════════════════════════════════════
+   ПОЛНЫЕ OVERRIDES ДЛЯ КАЖДОГО СКИНА
+   Перекрывают жёстко прописанные цвета Aurora
+   (game-screen, modals, action buttons, PvP banner)
+   ══════════════════════════════════════════════════════════ */
+
+/* ─── ОБЩИЙ ПАТТЕРН: СВЕТЛЫЕ СКИНЫ (classic, constructivism, sakura, scholar) ─── */
+body.skin-classic,
+body.skin-constructivism,
+body.skin-sakura,
+body.skin-scholar {
+  /* game header делаем светлым */
+}
+body.skin-classic #game-header,
+body.skin-constructivism #game-header,
+body.skin-sakura #game-header,
+body.skin-scholar #game-header {
+  background: var(--a-s2) !important;
+  border-color: var(--a-border) !important;
+  backdrop-filter: none !important;
+}
+body.skin-classic #table-container,
+body.skin-constructivism #table-container,
+body.skin-sakura #table-container,
+body.skin-scholar #table-container {
+  background: var(--a-s1) !important;
+  border-color: var(--a-border) !important;
+}
+body.skin-classic #pool-panel,
+body.skin-constructivism #pool-panel,
+body.skin-sakura #pool-panel,
+body.skin-scholar #pool-panel {
+  background: var(--a-s2) !important;
+  border-color: var(--a-border) !important;
+}
+body.skin-classic #table-head,
+body.skin-constructivism #table-head,
+body.skin-sakura #table-head,
+body.skin-scholar #table-head {
+  background: var(--a-s3) !important;
+}
+/* DnD slots — светлые скины */
+body.skin-classic .dnd-slot,
+body.skin-constructivism .dnd-slot,
+body.skin-sakura .dnd-slot,
+body.skin-scholar .dnd-slot {
+  background-color: var(--a-s2) !important;
+  border-color: var(--a-border) !important;
+}
+/* Кнопки проверки/следующий — светлые скины */
+body.skin-classic #check-btn-sure,
+body.skin-constructivism #check-btn-sure,
+body.skin-sakura #check-btn-sure,
+body.skin-scholar #check-btn-sure {
+  background: linear-gradient(135deg,#059669,#10b981) !important;
+  box-shadow: 0 4px 16px rgba(16,185,129,.3) !important;
+}
+body.skin-classic #check-btn-doubt,
+body.skin-constructivism #check-btn-doubt,
+body.skin-sakura #check-btn-doubt,
+body.skin-scholar #check-btn-doubt {
+  background: linear-gradient(135deg,#4f46e5,#8b5cf6) !important;
+  box-shadow: 0 4px 16px rgba(139,92,246,.3) !important;
+}
+body.skin-classic #next-btn,
+body.skin-constructivism #next-btn,
+body.skin-sakura #next-btn,
+body.skin-scholar #next-btn {
+  background: linear-gradient(135deg,var(--a-b1),var(--a-b2)) !important;
+  box-shadow: 0 4px 20px rgba(0,0,0,.2) !important;
+}
+/* .bg-emerald-500 / .bg-blue-600 — светлые скины (убираем glow-тени) */
+body.skin-classic .bg-emerald-500,
+body.skin-constructivism .bg-emerald-500,
+body.skin-sakura .bg-emerald-500,
+body.skin-scholar .bg-emerald-500 {
+  background: linear-gradient(135deg,#059669,#10b981) !important;
+  box-shadow: 0 4px 12px rgba(16,185,129,.25) !important;
+}
+body.skin-classic .bg-blue-600,
+body.skin-constructivism .bg-blue-600,
+body.skin-sakura .bg-blue-600,
+body.skin-scholar .bg-blue-600 {
+  background: linear-gradient(135deg,var(--a-b1),var(--a-b2)) !important;
+  box-shadow: 0 4px 12px rgba(0,0,0,.15) !important;
+}
+/* PvP баннер — светлые скины */
+body.skin-classic [data-action="startDuelSearch"],
+body.skin-constructivism [data-action="startDuelSearch"],
+body.skin-sakura [data-action="startDuelSearch"],
+body.skin-scholar [data-action="startDuelSearch"] {
+  background: linear-gradient(135deg,rgba(59,130,246,.1),rgba(139,92,246,.08)) !important;
+  border-color: rgba(59,130,246,.25) !important;
+  box-shadow: 0 4px 16px rgba(59,130,246,.1) !important;
+}
+body.skin-classic [data-action="startDuelSearch"] h4,
+body.skin-constructivism [data-action="startDuelSearch"] h4,
+body.skin-sakura [data-action="startDuelSearch"] h4,
+body.skin-scholar [data-action="startDuelSearch"] h4 {
+  background: none !important;
+  -webkit-text-fill-color: var(--a-txt) !important;
+  color: var(--a-txt) !important;
+}
+/* FIX: подзаголовок баннера (text-indigo-100) был нечитаем на светлом фоне */
+body.skin-classic [data-action="startDuelSearch"] p,
+body.skin-constructivism [data-action="startDuelSearch"] p,
+body.skin-sakura [data-action="startDuelSearch"] p,
+body.skin-scholar [data-action="startDuelSearch"] p {
+  color: var(--a-muted) !important;
+}
+/* Конструктивизм PvP — красный */
+body.skin-constructivism [data-action="startDuelSearch"] {
+  background: linear-gradient(135deg,rgba(204,0,0,.12),rgba(139,0,0,.08)) !important;
+  border-color: rgba(204,0,0,.3) !important;
+}
+body.skin-constructivism [data-action="startDuelSearch"] h4 { color: #cc0000 !important; -webkit-text-fill-color: #cc0000 !important; }
+/* Сакура PvP — розовый */
+body.skin-sakura [data-action="startDuelSearch"] {
+  background: linear-gradient(135deg,rgba(232,121,160,.1),rgba(74,124,89,.08)) !important;
+  border-color: rgba(232,121,160,.25) !important;
+}
+body.skin-sakura [data-action="startDuelSearch"] h4 { color: #e879a0 !important; -webkit-text-fill-color: #e879a0 !important; }
+/* Scholar PvP — зелёный */
+body.skin-scholar [data-action="startDuelSearch"] {
+  background: linear-gradient(135deg,rgba(74,124,89,.1),rgba(180,83,9,.08)) !important;
+  border-color: rgba(74,124,89,.25) !important;
+}
+body.skin-scholar [data-action="startDuelSearch"] h4 { color: #4a7c59 !important; -webkit-text-fill-color: #4a7c59 !important; }
+
+/* Onboarding кнопки — светлые скины */
+body.skin-classic [data-action="nextOnbStep"],
+body.skin-classic [data-action="finishOnboarding"].bg-emerald-500,
+body.skin-constructivism [data-action="nextOnbStep"],
+body.skin-sakura [data-action="nextOnbStep"],
+body.skin-scholar [data-action="nextOnbStep"] {
+  background: linear-gradient(135deg,var(--a-b1),var(--a-b2)) !important;
+  box-shadow: 0 4px 16px rgba(0,0,0,.15) !important;
+}
+
+/* ─── ТЁМНЫЕ СКИНЫ: VAPORWAVE ─── */
+body.skin-vaporwave #game-header {
+  background: rgba(15,5,32,.85) !important;
+  border-color: rgba(185,103,255,.25) !important;
+}
+body.skin-vaporwave #check-btn-sure {
+  background: linear-gradient(135deg,#00b4d8,#0077b6) !important;
+  box-shadow: 0 4px 16px rgba(0,180,216,.4) !important;
+}
+body.skin-vaporwave #check-btn-doubt {
+  background: linear-gradient(135deg,#b967ff,#7b2fff) !important;
+  box-shadow: 0 4px 16px rgba(185,103,255,.4) !important;
+}
+body.skin-vaporwave #next-btn {
+  background: linear-gradient(135deg,#ff71ce,#b967ff) !important;
+  box-shadow: 0 4px 20px rgba(255,113,206,.4) !important;
+}
+body.skin-vaporwave .bg-emerald-500 {
+  background: linear-gradient(135deg,#00b4d8,#0077b6) !important;
+  box-shadow: 0 4px 16px rgba(0,180,216,.35) !important;
+}
+body.skin-vaporwave .bg-blue-600 {
+  background: linear-gradient(135deg,#b967ff,#7b2fff) !important;
+  box-shadow: 0 4px 16px rgba(185,103,255,.3) !important;
+}
+body.skin-vaporwave [data-action="startDuelSearch"] {
+  background: linear-gradient(135deg,rgba(255,113,206,.15),rgba(1,205,254,.1),rgba(185,103,255,.1)) !important;
+  border-color: rgba(255,113,206,.4) !important;
+  box-shadow: 0 0 30px rgba(255,113,206,.12) !important;
+}
+body.skin-vaporwave [data-action="applyGlobalSettings"] {
+  background: linear-gradient(135deg,#b967ff,#ff71ce) !important;
+}
+
+/* ─── ТЁМНЫЕ СКИНЫ: TERMINAL ─── */
+body.skin-terminal #game-header {
+  background: rgba(0,8,0,.9) !important;
+  border-color: rgba(0,255,65,.3) !important;
+  backdrop-filter: none !important;
+}
+body.skin-terminal #check-btn-sure {
+  background: #001a00 !important;
+  border: 1px solid #00ff41 !important;
+  box-shadow: 0 0 12px rgba(0,255,65,.3) !important;
+  color: #00ff41 !important;
+}
+body.skin-terminal #check-btn-doubt {
+  background: #001a00 !important;
+  border: 1px solid rgba(0,255,65,.5) !important;
+  box-shadow: 0 0 12px rgba(0,255,65,.2) !important;
+  color: rgba(0,255,65,.8) !important;
+}
+body.skin-terminal #next-btn {
+  background: #00ff41 !important;
+  color: #000 !important;
+  box-shadow: 0 0 20px rgba(0,255,65,.5) !important;
+  border: none !important;
+}
+body.skin-terminal .bg-emerald-500 {
+  background: #001a00 !important;
+  border: 1px solid #00ff41 !important;
+  box-shadow: 0 0 12px rgba(0,255,65,.3) !important;
+  color: #00ff41 !important;
+}
+body.skin-terminal .bg-blue-600 {
+  background: rgba(0,255,65,.12) !important;
+  border: 1px solid rgba(0,255,65,.4) !important;
+  color: #00ff41 !important;
+  box-shadow: none !important;
+}
+body.skin-terminal .bg-rose-500, body.skin-terminal .bg-rose-600 {
+  background: rgba(0,255,65,.06) !important;
+  border: 1px solid rgba(0,255,65,.3) !important;
+  color: #00ff41 !important;
+  box-shadow: none !important;
+}
+body.skin-terminal [data-action="startDuelSearch"] {
+  background: rgba(0,17,0,.9) !important;
+  border: 1px dashed rgba(0,255,65,.5) !important;
+  box-shadow: 0 0 20px rgba(0,255,65,.08) !important;
+}
+body.skin-terminal [data-action="startDuelSearch"] h4 {
+  background: none !important;
+  -webkit-text-fill-color: #00ff41 !important;
+  color: #00ff41 !important;
+}
+body.skin-terminal [data-action="applyGlobalSettings"] {
+  background: #00ff41 !important;
+  color: #000 !important;
+  box-shadow: 0 0 20px rgba(0,255,65,.4) !important;
+}
+body.skin-terminal [data-action="nextOnbStep"],
+body.skin-terminal [data-action="finishOnboarding"].bg-emerald-500 {
+  background: #00ff41 !important;
+  color: #000 !important;
+  box-shadow: 0 0 16px rgba(0,255,65,.4) !important;
+}
+body.skin-terminal #zen-exit-btn {
+  background: #00ff41 !important;
+  box-shadow: 0 0 24px rgba(0,255,65,.6) !important;
+  border-color: rgba(0,255,65,.4) !important;
+  color: #000 !important;
+}
+body.skin-terminal select,
+body.skin-terminal input[type="number"],
+body.skin-terminal input[type="text"] {
+  background: #001100 !important;
+  border-color: rgba(0,255,65,.25) !important;
+  color: #00ff41 !important;
+}
+/* Terminal: все кнопки */
+body.skin-terminal button:not(#next-btn):not(#zen-exit-btn):not([data-action="applyGlobalSettings"]):not([data-action="nextOnbStep"]):not([data-action="finishOnboarding"]) {
+  border-color: rgba(0,255,65,.2) !important;
+}
+
+/* ─── ТЁМНЫЕ СКИНЫ: MIDNIGHT OIL ─── */
+body.skin-midnight #game-header {
+  background: rgba(13,10,30,.85) !important;
+  border-color: rgba(124,58,237,.3) !important;
+}
+body.skin-midnight #check-btn-sure {
+  background: linear-gradient(135deg,#059669,#10b981) !important;
+  box-shadow: 0 4px 16px rgba(16,185,129,.3) !important;
+}
+body.skin-midnight #check-btn-doubt {
+  background: linear-gradient(135deg,#7c3aed,#a78bfa) !important;
+  box-shadow: 0 4px 16px rgba(167,139,250,.4) !important;
+}
+body.skin-midnight #next-btn {
+  background: linear-gradient(135deg,#7c3aed,#a78bfa) !important;
+  box-shadow: 0 4px 20px rgba(167,139,250,.4) !important;
+}
+body.skin-midnight .bg-emerald-500 {
+  background: linear-gradient(135deg,#059669,#10b981) !important;
+  box-shadow: 0 4px 12px rgba(16,185,129,.3) !important;
+}
+body.skin-midnight .bg-blue-600 {
+  background: linear-gradient(135deg,#7c3aed,#a78bfa) !important;
+  box-shadow: 0 4px 12px rgba(167,139,250,.3) !important;
+}
+body.skin-midnight [data-action="startDuelSearch"] {
+  background: linear-gradient(135deg,rgba(124,58,237,.18),rgba(167,139,250,.12),rgba(245,158,11,.08)) !important;
+  border-color: rgba(124,58,237,.4) !important;
+  box-shadow: 0 8px 32px rgba(124,58,237,.15) !important;
+}
+body.skin-midnight [data-action="applyGlobalSettings"] {
+  background: linear-gradient(135deg,#7c3aed,#a78bfa) !important;
+  box-shadow: 0 8px 24px rgba(124,58,237,.4) !important;
+}
+
+/* ══════════════════════════════════════════════════════════
+   НЕОБРУТАЛИЗМ — усиление конструктивизма
+   Жёсткие чёрные рамки, смещённые тени без размытия,
+   плоские заливки, нулевой радиус. Светлый и тёмный режим.
+   (Идёт ПОСЛЕ общих светлых правил → перебивает мягкие тени.)
+   ══════════════════════════════════════════════════════════ */
+
+/* ── уточнённая палитра ── */
+body.skin-constructivism {
+  --a-bg:#f4efe3; --a-s1:#fffdf7; --a-s2:#f0e9da; --a-s3:#efe7d5;
+  --a-b1:#e11d10; --a-b2:#111111; --a-b3:#e11d10;
+  --a-txt:#0f0f0f; --a-muted:#4a4a4a; --a-border:#111111;
+}
+/* ── убираем жёлтый: статы и кольцо ЕГЭ — красный/белый вместо жёлтого ── */
+body.skin-constructivism #stat-learned { color:#f5f5f5 !important; text-shadow:none !important; }
+body.skin-constructivism #stat-ege,
+body.skin-constructivism #ege-ring { color:#ff453a !important; stroke:#ff453a !important; }
+body.skin-constructivism #bottom-nav button.active-nav,
+body.skin-constructivism #bottom-nav button:hover { color:#ff453a !important; }
+
+/* карточки заданий/режимов */
+body.skin-constructivism [data-action="quickStartGame"],
+body.skin-constructivism [data-action="pickTaskForMode"],
+body.skin-constructivism [data-action="startVisualTrainer"] {
+  background:#fffdf7 !important; border:3px solid #111 !important; border-radius:0 !important;
+  box-shadow:6px 6px 0 #111 !important; transition:transform .12s ease, box-shadow .12s ease !important;
+}
+body.skin-constructivism [data-action="quickStartGame"]:hover,
+body.skin-constructivism [data-action="pickTaskForMode"]:hover,
+body.skin-constructivism [data-action="startVisualTrainer"]:hover {
+  transform:translate(-3px,-3px) !important; box-shadow:9px 9px 0 #e11d10 !important; border-color:#111 !important;
+}
+body.skin-constructivism [data-action="quickStartGame"]:active,
+body.skin-constructivism [data-action="pickTaskForMode"]:active,
+body.skin-constructivism [data-action="startVisualTrainer"]:active {
+  transform:translate(2px,2px) !important; box-shadow:2px 2px 0 #111 !important;
+}
+
+/* PvP баннер */
+body.skin-constructivism [data-action="startDuelSearch"] {
+  background:#ffe3df !important; border:3px solid #111 !important; border-radius:0 !important;
+  box-shadow:6px 6px 0 #e11d10 !important; transition:transform .12s ease, box-shadow .12s ease !important;
+}
+body.skin-constructivism [data-action="startDuelSearch"]:hover {
+  transform:translate(-2px,-2px) !important; box-shadow:8px 8px 0 #e11d10 !important;
+}
+
+/* верхняя плашка статистики и нижняя навигация */
+body.skin-constructivism #top-stats-bar {
+  background:#111 !important; border:3px solid #111 !important; border-radius:0 !important; box-shadow:5px 5px 0 #e11d10 !important;
+}
+body.skin-constructivism #bottom-nav { border-top:3px solid #111 !important; box-shadow:none !important; }
+
+/* игровые поверхности */
+body.skin-constructivism #table-container,
+body.skin-constructivism #pool-panel {
+  border:3px solid #111 !important; border-radius:0 !important; box-shadow:5px 5px 0 #111 !important;
+}
+body.skin-constructivism #table-head { background:#e11d10 !important; border-bottom:3px solid #111 !important; }
+body.skin-constructivism #table-head th { color:#fff !important; }
+
+/* ── слоты и фишки («варианты») — чистый стиль БЕЗ жёстких теней и двойных рамок,
+      чтобы при нарешке не было «рамки в рамке» и выглядело гармонично ── */
+body.skin-constructivism .dnd-slot {
+  background:#fffdf7 !important; border:2px solid rgba(17,17,17,.35) !important; border-radius:6px !important; box-shadow:none !important;
+}
+body.skin-constructivism .dnd-slot.has-item { border:2px solid #111 !important; }
+body.skin-constructivism .dnd-chip {
+  background:#fffdf7 !important; border:2px solid rgba(17,17,17,.3) !important; border-radius:6px !important; color:#111 !important;
+  font-weight:700 !important; box-shadow:0 1px 3px rgba(0,0,0,.08) !important; transition:transform .1s ease, border-color .1s ease, box-shadow .1s ease !important;
+}
+body.skin-constructivism .dnd-chip:hover { border-color:#e11d10 !important; transform:translateY(-1px) !important; box-shadow:0 2px 6px rgba(225,29,16,.18) !important; }
+body.skin-constructivism .dnd-chip.selected { border-color:#e11d10 !important; background:#ffece9 !important; box-shadow:0 0 0 3px rgba(225,29,16,.25) !important; transform:translateY(-1px) !important; }
+/* фишка ВНУТРИ слота — без своей рамки/тени/фона (убирает «рамку в рамке») */
+body.skin-constructivism .dnd-chip.in-slot { border:none !important; box-shadow:none !important; background:transparent !important; transform:none !important; }
+
+/* кнопки проверки / дальше — плоская заливка, чёрная рамка, жёсткая тень */
+body.skin-constructivism #check-btn-sure,
+body.skin-constructivism #check-btn-doubt,
+body.skin-constructivism #next-btn {
+  border:3px solid #111 !important; border-radius:0 !important; box-shadow:4px 4px 0 #111 !important;
+  color:#fff !important; text-shadow:none !important;
+}
+body.skin-constructivism #check-btn-sure  { background:#16a34a !important; }
+body.skin-constructivism #check-btn-doubt { background:#2563eb !important; }
+body.skin-constructivism #next-btn        { background:#e11d10 !important; }
+body.skin-constructivism #check-btn-sure:active,
+body.skin-constructivism #check-btn-doubt:active,
+body.skin-constructivism #next-btn:active { transform:translate(2px,2px) !important; box-shadow:1px 1px 0 #111 !important; }
+
+/* кнопки шапки — сидят на ЧЁРНОЙ плашке, поэтому тёмные/полупрозрачные, без белых квадратов */
+body.skin-constructivism #main-header button {
+  background:rgba(255,255,255,.08) !important; border:1.5px solid rgba(255,255,255,.22) !important; border-radius:4px !important;
+}
+body.skin-constructivism #main-header button:hover { background:rgba(255,255,255,.16) !important; }
+/* кнопка-кольцо ЕГЭ — без рамки/квадрата */
+body.skin-constructivism #main-header button[data-action="openEGEModal"] { background:transparent !important; border:none !important; }
+
+/* ── ТЁМНЫЙ необрутализм: белые рамки + цветные жёсткие тени на почти-чёрном ── */
+html.dark body.skin-constructivism {
+  --a-bg:#0d0d0d; --a-s1:#181818; --a-s2:#121212; --a-s3:#202020;
+  --a-b1:#ff3b30; --a-b2:#f5f5f5; --a-b3:#ff3b30;
+  --a-txt:#f5f5f5; --a-muted:#a5a5a5; --a-border:#f5f5f5;
+}
+html.dark body.skin-constructivism [data-action="quickStartGame"],
+html.dark body.skin-constructivism [data-action="pickTaskForMode"],
+html.dark body.skin-constructivism [data-action="startVisualTrainer"] {
+  background:#181818 !important; border:3px solid #f5f5f5 !important; box-shadow:6px 6px 0 #ff3b30 !important;
+}
+html.dark body.skin-constructivism [data-action="quickStartGame"]:hover,
+html.dark body.skin-constructivism [data-action="pickTaskForMode"]:hover,
+html.dark body.skin-constructivism [data-action="startVisualTrainer"]:hover {
+  box-shadow:9px 9px 0 #fff !important; border-color:#fff !important;
+}
+html.dark body.skin-constructivism [data-action="startDuelSearch"] {
+  background:#241010 !important; border:3px solid #f5f5f5 !important; box-shadow:6px 6px 0 #ff3b30 !important;
+}
+html.dark body.skin-constructivism #top-stats-bar {
+  background:#181818 !important; border:3px solid #f5f5f5 !important; box-shadow:5px 5px 0 #ff3b30 !important;
+}
+html.dark body.skin-constructivism #bottom-nav { background:#0d0d0d !important; border-top:3px solid #f5f5f5 !important; }
+html.dark body.skin-constructivism #table-container,
+html.dark body.skin-constructivism #pool-panel {
+  border:3px solid #f5f5f5 !important; box-shadow:5px 5px 0 #ff3b30 !important;
+}
+html.dark body.skin-constructivism #table-head { background:#ff3b30 !important; border-bottom:3px solid #f5f5f5 !important; }
+html.dark body.skin-constructivism #table-head th { color:#fff !important; }
+html.dark body.skin-constructivism .dnd-slot { background:#181818 !important; border:2px solid rgba(245,245,245,.3) !important; border-radius:6px !important; box-shadow:none !important; }
+html.dark body.skin-constructivism .dnd-slot.has-item { border:2px solid #ff3b30 !important; background:#1c1413 !important; }
+html.dark body.skin-constructivism .dnd-chip {
+  background:#202020 !important; border:2px solid rgba(245,245,245,.28) !important; color:#f5f5f5 !important; border-radius:6px !important; box-shadow:none !important;
+}
+html.dark body.skin-constructivism .dnd-chip:hover { border-color:#ff3b30 !important; transform:translateY(-1px) !important; box-shadow:0 2px 6px rgba(255,59,48,.25) !important; }
+html.dark body.skin-constructivism .dnd-chip.selected { border-color:#ff3b30 !important; background:#2a1414 !important; box-shadow:0 0 0 3px rgba(255,59,48,.3) !important; transform:translateY(-1px) !important; }
+html.dark body.skin-constructivism .dnd-chip.in-slot { border:none !important; box-shadow:none !important; background:transparent !important; transform:none !important; }
+html.dark body.skin-constructivism #check-btn-sure,
+html.dark body.skin-constructivism #check-btn-doubt,
+html.dark body.skin-constructivism #next-btn {
+  border:3px solid #f5f5f5 !important; box-shadow:4px 4px 0 #000 !important;
+}
+html.dark body.skin-constructivism #main-header button { background:rgba(255,255,255,.08) !important; border:1.5px solid rgba(255,255,255,.22) !important; border-radius:4px !important; }
+html.dark body.skin-constructivism #main-header button:hover { background:rgba(255,255,255,.16) !important; }
+html.dark body.skin-constructivism #main-header button[data-action="openEGEModal"] { background:transparent !important; border:none !important; }
+
+/* ══════════════════════════════════════════════════════════
+   ВСТАВЛЕННЫЙ ОТВЕТ «ВШИТ» В ТАБЛИЦУ (тёмная тема)
+   Чтобы заполненный слот не был белым инородным блоком, а выглядел как
+   обычная заполненная ячейка таблицы. Срабатывает для скинов БЕЗ собственного
+   тёмного оформления слотов; скины с явным тёмным дизайном (напр. необрутализм,
+   у них выше специфичность — html.dark body.skin-X) сохраняют свой стиль.
+   ══════════════════════════════════════════════════════════ */
+html.dark .dnd-slot.has-item {
+  background-color: rgba(255,255,255,.045) !important;
+  border-color: rgba(255,255,255,.16) !important;
+  box-shadow: none !important;
+}
+html.dark .dnd-chip.in-slot {
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+  color: var(--a-txt, #f1f5f9) !important;
+}

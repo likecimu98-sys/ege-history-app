@@ -1,0 +1,13 @@
+{
+  "name": "ege-history-app",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Тренажёр ЕГЭ по истории — PWA / Telegram Mini App",
+  "scripts": {
+    "build:css": "tailwindcss -i ./input.css -o ./output.css",
+    "watch:css": "tailwindcss -i ./input.css -o ./output.css --watch"
+  },
+  "devDependencies": {
+    "tailwindcss": "^3.4.17"
+  }
+}

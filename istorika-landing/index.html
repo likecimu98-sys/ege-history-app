@@ -1,0 +1,1978 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Историка — ЕГЭ по истории на 80+</title>
+  <meta name="description" content="Онлайн-школа Историка: подготовка к ЕГЭ по истории с Владом Манацковым, кураторами, проверкой ДЗ, пробниками и понятной системой до экзамена.">
+  <style>
+    :root {
+      --bg: #2b2f36;
+      --bg-deep: #171a1f;
+      --panel: #333840;
+      --panel-soft: #3c424c;
+      --text: #f7f6f2;
+      --muted: #c5c2b8;
+      --dim: #8f948d;
+      --sand: #c8b27a;
+      --sand-strong: #e0ca8e;
+      --line: rgba(255, 255, 255, .13);
+      --line-strong: rgba(200, 178, 122, .38);
+      --danger: #e78372;
+      --success: #a9c98a;
+      --shadow: 0 24px 80px rgba(0, 0, 0, .32);
+      --radius: 8px;
+      --wrap: 1180px;
+      --font: Inter, Manrope, "Segoe UI", Arial, sans-serif;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    html {
+      scroll-behavior: smooth;
+    }
+
+    body {
+      margin: 0;
+      background:
+        linear-gradient(180deg, rgba(23, 26, 31, .82), rgba(43, 47, 54, .98) 680px),
+        radial-gradient(circle at 72% 5%, rgba(200, 178, 122, .11), transparent 32%),
+        var(--bg);
+      color: var(--text);
+      font-family: var(--font);
+      letter-spacing: 0;
+    }
+
+    @keyframes fadeUp {
+      from {
+        opacity: 0;
+        transform: translateY(22px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    @keyframes floatFrame {
+      0%, 100% {
+        transform: translateY(0);
+      }
+      50% {
+        transform: translateY(-10px);
+      }
+    }
+
+    @keyframes marqueeMove {
+      from {
+        transform: translateX(0);
+      }
+      to {
+        transform: translateX(-50%);
+      }
+    }
+
+    img {
+      display: block;
+      max-width: 100%;
+    }
+
+    a {
+      color: inherit;
+      text-decoration: none;
+    }
+
+    button,
+    input,
+    select {
+      font: inherit;
+    }
+
+    .page-shell {
+      min-height: 100vh;
+      overflow: hidden;
+    }
+
+    .section {
+      padding: 92px 24px;
+      position: relative;
+    }
+
+    .section.dark {
+      background: var(--bg-deep);
+    }
+
+    .section.soft {
+      background: rgba(255, 255, 255, .035);
+      border-top: 1px solid var(--line);
+      border-bottom: 1px solid var(--line);
+    }
+
+    .section.painting-bg {
+      overflow: hidden;
+      isolation: isolate;
+    }
+
+    .section.painting-bg::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      z-index: 0;
+      background-image: var(--painting);
+      background-size: cover;
+      background-position: center;
+      opacity: .46;
+      filter: grayscale(.08) saturate(.86) contrast(1.08);
+      transform: scale(1.04);
+    }
+
+    .section.painting-bg::after {
+      content: "";
+      position: absolute;
+      inset: 0;
+      z-index: 1;
+      background:
+        linear-gradient(90deg, rgba(23, 26, 31, .9), rgba(43, 47, 54, .72) 48%, rgba(23, 26, 31, .9)),
+        linear-gradient(180deg, rgba(23, 26, 31, .7), rgba(23, 26, 31, .86));
+    }
+
+    .section.painting-left::before {
+      background-position: left center;
+    }
+
+    .section.painting-right::before {
+      background-position: right center;
+    }
+
+    .section.painting-bg .wrap {
+      position: relative;
+      z-index: 2;
+    }
+
+    .wrap {
+      width: min(var(--wrap), 100%);
+      margin: 0 auto;
+    }
+
+    .header {
+      position: sticky;
+      top: 0;
+      z-index: 50;
+      padding: 14px 24px;
+      border-bottom: 1px solid rgba(255, 255, 255, .08);
+      background: rgba(23, 26, 31, .78);
+      backdrop-filter: blur(20px);
+    }
+
+    .header-inner {
+      width: min(var(--wrap), 100%);
+      margin: 0 auto;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 24px;
+    }
+
+    .brand {
+      display: inline-flex;
+      align-items: center;
+      gap: 12px;
+      font-weight: 800;
+      font-size: 20px;
+      letter-spacing: .02em;
+    }
+
+    .brand img {
+      width: 42px;
+      height: 42px;
+      border-radius: 50%;
+      border: 1px solid rgba(255, 255, 255, .16);
+      object-fit: cover;
+      background: var(--bg);
+    }
+
+    .nav {
+      display: flex;
+      align-items: center;
+      gap: 22px;
+      color: var(--muted);
+      font-size: 14px;
+      font-weight: 600;
+    }
+
+    .nav a {
+      opacity: .86;
+      transition: color .2s ease, opacity .2s ease;
+    }
+
+    .nav a:hover {
+      color: var(--text);
+      opacity: 1;
+    }
+
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 48px;
+      padding: 0 22px;
+      border: 1px solid transparent;
+      border-radius: var(--radius);
+      background: var(--sand);
+      color: #171a1f;
+      font-size: 15px;
+      font-weight: 800;
+      cursor: pointer;
+      transition: transform .2s ease, background .2s ease, border-color .2s ease, color .2s ease;
+    }
+
+    .btn:hover {
+      transform: translateY(-2px);
+      background: var(--sand-strong);
+    }
+
+    .btn.secondary {
+      background: transparent;
+      color: var(--text);
+      border-color: rgba(255, 255, 255, .22);
+    }
+
+    .btn.secondary:hover {
+      border-color: var(--sand);
+      color: var(--sand-strong);
+      background: rgba(255, 255, 255, .04);
+    }
+
+    .btn.block {
+      width: 100%;
+    }
+
+    .hero {
+      min-height: calc(100vh - 72px);
+      padding: 58px 24px 76px;
+      display: grid;
+      align-items: center;
+    }
+
+    .hero-grid {
+      width: min(var(--wrap), 100%);
+      margin: 0 auto;
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) minmax(360px, 520px);
+      gap: 54px;
+      align-items: center;
+    }
+
+    .hero-copy {
+      grid-column: 1;
+      grid-row: 1;
+      animation: fadeUp .75s ease both;
+    }
+
+    .hero h1 {
+      margin: 0 0 22px;
+      font-size: clamp(42px, 6.2vw, 78px);
+      line-height: .98;
+      font-weight: 900;
+      letter-spacing: 0;
+      max-width: 840px;
+    }
+
+    .hero h1 span {
+      color: var(--sand-strong);
+    }
+
+    .lead {
+      margin: 0;
+      max-width: 680px;
+      color: var(--muted);
+      font-size: clamp(18px, 2vw, 23px);
+      line-height: 1.55;
+    }
+
+    .hero-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 14px;
+      margin-top: 34px;
+    }
+
+    .hero-proof {
+      grid-column: 1;
+      grid-row: 2;
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 14px;
+      margin-top: -12px;
+      max-width: 720px;
+    }
+
+    .proof-item {
+      padding: 18px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: rgba(255, 255, 255, .045);
+    }
+
+    .proof-item strong {
+      display: block;
+      color: var(--sand-strong);
+      font-size: 27px;
+      line-height: 1;
+      margin-bottom: 8px;
+    }
+
+    .proof-item span {
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.35;
+    }
+
+    .hero-visual {
+      position: relative;
+      min-height: 0;
+      grid-column: 2;
+      grid-row: 1 / span 2;
+      display: grid;
+      gap: 14px;
+      align-self: center;
+      animation: fadeUp .85s .12s ease both;
+    }
+
+    .portrait-frame {
+      position: relative;
+      width: min(100%, 462px);
+      margin-left: auto;
+      border-radius: var(--radius);
+      overflow: hidden;
+      border: 1px solid rgba(255, 255, 255, .16);
+      box-shadow: var(--shadow);
+      background: var(--panel);
+      animation: floatFrame 6s ease-in-out infinite;
+    }
+
+    .portrait-frame::after {
+      content: "";
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(180deg, transparent 40%, rgba(23, 26, 31, .88));
+      pointer-events: none;
+    }
+
+    .portrait-frame img {
+      height: 560px;
+      width: 100%;
+      object-fit: cover;
+      transition: transform .6s ease;
+    }
+
+    .portrait-frame:hover img {
+      transform: scale(1.035);
+    }
+
+    .visual-caption {
+      position: absolute;
+      left: 20px;
+      right: 20px;
+      bottom: 18px;
+      z-index: 2;
+      display: flex;
+      justify-content: space-between;
+      gap: 16px;
+      align-items: flex-end;
+      padding-top: 22px;
+      border-top: 1px solid rgba(255, 255, 255, .16);
+    }
+
+    .visual-caption strong {
+      display: block;
+      font-size: 22px;
+      line-height: 1.1;
+    }
+
+    .visual-caption span {
+      display: block;
+      margin-top: 5px;
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .hourglass-card {
+      position: relative;
+      width: min(100%, 462px);
+      margin-left: auto;
+      padding: 18px;
+      border: 1px solid var(--line-strong);
+      border-radius: var(--radius);
+      background: rgba(23, 26, 31, .72);
+      box-shadow: 0 18px 44px rgba(0, 0, 0, .22);
+      display: grid;
+      grid-template-columns: 56px 1fr;
+      gap: 16px;
+      align-items: center;
+    }
+
+    .hourglass-card img {
+      width: 56px;
+      height: 56px;
+      border-radius: 50%;
+      object-fit: cover;
+    }
+
+    .hourglass-card strong {
+      display: block;
+      grid-column: 2;
+      font-size: 18px;
+      line-height: 1.2;
+    }
+
+    .hourglass-card p {
+      grid-column: 2;
+      margin: -4px 0 0;
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.45;
+    }
+
+    .marquee {
+      border-top: 1px solid var(--line);
+      border-bottom: 1px solid var(--line);
+      background: rgba(23, 26, 31, .72);
+      overflow: hidden;
+      white-space: nowrap;
+    }
+
+    .marquee-track {
+      width: max-content;
+      display: flex;
+      align-items: center;
+      gap: 36px;
+      padding: 18px 0;
+      animation: marqueeMove 28s linear infinite;
+    }
+
+    .marquee span {
+      color: var(--muted);
+      font-size: 15px;
+      font-weight: 800;
+      letter-spacing: .02em;
+      text-transform: uppercase;
+    }
+
+    .marquee span::before {
+      content: "";
+      display: inline-block;
+      width: 8px;
+      height: 8px;
+      margin-right: 18px;
+      border-radius: 50%;
+      background: var(--sand);
+      vertical-align: 1px;
+    }
+
+    .art-band {
+      padding: 42px 24px 46px;
+      scroll-margin-top: 82px;
+      border-top: 1px solid rgba(255, 255, 255, .06);
+      border-bottom: 1px solid rgba(255, 255, 255, .06);
+      background:
+        radial-gradient(circle at 50% 0%, rgba(200, 178, 122, .08), transparent 34%),
+        var(--bg-deep);
+    }
+
+    .art-band-head,
+    .art-band-grid {
+      width: min(var(--wrap), 100%);
+      margin: 0 auto;
+    }
+
+    .art-band-head {
+      display: flex;
+      align-items: end;
+      justify-content: space-between;
+      gap: 28px;
+      margin-bottom: 18px;
+    }
+
+    .art-band-head h2 {
+      margin: 0;
+      max-width: 620px;
+      font-size: clamp(24px, 3vw, 36px);
+      line-height: 1.08;
+      font-weight: 900;
+    }
+
+    .art-band-head p {
+      max-width: 420px;
+      margin: 0;
+      color: var(--muted);
+      font-size: 15px;
+      line-height: 1.55;
+    }
+
+    .art-band-grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 16px;
+    }
+
+    .art-tile {
+      min-height: 188px;
+      position: relative;
+      overflow: hidden;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background-image: var(--tile);
+      background-size: cover;
+      background-position: center;
+      box-shadow: 0 18px 48px rgba(0, 0, 0, .26);
+      transform: translateZ(0);
+    }
+
+    .art-tile::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(180deg, rgba(23, 26, 31, .05), rgba(23, 26, 31, .84));
+      z-index: 1;
+    }
+
+    .art-tile::after {
+      content: "";
+      position: absolute;
+      inset: 12px;
+      border: 1px solid rgba(255, 255, 255, .18);
+      border-radius: calc(var(--radius) - 6px);
+      z-index: 2;
+      pointer-events: none;
+    }
+
+    .art-tile span {
+      position: absolute;
+      left: 22px;
+      right: 22px;
+      bottom: 20px;
+      z-index: 3;
+      color: var(--text);
+      font-size: 15px;
+      font-weight: 900;
+      line-height: 1.35;
+    }
+
+    .art-band + .section {
+      padding-top: 72px;
+    }
+
+    .section-head {
+      display: grid;
+      grid-template-columns: minmax(0, .88fr) minmax(260px, .48fr);
+      gap: 36px;
+      align-items: end;
+      margin-bottom: 44px;
+    }
+
+    .section-head h2 {
+      margin: 0;
+      font-size: clamp(34px, 5vw, 58px);
+      line-height: 1;
+      font-weight: 900;
+      letter-spacing: 0;
+    }
+
+    .section-head p {
+      margin: 0;
+      color: var(--muted);
+      font-size: 18px;
+      line-height: 1.55;
+    }
+
+    .pain-grid,
+    .advantage-grid {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 16px;
+    }
+
+    .pain-card,
+    .advantage-card,
+    .result-card,
+    .tariff,
+    .faq-item {
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: rgba(255, 255, 255, .045);
+    }
+
+    .pain-card,
+    .advantage-card {
+      padding: 24px;
+      min-height: 214px;
+    }
+
+    .icon {
+      width: 40px;
+      height: 40px;
+      color: var(--sand-strong);
+      margin-bottom: 28px;
+    }
+
+    .pain-card h3,
+    .advantage-card h3 {
+      margin: 0 0 12px;
+      font-size: 20px;
+      line-height: 1.15;
+    }
+
+    .pain-card p,
+    .advantage-card p {
+      margin: 0;
+      color: var(--muted);
+      font-size: 15px;
+      line-height: 1.5;
+    }
+
+    .solution-layout {
+      display: grid;
+      grid-template-columns: .9fr 1.1fr;
+      gap: 34px;
+      align-items: stretch;
+    }
+
+    .solution-copy {
+      padding: 36px;
+      border-radius: var(--radius);
+      border: 1px solid var(--line-strong);
+      background: rgba(200, 178, 122, .08);
+    }
+
+    .solution-copy h2 {
+      margin: 0 0 18px;
+      font-size: clamp(32px, 4.5vw, 54px);
+      line-height: 1;
+    }
+
+    .solution-copy p {
+      margin: 0 0 26px;
+      color: var(--muted);
+      font-size: 18px;
+      line-height: 1.6;
+    }
+
+    .route {
+      display: grid;
+      gap: 12px;
+    }
+
+    .route-step {
+      display: grid;
+      grid-template-columns: 58px 1fr;
+      gap: 18px;
+      align-items: center;
+      padding: 18px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: rgba(255, 255, 255, .04);
+    }
+
+    .route-step b {
+      display: grid;
+      place-items: center;
+      width: 48px;
+      height: 48px;
+      border-radius: 50%;
+      background: var(--sand);
+      color: var(--bg-deep);
+      font-size: 18px;
+    }
+
+    .route-step strong {
+      display: block;
+      margin-bottom: 4px;
+      font-size: 18px;
+    }
+
+    .route-step span {
+      color: var(--muted);
+      font-size: 14px;
+      line-height: 1.45;
+    }
+
+    .teacher-layout {
+      display: grid;
+      grid-template-columns: minmax(300px, 430px) 1fr;
+      gap: 42px;
+      align-items: center;
+    }
+
+    .teacher-photo {
+      border-radius: var(--radius);
+      overflow: hidden;
+      border: 1px solid var(--line);
+      background: var(--panel);
+      box-shadow: var(--shadow);
+    }
+
+    .teacher-photo img {
+      width: 100%;
+      aspect-ratio: 4 / 5;
+      object-fit: cover;
+    }
+
+    .teacher-copy h2 {
+      margin: 0 0 20px;
+      font-size: clamp(34px, 5vw, 60px);
+      line-height: 1;
+      font-weight: 900;
+    }
+
+    .teacher-copy p {
+      margin: 0;
+      color: var(--muted);
+      font-size: 18px;
+      line-height: 1.62;
+    }
+
+    .teacher-facts {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 12px;
+      margin-top: 30px;
+    }
+
+    .fact {
+      padding: 17px;
+      border-radius: var(--radius);
+      border: 1px solid var(--line);
+      background: rgba(255, 255, 255, .04);
+      color: var(--muted);
+      font-size: 14px;
+      line-height: 1.45;
+    }
+
+    .fact strong {
+      display: block;
+      color: var(--text);
+      font-size: 17px;
+      margin-bottom: 4px;
+    }
+
+    .program {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 1px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      overflow: hidden;
+      background: var(--line);
+    }
+
+    .module {
+      padding: 26px;
+      background: var(--bg);
+      min-height: 210px;
+      position: relative;
+    }
+
+    .module::before {
+      content: attr(data-num);
+      display: block;
+      color: var(--sand-strong);
+      font-size: 14px;
+      font-weight: 800;
+      margin-bottom: 36px;
+    }
+
+    .module h3 {
+      margin: 0 0 10px;
+      font-size: 21px;
+      line-height: 1.12;
+    }
+
+    .module p {
+      margin: 0;
+      color: var(--muted);
+      font-size: 15px;
+      line-height: 1.5;
+    }
+
+    .tariffs {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 18px;
+      align-items: stretch;
+    }
+
+    .tariff {
+      padding: 28px;
+      display: flex;
+      flex-direction: column;
+      min-height: 560px;
+      position: relative;
+    }
+
+    .tariff.featured {
+      background: rgba(200, 178, 122, .08);
+      border-color: var(--line-strong);
+      box-shadow: 0 0 0 1px rgba(200, 178, 122, .12), var(--shadow);
+    }
+
+    .tariff-label {
+      color: var(--sand-strong);
+      font-size: 13px;
+      font-weight: 900;
+      text-transform: uppercase;
+      letter-spacing: .08em;
+      min-height: 18px;
+      margin-bottom: 18px;
+    }
+
+    .tariff h3 {
+      margin: 0;
+      font-size: 29px;
+      line-height: 1;
+    }
+
+    .price {
+      margin: 20px 0 18px;
+      font-size: 38px;
+      font-weight: 900;
+      line-height: 1;
+    }
+
+    .price span {
+      color: var(--muted);
+      font-size: 15px;
+      font-weight: 600;
+    }
+
+    .tariff ul {
+      list-style: none;
+      padding: 0;
+      margin: 0 0 26px;
+      display: grid;
+      gap: 12px;
+      color: var(--muted);
+      font-size: 15px;
+      line-height: 1.42;
+    }
+
+    .tariff li {
+      position: relative;
+      padding-left: 26px;
+    }
+
+    .tariff li::before {
+      content: "";
+      position: absolute;
+      left: 0;
+      top: .35em;
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      border: 3px solid var(--sand);
+    }
+
+    .tariff .btn {
+      margin-top: auto;
+    }
+
+    .results-layout {
+      display: grid;
+      grid-template-columns: .78fr 1.22fr;
+      gap: 28px;
+      align-items: start;
+    }
+
+    .results-photo {
+      position: sticky;
+      top: 104px;
+      border-radius: var(--radius);
+      overflow: hidden;
+      border: 1px solid var(--line);
+      background: var(--panel);
+      box-shadow: var(--shadow);
+    }
+
+    .results-photo img {
+      width: 100%;
+      aspect-ratio: 1 / 1.05;
+      object-fit: cover;
+    }
+
+    .results-cards {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 16px;
+    }
+
+    .result-card {
+      padding: 24px;
+      min-height: 252px;
+    }
+
+    .score {
+      display: flex;
+      align-items: baseline;
+      gap: 12px;
+      margin-bottom: 18px;
+      color: var(--sand-strong);
+      font-weight: 900;
+      font-size: 34px;
+      line-height: 1;
+    }
+
+    .score span {
+      color: var(--dim);
+      font-size: 16px;
+      text-decoration: line-through;
+    }
+
+    .result-card p {
+      margin: 0 0 18px;
+      color: var(--muted);
+      font-size: 15px;
+      line-height: 1.55;
+    }
+
+    .student {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 14px;
+      padding-top: 16px;
+      border-top: 1px solid var(--line);
+      color: var(--text);
+      font-weight: 800;
+      font-size: 15px;
+    }
+
+    .student span {
+      color: var(--dim);
+      font-weight: 600;
+      font-size: 13px;
+    }
+
+    .process {
+      display: grid;
+      gap: 0;
+      border-top: 1px solid var(--line);
+      border-bottom: 1px solid var(--line);
+    }
+
+    .process-step {
+      display: grid;
+      grid-template-columns: 160px 1fr 270px;
+      gap: 30px;
+      align-items: center;
+      padding: 26px 0;
+      border-bottom: 1px solid var(--line);
+    }
+
+    .process-step:last-child {
+      border-bottom: 0;
+    }
+
+    .process-step .num {
+      color: var(--sand-strong);
+      font-size: 36px;
+      font-weight: 900;
+      line-height: 1;
+    }
+
+    .process-step h3 {
+      margin: 0 0 8px;
+      font-size: 24px;
+      line-height: 1.1;
+    }
+
+    .process-step p {
+      margin: 0;
+      color: var(--muted);
+      font-size: 15px;
+      line-height: 1.5;
+    }
+
+    .process-step small {
+      color: var(--dim);
+      font-size: 14px;
+      line-height: 1.45;
+    }
+
+    .faq-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 14px;
+    }
+
+    .faq-item {
+      overflow: hidden;
+    }
+
+    .faq-q {
+      width: 100%;
+      min-height: 72px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 18px;
+      padding: 20px 22px;
+      border: 0;
+      background: transparent;
+      color: var(--text);
+      cursor: pointer;
+      text-align: left;
+      font-size: 18px;
+      font-weight: 800;
+    }
+
+    .faq-q svg {
+      flex: 0 0 auto;
+      width: 20px;
+      height: 20px;
+      color: var(--sand);
+      transition: transform .2s ease;
+    }
+
+    .faq-a {
+      display: none;
+      padding: 0 22px 22px;
+      color: var(--muted);
+      font-size: 15px;
+      line-height: 1.55;
+    }
+
+    .faq-item.active .faq-a {
+      display: block;
+    }
+
+    .faq-item.active .faq-q svg {
+      transform: rotate(45deg);
+    }
+
+    .urgency {
+      display: grid;
+      grid-template-columns: 1fr 390px;
+      gap: 40px;
+      align-items: center;
+      padding: 42px;
+      border: 1px solid var(--line-strong);
+      border-radius: var(--radius);
+      background: linear-gradient(135deg, rgba(200, 178, 122, .12), rgba(255, 255, 255, .035));
+    }
+
+    .urgency h2 {
+      margin: 0 0 18px;
+      font-size: clamp(34px, 5vw, 58px);
+      line-height: 1;
+    }
+
+    .urgency p {
+      margin: 0;
+      color: var(--muted);
+      font-size: 18px;
+      line-height: 1.55;
+      max-width: 720px;
+    }
+
+    .timer {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 10px;
+    }
+
+    .time-cell {
+      padding: 18px 10px;
+      border-radius: var(--radius);
+      background: rgba(23, 26, 31, .7);
+      text-align: center;
+      border: 1px solid var(--line);
+    }
+
+    .time-cell strong {
+      display: block;
+      color: var(--sand-strong);
+      font-size: 30px;
+      line-height: 1;
+      margin-bottom: 8px;
+    }
+
+    .time-cell span {
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .form-layout {
+      display: grid;
+      grid-template-columns: .95fr 1.05fr;
+      gap: 42px;
+      align-items: start;
+    }
+
+    .form-copy h2 {
+      margin: 0 0 20px;
+      font-size: clamp(36px, 5.5vw, 64px);
+      line-height: 1;
+    }
+
+    .form-copy p {
+      margin: 0 0 28px;
+      color: var(--muted);
+      font-size: 18px;
+      line-height: 1.55;
+    }
+
+    .form-points {
+      display: grid;
+      gap: 12px;
+    }
+
+    .form-point {
+      padding: 15px 18px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      color: var(--muted);
+      background: rgba(255, 255, 255, .035);
+      font-size: 15px;
+    }
+
+    .lead-form {
+      padding: 30px;
+      border-radius: var(--radius);
+      border: 1px solid var(--line-strong);
+      background: rgba(23, 26, 31, .82);
+      box-shadow: var(--shadow);
+    }
+
+    .field-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 14px;
+    }
+
+    .field {
+      display: grid;
+      gap: 8px;
+    }
+
+    .field.full {
+      grid-column: 1 / -1;
+    }
+
+    label {
+      color: var(--muted);
+      font-size: 13px;
+      font-weight: 700;
+    }
+
+    input,
+    select {
+      width: 100%;
+      height: 52px;
+      border-radius: var(--radius);
+      border: 1px solid var(--line);
+      outline: 0;
+      background: rgba(255, 255, 255, .06);
+      color: var(--text);
+      padding: 0 15px;
+      font-size: 16px;
+      transition: border-color .2s ease, background .2s ease;
+    }
+
+    select option {
+      background: var(--bg-deep);
+      color: var(--text);
+    }
+
+    input:focus,
+    select:focus {
+      border-color: var(--sand);
+      background: rgba(255, 255, 255, .09);
+    }
+
+    .form-note {
+      margin: 14px 0 20px;
+      color: var(--dim);
+      font-size: 13px;
+      line-height: 1.45;
+    }
+
+    .success {
+      display: none;
+      margin-top: 16px;
+      padding: 14px;
+      border-radius: var(--radius);
+      background: rgba(169, 201, 138, .12);
+      border: 1px solid rgba(169, 201, 138, .38);
+      color: var(--success);
+      font-size: 14px;
+      line-height: 1.45;
+    }
+
+    .success.show {
+      display: block;
+    }
+
+    .footer {
+      padding: 38px 24px;
+      background: #111317;
+      border-top: 1px solid var(--line);
+      color: var(--muted);
+    }
+
+    .footer-inner {
+      width: min(var(--wrap), 100%);
+      margin: 0 auto;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 28px;
+      flex-wrap: wrap;
+      font-size: 14px;
+    }
+
+    .footer-links {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 18px;
+    }
+
+    .footer-links a:hover {
+      color: var(--sand-strong);
+    }
+
+    .mobile-only {
+      display: none;
+    }
+
+    .reveal {
+      opacity: 0;
+      transform: translateY(24px);
+      transition: opacity .7s ease, transform .7s ease;
+    }
+
+    .reveal.is-visible {
+      opacity: 1;
+      transform: translateY(0);
+    }
+
+    @media (max-width: 980px) {
+      .nav {
+        display: none;
+      }
+
+      .hero {
+        min-height: auto;
+        padding-top: 44px;
+      }
+
+      .hero-grid,
+      .solution-layout,
+      .teacher-layout,
+      .results-layout,
+      .form-layout,
+      .urgency {
+        grid-template-columns: 1fr;
+      }
+
+      .hero-copy,
+      .hero-visual,
+      .hero-proof {
+        grid-column: auto;
+        grid-row: auto;
+      }
+
+      .hero-visual {
+        min-height: 0;
+      }
+
+      .hero-proof {
+        margin-top: 0;
+        max-width: none;
+      }
+
+      .section-head {
+        grid-template-columns: 1fr;
+        align-items: start;
+      }
+
+      .art-band-head {
+        align-items: flex-start;
+        flex-direction: column;
+        gap: 12px;
+      }
+
+      .pain-grid,
+      .advantage-grid,
+      .tariffs,
+      .program,
+      .results-cards,
+      .faq-grid,
+      .art-band-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+
+      .results-photo {
+        position: static;
+      }
+
+      .process-step {
+        grid-template-columns: 96px 1fr;
+      }
+
+      .process-step small {
+        grid-column: 2;
+      }
+    }
+
+    @media (max-width: 660px) {
+      .section {
+        padding: 66px 18px;
+      }
+
+      .art-band {
+        padding: 32px 18px 38px;
+      }
+
+      .art-band + .section {
+        padding-top: 60px;
+      }
+
+      .header {
+        padding: 12px 18px;
+      }
+
+      .header .btn {
+        display: none;
+      }
+
+      .mobile-only {
+        display: inline-flex;
+      }
+
+      .hero h1 {
+        font-size: 45px;
+      }
+
+      .lead {
+        font-size: 17px;
+      }
+
+      .hero-proof,
+      .pain-grid,
+      .advantage-grid,
+      .tariffs,
+      .program,
+      .results-cards,
+      .faq-grid,
+      .art-band-grid,
+      .teacher-facts,
+      .field-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .proof-item {
+        padding: 16px;
+      }
+
+      .hero-visual {
+        min-height: 0;
+      }
+
+      .portrait-frame {
+        width: 100%;
+        margin-left: 0;
+        inset: auto;
+      }
+
+      .portrait-frame img {
+        height: 430px;
+      }
+
+      .hourglass-card {
+        left: auto;
+        right: auto;
+        bottom: auto;
+        width: auto;
+        margin-left: 0;
+      }
+
+      .art-tile {
+        min-height: 188px;
+      }
+
+      .section-head h2,
+      .art-band-head h2,
+      .teacher-copy h2,
+      .solution-copy h2,
+      .form-copy h2,
+      .urgency h2 {
+        font-size: 36px;
+      }
+
+      .solution-copy,
+      .lead-form,
+      .urgency {
+        padding: 24px;
+      }
+
+      .tariff {
+        min-height: auto;
+      }
+
+      .process-step {
+        grid-template-columns: 1fr;
+        gap: 12px;
+      }
+
+      .process-step small {
+        grid-column: auto;
+      }
+
+      .timer {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+
+      .footer-inner {
+        align-items: flex-start;
+        flex-direction: column;
+      }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      *,
+      *::before,
+      *::after {
+        scroll-behavior: auto !important;
+        transition: none !important;
+        animation: none !important;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="page-shell">
+    <header class="header">
+      <div class="header-inner">
+        <a class="brand" href="#top" aria-label="Историка">
+          <img src="assets/hourglass-logo.jpg" alt="">
+          <span>Историка</span>
+        </a>
+        <nav class="nav" aria-label="Основная навигация">
+          <a href="#program">Программа</a>
+          <a href="#tariffs">Тарифы</a>
+          <a href="#results">Результаты</a>
+          <a href="#faq">FAQ</a>
+        </nav>
+        <a class="btn" href="#lead">Записаться</a>
+      </div>
+    </header>
+
+    <main id="top">
+      <section class="hero">
+        <div class="hero-grid">
+          <div class="hero-copy">
+            <h1>ЕГЭ по истории на <span>80+</span> без зубрежки дат</h1>
+            <p class="lead">Онлайн-школа Влада Манацкова, где историю проходят как систему: живые вебинары, кураторы, домашние задания, проверка работ, пробники и понятный план до экзамена.</p>
+            <div class="hero-actions">
+              <a class="btn" href="#lead">Записаться на пробный урок</a>
+              <a class="btn secondary" href="#program">Посмотреть программу</a>
+            </div>
+          </div>
+
+          <div class="hero-visual" aria-label="Влад Манацков и символ школы">
+            <div class="portrait-frame">
+              <img src="assets/vlad-collage.jpg" alt="Влад Манацков в историческом коллаже">
+              <div class="visual-caption">
+                <div>
+                  <strong>Влад Манацков</strong>
+                  <span>автор школы «Историка»</span>
+                </div>
+                <span>ЕГЭ • история • система</span>
+              </div>
+            </div>
+            <div class="hourglass-card">
+              <img src="assets/hourglass-logo.jpg" alt="Логотип Историки — песочные часы">
+              <strong>Время до ЕГЭ ограничено</strong>
+              <p>Поэтому готовимся не хаотично, а по маршруту: тема, практика, проверка, пробник, повторение.</p>
+            </div>
+          </div>
+
+          <div class="hero-proof" aria-label="Ключевые факты">
+            <div class="proof-item">
+              <strong>81</strong>
+              <span>средний балл учеников курса в 2025 году</span>
+            </div>
+            <div class="proof-item">
+              <strong>22K+</strong>
+              <span>подписчиков на YouTube-канале «Историка»</span>
+            </div>
+            <div class="proof-item">
+              <strong>10 мес.</strong>
+              <span>маршрут от базы до финального повторения</span>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <div class="marquee" aria-label="Темы курса">
+        <div class="marquee-track">
+          <span>История России</span>
+          <span>Карты</span>
+          <span>Культура</span>
+          <span>Вторая часть</span>
+          <span>Пробники</span>
+          <span>Кураторы</span>
+          <span>Проверка ДЗ</span>
+          <span>80+ без хаоса</span>
+          <span>История России</span>
+          <span>Карты</span>
+          <span>Культура</span>
+          <span>Вторая часть</span>
+          <span>Пробники</span>
+          <span>Кураторы</span>
+          <span>Проверка ДЗ</span>
+          <span>80+ без хаоса</span>
+        </div>
+      </div>
+
+      <section class="section soft painting-bg painting-right" style="--painting: url('assets/painting-smolensk.jpg');">
+        <div class="wrap">
+          <div class="section-head">
+            <h2>История кажется бесконечной, когда нет системы</h2>
+            <p>Главная проблема не в том, что предмет сложный. Проблема в хаосе: даты отдельно, карты отдельно, культура отдельно, а вторая часть живет своей жизнью.</p>
+          </div>
+          <div class="pain-grid">
+            <article class="pain-card">
+              <svg class="icon" viewBox="0 0 40 40" fill="none" aria-hidden="true"><path d="M8 10h24M8 20h24M8 30h14" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"/><path d="M28 27l4 4 6-8" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              <h3>Путаются даты и правители</h3>
+              <p>События учатся кусками, поэтому на пробнике сложно восстановить логику эпохи.</p>
+            </article>
+            <article class="pain-card">
+              <svg class="icon" viewBox="0 0 40 40" fill="none" aria-hidden="true"><path d="M7 30l8-20 10 16 8-10" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/><path d="M6 34h28" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"/></svg>
+              <h3>Баллы теряются во второй части</h3>
+              <p>Знать факт недостаточно: нужно формулировать причины, последствия и аргументы.</p>
+            </article>
+            <article class="pain-card">
+              <svg class="icon" viewBox="0 0 40 40" fill="none" aria-hidden="true"><path d="M20 4v32M9 10h22M11 30h18" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"/><path d="M14 10c0 8 12 12 12 20M26 10c0 8-12 12-12 20" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg>
+              <h3>Мало времени до экзамена</h3>
+              <p>Без плана подготовка превращается в аврал и постоянное чувство, что ты не успеваешь.</p>
+            </article>
+            <article class="pain-card">
+              <svg class="icon" viewBox="0 0 40 40" fill="none" aria-hidden="true"><path d="M10 8h20v24H10z" stroke="currentColor" stroke-width="2.5"/><path d="M15 15h10M15 21h7M15 27h10" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"/></svg>
+              <h3>Ошибки не разбираются</h3>
+              <p>Ученик решает задания, но не понимает, почему ответ не засчитали и как исправиться.</p>
+            </article>
+          </div>
+        </div>
+      </section>
+
+      <section class="section">
+        <div class="wrap solution-layout">
+          <div class="solution-copy">
+            <h2>«Историка» закрывает эти пробелы маршрутом до результата</h2>
+            <p>Каждая неделя курса ведет к конкретному действию: разобраться в теме, закрепить заданиями, получить проверку, исправить ошибки и вернуться к слабым местам на повторении.</p>
+            <a class="btn" href="#lead">Получить план подготовки</a>
+          </div>
+          <div class="route">
+            <div class="route-step">
+              <b>1</b>
+              <div><strong>Понимаем эпоху</strong><span>Не заучиваем набор дат, а видим причины, связи и последствия.</span></div>
+            </div>
+            <div class="route-step">
+              <b>2</b>
+              <div><strong>Решаем формат ЕГЭ</strong><span>Карты, культура, хронология, текстовые задания и вся вторая часть.</span></div>
+            </div>
+            <div class="route-step">
+              <b>3</b>
+              <div><strong>Получаем проверку</strong><span>Кураторы помогают не выпадать из графика, ДЗ проверяются и возвращаются с комментариями.</span></div>
+            </div>
+            <div class="route-step">
+              <b>4</b>
+              <div><strong>Растим балл пробниками</strong><span>Регулярно смотрим динамику, разбираем ошибки и усиливаем слабые темы.</span></div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="section dark painting-bg painting-left" style="--painting: url('assets/painting-cossacks.jpg');">
+        <div class="wrap teacher-layout">
+          <div class="teacher-photo">
+            <img src="assets/teacher-selfie.jpg" alt="Влад Манацков">
+          </div>
+          <div class="teacher-copy">
+            <h2>Влад Манацков объясняет историю живым языком</h2>
+            <p>Влад — автор онлайн-школы «Историка». Его сильная сторона — превращать сложные периоды в понятную причинно-следственную систему: кто, зачем, почему, к чему привело и как это спросит ЕГЭ.</p>
+            <div class="teacher-facts">
+              <div class="fact"><strong>Автор курса</strong>Вся подготовка собрана вокруг единой логики и экзаменационных заданий.</div>
+              <div class="fact"><strong>Живые вебинары</strong>Уроки с объяснением темы, практикой и ответами на вопросы.</div>
+              <div class="fact"><strong>Разбор реальных вариантов</strong>Досрочные, основные волны, типичные ловушки и критерии.</div>
+              <div class="fact"><strong>Комьюнити</strong>Telegram, VK, открытые материалы и постоянное присутствие преподавателя.</div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="section" id="program">
+        <div class="wrap">
+          <div class="section-head">
+            <h2>Программа ведет от базы до финального повторения</h2>
+            <p>Модули идут в логике экзамена: сначала каркас истории России, затем сложные типы заданий, вторая часть и пробники.</p>
+          </div>
+          <div class="program">
+            <article class="module" data-num="01"><h3>Диагностика и план</h3><p>Определяем стартовый уровень, цель по баллам и недельный темп.</p></article>
+            <article class="module" data-num="02"><h3>Древняя Русь и Средневековье</h3><p>Рюриковичи, раздробленность, Орда, Москва и первые связи с картами.</p></article>
+            <article class="module" data-num="03"><h3>Московское государство</h3><p>Иван III, Иван IV, Смута, первые Романовы и причинные цепочки.</p></article>
+            <article class="module" data-num="04"><h3>XVIII-XIX века</h3><p>Петр I, Екатерина II, реформы, войны, общественные движения и культура.</p></article>
+            <article class="module" data-num="05"><h3>XX век и современность</h3><p>Революции, СССР, Великая Отечественная, перестройка и новейшая история.</p></article>
+            <article class="module" data-num="06"><h3>Вторая часть и финал</h3><p>Аргументы, ПСС, историческое сочинение, пробники и повторение слабых мест.</p></article>
+          </div>
+        </div>
+      </section>
+
+      <section class="art-band" id="history-strip" aria-label="Исторические визуальные образы">
+        <div class="art-band-head">
+          <h2>История запоминается, когда видишь эпоху целиком</h2>
+          <p>Связываем даты, личности, карты и культуру в понятную картину, а не в набор разрозненных фактов.</p>
+        </div>
+        <div class="art-band-grid">
+          <div class="art-tile" style="--tile: url('assets/painting-smolensk.jpg');">
+            <span>1812: дым, карты, решения</span>
+          </div>
+          <div class="art-tile" style="--tile: url('assets/painting-cossacks.jpg');">
+            <span>Характер эпохи в деталях</span>
+          </div>
+          <div class="art-tile" style="--tile: url('assets/culture-tour.jpg');">
+            <span>Культура, личности и контекст</span>
+          </div>
+        </div>
+      </section>
+
+      <section class="section soft" id="tariffs">
+        <div class="wrap">
+          <div class="section-head">
+            <h2>Три формата под разный уровень контроля</h2>
+            <p>Можно идти самостоятельно, с кураторами или с максимальным сопровождением до экзамена.</p>
+          </div>
+          <div class="tariffs">
+            <article class="tariff">
+              <div class="tariff-label">&nbsp;</div>
+              <h3>Старт</h3>
+              <div class="price">4 990 ₽ <span>/ мес.</span></div>
+              <ul>
+                <li>Живые вебинары и записи занятий</li>
+                <li>Конспекты по всем темам курса</li>
+                <li>Домашние задания после уроков</li>
+                <li>Доступ к материалам до конца экзамена</li>
+                <li>Общий чат потока</li>
+              </ul>
+              <a class="btn secondary block" href="#lead">Начать со старта</a>
+            </article>
+            <article class="tariff featured">
+              <div class="tariff-label">Выбор большинства</div>
+              <h3>Оптимум</h3>
+              <div class="price">8 990 ₽ <span>/ мес.</span></div>
+              <ul>
+                <li>Все из тарифа «Старт»</li>
+                <li>Проверка домашних заданий</li>
+                <li>Кураторы и контроль дедлайнов</li>
+                <li>Ежемесячные пробники</li>
+                <li>Разбор ошибок и рекомендации</li>
+                <li>Отдельная подготовка ко второй части</li>
+              </ul>
+              <a class="btn block" href="#lead">Выбрать оптимум</a>
+            </article>
+            <article class="tariff">
+              <div class="tariff-label">Максимум контроля</div>
+              <h3>Премиум</h3>
+              <div class="price">14 990 ₽ <span>/ мес.</span></div>
+              <ul>
+                <li>Все из тарифа «Оптимум»</li>
+                <li>Персональный план подготовки</li>
+                <li>Индивидуальные разборы сложных заданий</li>
+                <li>Приоритетная связь с куратором</li>
+                <li>Отчеты о прогрессе для родителей</li>
+                <li>Финальная стратегия перед экзаменом</li>
+              </ul>
+              <a class="btn secondary block" href="#lead">Обсудить премиум</a>
+            </article>
+          </div>
+        </div>
+      </section>
+
+      <section class="section painting-bg painting-right" id="results" style="--painting: url('assets/vlad-collage.jpg');">
+        <div class="wrap">
+          <div class="section-head">
+            <h2>Результаты растут, когда ученик понимает, что исправлять</h2>
+            <p>Показываем не обещания, а динамику: стартовый уровень, понятный маршрут, регулярные проверки и итоговый рост балла.</p>
+          </div>
+          <div class="results-layout">
+            <div class="results-photo">
+              <img src="assets/culture-tour.jpg" alt="Исторический коллаж с Владом Манацковым">
+            </div>
+            <div class="results-cards">
+              <article class="result-card">
+                <div class="score"><span>54</span> 88</div>
+                <p>«Пришла с хаосом в датах и картах. После проверок ДЗ стало понятно, где теряю баллы и как формулировать ответы».</p>
+                <div class="student">Алина К. <span>11 класс</span></div>
+              </article>
+              <article class="result-card">
+                <div class="score"><span>63</span> 91</div>
+                <p>«Больше всего помогла вторая часть: причины, последствия и аргументы наконец стали не лотереей, а алгоритмом».</p>
+                <div class="student">Максим Р. <span>ЕГЭ 2025</span></div>
+              </article>
+              <article class="result-card">
+                <div class="score"><span>47</span> 82</div>
+                <p>«Готовился поздно, поэтому важен был фокус. Куратор помогал держать темп, а пробники сильно снизили стресс».</p>
+                <div class="student">Даниил П. <span>интенсив</span></div>
+              </article>
+              <article class="result-card">
+                <div class="score"><span>58</span> 86</div>
+                <p>«Культура и карты перестали быть случайностью. Конспекты, карточки и регулярное повторение сделали свое дело».</p>
+                <div class="student">Софья М. <span>тариф Оптимум</span></div>
+              </article>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="section dark">
+        <div class="wrap">
+          <div class="section-head">
+            <h2>Почему ученики выбирают «Историку»</h2>
+            <p>Курс построен не вокруг красивых обещаний, а вокруг ежедневного движения: урок, практика, проверка, исправление, повторение.</p>
+          </div>
+          <div class="advantage-grid">
+            <article class="advantage-card"><h3>Узкая специализация</h3><p>Фокус на истории и формате ЕГЭ, без распыления на десятки предметов.</p></article>
+            <article class="advantage-card"><h3>Кураторы</h3><p>Помогают с дедлайнами, вопросами и регулярностью подготовки.</p></article>
+            <article class="advantage-card"><h3>Проверка ДЗ</h3><p>Работы возвращаются с комментариями: ученик понимает, что исправить.</p></article>
+            <article class="advantage-card"><h3>Пробники</h3><p>Показывают динамику, слабые темы и готовность к реальному экзамену.</p></article>
+            <article class="advantage-card"><h3>Вторая часть</h3><p>Отдельный фокус на ПСС, аргументах и критериях проверки.</p></article>
+            <article class="advantage-card"><h3>Живой язык</h3><p>Сложные эпохи объясняются так, чтобы их реально понять и запомнить.</p></article>
+            <article class="advantage-card"><h3>Записи уроков</h3><p>Можно пересмотреть тему, если пропустил занятие или хочешь повторить.</p></article>
+            <article class="advantage-card"><h3>Комьюнити</h3><p>Ученики готовятся не в одиночку, а в среде, где история становится привычкой.</p></article>
+          </div>
+        </div>
+      </section>
+
+      <section class="section">
+        <div class="wrap">
+          <div class="section-head">
+            <h2>Как проходит обучение</h2>
+            <p>Простой маршрут без лишней бюрократии: ученик всегда знает, что смотреть, что решать и когда сдавать.</p>
+          </div>
+          <div class="process">
+            <div class="process-step">
+              <div class="num">01</div>
+              <div><h3>Диагностика и цель</h3><p>Определяем текущий уровень, желаемый балл и подходящий тариф.</p></div>
+              <small>На старте видно, какие темы уже сильные, а где нужно усиление.</small>
+            </div>
+            <div class="process-step">
+              <div class="num">02</div>
+              <div><h3>Уроки и конспекты</h3><p>Влад объясняет тему на вебинаре, запись остается в доступе.</p></div>
+              <small>После занятия ученик получает материалы и домашнюю работу.</small>
+            </div>
+            <div class="process-step">
+              <div class="num">03</div>
+              <div><h3>Домашка и проверка</h3><p>Задания проверяются, ошибки разбираются, куратор помогает не застрять.</p></div>
+              <small>Особое внимание — второй части и формулировкам.</small>
+            </div>
+            <div class="process-step">
+              <div class="num">04</div>
+              <div><h3>Пробники и финал</h3><p>Регулярно замеряем балл, корректируем план и повторяем слабые темы.</p></div>
+              <small>К экзамену ученик приходит с понятной стратегией.</small>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="section soft" id="faq">
+        <div class="wrap">
+          <div class="section-head">
+            <h2>Вопросы перед записью</h2>
+            <p>Коротко о том, что обычно спрашивают ученики и родители до старта курса.</p>
+          </div>
+          <div class="faq-grid">
+            <article class="faq-item active">
+              <button class="faq-q" type="button">Можно ли прийти с нуля? <svg viewBox="0 0 24 24" fill="none"><path d="M12 5v14M5 12h14" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/></svg></button>
+              <div class="faq-a">Да. На старте есть диагностика и базовые темы, а дальше ученик идет по системе от простого к сложному.</div>
+            </article>
+            <article class="faq-item">
+              <button class="faq-q" type="button">Что если я пропущу вебинар? <svg viewBox="0 0 24 24" fill="none"><path d="M12 5v14M5 12h14" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/></svg></button>
+              <div class="faq-a">Записи сохраняются, поэтому занятие можно посмотреть позже и сдать домашку в согласованный срок.</div>
+            </article>
+            <article class="faq-item">
+              <button class="faq-q" type="button">Кто проверяет домашние задания? <svg viewBox="0 0 24 24" fill="none"><path d="M12 5v14M5 12h14" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/></svg></button>
+              <div class="faq-a">На тарифах с сопровождением работы проверяются, ученик получает комментарии и понимает, как исправить ошибку.</div>
+            </article>
+            <article class="faq-item">
+              <button class="faq-q" type="button">Есть ли контроль для родителей? <svg viewBox="0 0 24 24" fill="none"><path d="M12 5v14M5 12h14" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/></svg></button>
+              <div class="faq-a">На премиальном формате можно получать отчеты о прогрессе, посещаемости, ДЗ и пробниках.</div>
+            </article>
+            <article class="faq-item">
+              <button class="faq-q" type="button">Курс соответствует ЕГЭ? <svg viewBox="0 0 24 24" fill="none"><path d="M12 5v14M5 12h14" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/></svg></button>
+              <div class="faq-a">Программа построена вокруг актуального формата ЕГЭ: теория, типы заданий, критерии и регулярные пробники.</div>
+            </article>
+            <article class="faq-item">
+              <button class="faq-q" type="button">Можно ли оплатить частями? <svg viewBox="0 0 24 24" fill="none"><path d="M12 5v14M5 12h14" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/></svg></button>
+              <div class="faq-a">Да, менеджер подберет удобный вариант оплаты и расскажет условия перед записью.</div>
+            </article>
+          </div>
+        </div>
+      </section>
+
+      <section class="section">
+        <div class="wrap urgency">
+          <div>
+            <h2>Набор в поток открыт до 1 сентября</h2>
+            <p>Чем раньше старт, тем меньше аврала весной. При записи сейчас ученик получает бонусный интенсив по хронологии и чек-лист по второй части.</p>
+          </div>
+          <div class="timer" aria-label="Таймер до окончания набора">
+            <div class="time-cell"><strong id="days">00</strong><span>дней</span></div>
+            <div class="time-cell"><strong id="hours">00</strong><span>часов</span></div>
+            <div class="time-cell"><strong id="minutes">00</strong><span>минут</span></div>
+            <div class="time-cell"><strong id="seconds">00</strong><span>секунд</span></div>
+          </div>
+        </div>
+      </section>
+
+      <section class="section dark" id="lead">
+        <div class="wrap form-layout">
+          <div class="form-copy">
+            <h2>Начните с пробного урока и плана подготовки</h2>
+            <p>Оставьте заявку. Мы уточним класс, текущий уровень, цель по баллам и подскажем, какой формат подойдет лучше.</p>
+            <div class="form-points">
+              <div class="form-point">Покажем, как устроены уроки, ДЗ и проверка.</div>
+              <div class="form-point">Подберем тариф под уровень самостоятельности.</div>
+              <div class="form-point">Объясним, как быстро закрыть слабые темы до ЕГЭ.</div>
+            </div>
+          </div>
+
+          <form class="lead-form" id="leadForm">
+            <div class="field-grid">
+              <div class="field">
+                <label for="name">Имя</label>
+                <input id="name" name="name" type="text" placeholder="Как к вам обращаться" required>
+              </div>
+              <div class="field">
+                <label for="phone">Телефон</label>
+                <input id="phone" name="phone" type="tel" placeholder="+7 999 000-00-00" required>
+              </div>
+              <div class="field">
+                <label for="grade">Класс</label>
+                <select id="grade" name="grade">
+                  <option>11 класс</option>
+                  <option>10 класс</option>
+                  <option>9 класс</option>
+                  <option>Родитель ученика</option>
+                </select>
+              </div>
+              <div class="field">
+                <label for="goal">Цель</label>
+                <select id="goal" name="goal">
+                  <option>80+ баллов</option>
+                  <option>90+ баллов</option>
+                  <option>Закрыть базу</option>
+                  <option>Подобрать формат</option>
+                </select>
+              </div>
+              <div class="field full">
+                <label for="format">Интересующий формат</label>
+                <select id="format" name="format">
+                  <option>Оптимум — с кураторами и проверкой ДЗ</option>
+                  <option>Старт — самостоятельная подготовка</option>
+                  <option>Премиум — максимум контроля</option>
+                </select>
+              </div>
+            </div>
+            <p class="form-note">Нажимая кнопку, вы соглашаетесь на обработку данных. Для публикации подключите вашу CRM, форму VK или Telegram-бота.</p>
+            <button class="btn block" type="submit">Записаться на пробный урок</button>
+            <div class="success" id="successMessage">Заявка принята. Мы свяжемся с вами и подскажем подходящий формат подготовки.</div>
+          </form>
+        </div>
+      </section>
+    </main>
+
+    <footer class="footer">
+      <div class="footer-inner">
+        <div class="brand">
+          <img src="assets/hourglass-logo.jpg" alt="">
+          <span>Историка</span>
+        </div>
+        <div class="footer-links">
+          <a href="https://vk.com/istorikaege">VK</a>
+          <a href="https://www.youtube.com/@Istorikaschool">YouTube</a>
+          <a href="https://t.me/istoricash">Telegram</a>
+          <a href="#lead">Заявка</a>
+          <a href="#">Оферта</a>
+          <a href="#">Политика</a>
+        </div>
+      </div>
+    </footer>
+  </div>
+
+  <script>
+    const animatedElements = document.querySelectorAll(".section-head, .proof-item, .pain-card, .route-step, .module, .art-tile, .tariff, .result-card, .advantage-card, .process-step, .faq-item");
+    const motionAllowed = !window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    if (motionAllowed && "IntersectionObserver" in window) {
+      const observer = new IntersectionObserver((entries) => {
+        entries.forEach((entry) => {
+          if (entry.isIntersecting) {
+            entry.target.classList.add("is-visible");
+            observer.unobserve(entry.target);
+          }
+        });
+      }, { threshold: 0.14 });
+
+      animatedElements.forEach((element) => {
+        element.classList.add("reveal");
+        observer.observe(element);
+      });
+    } else {
+      animatedElements.forEach((element) => element.classList.add("is-visible"));
+    }
+
+    const faqItems = document.querySelectorAll(".faq-item");
+    faqItems.forEach((item) => {
+      item.querySelector(".faq-q").addEventListener("click", () => {
+        item.classList.toggle("active");
+      });
+    });
+
+    const deadline = new Date("2026-09-01T23:59:59");
+    const timerIds = {
+      days: document.getElementById("days"),
+      hours: document.getElementById("hours"),
+      minutes: document.getElementById("minutes"),
+      seconds: document.getElementById("seconds")
+    };
+
+    function updateTimer() {
+      const now = new Date();
+      const diff = Math.max(0, deadline - now);
+      const days = Math.floor(diff / 86400000);
+      const hours = Math.floor((diff / 3600000) % 24);
+      const minutes = Math.floor((diff / 60000) % 60);
+      const seconds = Math.floor((diff / 1000) % 60);
+      timerIds.days.textContent = String(days).padStart(2, "0");
+      timerIds.hours.textContent = String(hours).padStart(2, "0");
+      timerIds.minutes.textContent = String(minutes).padStart(2, "0");
+      timerIds.seconds.textContent = String(seconds).padStart(2, "0");
+    }
+
+    updateTimer();
+    setInterval(updateTimer, 1000);
+
+    const form = document.getElementById("leadForm");
+    const success = document.getElementById("successMessage");
+    form.addEventListener("submit", (event) => {
+      event.preventDefault();
+      const data = Object.fromEntries(new FormData(form).entries());
+      localStorage.setItem("istorikaLead", JSON.stringify({ ...data, createdAt: new Date().toISOString() }));
+      success.classList.add("show");
+      form.reset();
+    });
+  </script>
+</body>
+</html>
