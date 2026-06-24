@@ -1804,17 +1804,22 @@
         };
 
         // ── Новый формат: ДЗ как набор подзаданий (items) ──
-        // items[i] = {task, period, metric:'lines'|'points'|'learned', goal}
+        // items[i] = {task, period, metric:'lines'|'points'|'learned', goal[, yearStart, yearEnd]}
+        // yearStart/yearEnd передаются ТОЛЬКО для period==='custom' (диапазон лет), иначе теряются.
         window._assignBundleToStudentDb = async function(studentId, items, deadline, title, silent) {
             if (!db) return;
             const rec = {
                 id: 'a_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 8),
-                items: (items || []).map(it => ({
-                    task: it.task || 'task4',
-                    period: it.period || 'all',
-                    metric: (it.metric === 'points' || it.metric === 'learned') ? it.metric : 'lines',
-                    goal: Number(it.goal) || 0
-                })),
+                items: (items || []).map(it => {
+                    const o = {
+                        task: it.task || 'task4',
+                        period: it.period || 'all',
+                        metric: (it.metric === 'points' || it.metric === 'learned') ? it.metric : 'lines',
+                        goal: Number(it.goal) || 0
+                    };
+                    if (o.period === 'custom') { o.yearStart = Number(it.yearStart) || 862; o.yearEnd = Number(it.yearEnd) || 2026; }
+                    return o;
+                }),
                 deadline: deadline || null,
                 title: title || null,
                 assignedAt: Date.now()
@@ -1837,12 +1842,16 @@
             // Тогда опоздавший подхватит ДЗ из журнала без дублей с теми, кому уже разослали.
             const rec = {
                 id: 'a_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 8),
-                items: (items || []).map(it => ({
-                    task: it.task || 'task4',
-                    period: it.period || 'all',
-                    metric: (it.metric === 'points' || it.metric === 'learned') ? it.metric : 'lines',
-                    goal: Number(it.goal) || 0
-                })),
+                items: (items || []).map(it => {
+                    const o = {
+                        task: it.task || 'task4',
+                        period: it.period || 'all',
+                        metric: (it.metric === 'points' || it.metric === 'learned') ? it.metric : 'lines',
+                        goal: Number(it.goal) || 0
+                    };
+                    if (o.period === 'custom') { o.yearStart = Number(it.yearStart) || 862; o.yearEnd = Number(it.yearEnd) || 2026; }
+                    return o;
+                }),
                 deadline: deadline || null,
                 title: title || null,
                 assignedAt: Date.now()

@@ -398,14 +398,18 @@ function normalizeAssignmentRec(rec) {
         // legacy/простой формат — один этап по строкам
         items = [{ task: rec.task || 'task4', period: rec.period || 'all', metric: 'lines', goal: Number(rec.total) || 0 }];
     }
-    items = items.map(it => ({
-        task: it.task || 'task4',
-        period: it.period || 'all',
-        metric: (it.metric === 'points' || it.metric === 'learned') ? it.metric : 'lines',
-        goal: Number(it.goal) || 0,
-        progress: Number(it.progress) || 0,
-        done: false
-    }));
+    items = items.map(it => {
+        const o = {
+            task: it.task || 'task4',
+            period: it.period || 'all',
+            metric: (it.metric === 'points' || it.metric === 'learned') ? it.metric : 'lines',
+            goal: Number(it.goal) || 0,
+            progress: Number(it.progress) || 0,
+            done: false
+        };
+        if (o.period === 'custom') { o.yearStart = Number(it.yearStart) || 862; o.yearEnd = Number(it.yearEnd) || 2026; }
+        return o;
+    });
     return {
         id: rec.id,
         title: rec.title || null,
