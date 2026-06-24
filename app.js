@@ -582,6 +582,7 @@ const ACTION_HANDLERS = {
     startHwFromBanner:      () => window.startHwFromBanner?.(),
     openHwTab:              () => window.openHwTab?.(),
     openCram:               (a) => window.openCram?.(a),
+    openSvoTrainer:         () => window.openSvoTrainer?.(),
     backToLobby:            () => window.backToLobby?.(),
     quickStartGame:         (a, a2) => window.quickStartGame?.(a, a2 || 'normal'),
     startVisualTrainer:     () => window.startVisualTrainer?.(),

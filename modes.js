@@ -1001,3 +1001,117 @@ window.nextRedPencilCase = function() {
     currentRPCaseIndex++;
     window.loadRPCase(currentRPCaseIndex);
 };
+
+/* ══════════════════════════════════════════════════════════
+   ТРЕНАЖЁР «ЛИЧНОСТИ СВО» — узнавание для задания №5.
+   Показываем 5 имён: одно — участник СВО (из списка), 4 — отвлекающие из task5
+   (НЕ связанные с СВО). N верных подряд по имени → оно уходит из пула.
+   Прогресс — в localStorage (svo_streaks), как у «Зубрёжки».
+   ══════════════════════════════════════════════════════════ */
+window.svoPersonsData = [
+    'Н. Гаджимагомедов', 'В. Жога', 'Т. Матвеев', 'А. Жихарев', 'К. Боташев',
+    'А. Сеикаев', 'Д. Исламов', 'Д. Гелимханов', 'И. Цевун', 'А. Алаудинов',
+    'Ю. Гагарин', 'О. Качура', 'М. Пирогова', 'Е. Иванова', 'М. Мирошниченко'
+];
+const SVO_NEED = 4; // верных подряд по имени, чтобы оно ушло из пула
+let _svoTarget = null, _svoLock = false;
+function _svoEsc(s) { return (typeof escapeHtml === 'function') ? escapeHtml(String(s)) : String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c])); }
+function _svoLoad() { try { return JSON.parse(localStorage.getItem('svo_streaks') || '{}') || {}; } catch (e) { return {}; } }
+function _svoSave(o) { try { localStorage.setItem('svo_streaks', JSON.stringify(o)); } catch (e) {} }
+function _svoPool(st) { return window.svoPersonsData.filter(n => (st[n] || 0) < SVO_NEED); }
+function _svoLearned(st) { return window.svoPersonsData.filter(n => (st[n] || 0) >= SVO_NEED).length; }
+function _svoShuffle(a) { for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; }
+function _svoDecoys(target) {
+    const isSvo = e => /СВО|[Сс]пециальн\w*\s+военн/.test(String(e || ''));
+    const pool = [...new Set((window.task5Data || []).filter(f => f.person && !isSvo(f.event)).map(f => f.person))].filter(p => p && p !== target);
+    return _svoShuffle(pool).slice(0, 4);
+}
+
+window.openSvoTrainer = function() {
+    if (typeof haptic === 'function') haptic('light');
+    let ov = document.getElementById('svo-overlay');
+    if (!ov) { ov = document.createElement('div'); ov.id = 'svo-overlay'; document.body.appendChild(ov); }
+    ov.className = 'no-print';
+    ov.style.cssText = 'position:fixed;inset:0;z-index:10050;background:rgba(0,0,0,0.6);backdrop-filter:blur(4px);display:flex;align-items:center;justify-content:center;padding:16px';
+    _svoLock = false;
+    _svoRender();
+};
+window.closeSvoTrainer = function() {
+    const ov = document.getElementById('svo-overlay'); if (ov) ov.remove();
+    if (window.updateProgressBars) window.updateProgressBars();
+};
+
+function _svoRender() {
+    const ov = document.getElementById('svo-overlay'); if (!ov) return;
+    const st = _svoLoad();
+    const learned = _svoLearned(st), total = window.svoPersonsData.length;
+    const pct = total ? Math.round(learned / total * 100) : 0;
+    const pool = _svoPool(st);
+    const cardLayout = 'border-radius:20px;padding:22px;width:100%;max-width:420px;box-shadow:0 20px 60px rgba(0,0,0,0.3)';
+
+    if (!pool.length) {
+        ov.innerHTML = `<div class="bg-white dark:bg-[#1e1e1e]" style="${cardLayout};text-align:center">
+            <div style="font-size:46px;margin-bottom:8px">✅</div>
+            <div class="text-gray-800 dark:text-gray-200" style="font-size:17px;font-weight:900;margin-bottom:4px">Все личности выучены</div>
+            <div class="text-gray-400" style="font-size:11px;margin-bottom:18px">${total} из ${total} · по ${SVO_NEED} верных подряд каждая</div>
+            <div style="display:flex;gap:8px">
+                <button id="svo-reset" class="bg-gray-100 dark:bg-[#2c2c2c] text-gray-600 dark:text-gray-300" style="flex:1;border:none;border-radius:14px;padding:12px;font-size:13px;font-weight:900;cursor:pointer">Сбросить</button>
+                <button id="svo-done" style="flex:1;background:#a855f7;color:#fff;border:none;border-radius:14px;padding:12px;font-size:13px;font-weight:900;cursor:pointer">Готово</button>
+            </div></div>`;
+        ov.querySelector('#svo-done').onclick = window.closeSvoTrainer;
+        ov.querySelector('#svo-reset').onclick = () => { _svoSave({}); _svoRender(); };
+        return;
+    }
+
+    _svoTarget = pool[Math.floor(Math.random() * pool.length)];
+    const opts = _svoShuffle([_svoTarget, ..._svoDecoys(_svoTarget)]);
+    const cur = Math.min(st[_svoTarget] || 0, SVO_NEED);
+    const optLayout = 'width:100%;border:2px solid transparent;border-radius:12px;padding:12px 14px;font-size:14px;font-weight:800;cursor:pointer;transition:all .15s;text-align:center';
+
+    ov.innerHTML = `<div class="bg-white dark:bg-[#1e1e1e]" style="${cardLayout}">
+        <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:14px">
+            <div><div class="text-gray-800 dark:text-gray-200" style="font-size:17px;font-weight:900">Личности СВО</div>
+                <div class="text-gray-400" style="font-size:11px">Узнавание для задания №5</div></div>
+            <button id="svo-x" class="text-gray-400" style="background:none;border:none;font-size:22px;line-height:1;cursor:pointer;padding:0 4px">✕</button>
+        </div>
+        <div style="margin-bottom:16px">
+            <div class="text-gray-400" style="display:flex;justify-content:space-between;font-size:11px;font-weight:800;margin-bottom:4px"><span>Выучено</span><span>${learned} / ${total}</span></div>
+            <div class="bg-gray-100 dark:bg-[#2c2c2c]" style="height:8px;border-radius:6px;overflow:hidden"><div style="height:100%;width:${pct}%;background:#a855f7;border-radius:6px;transition:width .3s"></div></div>
+        </div>
+        <div class="text-gray-700 dark:text-gray-300" style="text-align:center;font-size:14px;font-weight:900;margin-bottom:2px">Кто из них — участник СВО?</div>
+        <div class="text-gray-400" style="text-align:center;font-size:11px;margin-bottom:14px">Серия по этому имени: ${cur} / ${SVO_NEED}</div>
+        <div id="svo-options" style="display:flex;flex-direction:column;gap:8px">
+            ${opts.map(o => `<button class="svo-opt bg-gray-50 dark:bg-[#2c2c2c] text-gray-800 dark:text-gray-200" data-name="${_svoEsc(o)}" style="${optLayout}">${_svoEsc(o)}</button>`).join('')}
+        </div>
+        <div id="svo-feedback" style="text-align:center;font-size:13px;font-weight:900;margin-top:12px;min-height:18px"></div>
+    </div>`;
+
+    ov.querySelector('#svo-x').onclick = window.closeSvoTrainer;
+    ov.querySelectorAll('.svo-opt').forEach(b => b.addEventListener('click', () => _svoAnswer(b.getAttribute('data-name'))));
+}
+
+function _svoAnswer(name) {
+    if (_svoLock) return; _svoLock = true;
+    const ov = document.getElementById('svo-overlay'); if (!ov) { _svoLock = false; return; }
+    const st = _svoLoad();
+    const ok = name === _svoTarget;
+    st[_svoTarget] = ok ? Math.min(SVO_NEED, (st[_svoTarget] || 0) + 1) : 0;
+    _svoSave(st);
+    ov.querySelectorAll('.svo-opt').forEach(b => {
+        b.disabled = true; b.style.cursor = 'default';
+        const n = b.getAttribute('data-name');
+        if (n === _svoTarget) { b.style.borderColor = '#10b981'; b.style.background = 'rgba(16,185,129,0.16)'; b.style.color = '#047857'; }
+        else if (n === name) { b.style.borderColor = '#f43f5e'; b.style.background = 'rgba(244,63,94,0.12)'; b.style.color = '#be123c'; }
+    });
+    const fb = ov.querySelector('#svo-feedback');
+    if (ok) {
+        fb.textContent = (st[_svoTarget] >= SVO_NEED) ? 'Выучено ✅' : `Верно! Серия ${st[_svoTarget]} / ${SVO_NEED}`;
+        fb.style.color = '#059669';
+        if (typeof haptic === 'function') haptic('success');
+    } else {
+        fb.textContent = `Участник СВО — ${_svoTarget}`;
+        fb.style.color = '#e11d48';
+        if (typeof haptic === 'function') haptic('error');
+    }
+    setTimeout(() => { _svoLock = false; _svoRender(); }, ok ? 700 : 1500);
+}

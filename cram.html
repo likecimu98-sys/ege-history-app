@@ -552,7 +552,7 @@ function periodList(){ return Array.isArray(state.periods) ? state.periods : [];
 function periodDecks(){ return periodList().map(p => buildPeriodDeck(p.from, p.to)); }
 function getDecks(){ return [...periodDecks(), ...STATIC_DECKS]; }
 const STORE_KEY = 'ege_dates_neobrutal_v1_' + RAW.hash;
-const NEED_CHOOSE = 2;
+const NEED_CHOOSE = 3;
 let state = loadState();
 let currentDeck = null;
 let currentItem = null;
@@ -764,7 +764,7 @@ function addPeriod(){
 }
 function deckCard(deck){
   const st = deckStats(deck);
-  const phaseText = st.done ? 'выучен' : (st.phase === 'type' ? (deck.kind === 'commander' ? 'ввод фамилии' : (deck.kind === 'film' ? 'ввод ответа' : 'ввод')) : '1 из 4');
+  const phaseText = st.done ? 'выучен' : (st.phase === 'type' ? (deck.kind === 'commander' ? 'ввод фамилии' : (deck.kind === 'film' ? 'ввод ответа' : 'ввод')) : 'выбор');
   const rangeLabel = deckRangeLabel(deck);
   const rangePrefix = deck.kind === 'film' ? '' : 'Даты: ';
   const doneNow = st.done ? st.total : (st.phase === 'type' ? st.typedDone : st.chooseDone);
@@ -773,7 +773,7 @@ function deckCard(deck){
   btn.className = 'deck' + (st.done ? ' done' : '') + (deck.kind === 'vov' ? ' vov' : '') + (deck.kind === 'commander' ? ' commander' : '') + (deck.kind === 'film' ? ' film' : '');
   btn.innerHTML = `
     <div class="deck-title"><span>${esc(deck.title)}</span><span class="tag ${st.done?'green':(deck.kind==='vov'?'pink':(deck.kind==='film'?'blue':'yellow'))}">${phaseText}</span></div>
-    <div class="deck-meta">${rangeLabel ? rangePrefix + esc(rangeLabel) + ' · ' : ''}${st.total} ${deck.kind === 'film' ? 'фильмов' : 'событий'} · 1 из 4: ${st.chooseDone}/${st.total} · ввод: ${st.typedDone}/${st.total} · время: ${fmtTime(state.timers[deck.id] || 0)}</div>
+    <div class="deck-meta">${rangeLabel ? rangePrefix + esc(rangeLabel) + ' · ' : ''}${st.total} ${deck.kind === 'film' ? 'фильмов' : 'событий'} · выбор: ${st.chooseDone}/${st.total} · ввод: ${st.typedDone}/${st.total} · время: ${fmtTime(state.timers[deck.id] || 0)}</div>
     <div class="progress"><span class="fill" style="width:${bar}%"></span></div>`;
   btn.addEventListener('click', () => startDeck(deck.id));
   return btn;
@@ -790,7 +790,7 @@ function openStats(){
   const total = getDecks().reduce((s,d)=>s+(state.timers[d.id]||0),0);
   grid.innerHTML = getDecks().map(deck => {
     const st = deckStats(deck);
-    const main = st.done ? 'готов' : (st.phase === 'type' ? `ввод ${st.typedDone}/${st.total}` : `1 из 4 ${st.chooseDone}/${st.total}`);
+    const main = st.done ? 'готов' : (st.phase === 'type' ? `ввод ${st.typedDone}/${st.total}` : `выбор ${st.chooseDone}/${st.total}`);
     return `<div class="time-row ${st.done?'done':''}"><div><b>${esc(deck.title)}</b><div class="mini">${main}</div></div><div style="text-align:right">${fmtTime(state.timers[deck.id] || 0)}</div></div>`;
   }).join('') + `<div class="time-row"><div><b>Всего</b><div class="mini">сумма по всем блокам</div></div><div style="text-align:right">${fmtTime(total)}</div></div>
   <button class="btn" id="resetProgress" style="margin-top:6px;background:#ffe1df">Сбросить прогресс и время</button>`;
@@ -838,7 +838,7 @@ function renderTrainer(){
 function updateStatus(){
   const st = deckStats(currentDeck);
   const s = deckState(currentDeck);
-  const stage = s.phase === 'type' ? 'Этап 2/2: ввод' : (s.phase === 'done' ? 'Готово' : 'Этап 1/2: 1 из 4');
+  const stage = s.phase === 'type' ? 'Этап 2/2: ввод' : (s.phase === 'done' ? 'Готово' : 'Этап 1/2: выбор');
   const doneNow = s.phase === 'type' ? st.typedDone : (s.phase === 'done' ? st.total : st.chooseDone);
   const left = Math.max(0, st.total - doneNow);
   document.getElementById('statusRow').innerHTML = `
@@ -907,7 +907,7 @@ function renderChoose(){
   document.getElementById('work').innerHTML = `
     <div class="label">${currentDeck.kind === 'film' ? 'Фильм' : 'Событие'}</div>
     <div class="question">${esc(currentItem.event)}</div>
-    <div class="mini">Нажми на правильный ответ. Нужно 2 правильных подряд: сейчас ${Math.min(r.choose || 0, NEED_CHOOSE)}/${NEED_CHOOSE}.</div>
+    <div class="mini">Нажми на правильный ответ. Нужно ${NEED_CHOOSE} правильных подряд: сейчас ${Math.min(r.choose || 0, NEED_CHOOSE)}/${NEED_CHOOSE}.</div>
     <div class="options" id="options">${currentOptions.map((o,i)=>`<button class="option" data-value="${esc(o)}">${esc(o)}</button>`).join('')}</div>
     <div class="feedback" id="feedback"></div>`;
   document.querySelectorAll('.option').forEach(btn => btn.addEventListener('click', () => {
@@ -938,7 +938,7 @@ function renderComplete(){
     <div class="complete">
       <div class="emoji">💚</div>
       <h2>${esc(currentDeck.title)} выучен</h2>
-      <div class="mini">${currentDeck.kind === 'film' ? 'Все фильмы прошли 1 из 4 и точный ввод периода/автора.' : 'Все события прошли 1 из 4 и точный ввод. Блок будет гореть зелёным на главной.'}</div>
+      <div class="mini">${currentDeck.kind === 'film' ? 'Все фильмы прошли выбор и точный ввод периода/автора.' : 'Все события прошли выбор и точный ввод. Блок будет гореть зелёным на главной.'}</div>
       <button class="btn green" id="homeBtn">К блокам</button>
     </div>`;
   document.getElementById('bottomActions').classList.add('hidden');
