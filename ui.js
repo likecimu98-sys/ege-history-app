@@ -477,8 +477,8 @@ function updateSkinPicker(activeSkin) {
     });
 }
 
-// Apply skin on page load — тема по умолчанию: необрутализм (constructivism)
-const DEFAULT_SKIN = 'constructivism';
+// Apply skin on page load — тема по умолчанию: классика (светлая)
+const DEFAULT_SKIN = 'classic';
 (function() {
     let saved = localStorage.getItem('ege_skin') || DEFAULT_SKIN;
     // Легаси/удалённые скины (старая система beresta/cyberpunk/… больше не существует) → дефолт.

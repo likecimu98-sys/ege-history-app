@@ -529,7 +529,8 @@ function initStorage() {
     cacheDOM();
     if (tg && tg.initDataUnsafe) {
         tg.expand(); tg.ready();
-        if (tg.colorScheme === 'dark') { document.documentElement.classList.add('dark'); localStorage.setItem('ege_theme', 'dark'); }
+        // Тема по умолчанию — светлая. Тёмную из Telegram больше не навязываем новым
+        // пользователям; кто хочет тёмную — переключает сам (выбор сохраняется в ege_theme).
     }
     initPrecomputed();
 
