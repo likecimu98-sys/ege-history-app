@@ -34,6 +34,13 @@ localStorage.setItem('ege_auth_debug', '1');  // затем перезагруз
   чинить только Google-префикс и включать строгие правила.
 - Если `match: false` — нужен серверный фикс (Шаг 1).
 
+> **ПОДТВЕРЖДЕНО (24.06.2026, реальный Telegram Mini App):**
+> `authUid = 8UxGPoM2e5NA2pQg1E6PA02kgDg1` (случайный Firebase-uid),
+> `canonicalDocId = 352253483` (Telegram ID), **`match: false`**.
+> Сервер минтит токен со СЛУЧАЙНЫМ uid, не с tgId → нужен серверный фикс (Шаг 1).
+> Документы уже ключатся по Telegram ID, поэтому миграции данных для Telegram-учеников
+> НЕ требуется — после фикса `auth.uid (=tgId)` совпадёт с ID документа.
+
 ## Шаг 1. Сервер бота (вне этого репо): uid токена = tgId
 
 Там, где бэкенд минтит токен для Mini App (Firebase Admin SDK), `uid` должен быть
@@ -44,6 +51,20 @@ const token = await admin.auth().createCustomToken(String(telegramUserId));
 // затем отдать token клиенту как __initial_auth_token
 ```
 Тогда у Telegram-учеников `request.auth.uid === tgId === ID документа`.
+
+**Вариант с custom-claims (рекомендую — не меняет `auth.uid`, безопаснее для всего,
+что могло на него завязаться):** оставить uid как есть, но добавить в токен claim с tgId:
+```js
+const token = await admin.auth().createCustomToken(firebaseUid, { tgId: String(telegramUserId) });
+```
+Тогда в правилах сверяемся не с `auth.uid`, а с claim:
+```
+function isOwner(id) {
+  return request.auth != null && request.auth.token.tgId == id;
+}
+```
+Любой из двух вариантов закрывает проблему. Custom-claims — мягче (ничего не ломает),
+смена uid — проще в правилах. Выбирай по тому, что удобнее в бэкенде бота.
 
 ## Шаг 2. Клиент (этот репо): убрать рассинхрон Google-префикса
 
