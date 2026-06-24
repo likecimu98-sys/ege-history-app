@@ -452,7 +452,7 @@ function toggleTheme() { localStorage.setItem('ege_theme', document.documentElem
 /* ──────────────────────────────────────────────────────────
    SKIN SYSTEM — 7 лобби-тем
    ────────────────────────────────────────────────────────── */
-const SKINS = ['aurora','classic','constructivism','vaporwave','sakura','terminal','midnight','scholar'];
+const SKINS = ['aurora','classic','constructivism','coffee','sakura','forest','scholar'];
 
 window.applySkin = function(skin) {
     if (!SKINS.includes(skin)) skin = 'aurora';

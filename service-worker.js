@@ -1,6 +1,6 @@
 'use strict';
 
-const APP_VERSION = '2026-06-24-6';
+const APP_VERSION = '2026-06-24-7';
 const STATIC_CACHE = `ege-history-static-${APP_VERSION}`;
 const ASSET_CACHE = `ege-history-assets-${APP_VERSION}`;
 const CACHE_NAMES = [STATIC_CACHE, ASSET_CACHE];

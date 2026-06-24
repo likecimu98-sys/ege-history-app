@@ -525,18 +525,7 @@ html.dark body.skin-classic [data-action="quickStartGame"],
 html.dark body.skin-classic [data-action="pickTaskForMode"] { background: #1e1e1e !important; }
 
 /* ── 2. КОНСТРУКТИВИЗМ ── */
-body.skin-constructivism {
-  --a-bg:     #f2ece0;
-  --a-s1:     #fffdf7;
-  --a-s2:     #ede8dc;
-  --a-s3:     #e2ddd0;
-  --a-b1:     #cc0000;
-  --a-b2:     #8b0000;
-  --a-b3:     #e8c619;
-  --a-txt:    #111111;
-  --a-muted:  #555555;
-  --a-border: rgba(204,0,0,.2);
-}
+/* (дубль-токены конструктивизма удалены — единое определение ниже, ~стр. 1000) */
 body.skin-constructivism #top-stats-bar { background: #111111 !important; border-color: rgba(232,198,25,.3) !important; }
 body.skin-constructivism #bottom-nav    { background: #111111 !important; border-top: 3px solid #cc0000 !important; box-shadow: none !important; }
 body.skin-constructivism #stat-learned  { color: #e8c619 !important; text-shadow: none !important; }
@@ -553,37 +542,6 @@ body.skin-constructivism [data-action="pickTaskForMode"]:hover { border-color: #
 body.skin-constructivism .dnd-slot { background-color: #fffdf7 !important; border-color: rgba(204,0,0,.3) !important; border-radius: 4px !important; }
 body.skin-constructivism .dnd-chip { background: #fffdf7 !important; border-color: rgba(204,0,0,.25) !important; color: #111 !important; border-radius: 4px !important; }
 body.skin-constructivism #main-header button { background: rgba(204,0,0,.1) !important; border-color: rgba(204,0,0,.3) !important; border-radius: 4px !important; }
-/* Конструктивизм тёмная */
-html.dark body.skin-constructivism {
-  --a-bg: #1a0a0a; --a-s1: #2d0a0a; --a-s2: #1a0000; --a-s3: #3d1010;
-  --a-txt: #f5e0d0; --a-muted: #c08070; --a-border: rgba(204,0,0,.3);
-}
-
-/* ── 3. ВЕЙПОРВЭЙВ ── */
-body.skin-vaporwave {
-  --a-bg:     #0f0520;
-  --a-s1:     #1a0533;
-  --a-s2:     #0a0318;
-  --a-s3:     #200840;
-  --a-b1:     #ff71ce;
-  --a-b2:     #01cdfe;
-  --a-b3:     #b967ff;
-  --a-txt:    #f0e6ff;
-  --a-muted:  #7b6fa0;
-  --a-border: rgba(185,103,255,.25);
-}
-body.skin-vaporwave #top-stats-bar { background: rgba(15,5,32,.9) !important; border-color: rgba(185,103,255,.4) !important; box-shadow: 0 0 30px rgba(185,103,255,.15) !important; }
-body.skin-vaporwave #bottom-nav    { background: rgba(10,3,24,.97) !important; border-top-color: rgba(185,103,255,.2) !important; }
-body.skin-vaporwave #stat-learned  { color: #ff71ce !important; text-shadow: 0 0 10px rgba(255,113,206,.6) !important; }
-body.skin-vaporwave #stat-solved   { color: #01cdfe !important; text-shadow: 0 0 10px rgba(1,205,254,.6) !important; }
-body.skin-vaporwave #stat-days     { color: #b967ff !important; text-shadow: 0 0 10px rgba(185,103,255,.6) !important; }
-body.skin-vaporwave #stat-ege      { color: #01cdfe !important; text-shadow: 0 0 10px rgba(1,205,254,.7) !important; }
-body.skin-vaporwave #ege-ring      { stroke: #01cdfe !important; filter: drop-shadow(0 0 4px rgba(1,205,254,.8)) !important; }
-body.skin-vaporwave #bottom-nav button.active-nav,
-body.skin-vaporwave #bottom-nav button:hover { color: #ff71ce !important; }
-body.skin-vaporwave [data-action="startDuelSearch"] h4 { background: linear-gradient(to right,#ff71ce,#01cdfe) !important; -webkit-background-clip: text !important; }
-/* Вейпорвэйв всегда тёмный — .dark не влияет */
-
 /* ── 4. САКУРА ── */
 body.skin-sakura {
   --a-bg:     #fdf5f7;
@@ -623,66 +581,7 @@ html.dark body.skin-sakura {
 html.dark body.skin-sakura #top-stats-bar { background: rgba(26,10,16,.95) !important; }
 html.dark body.skin-sakura #bottom-nav    { background: rgba(14,5,10,.97) !important; }
 
-/* ── 5. ТЕРМИНАЛ ── */
-body.skin-terminal {
-  --a-bg:     #000000;
-  --a-s1:     #001100;
-  --a-s2:     #000800;
-  --a-s3:     #001a00;
-  --a-b1:     #00ff41;
-  --a-b2:     #00cc33;
-  --a-b3:     #00aa22;
-  --a-txt:    #00ff41;
-  --a-muted:  rgba(0,255,65,.5);
-  --a-border: rgba(0,255,65,.2);
-}
-body.skin-terminal #top-stats-bar { background: rgba(0,8,0,.9) !important; border-color: rgba(0,255,65,.3) !important; box-shadow: 0 0 20px rgba(0,255,65,.08) !important; }
-body.skin-terminal #bottom-nav    { background: rgba(0,4,0,.97) !important; border-top: 1px solid rgba(0,255,65,.3) !important; }
-body.skin-terminal #stat-learned,
-body.skin-terminal #stat-solved,
-body.skin-terminal #stat-days     { color: #00ff41 !important; text-shadow: 0 0 8px rgba(0,255,65,.6) !important; }
-body.skin-terminal #stat-ege      { color: #00ff41 !important; text-shadow: 0 0 8px rgba(0,255,65,.6) !important; }
-body.skin-terminal #ege-ring      { stroke: #00ff41 !important; filter: drop-shadow(0 0 3px rgba(0,255,65,.8)) !important; }
-body.skin-terminal #bottom-nav button { color: rgba(0,255,65,.4) !important; }
-body.skin-terminal #bottom-nav button.active-nav,
-body.skin-terminal #bottom-nav button:hover { color: #00ff41 !important; }
-body.skin-terminal #main-header button { background: rgba(0,255,65,.06) !important; border-color: rgba(0,255,65,.25) !important; border-radius: 4px !important; }
-body.skin-terminal [data-action="quickStartGame"],
-body.skin-terminal [data-action="pickTaskForMode"] { background: rgba(0,17,0,.8) !important; border: 1px solid rgba(0,255,65,.25) !important; border-radius: 4px !important; }
-body.skin-terminal [data-action="quickStartGame"]:hover,
-body.skin-terminal [data-action="pickTaskForMode"]:hover { border-color: #00ff41 !important; box-shadow: 0 0 12px rgba(0,255,65,.2) !important; }
-body.skin-terminal .dnd-slot { background-color: rgba(0,17,0,.7) !important; border-color: rgba(0,255,65,.3) !important; border-radius: 4px !important; }
-body.skin-terminal .dnd-chip { background: rgba(0,17,0,.9) !important; border-color: rgba(0,255,65,.3) !important; color: #00ff41 !important; border-radius: 4px !important; }
-body.skin-terminal .bg-white,.skin-terminal .bg-gray-50 { background-color: #001100 !important; }
-/* Терминал всегда тёмный */
-
-/* ── 6. MIDNIGHT OIL ── */
-body.skin-midnight {
-  --a-bg:     #0d0a1e;
-  --a-s1:     #14082c;
-  --a-s2:     #0a0616;
-  --a-s3:     #1e0e3c;
-  --a-b1:     #a78bfa;
-  --a-b2:     #f59e0b;
-  --a-b3:     #fb7185;
-  --a-txt:    #e2d9f3;
-  --a-muted:  #9ca3af;
-  --a-border: rgba(124,58,237,.25);
-}
-body.skin-midnight #top-stats-bar { background: rgba(13,10,30,.9) !important; border-color: rgba(124,58,237,.35) !important; box-shadow: 0 4px 24px rgba(0,0,0,.6), 0 0 30px rgba(124,58,237,.08) !important; }
-body.skin-midnight #bottom-nav    { background: rgba(8,5,18,.97) !important; border-top-color: rgba(124,58,237,.2) !important; }
-body.skin-midnight #stat-learned  { color: #a78bfa !important; text-shadow: 0 0 8px rgba(167,139,250,.5) !important; }
-body.skin-midnight #stat-solved   { color: #f59e0b !important; text-shadow: 0 0 8px rgba(245,158,11,.5) !important; }
-body.skin-midnight #stat-days     { color: #fb7185 !important; text-shadow: 0 0 8px rgba(251,113,133,.5) !important; }
-body.skin-midnight #stat-ege      { color: #f59e0b !important; text-shadow: 0 0 8px rgba(245,158,11,.7) !important; }
-body.skin-midnight #ege-ring      { stroke: #f59e0b !important; filter: drop-shadow(0 0 3px rgba(245,158,11,.7)) !important; }
-body.skin-midnight #bottom-nav button.active-nav,
-body.skin-midnight #bottom-nav button:hover { color: #a78bfa !important; }
-body.skin-midnight #main-header button { background: rgba(124,58,237,.08) !important; border-color: rgba(124,58,237,.25) !important; }
-body.skin-midnight [data-action="toggleFocusMode"]:not(#zen-exit-btn) { background: rgba(245,158,11,.1) !important; border-color: rgba(245,158,11,.3) !important; box-shadow: 0 0 8px rgba(245,158,11,.15) !important; }
-/* Midnight всегда тёмный */
-
-/* ── 7. УЧЁНАЯ АКАДЕМИЯ (Scholar Minimal) ── */
+/* ── 5. УЧЁНАЯ АКАДЕМИЯ (Scholar Minimal) ── */
 body.skin-scholar {
   --a-bg:     #fafaf8;
   --a-s1:     #ffffff;
@@ -860,155 +759,8 @@ body.skin-scholar [data-action="nextOnbStep"] {
   box-shadow: 0 4px 16px rgba(0,0,0,.15) !important;
 }
 
-/* ─── ТЁМНЫЕ СКИНЫ: VAPORWAVE ─── */
-body.skin-vaporwave #game-header {
-  background: rgba(15,5,32,.85) !important;
-  border-color: rgba(185,103,255,.25) !important;
-}
-body.skin-vaporwave #check-btn-sure {
-  background: linear-gradient(135deg,#00b4d8,#0077b6) !important;
-  box-shadow: 0 4px 16px rgba(0,180,216,.4) !important;
-}
-body.skin-vaporwave #check-btn-doubt {
-  background: linear-gradient(135deg,#b967ff,#7b2fff) !important;
-  box-shadow: 0 4px 16px rgba(185,103,255,.4) !important;
-}
-body.skin-vaporwave #next-btn {
-  background: linear-gradient(135deg,#ff71ce,#b967ff) !important;
-  box-shadow: 0 4px 20px rgba(255,113,206,.4) !important;
-}
-body.skin-vaporwave .bg-emerald-500 {
-  background: linear-gradient(135deg,#00b4d8,#0077b6) !important;
-  box-shadow: 0 4px 16px rgba(0,180,216,.35) !important;
-}
-body.skin-vaporwave .bg-blue-600 {
-  background: linear-gradient(135deg,#b967ff,#7b2fff) !important;
-  box-shadow: 0 4px 16px rgba(185,103,255,.3) !important;
-}
-body.skin-vaporwave [data-action="startDuelSearch"] {
-  background: linear-gradient(135deg,rgba(255,113,206,.15),rgba(1,205,254,.1),rgba(185,103,255,.1)) !important;
-  border-color: rgba(255,113,206,.4) !important;
-  box-shadow: 0 0 30px rgba(255,113,206,.12) !important;
-}
-body.skin-vaporwave [data-action="applyGlobalSettings"] {
-  background: linear-gradient(135deg,#b967ff,#ff71ce) !important;
-}
+/* (override-блоки удалённых скинов vaporwave / terminal / midnight вырезаны) */
 
-/* ─── ТЁМНЫЕ СКИНЫ: TERMINAL ─── */
-body.skin-terminal #game-header {
-  background: rgba(0,8,0,.9) !important;
-  border-color: rgba(0,255,65,.3) !important;
-  backdrop-filter: none !important;
-}
-body.skin-terminal #check-btn-sure {
-  background: #001a00 !important;
-  border: 1px solid #00ff41 !important;
-  box-shadow: 0 0 12px rgba(0,255,65,.3) !important;
-  color: #00ff41 !important;
-}
-body.skin-terminal #check-btn-doubt {
-  background: #001a00 !important;
-  border: 1px solid rgba(0,255,65,.5) !important;
-  box-shadow: 0 0 12px rgba(0,255,65,.2) !important;
-  color: rgba(0,255,65,.8) !important;
-}
-body.skin-terminal #next-btn {
-  background: #00ff41 !important;
-  color: #000 !important;
-  box-shadow: 0 0 20px rgba(0,255,65,.5) !important;
-  border: none !important;
-}
-body.skin-terminal .bg-emerald-500 {
-  background: #001a00 !important;
-  border: 1px solid #00ff41 !important;
-  box-shadow: 0 0 12px rgba(0,255,65,.3) !important;
-  color: #00ff41 !important;
-}
-body.skin-terminal .bg-blue-600 {
-  background: rgba(0,255,65,.12) !important;
-  border: 1px solid rgba(0,255,65,.4) !important;
-  color: #00ff41 !important;
-  box-shadow: none !important;
-}
-body.skin-terminal .bg-rose-500, body.skin-terminal .bg-rose-600 {
-  background: rgba(0,255,65,.06) !important;
-  border: 1px solid rgba(0,255,65,.3) !important;
-  color: #00ff41 !important;
-  box-shadow: none !important;
-}
-body.skin-terminal [data-action="startDuelSearch"] {
-  background: rgba(0,17,0,.9) !important;
-  border: 1px dashed rgba(0,255,65,.5) !important;
-  box-shadow: 0 0 20px rgba(0,255,65,.08) !important;
-}
-body.skin-terminal [data-action="startDuelSearch"] h4 {
-  background: none !important;
-  -webkit-text-fill-color: #00ff41 !important;
-  color: #00ff41 !important;
-}
-body.skin-terminal [data-action="applyGlobalSettings"] {
-  background: #00ff41 !important;
-  color: #000 !important;
-  box-shadow: 0 0 20px rgba(0,255,65,.4) !important;
-}
-body.skin-terminal [data-action="nextOnbStep"],
-body.skin-terminal [data-action="finishOnboarding"].bg-emerald-500 {
-  background: #00ff41 !important;
-  color: #000 !important;
-  box-shadow: 0 0 16px rgba(0,255,65,.4) !important;
-}
-body.skin-terminal #zen-exit-btn {
-  background: #00ff41 !important;
-  box-shadow: 0 0 24px rgba(0,255,65,.6) !important;
-  border-color: rgba(0,255,65,.4) !important;
-  color: #000 !important;
-}
-body.skin-terminal select,
-body.skin-terminal input[type="number"],
-body.skin-terminal input[type="text"] {
-  background: #001100 !important;
-  border-color: rgba(0,255,65,.25) !important;
-  color: #00ff41 !important;
-}
-/* Terminal: все кнопки */
-body.skin-terminal button:not(#next-btn):not(#zen-exit-btn):not([data-action="applyGlobalSettings"]):not([data-action="nextOnbStep"]):not([data-action="finishOnboarding"]) {
-  border-color: rgba(0,255,65,.2) !important;
-}
-
-/* ─── ТЁМНЫЕ СКИНЫ: MIDNIGHT OIL ─── */
-body.skin-midnight #game-header {
-  background: rgba(13,10,30,.85) !important;
-  border-color: rgba(124,58,237,.3) !important;
-}
-body.skin-midnight #check-btn-sure {
-  background: linear-gradient(135deg,#059669,#10b981) !important;
-  box-shadow: 0 4px 16px rgba(16,185,129,.3) !important;
-}
-body.skin-midnight #check-btn-doubt {
-  background: linear-gradient(135deg,#7c3aed,#a78bfa) !important;
-  box-shadow: 0 4px 16px rgba(167,139,250,.4) !important;
-}
-body.skin-midnight #next-btn {
-  background: linear-gradient(135deg,#7c3aed,#a78bfa) !important;
-  box-shadow: 0 4px 20px rgba(167,139,250,.4) !important;
-}
-body.skin-midnight .bg-emerald-500 {
-  background: linear-gradient(135deg,#059669,#10b981) !important;
-  box-shadow: 0 4px 12px rgba(16,185,129,.3) !important;
-}
-body.skin-midnight .bg-blue-600 {
-  background: linear-gradient(135deg,#7c3aed,#a78bfa) !important;
-  box-shadow: 0 4px 12px rgba(167,139,250,.3) !important;
-}
-body.skin-midnight [data-action="startDuelSearch"] {
-  background: linear-gradient(135deg,rgba(124,58,237,.18),rgba(167,139,250,.12),rgba(245,158,11,.08)) !important;
-  border-color: rgba(124,58,237,.4) !important;
-  box-shadow: 0 8px 32px rgba(124,58,237,.15) !important;
-}
-body.skin-midnight [data-action="applyGlobalSettings"] {
-  background: linear-gradient(135deg,#7c3aed,#a78bfa) !important;
-  box-shadow: 0 8px 24px rgba(124,58,237,.4) !important;
-}
 
 /* ══════════════════════════════════════════════════════════
    НЕОБРУТАЛИЗМ — усиление конструктивизма
@@ -1153,6 +905,122 @@ html.dark body.skin-constructivism #next-btn {
 html.dark body.skin-constructivism #main-header button { background:rgba(255,255,255,.08) !important; border:1.5px solid rgba(255,255,255,.22) !important; border-radius:4px !important; }
 html.dark body.skin-constructivism #main-header button:hover { background:rgba(255,255,255,.16) !important; }
 html.dark body.skin-constructivism #main-header button[data-action="openEGEModal"] { background:transparent !important; border:none !important; }
+
+/* ══════════════════════════════════════════════════════════
+   FIX тёмного режима: SAKURA / SCHOLAR
+   (раньше в .dark оставались белые фишки/кнопки — инородные на тёмном)
+   ══════════════════════════════════════════════════════════ */
+html.dark body.skin-sakura .dnd-chip:not(.in-slot),
+html.dark body.skin-scholar .dnd-chip:not(.in-slot) {
+  background: var(--a-s1) !important; border-color: var(--a-border) !important; color: var(--a-txt) !important;
+}
+html.dark body.skin-sakura [data-action="quickStartGame"],
+html.dark body.skin-sakura [data-action="pickTaskForMode"],
+html.dark body.skin-scholar [data-action="quickStartGame"],
+html.dark body.skin-scholar [data-action="pickTaskForMode"] {
+  background: var(--a-s1) !important; border-color: var(--a-border) !important;
+}
+
+/* ══════════════════════════════════════════════════════════
+   НОВЫЙ СКИН: КОФЕ (тёплая сепия) — светлый и тёмный
+   ══════════════════════════════════════════════════════════ */
+body.skin-coffee {
+  --a-bg:#f4eee4; --a-s1:#fffaf2; --a-s2:#f1e8da; --a-s3:#e7dccb;
+  --a-b1:#b5651d; --a-b2:#7a9e7e; --a-b3:#c75d3a;
+  --a-txt:#2e2118; --a-muted:#8a7866; --a-border:#e3d6c2;
+}
+body.skin-coffee #top-stats-bar { background: rgba(255,250,242,.95) !important; border-color:#e3d6c2 !important; box-shadow:0 2px 16px rgba(120,80,30,.08) !important; }
+body.skin-coffee #bottom-nav    { background: rgba(255,250,242,.97) !important; border-top-color:#e3d6c2 !important; box-shadow:0 -2px 8px rgba(120,80,30,.06) !important; }
+body.skin-coffee #bottom-nav button { color:#a3927e !important; }
+body.skin-coffee #bottom-nav button.active-nav,
+body.skin-coffee #bottom-nav button:hover { color:#b5651d !important; }
+body.skin-coffee #stat-learned { color:#7a9e7e !important; text-shadow:none !important; }
+body.skin-coffee #stat-solved  { color:#b5651d !important; text-shadow:none !important; }
+body.skin-coffee #stat-days    { color:#c75d3a !important; text-shadow:none !important; }
+body.skin-coffee #stat-ege     { color:#b5651d !important; text-shadow:none !important; }
+body.skin-coffee #ege-ring     { stroke:#b5651d !important; filter:drop-shadow(0 0 2px rgba(181,101,29,.4)) !important; }
+body.skin-coffee #main-header button { background:rgba(181,101,29,.07) !important; border-color:#e3d6c2 !important; }
+body.skin-coffee #game-header     { background:var(--a-s2) !important; border-color:var(--a-border) !important; backdrop-filter:none !important; }
+body.skin-coffee #table-container { background:var(--a-s1) !important; border-color:var(--a-border) !important; }
+body.skin-coffee #pool-panel      { background:var(--a-s2) !important; border-color:var(--a-border) !important; }
+body.skin-coffee #table-head      { background:var(--a-s3) !important; }
+body.skin-coffee #table-head th   { color:var(--a-txt) !important; }
+body.skin-coffee .dnd-slot { background-color:var(--a-s2) !important; border-color:var(--a-border) !important; }
+body.skin-coffee [data-action="quickStartGame"],
+body.skin-coffee [data-action="pickTaskForMode"] { background:#fffaf2 !important; border-color:#e3d6c2 !important; }
+body.skin-coffee .dnd-chip { background:#fffaf2 !important; border-color:#e3d6c2 !important; color:#2e2118 !important; }
+body.skin-coffee #check-btn-sure  { background:linear-gradient(135deg,#059669,#10b981) !important; box-shadow:0 4px 16px rgba(16,185,129,.3) !important; }
+body.skin-coffee #check-btn-doubt { background:linear-gradient(135deg,#4f46e5,#8b5cf6) !important; box-shadow:0 4px 16px rgba(139,92,246,.3) !important; }
+body.skin-coffee #next-btn        { background:linear-gradient(135deg,var(--a-b1),var(--a-b2)) !important; box-shadow:0 4px 20px rgba(0,0,0,.2) !important; }
+body.skin-coffee [data-action="startDuelSearch"] { background:linear-gradient(135deg,rgba(181,101,29,.1),rgba(122,158,126,.08)) !important; border-color:rgba(181,101,29,.25) !important; box-shadow:0 4px 16px rgba(181,101,29,.1) !important; }
+body.skin-coffee [data-action="startDuelSearch"] h4 { background:none !important; -webkit-text-fill-color:#b5651d !important; color:#b5651d !important; }
+body.skin-coffee [data-action="startDuelSearch"] p  { color:var(--a-muted) !important; }
+/* Кофе — тёмная */
+html.dark body.skin-coffee {
+  --a-bg:#1a130d; --a-s1:#271c12; --a-s2:#1f160e; --a-s3:#33261a;
+  --a-b1:#d9a066; --a-b2:#9cbfa0; --a-b3:#e08a5e;
+  --a-txt:#ece0d0; --a-muted:#a08c74; --a-border:#3a2c1c;
+}
+html.dark body.skin-coffee #top-stats-bar { background:rgba(39,28,18,.95) !important; box-shadow:0 2px 16px rgba(0,0,0,.4) !important; }
+html.dark body.skin-coffee #bottom-nav    { background:rgba(20,15,10,.97) !important; border-top-color:#3a2c1c !important; }
+html.dark body.skin-coffee #stat-solved { color:#d9a066 !important; }
+html.dark body.skin-coffee #stat-ege    { color:#d9a066 !important; }
+html.dark body.skin-coffee #ege-ring    { stroke:#d9a066 !important; }
+html.dark body.skin-coffee [data-action="quickStartGame"],
+html.dark body.skin-coffee [data-action="pickTaskForMode"] { background:#271c12 !important; border-color:#3a2c1c !important; }
+html.dark body.skin-coffee .dnd-chip:not(.in-slot) { background:#271c12 !important; border-color:#3a2c1c !important; color:#ece0d0 !important; }
+html.dark body.skin-coffee [data-action="startDuelSearch"] h4 { -webkit-text-fill-color:#d9a066 !important; color:#d9a066 !important; }
+
+/* ══════════════════════════════════════════════════════════
+   НОВЫЙ СКИН: ЛЕС (природный зелёный) — светлый и тёмный
+   ══════════════════════════════════════════════════════════ */
+body.skin-forest {
+  --a-bg:#eff5ee; --a-s1:#ffffff; --a-s2:#e7f0e6; --a-s3:#d9e8d8;
+  --a-b1:#2f7d4f; --a-b2:#c98a3a; --a-b3:#3f9d63;
+  --a-txt:#14271a; --a-muted:#5c7a63; --a-border:#d2e3d0;
+}
+body.skin-forest #top-stats-bar { background: rgba(255,255,255,.95) !important; border-color:#d2e3d0 !important; box-shadow:0 2px 16px rgba(20,80,40,.08) !important; }
+body.skin-forest #bottom-nav    { background: rgba(247,251,246,.97) !important; border-top-color:#d2e3d0 !important; box-shadow:0 -2px 8px rgba(20,80,40,.06) !important; }
+body.skin-forest #bottom-nav button { color:#8aa890 !important; }
+body.skin-forest #bottom-nav button.active-nav,
+body.skin-forest #bottom-nav button:hover { color:#2f7d4f !important; }
+body.skin-forest #stat-learned { color:#2f7d4f !important; text-shadow:none !important; }
+body.skin-forest #stat-solved  { color:#c98a3a !important; text-shadow:none !important; }
+body.skin-forest #stat-days    { color:#3f9d63 !important; text-shadow:none !important; }
+body.skin-forest #stat-ege     { color:#2f7d4f !important; text-shadow:none !important; }
+body.skin-forest #ege-ring     { stroke:#2f7d4f !important; filter:drop-shadow(0 0 2px rgba(47,125,79,.4)) !important; }
+body.skin-forest #main-header button { background:rgba(47,125,79,.07) !important; border-color:#d2e3d0 !important; }
+body.skin-forest #game-header     { background:var(--a-s2) !important; border-color:var(--a-border) !important; backdrop-filter:none !important; }
+body.skin-forest #table-container { background:var(--a-s1) !important; border-color:var(--a-border) !important; }
+body.skin-forest #pool-panel      { background:var(--a-s2) !important; border-color:var(--a-border) !important; }
+body.skin-forest #table-head      { background:var(--a-s3) !important; }
+body.skin-forest #table-head th   { color:var(--a-txt) !important; }
+body.skin-forest .dnd-slot { background-color:var(--a-s2) !important; border-color:var(--a-border) !important; }
+body.skin-forest [data-action="quickStartGame"],
+body.skin-forest [data-action="pickTaskForMode"] { background:#ffffff !important; border-color:#d2e3d0 !important; }
+body.skin-forest .dnd-chip { background:#ffffff !important; border-color:#d2e3d0 !important; color:#14271a !important; }
+body.skin-forest #check-btn-sure  { background:linear-gradient(135deg,#059669,#10b981) !important; box-shadow:0 4px 16px rgba(16,185,129,.3) !important; }
+body.skin-forest #check-btn-doubt { background:linear-gradient(135deg,#4f46e5,#8b5cf6) !important; box-shadow:0 4px 16px rgba(139,92,246,.3) !important; }
+body.skin-forest #next-btn        { background:linear-gradient(135deg,var(--a-b1),var(--a-b2)) !important; box-shadow:0 4px 20px rgba(0,0,0,.2) !important; }
+body.skin-forest [data-action="startDuelSearch"] { background:linear-gradient(135deg,rgba(47,125,79,.1),rgba(201,138,58,.08)) !important; border-color:rgba(47,125,79,.25) !important; box-shadow:0 4px 16px rgba(47,125,79,.1) !important; }
+body.skin-forest [data-action="startDuelSearch"] h4 { background:none !important; -webkit-text-fill-color:#2f7d4f !important; color:#2f7d4f !important; }
+body.skin-forest [data-action="startDuelSearch"] p  { color:var(--a-muted) !important; }
+/* Лес — тёмная */
+html.dark body.skin-forest {
+  --a-bg:#0b1710; --a-s1:#15291c; --a-s2:#102114; --a-s3:#1d3826;
+  --a-b1:#4ade80; --a-b2:#e0a64d; --a-b3:#5bd98a;
+  --a-txt:#d7ecdb; --a-muted:#7fa386; --a-border:#244a30;
+}
+html.dark body.skin-forest #top-stats-bar { background:rgba(21,41,28,.95) !important; box-shadow:0 2px 16px rgba(0,0,0,.4) !important; }
+html.dark body.skin-forest #bottom-nav    { background:rgba(11,23,16,.97) !important; border-top-color:#244a30 !important; }
+html.dark body.skin-forest #stat-solved { color:#e0a64d !important; }
+html.dark body.skin-forest #stat-days   { color:#5bd98a !important; }
+html.dark body.skin-forest #stat-ege    { color:#4ade80 !important; }
+html.dark body.skin-forest #ege-ring    { stroke:#4ade80 !important; }
+html.dark body.skin-forest [data-action="quickStartGame"],
+html.dark body.skin-forest [data-action="pickTaskForMode"] { background:#15291c !important; border-color:#244a30 !important; }
+html.dark body.skin-forest .dnd-chip:not(.in-slot) { background:#15291c !important; border-color:#244a30 !important; color:#d7ecdb !important; }
+html.dark body.skin-forest [data-action="startDuelSearch"] h4 { -webkit-text-fill-color:#4ade80 !important; color:#4ade80 !important; }
 
 /* ══════════════════════════════════════════════════════════
    ВСТАВЛЕННЫЙ ОТВЕТ «ВШИТ» В ТАБЛИЦУ (тёмная тема)
