@@ -139,11 +139,15 @@ function _hwcAvail() {
     const { task, period, metric, yearStart, yearEnd } = c.draft;
     const hint = document.getElementById('hwc-avail');
     // Зубрёжка: период/метрика не нужны — цель всегда «вызубрить N дат». Прячем лишние контролы.
-    const cramExtra = document.getElementById('hwc-noncram-rows');
-    if (cramExtra) cramExtra.style.display = task === 'cram' ? 'none' : '';
-    if (task === 'cram') {
+    const isCram = task === 'cram';
+    const periodRow = document.getElementById('hwc-period-row');
+    const metricRow = document.getElementById('hwc-metric-row');
+    if (periodRow) periodRow.style.display = isCram ? 'none' : '';
+    if (metricRow) metricRow.style.display = isCram ? 'none' : '';
+    // Год-диапазон («Годы от—до») показываем И для зубрёжки — это выбор дат для ДЗ.
+    if (isCram) {
         c.draft.metric = 'learned';
-        if (hint) { hint.textContent = '⚡ Ученик зубрит даты (выбор → ввод). Цель — N выученных фактов.'; hint.style.display = ''; }
+        if (hint) { hint.textContent = '⚡ Зубрёжка дат. Годы (от—до) — необязательно: 862–2026 = все даты; сузишь — только этот диапазон. Цель — N дат.'; hint.style.display = ''; }
         return;
     }
     if (!hint) return;
@@ -172,7 +176,11 @@ window._hwcAddItem = function() {
     if (isNaN(goal) || goal <= 0) return showToast('⚠️', 'Укажите цель (> 0)', 'bg-rose-500', 'border-rose-700');
     // Зубрёжка — отдельный этап без периода: «вызубрить N дат» (любые блоки тренажёра).
     if (task === 'cram') {
-        c.items.push({ task: 'cram', metric: 'learned', goal });
+        const cit = { task: 'cram', metric: 'learned', goal };
+        // Диапазон лет для зубрёжки (необязательно): сохраняем, только если сужен относительно полного 862–2026.
+        const ys = c.draft.yearStart, ye = c.draft.yearEnd;
+        if (ys && ye && !(ys <= 862 && ye >= 2026)) { cit.yearStart = Math.min(ys, ye); cit.yearEnd = Math.max(ys, ye); }
+        c.items.push(cit);
         c.draft.goal = '';
         return _renderHwComposer();
     }
@@ -224,7 +232,8 @@ function _renderHwComposer() {
     const metricUnit = { lines: 'строк', points: 'баллов', learned: 'фактов' };
     const taskShort = { task3: '🔗№3', task4: '📍№4', task5: '👤№5', task7: '🎨№7', cram: '⚡Зубрёжка' };
     const periodShort = Object.fromEntries(HWC_PERIODS.map(p => [p.v, p.t]));
-    const itemScope = it => it.task === 'cram' ? 'даты (любые блоки)'
+    const itemScope = it => it.task === 'cram'
+        ? (it.yearStart && it.yearEnd ? `даты ${it.yearStart}–${it.yearEnd} гг.` : 'даты (любые блоки)')
         : (it.period === 'custom' ? (it.yearStart || '?') + '–' + (it.yearEnd || '?') + ' гг.' : (periodShort[it.period] || it.period));
 
     const itemsHtml = c.items.length ? c.items.map((it, i) => `
@@ -259,16 +268,16 @@ function _renderHwComposer() {
 
       <div style="background:var(--card,#fff);border:1px solid rgba(128,128,128,0.18);border-radius:14px;padding:12px;margin:10px 0" class="dark:bg-[#1e1e1e]">
         <div style="margin-bottom:8px">${sel('hwc-task', HWC_TASKS, 'window._hwcAvail()', d.task)}</div>
-        <div id="hwc-noncram-rows">
-          <div style="margin-bottom:8px">${sel('hwc-period', HWC_PERIODS, 'window._hwcPeriodChange()', d.period)}</div>
+        <div id="hwc-period-row" style="margin-bottom:8px">${sel('hwc-period', HWC_PERIODS, 'window._hwcPeriodChange()', d.period)}</div>
+        <div id="hwc-year-row">
           <label style="display:block;font-size:10px;color:#9ca3af;font-weight:700;margin-bottom:4px">Годы (от — до)</label>
           <div style="display:grid;grid-template-columns:1fr auto 1fr;gap:6px;align-items:center;margin-bottom:8px">
             <input id="hwc-year-start" type="number" inputmode="numeric" min="800" max="2030" value="${d.yearStart}" placeholder="от" oninput="window._hwcYearInput()" style="width:100%;padding:8px;border:1px solid rgba(128,128,128,0.3);border-radius:10px;font-size:13px;font-weight:800;text-align:center;background:#fff;color:#111">
             <span style="font-size:12px;color:#9ca3af;font-weight:800">—</span>
             <input id="hwc-year-end" type="number" inputmode="numeric" min="800" max="2030" value="${d.yearEnd}" placeholder="до" oninput="window._hwcYearInput()" style="width:100%;padding:8px;border:1px solid rgba(128,128,128,0.3);border-radius:10px;font-size:13px;font-weight:800;text-align:center;background:#fff;color:#111">
           </div>
-          <div style="margin-bottom:8px">${sel('hwc-metric', HWC_METRICS, 'window._hwcAvail()', d.metric)}</div>
         </div>
+        <div id="hwc-metric-row" style="margin-bottom:8px">${sel('hwc-metric', HWC_METRICS, 'window._hwcAvail()', d.metric)}</div>
         <label style="display:block;font-size:10px;color:#9ca3af;font-weight:700;margin-bottom:4px">Цель (сколько)</label>
         <input id="hwc-goal" type="number" inputmode="numeric" min="1" placeholder="N" value="${d.goal}" oninput="window._hwcSyncDraft()" style="width:100%;padding:9px;border:1px solid rgba(128,128,128,0.3);border-radius:10px;font-size:13px;font-weight:800;text-align:center;background:#fff;color:#111">
         <div id="hwc-avail" style="display:none;font-size:10px;color:var(--c-brand-strong);font-weight:700;margin-top:6px"></div>
@@ -770,7 +779,8 @@ function _hwItemRow(it, idx, kind) {
     const prog = window.hwItemProgress(it), goal = it.goal || 0;
     const pct = goal ? Math.min(100, Math.round(prog / goal * 100)) : 0;
     const done = window.hwItemDone(it);
-    const periodLabel = it.task === 'cram' ? 'тренажёр дат'
+    const periodLabel = it.task === 'cram'
+        ? (it.yearStart && it.yearEnd ? `даты ${it.yearStart}–${it.yearEnd} гг.` : 'тренажёр дат')
         : (it.period === 'custom' ? (it.yearStart || '?') + '–' + (it.yearEnd || '?') + ' гг.' : (HW_PERIOD_LABEL[it.period] || ''));
     const tick = done ? '✅' : '▢';
     return `
@@ -901,7 +911,7 @@ window.startHwItem = function(id, idx) {
     if (it.task === 'cram') {
         const total = (a.items || []).length;
         showToast('⚡', `Этап ${idx + 1} из ${total}: вызубрить ${it.goal} дат`, 'bg-indigo-500', 'border-indigo-700');
-        if (window.openCram) window.openCram();
+        if (window.openCram) window.openCram((it.yearStart && it.yearEnd) ? ('period:' + it.yearStart + '-' + it.yearEnd) : undefined);
         return;
     }
     const mm = HW_METRIC_META[it.metric] || HW_METRIC_META.lines;

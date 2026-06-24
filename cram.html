@@ -1167,6 +1167,21 @@ function notifyMastered(deck, item){
   const m = (location.hash || '').match(/deck=([^&]+)/);
   if(m){
     const id = decodeURIComponent(m[1]);
+    // Диплинк на период по годам (ДЗ-зубрёжка с диапазоном): period:FROM-TO — строим и запускаем.
+    const pm = id.match(/^period:(\d{3,4})-(\d{3,4})$/);
+    if(pm){
+      const a = Math.min(+pm[1], +pm[2]), b = Math.max(+pm[1], +pm[2]);
+      const deck = buildPeriodDeck(a, b);
+      if(deck.items.length){
+        if(!Array.isArray(state.periods)) state.periods = [];
+        state.periods = state.periods.filter(p => !(p.from === a && p.to === b));
+        state.periods.unshift({ from:a, to:b });
+        if(state.periods.length > 3) state.periods = state.periods.slice(0, 3);
+        saveState();
+        startDeck(periodDeckId(a, b));
+        return;
+      }
+    }
     if(getDecks().find(d => d.id === id)){ startDeck(id); return; }
   }
   renderHome();
