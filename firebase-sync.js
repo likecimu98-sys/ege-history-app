@@ -507,7 +507,11 @@
                     const pending = Array.isArray(data.pendingAssignments) ? data.pendingAssignments : [];
                     if (pending.length) {
                         let added = 0;
-                        pending.forEach(rec => { if (window.ingestAssignment && window.ingestAssignment(rec)) added++; });
+                        const revoked = window._classRevoked; // отозванные учителем ДЗ не подхватываем
+                        pending.forEach(rec => {
+                            if (rec && rec.id && revoked && revoked.has(rec.id)) return;
+                            if (window.ingestAssignment && window.ingestAssignment(rec)) added++;
+                        });
                         // снимаем обработанные записи с документа (точное соответствие объектов)
                         updateDoc(docSnap.ref, { pendingAssignments: arrayRemove(...pending) }).catch(console.error);
                         if (added > 0) {
@@ -1781,17 +1785,30 @@
                 const ref = doc(db, 'artifacts', appId, 'public', 'data', 'classes', code);
                 const snap = await getDoc(ref);
                 if (!snap.exists()) return;
-                const list = Array.isArray(snap.data().assignments) ? snap.data().assignments : [];
-                if (!list.length) return;
+                const data = snap.data();
+                const list = Array.isArray(data.assignments) ? data.assignments : [];
+                // Отозванные учителем ДЗ (вариант А): не подхватываем их и убираем у себя невыполненные копии.
+                const revoked = Array.isArray(data.revokedAssignments) ? data.revokedAssignments : [];
+                const revokedSet = new Set(revoked);
+                window._classRevoked = revokedSet;
+                let removed = (window.reconcileRevokedAssignments ? window.reconcileRevokedAssignments(revoked) : 0);
                 const today = new Date().toISOString().split('T')[0];
                 let added = 0;
                 list.forEach(rec => {
                     if (!rec || !rec.id) return;
+                    if (revokedSet.has(rec.id)) return; // отозвано — не подхватываем
                     const r = Object.assign({}, rec);
                     // опоздавшему просроченные на момент входа дедлайны снимаем — не штрафуем за то, что задано до его прихода
                     if (r.deadline && r.deadline < today) r.deadline = null;
                     if (window.ingestAssignment && window.ingestAssignment(r)) added++;
                 });
+                if (removed > 0 && added === 0) {
+                    if (window.recomputeHwMirror) window.recomputeHwMirror();
+                    if (window.refreshHwState) window.refreshHwState();
+                    saveProgress();
+                    if (window.updateGlobalUI) window.updateGlobalUI();
+                    if (window.updateHwNavBadge) window.updateHwNavBadge();
+                }
                 if (added > 0) {
                     if (window.recomputeHwMirror) window.recomputeHwMirror();
                     if (window.refreshHwState) window.refreshHwState();
@@ -1801,6 +1818,42 @@
                     showToast('📚', `Добавлены задания класса: ${added}`, 'bg-indigo-500', 'border-indigo-700');
                 }
             } catch (e) { console.error('pullClassAssignments error:', e); }
+        };
+
+        // ─── Учитель: список выданных классу ДЗ (из журнала класса) ───
+        window.listClassAssignments = async function(rawCode) {
+            if (!db) return [];
+            const code = _classDocId(rawCode);
+            if (!code) return [];
+            try {
+                const snap = await getDoc(doc(db, 'artifacts', appId, 'public', 'data', 'classes', code));
+                if (!snap.exists()) return [];
+                const list = Array.isArray(snap.data().assignments) ? snap.data().assignments : [];
+                // свежие сверху
+                return list.slice().sort((a, b) => (b.assignedAt || 0) - (a.assignedAt || 0));
+            } catch (e) { console.error('listClassAssignments error:', e); return []; }
+        };
+
+        // ─── Учитель: отменить выданное ДЗ (вариант А) ───
+        // Пишем ОДНУ запись в документ класса: убираем ДЗ из журнала + ставим «отзыв» (revokedAssignments).
+        // Документы учеников НЕ трогаем (их прогресс — в fullStateJson, владелец = сам ученик): каждый ученик
+        // при следующем входе через pullClassAssignments сам уберёт невыполненную копию, а сданную оставит.
+        window.cancelClassAssignment = async function(rawCode, id) {
+            if (!db || !id) return false;
+            const code = _classDocId(rawCode);
+            if (!code) return false;
+            try {
+                const ref = doc(db, 'artifacts', appId, 'public', 'data', 'classes', code);
+                const snap = await getDoc(ref);
+                const data = snap.exists() ? snap.data() : {};
+                const list = (Array.isArray(data.assignments) ? data.assignments : []).filter(a => a && a.id !== id);
+                const revoked = Array.isArray(data.revokedAssignments) ? data.revokedAssignments.slice() : [];
+                if (!revoked.includes(id)) revoked.push(id);
+                // не даём списку отозванных расти бесконечно
+                const revokedTrimmed = revoked.slice(-300);
+                await setDoc(ref, { assignments: list, revokedAssignments: revokedTrimmed, updatedAt: Date.now() }, { merge: true });
+                return true;
+            } catch (e) { console.error('cancelClassAssignment error:', e); return false; }
         };
 
         // ── Новый формат: ДЗ как набор подзаданий (items) ──

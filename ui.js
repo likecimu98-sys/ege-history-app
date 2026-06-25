@@ -100,6 +100,100 @@ window.openHwComposer = function(target) {
     _renderHwComposer();
 };
 
+// ─── Список выданных классу ДЗ + отмена (вариант А) ───
+let _hwListCache = [];
+const _HWL_TASK = { task3: '🔗№3', task4: '📍№4', task5: '👤№5', task7: '🎨№7', cram: '⚡Зубрёжка' };
+const _HWL_UNIT = { lines: 'строк', points: 'баллов', learned: 'фактов' };
+function _hwlEsc(s) { return String(s == null ? '' : s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c])); }
+function _hwlItemSummary(it) {
+    const scope = it.task === 'cram'
+        ? (it.yearStart && it.yearEnd ? `${it.yearStart}–${it.yearEnd}` : 'любые')
+        : (it.period === 'custom' ? `${it.yearStart || '?'}–${it.yearEnd || '?'}` : (it.period || 'all'));
+    return `${_HWL_TASK[it.task] || it.task} ${it.goal} ${_HWL_UNIT[it.metric] || ''} · ${scope}`;
+}
+window.openClassAssignmentsList = function() {
+    const code = (document.getElementById('teacher-class-code-input')?.value || localStorage.getItem('teacher_class_code') || '').trim();
+    if (!code) return showToast('⚠️', 'Не задан код класса', 'bg-rose-500', 'border-rose-700');
+    if (!window.listClassAssignments) return showToast('⚠️', 'Нет подключения к серверу', 'bg-rose-500', 'border-rose-700');
+    let overlay = document.getElementById('hw-list-overlay');
+    if (!overlay) {
+        overlay = document.createElement('div');
+        overlay.id = 'hw-list-overlay';
+        overlay.style.cssText = 'position:fixed;inset:0;z-index:10002;background:rgba(0,0,0,0.55);display:flex;align-items:flex-end;justify-content:center';
+        overlay.onclick = e => { if (e.target === overlay) overlay.remove(); };
+        document.body.appendChild(overlay);
+    }
+    overlay.dataset.code = code;
+    overlay.innerHTML = `
+    <div style="background:#f7f7f8;width:100%;max-width:480px;max-height:90vh;overflow-y:auto;border-radius:24px 24px 0 0;padding:18px 16px 28px;box-shadow:0 -8px 40px rgba(0,0,0,0.25)" class="dark:bg-[#141414]">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+        <div style="font-size:16px;font-weight:900;color:#111" class="dark:text-white">📋 Выданные ДЗ</div>
+        <button onclick="document.getElementById('hw-list-overlay').remove()" style="font-size:22px;color:#aaa;background:none;border:none;cursor:pointer;padding:2px 8px">✕</button>
+      </div>
+      <div style="font-size:11px;color:#6b7280;font-weight:700;margin-bottom:4px">Класс ${_hwlEsc(code)}</div>
+      <div style="font-size:10px;color:#9ca3af;font-weight:600;margin-bottom:12px;line-height:1.4">Отмена убирает ДЗ из журнала и у тех, кто его ещё не сдал (подхватится при следующем входе ученика). У сдавших отметка сохраняется.</div>
+      <div id="hw-list-body"><div style="text-align:center;color:#9ca3af;font-size:12px;padding:20px 0">Загрузка…</div></div>
+    </div>`;
+    _loadClassAssignmentsList(code);
+};
+async function _loadClassAssignmentsList(code) {
+    let list = [];
+    try { list = await window.listClassAssignments(code); } catch (e) { console.error(e); }
+    _hwListCache = Array.isArray(list) ? list : [];
+    _paintClassAssignmentsList();
+}
+function _paintClassAssignmentsList() {
+    const body = document.getElementById('hw-list-body');
+    if (!body) return;
+    if (!_hwListCache.length) {
+        body.innerHTML = '<div style="text-align:center;color:#9ca3af;font-size:12px;padding:20px 0">Класс ещё не получал ДЗ «всему классу».</div>';
+        return;
+    }
+    body.innerHTML = _hwListCache.map(a => {
+        const id = a.id;
+        const title = a.title || `ДЗ · ${(a.items || []).length || 1} ${((a.items || []).length === 1) ? 'этап' : 'этап.'}`;
+        const dl = a.deadline ? 'срок до ' + new Date(a.deadline + 'T00:00:00').toLocaleDateString('ru-RU') : 'без срока';
+        const issued = a.assignedAt ? 'выдано ' + new Date(a.assignedAt).toLocaleDateString('ru-RU') : '';
+        const items = (a.items || []).map(_hwlItemSummary).join(' · ');
+        return `
+        <div data-row="${id}" style="background:#fff;border:1px solid rgba(128,128,128,0.18);border-radius:14px;padding:10px 12px;margin-bottom:8px" class="dark:bg-[#1e1e1e]">
+          <div style="font-size:13px;font-weight:900;color:#111;margin-bottom:2px" class="dark:text-gray-100">${_hwlEsc(title)}</div>
+          <div style="font-size:10px;color:#6b7280;margin-bottom:6px">${_hwlEsc(items)}</div>
+          <div style="display:flex;align-items:center;justify-content:space-between;gap:8px">
+            <div style="font-size:10px;color:#9ca3af;font-weight:700">${dl} · ${issued}</div>
+            <div class="hwl-actions" style="flex-shrink:0">
+              <button onclick="window._hwlAskCancel('${id}')" style="background:rgba(244,63,94,0.1);color:var(--c-danger,#e11d48);border:1px solid rgba(244,63,94,0.35);border-radius:9px;padding:6px 10px;font-size:11px;font-weight:900;cursor:pointer">Отменить</button>
+            </div>
+          </div>
+        </div>`;
+    }).join('');
+}
+window._hwlAskCancel = function(id) {
+    const cell = document.querySelector(`#hw-list-body [data-row="${id}"] .hwl-actions`);
+    if (!cell) return;
+    cell.innerHTML = `
+      <span style="font-size:10px;color:#6b7280;font-weight:800;margin-right:6px">Точно?</span>
+      <button onclick="window._hwlDoCancel('${id}')" style="background:var(--c-danger,#e11d48);color:#fff;border:none;border-radius:9px;padding:6px 10px;font-size:11px;font-weight:900;cursor:pointer;margin-right:4px">Да, отменить</button>
+      <button onclick="window._hwlRepaint()" style="background:#eee;color:#444;border:none;border-radius:9px;padding:6px 10px;font-size:11px;font-weight:900;cursor:pointer">Нет</button>`;
+};
+window._hwlRepaint = function() { _paintClassAssignmentsList(); };
+window._hwlDoCancel = async function(id) {
+    const overlay = document.getElementById('hw-list-overlay');
+    const code = overlay ? overlay.dataset.code : '';
+    const cell = document.querySelector(`#hw-list-body [data-row="${id}"] .hwl-actions`);
+    if (cell) cell.innerHTML = '<span style="font-size:10px;color:#9ca3af;font-weight:800">Отменяю…</span>';
+    let ok = false;
+    try { ok = await window.cancelClassAssignment(code, id); } catch (e) { console.error(e); }
+    if (ok) {
+        _hwListCache = _hwListCache.filter(a => a.id !== id);
+        _paintClassAssignmentsList();
+        showToast('🗑', 'ДЗ отменено. Ученики обновят при входе.', 'bg-emerald-500', 'border-emerald-700');
+    } else {
+        showToast('❌', 'Не удалось отменить ДЗ', 'bg-rose-500', 'border-rose-700');
+        _paintClassAssignmentsList();
+    }
+};
+
 // Считать текущее состояние формы в черновик (чтобы переменные не сбрасывались при ре-рендере).
 function _hwcSyncDraft() {
     const c = window._hwComposer; if (!c) return;

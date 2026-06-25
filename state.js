@@ -502,6 +502,19 @@ function ingestAssignment(rec) {
 }
 window.ingestAssignment = ingestAssignment;
 
+// Отзыв ДЗ учителем (вариант А): убираем у себя только НЕвыполненные задания с отозванными id.
+// Уже сданные (status==='done') оставляем — отметка и достижение сохраняются. Возвращает число убранных.
+function reconcileRevokedAssignments(revokedIds) {
+    const s = window.state && window.state.stats;
+    if (!s || !Array.isArray(s.assignments)) return 0;
+    const set = new Set(revokedIds || []);
+    if (!set.size) return 0;
+    const before = s.assignments.length;
+    s.assignments = s.assignments.filter(a => !(a && set.has(a.id) && a.status !== 'done'));
+    return before - s.assignments.length;
+}
+window.reconcileRevokedAssignments = reconcileRevokedAssignments;
+
 // Засчитать прогресс активному этапу ДЗ (lines/points). learned-этапы обновляются сами в refreshHwState.
 function creditActiveHwItem(task, lines, points) {
     const s = window.state.stats;
