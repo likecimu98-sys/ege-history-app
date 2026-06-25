@@ -18,6 +18,7 @@
       --green:#7dff97;
       --red:#ff6b5f;
       --orange:#ffb84d;
+      --purple:#c9a7ff;
       --shadow:5px 5px 0 var(--ink);
       --shadow-sm:3px 3px 0 var(--ink);
       --radius:20px;
@@ -46,12 +47,13 @@
     .deck.vov::after{background:var(--pink)}
     .deck.commander::after{background:var(--orange)}
     .deck.film::after{background:var(--blue)}
+    .deck.svo::after{background:var(--purple)}
     .compact-hero{margin-bottom:10px}
     .compact-hero .hero-top{align-items:center}
     .deck>*{position:relative;z-index:1}
     .deck-title{display:flex;align-items:center;justify-content:space-between;gap:10px;font-size:21px;font-weight:1000;letter-spacing:-.02em}
     .tag{display:inline-flex;align-items:center;justify-content:center;border:2px solid var(--line);border-radius:999px;background:#fff;padding:5px 8px;font-size:12px;font-weight:1000;white-space:nowrap;box-shadow:2px 2px 0 var(--ink)}
-    .tag.green{background:var(--green)} .tag.yellow{background:var(--yellow)} .tag.pink{background:var(--pink)} .tag.blue{background:var(--blue)} .tag.red{background:var(--red)}
+    .tag.green{background:var(--green)} .tag.yellow{background:var(--yellow)} .tag.pink{background:var(--pink)} .tag.blue{background:var(--blue)} .tag.red{background:var(--red)} .tag.purple{background:var(--purple)}
     .deck-meta{font-size:13px;color:var(--muted);font-weight:800}
     .progress{height:14px;background:#fff;border:3px solid var(--line);border-radius:999px;overflow:hidden}
     .fill{display:block;height:100%;width:0%;background:var(--pink);border-right:3px solid var(--line);transition:width .25s ease}
@@ -541,8 +543,25 @@ const FILM_ITEMS = [
   }
 ];
 const FILMS = { id:'films', idx:10, title:'Фильмы', kind:'film', items:FILM_ITEMS };
+// ── Колода «Личности СВО» (узнавание для задания №5) ──
+// Показываем 5 имён, одно — участник СВО; угадал NEED_SVO раз подряд → уходит из пула.
+// Отвлекающие имена берём из task5Data родителя (если открыто в приложении),
+// иначе — из встроенного резервного списка исторических личностей.
+const SVO_PERSON_NAMES = [
+  'Н. Гаджимагомедов', 'В. Жога', 'Т. Матвеев', 'А. Жихарев', 'К. Боташев',
+  'А. Сеикаев', 'Д. Исламов', 'Д. Гелимханов', 'И. Цевун', 'А. Алаудинов',
+  'Ю. Гагарин', 'О. Качура', 'М. Пирогова', 'Е. Иванова', 'М. Мирошниченко'
+];
+const SVO_DECOY_FALLBACK = [
+  'Г. К. Жуков', 'К. К. Рокоссовский', 'И. С. Конев', 'А. М. Василевский', 'С. М. Будённый',
+  'П. А. Столыпин', 'С. Ю. Витте', 'М. М. Сперанский', 'А. А. Аракчеев', 'П. Д. Киселёв',
+  'Б. Л. Пастернак', 'А. И. Солженицын', 'А. А. Ахматова', 'К. М. Симонов', 'Д. Д. Шостакович',
+  'А. Д. Сахаров', 'Ю. А. Гагарин', 'С. П. Королёв', 'И. В. Курчатов', 'Г. А. Потёмкин'
+];
+const SVO_DECK = { id:'svo', idx:11, title:'Личности СВО', kind:'svo',
+  items: SVO_PERSON_NAMES.map((name, i) => ({ id:'svo' + i, name, event:name })) };
 // Статичные колоды + динамические «периоды по годам» (последние 3, хранятся до прохождения).
-const STATIC_DECKS = [VOV, COMMANDERS, FILMS];
+const STATIC_DECKS = [VOV, COMMANDERS, FILMS, SVO_DECK];
 function periodDeckId(from, to){ return 'period:' + from + '-' + to; }
 function buildPeriodDeck(from, to){
   const items = MAIN_EVENTS.filter(e => { const y = eventYear(e); return y != null && y >= from && y <= to; });
@@ -553,6 +572,23 @@ function periodDecks(){ return periodList().map(p => buildPeriodDeck(p.from, p.t
 function getDecks(){ return [...periodDecks(), ...STATIC_DECKS]; }
 const STORE_KEY = 'ege_dates_neobrutal_v1_' + RAW.hash;
 const NEED_CHOOSE = 3;
+const NEED_SVO = 4; // личности СВО уходят из пула после 4 верных подряд
+function needFor(deck){ return deck && deck.kind === 'svo' ? NEED_SVO : NEED_CHOOSE; }
+// Пул отвлекающих имён для колоды СВО: из task5 родителя (без участников СВО) либо резервный список.
+function svoDecoyPool(){
+  const svoRe = /СВО|[Сс]пециальн\w*\s+военн/;
+  const targetSet = new Set(SVO_PERSON_NAMES);
+  let names = [];
+  try {
+    if(EMBEDDED && Array.isArray(window.parent.task5Data)){
+      names = window.parent.task5Data
+        .filter(f => f && f.person && !svoRe.test(String(f.event || '')))
+        .map(f => String(f.person).trim());
+    }
+  } catch(e){}
+  names = names.concat(SVO_DECOY_FALLBACK);
+  return [...new Set(names)].filter(n => n && !targetSet.has(n));
+}
 let state = loadState();
 let currentDeck = null;
 let currentItem = null;
@@ -661,6 +697,7 @@ function deckRangeLabel(deck){
 }
 function filmTarget(item){ return `${item.period} · ${item.author}`; }
 function target(deck, item){
+  if(deck.kind === 'svo') return item.name;
   if(deck.kind === 'commander') return item.target;
   if(deck.kind === 'film') return filmTarget(item);
   if(deck.kind === 'vov') return monthYearOnly(item.date || item.target);
@@ -669,12 +706,18 @@ function target(deck, item){
 function deckStats(deck){
   const s = deckState(deck);
   const total = deck.items.length;
+  const need = needFor(deck);
   let chooseDone = 0, typedDone = 0;
   deck.items.forEach(e => {
     const r = s.items[e.id];
-    if((r.choose || 0) >= NEED_CHOOSE) chooseDone++;
+    if((r.choose || 0) >= need) chooseDone++;
     if(r.typed) typedDone++;
   });
+  if(deck.kind === 'svo'){
+    // Узнавание без этапа ввода: готово, когда все имена набрали серию.
+    s.phase = (chooseDone >= total && total > 0) ? 'done' : 'choose';
+    return {total, chooseDone, typedDone:chooseDone, phase:s.phase, done:chooseDone >= total && total > 0};
+  }
   if(chooseDone >= total && s.phase === 'choose') s.phase = 'type';
   if(typedDone >= total && total > 0) s.phase = 'done';
   return {total, chooseDone, typedDone, phase:s.phase, done:typedDone >= total && total > 0};
@@ -764,6 +807,17 @@ function addPeriod(){
 }
 function deckCard(deck){
   const st = deckStats(deck);
+  if(deck.kind === 'svo'){
+    const bar = st.done ? 100 : pct(st.chooseDone, st.total);
+    const btn = document.createElement('button');
+    btn.className = 'deck svo' + (st.done ? ' done' : '');
+    btn.innerHTML = `
+      <div class="deck-title"><span>${esc(deck.title)}</span><span class="tag ${st.done?'green':'purple'}">${st.done?'выучено':'узнавание'}</span></div>
+      <div class="deck-meta">Задание №5 · ${st.total} личностей · узнал: ${st.chooseDone}/${st.total} · по ${NEED_SVO} подряд · время: ${fmtTime(state.timers[deck.id] || 0)}</div>
+      <div class="progress"><span class="fill" style="width:${bar}%"></span></div>`;
+    btn.addEventListener('click', () => startDeck(deck.id));
+    return btn;
+  }
   const phaseText = st.done ? 'выучен' : (st.phase === 'type' ? (deck.kind === 'commander' ? 'ввод фамилии' : (deck.kind === 'film' ? 'ввод ответа' : 'ввод')) : 'выбор');
   const rangeLabel = deckRangeLabel(deck);
   const rangePrefix = deck.kind === 'film' ? '' : 'Даты: ';
@@ -821,7 +875,7 @@ function renderTrainer(){
     <div class="wrap">
       <div class="topbar">
         <button class="btn" id="backBtn">← Блоки</button>
-        <span class="tag ${deck.kind === 'vov' ? 'pink' : (deck.kind === 'film' ? 'blue' : 'yellow')}">${esc(deck.title)}</span>
+        <span class="tag ${deck.kind === 'vov' ? 'pink' : (deck.kind === 'film' ? 'blue' : (deck.kind === 'svo' ? 'purple' : 'yellow'))}">${esc(deck.title)}</span>
       </div>
       <div class="status-row" id="statusRow"></div>
       <div class="progress" style="margin-bottom:12px"><span class="fill" id="mainFill"></span></div>
@@ -838,7 +892,9 @@ function renderTrainer(){
 function updateStatus(){
   const st = deckStats(currentDeck);
   const s = deckState(currentDeck);
-  const stage = s.phase === 'type' ? 'Этап 2/2: ввод' : (s.phase === 'done' ? 'Готово' : 'Этап 1/2: выбор');
+  const stage = currentDeck.kind === 'svo'
+    ? (s.phase === 'done' ? 'Готово' : 'Узнавание')
+    : (s.phase === 'type' ? 'Этап 2/2: ввод' : (s.phase === 'done' ? 'Готово' : 'Этап 1/2: выбор'));
   const doneNow = s.phase === 'type' ? st.typedDone : (s.phase === 'done' ? st.total : st.chooseDone);
   const left = Math.max(0, st.total - doneNow);
   document.getElementById('statusRow').innerHTML = `
@@ -849,7 +905,7 @@ function updateStatus(){
 }
 function activePool(){
   const s = deckState(currentDeck);
-  if(s.phase === 'choose') return currentDeck.items.filter(e => (s.items[e.id].choose || 0) < NEED_CHOOSE);
+  if(s.phase === 'choose') return currentDeck.items.filter(e => (s.items[e.id].choose || 0) < needFor(currentDeck));
   if(s.phase === 'type') return currentDeck.items.filter(e => !s.items[e.id].typed);
   return [];
 }
@@ -874,6 +930,11 @@ function pickNext(){
   return item;
 }
 function makeOptions(item){
+  if(currentDeck.kind === 'svo'){
+    const correct = item.name;
+    const decoys = shuffle(svoDecoyPool().filter(n => n !== correct)).slice(0, 4);
+    return shuffle([correct, ...decoys]);
+  }
   const correct = target(currentDeck, item);
   const values = [];
   currentDeck.items.forEach(e => {
@@ -904,10 +965,18 @@ function nextQuestion(){
 function renderChoose(){
   currentOptions = makeOptions(currentItem);
   const r = rec(currentDeck, currentItem);
+  const need = needFor(currentDeck);
+  const isSvo = currentDeck.kind === 'svo';
+  const cur = Math.min(r.choose || 0, need);
+  const label = isSvo ? 'Личности · задание №5' : (currentDeck.kind === 'film' ? 'Фильм' : 'Событие');
+  const question = isSvo ? 'Кто из них — участник СВО?' : esc(currentItem.event);
+  const hint = isSvo
+    ? `Нажми на участника СВО. Нужно ${need} верных подряд по имени: сейчас ${cur}/${need}.`
+    : `Нажми на правильный ответ. Нужно ${need} правильных подряд: сейчас ${cur}/${need}.`;
   document.getElementById('work').innerHTML = `
-    <div class="label">${currentDeck.kind === 'film' ? 'Фильм' : 'Событие'}</div>
-    <div class="question">${esc(currentItem.event)}</div>
-    <div class="mini">Нажми на правильный ответ. Нужно ${NEED_CHOOSE} правильных подряд: сейчас ${Math.min(r.choose || 0, NEED_CHOOSE)}/${NEED_CHOOSE}.</div>
+    <div class="label">${esc(label)}</div>
+    <div class="question">${question}</div>
+    <div class="mini">${hint}</div>
     <div class="options" id="options">${currentOptions.map((o,i)=>`<button class="option" data-value="${esc(o)}">${esc(o)}</button>`).join('')}</div>
     <div class="feedback" id="feedback"></div>`;
   document.querySelectorAll('.option').forEach(btn => btn.addEventListener('click', () => {
@@ -937,8 +1006,8 @@ function renderComplete(){
   document.getElementById('work').innerHTML = `
     <div class="complete">
       <div class="emoji">💚</div>
-      <h2>${esc(currentDeck.title)} выучен</h2>
-      <div class="mini">${currentDeck.kind === 'film' ? 'Все фильмы прошли выбор и точный ввод периода/автора.' : 'Все события прошли выбор и точный ввод. Блок будет гореть зелёным на главной.'}</div>
+      <h2>${esc(currentDeck.title)}${currentDeck.kind === 'svo' ? ' — выучено' : ' выучен'}</h2>
+      <div class="mini">${currentDeck.kind === 'svo' ? ('Все ' + currentDeck.items.length + ' личностей узнаны по ' + NEED_SVO + ' раза подряд. Готов к заданию №5.') : (currentDeck.kind === 'film' ? 'Все фильмы прошли выбор и точный ввод периода/автора.' : 'Все события прошли выбор и точный ввод. Блок будет гореть зелёным на главной.')}</div>
       <button class="btn green" id="homeBtn">К блокам</button>
     </div>`;
   document.getElementById('bottomActions').classList.add('hidden');
@@ -964,8 +1033,9 @@ function checkChoose(){
   const correct = target(currentDeck, currentItem);
   const ok = selected === correct;
   const r = rec(currentDeck, currentItem);
+  const need = needFor(currentDeck);
   r.attempts = (r.attempts || 0) + 1;
-  if(ok) r.choose = Math.min(NEED_CHOOSE, (r.choose || 0) + 1);
+  if(ok) r.choose = Math.min(need, (r.choose || 0) + 1);
   else { r.choose = 0; r.wrong = (r.wrong || 0) + 1; }
   saveState();
   document.querySelectorAll('.option').forEach(btn => {
@@ -976,7 +1046,7 @@ function checkChoose(){
   });
   if(ok){
     revealed = true;
-    showFeedback('ok', `Верно. Серия: ${r.choose}/${NEED_CHOOSE}.`);
+    showFeedback('ok', `Верно. Серия: ${r.choose}/${need}.`);
     autoTimer = setTimeout(nextQuestion, 430);
   }else{
     waitingAfterWrong = true;
