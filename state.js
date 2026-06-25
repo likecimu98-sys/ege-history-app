@@ -408,6 +408,7 @@ function normalizeAssignmentRec(rec) {
             done: false
         };
         if (o.period === 'custom') { o.yearStart = Number(it.yearStart) || 862; o.yearEnd = Number(it.yearEnd) || 2026; }
+        else if (o.task === 'cram' && it.yearStart && it.yearEnd) { o.yearStart = Number(it.yearStart); o.yearEnd = Number(it.yearEnd); } // диапазон зубрёжки не терять
         return o;
     });
     return {

@@ -250,8 +250,44 @@ function calculateEgePoints(rows, task) {
     }
 }
 
+// Все ячейки заполнены и КАЖДАЯ верна (read-only, без начисления/пометок). Зеркалит логику checkAnswers.
+function _tableAllSlotsCorrect() {
+    const rows = $$('#task-table-body tr');
+    if (!rows.length) return false;
+    let sawSlot = false;
+    for (let idx = 0; idx < rows.length; idx++) {
+        const slots = rows[idx].querySelectorAll('.dnd-slot');
+        if (!slots.length) continue;
+        const fact = window.state.currentTargetData[idx];
+        const acceptSet = (window.state.currentMode !== 'detective')
+            ? window.acceptableAnswerSet(fact, window.state.currentTask) : null;
+        for (const slot of slots) {
+            if (slot.classList.contains('revealed-slot')) continue;
+            sawSlot = true;
+            const chip = slot.querySelector('.dnd-chip');
+            if (!chip) return false; // не заполнено
+            const val = chip.dataset.pureText || chip.innerText;
+            const ok = acceptSet ? acceptSet.has(val) : (val === slot.dataset.expected);
+            if (!ok) return false;
+        }
+    }
+    return sawSlot;
+}
+
+// Авто-проверка после расстановки: если ВСЁ заполнено верно — сразу проверяем (как «Зубрёжка»).
+// При ошибках ничего не делаем — ученик жмёт «Проверить» сам и видит, где не так.
+window.maybeAutoSubmit = function() {
+    const st = window.state;
+    if (!st || st.currentMode === 'duel') return;        // дуэль — ручная проверка
+    if (st.answersRevealed) return;
+    const cb = $('check-buttons');
+    if (!cb || cb.classList.contains('hidden')) return;  // уже проверено / не идёт ввод
+    if (!_tableAllSlotsCorrect()) return;
+    checkAnswers(true, true);
+};
+
 // === ПРОВЕРКА ОТВЕТОВ ===
-function checkAnswers(isSure) {
+function checkAnswers(isSure, auto) {
     isSure = isSure !== false;
     const rows = $$('#task-table-body tr');
     let allCorrect = true, filled = 0, total = $$('#task-table-body .dnd-slot').length, newlyCorrect = 0;
@@ -408,6 +444,11 @@ function checkAnswers(isSure) {
             $('next-btn').classList.add('hidden');
             updateGlobalUI();
             return;
+        }
+        // Авто-«Далее» при полностью верном заполнении (как в «Зубрёжке»): жмём «Дальше» сами.
+        if (auto) {
+            const nb = $('next-btn');
+            setTimeout(() => { if (nb && !nb.classList.contains('hidden')) nb.click(); }, 550);
         }
     } else {
         haptic('error');

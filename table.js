@@ -1206,6 +1206,7 @@ function handleSlotClick(slot) {
         slot.classList.remove('incorrect-slot');
         window.state.selectedChip = null;
         updateSlotGlow();
+        if (window.maybeAutoSubmit) window.maybeAutoSubmit(); // авто-«Далее» при полностью верном заполнении
     } else if (slot.classList.contains('has-item')) {
         const oldC = slot.querySelector('.dnd-chip');
         if (oldC) {

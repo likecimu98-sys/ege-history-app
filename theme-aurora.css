@@ -504,6 +504,11 @@ body.skin-classic {
   --a-border: #e2e8f0;
 }
 body.skin-classic #top-stats-bar { background: rgba(255,255,255,.95) !important; box-shadow: 0 2px 16px rgba(0,0,0,.08) !important; }
+/* Светлые темы: шапка-«остров» светлая, а её подписи (text-white/50) и разделители (bg-white/10)
+   были рассчитаны на тёмный фон — на белом они невидимы. Делаем их читаемыми.
+   Цифры статов уже перекрыты правилами #stat-* выше. Тёмную тему не трогаем. */
+html:not(.dark) #top-stats-bar .text-white\/50 { color: rgba(51,65,85,.72) !important; }
+html:not(.dark) #top-stats-bar .bg-white\/10   { background-color: rgba(15,23,42,.14) !important; }
 body.skin-classic #bottom-nav    { background: rgba(255,255,255,.97) !important; border-top-color: #e2e8f0 !important; box-shadow: 0 -2px 8px rgba(0,0,0,.06) !important; }
 body.skin-classic [data-action="quickStartGame"],
 body.skin-classic [data-action="pickTaskForMode"] { background: #ffffff !important; }

@@ -503,6 +503,20 @@
                     if (!docSnap.exists()) return;
                     const data = docSnap.data();
 
+                    // ── Индивидуально отозванные учителем ДЗ (поле revokedAssignments документа ученика) ──
+                    const ownRevoked = Array.isArray(data.revokedAssignments) ? data.revokedAssignments : [];
+                    if (ownRevoked.length) {
+                        _mergeRevoked(ownRevoked);
+                        const rmRevoked = window.reconcileRevokedAssignments ? window.reconcileRevokedAssignments(ownRevoked) : 0;
+                        if (rmRevoked > 0) {
+                            if (window.recomputeHwMirror) window.recomputeHwMirror();
+                            if (window.refreshHwState) window.refreshHwState();
+                            saveProgress();
+                            if (window.updateGlobalUI) window.updateGlobalUI();
+                            if (window.updateHwNavBadge) window.updateHwNavBadge();
+                        }
+                    }
+
                     // ── Новая модель: список заданий (pendingAssignments) ──
                     const pending = Array.isArray(data.pendingAssignments) ? data.pendingAssignments : [];
                     if (pending.length) {
@@ -1103,6 +1117,7 @@
                 </div>
                 <div style="display:flex;gap:6px;padding-top:8px;border-top:1px solid #f1f5f9">
                     <button onclick="window.promptAssignHw('${safeUid}','${safeName}')" class="flex-1 bg-rose-50 text-rose-600 hover:bg-rose-100 dark:bg-rose-900/20 dark:text-rose-400 py-2 rounded-xl text-[10px] font-black uppercase tracking-wider transition-colors active:scale-95">📝 ДЗ</button>
+                    <button onclick="window.openStudentAssignmentsList('${safeUid}','${safeName}')" class="bg-indigo-50 text-indigo-600 hover:bg-indigo-100 dark:bg-indigo-900/20 dark:text-indigo-400 px-3 py-2 rounded-xl text-[10px] font-black uppercase tracking-wider transition-colors active:scale-95" title="Выданные ДЗ ученика и отмена">📋</button>
                     <button onclick="window.downloadStudentPDF('${safeUid}')" class="flex-1 bg-blue-50 text-blue-600 hover:bg-blue-100 dark:bg-blue-900/20 dark:text-blue-400 py-2 rounded-xl text-[10px] font-black uppercase tracking-wider transition-colors active:scale-95">📄 Отчёт</button>
                     <button onclick="window.selectStudentForMerge('${safeUid}','${safeName}')" data-student-uid="${safeUid}" class="bg-amber-50 text-amber-600 hover:bg-amber-100 dark:bg-amber-900/20 dark:text-amber-400 px-3 py-2 rounded-xl text-[10px] font-black uppercase tracking-wider transition-colors active:scale-95" title="Объединить с другим аккаунтом">🔀</button>
                 </div>
@@ -1772,6 +1787,14 @@
             }
         };
 
+        // Общий набор отозванных id (классовые из журнала + индивидуальные из документа ученика).
+        // Растёт монотонно за сессию — раз отозвано, больше не подхватываем.
+        function _mergeRevoked(ids) {
+            if (!(window._classRevoked instanceof Set)) window._classRevoked = new Set();
+            (ids || []).forEach(id => window._classRevoked.add(id));
+            return window._classRevoked;
+        }
+
         // ─── Журнал ДЗ класса: чтобы ученики, добавленные на курс позже, получили старые задания ───
         function _classDocId(code) {
             return String(code || '').trim().replace(/[\/#?%]/g, '_');
@@ -1789,8 +1812,7 @@
                 const list = Array.isArray(data.assignments) ? data.assignments : [];
                 // Отозванные учителем ДЗ (вариант А): не подхватываем их и убираем у себя невыполненные копии.
                 const revoked = Array.isArray(data.revokedAssignments) ? data.revokedAssignments : [];
-                const revokedSet = new Set(revoked);
-                window._classRevoked = revokedSet;
+                const revokedSet = _mergeRevoked(revoked); // копим в общий набор (классовые + индивидуальные)
                 let removed = (window.reconcileRevokedAssignments ? window.reconcileRevokedAssignments(revoked) : 0);
                 const today = new Date().toISOString().split('T')[0];
                 let added = 0;
@@ -1856,6 +1878,81 @@
             } catch (e) { console.error('cancelClassAssignment error:', e); return false; }
         };
 
+        // ─── Учитель: отменить ВСЕ выданные классу ДЗ («с нового листа») ───
+        // Чистим журнал класса и отзываем все его id. Сданные у учеников остаются (вариант А).
+        window.cancelAllClassAssignments = async function(rawCode) {
+            if (!db) return 0;
+            const code = _classDocId(rawCode);
+            if (!code) return 0;
+            try {
+                const ref = doc(db, 'artifacts', appId, 'public', 'data', 'classes', code);
+                const snap = await getDoc(ref);
+                const data = snap.exists() ? snap.data() : {};
+                const ids = (Array.isArray(data.assignments) ? data.assignments : []).map(a => a && a.id).filter(Boolean);
+                const revoked = Array.isArray(data.revokedAssignments) ? data.revokedAssignments.slice() : [];
+                ids.forEach(id => { if (!revoked.includes(id)) revoked.push(id); });
+                await setDoc(ref, { assignments: [], revokedAssignments: revoked.slice(-300), updatedAt: Date.now() }, { merge: true });
+                return ids.length;
+            } catch (e) { console.error('cancelAllClassAssignments error:', e); return 0; }
+        };
+
+        // ─── Учитель: список ДЗ конкретного ученика (pending + подхваченные из его fullStateJson) ───
+        window.listStudentAssignments = async function(uid) {
+            if (!db || !uid) return [];
+            try {
+                const snap = await getDoc(doc(db, 'artifacts', appId, 'public', 'data', 'students', uid));
+                if (!snap.exists()) return [];
+                const data = snap.data();
+                const revoked = new Set(Array.isArray(data.revokedAssignments) ? data.revokedAssignments : []);
+                let ingested = [];
+                try { const st = JSON.parse(data.fullStateJson || '{}'); ingested = (st.stats || st || {}).assignments || []; } catch (e) {}
+                const byId = new Map();
+                (Array.isArray(ingested) ? ingested : []).forEach(a => {
+                    if (a && a.id) byId.set(a.id, { id: a.id, title: a.title, deadline: a.deadline, assignedAt: a.assignedAt, items: a.items, state: a.status === 'done' ? 'done' : 'active', revoked: revoked.has(a.id) });
+                });
+                (Array.isArray(data.pendingAssignments) ? data.pendingAssignments : []).forEach(a => {
+                    if (a && a.id && !byId.has(a.id)) byId.set(a.id, { id: a.id, title: a.title, deadline: a.deadline, assignedAt: a.assignedAt, items: a.items, state: 'pending', revoked: revoked.has(a.id) });
+                });
+                return [...byId.values()].filter(a => !a.revoked).sort((x, y) => (y.assignedAt || 0) - (x.assignedAt || 0));
+            } catch (e) { console.error('listStudentAssignments error:', e); return []; }
+        };
+
+        // ─── Учитель: отменить ДЗ у конкретного ученика (вариант А) ───
+        // Пишем только в верхнеуровневые поля документа ученика (pendingAssignments + revokedAssignments) —
+        // НЕ трогаем fullStateJson (его перезаписывает сам ученик). Ученик сам сверится в _handleHwSnapshot.
+        window.cancelStudentAssignment = async function(uid, id) {
+            if (!db || !uid || !id) return false;
+            try {
+                const ref = doc(db, 'artifacts', appId, 'public', 'data', 'students', uid);
+                const snap = await getDoc(ref);
+                const data = snap.exists() ? snap.data() : {};
+                const pending = (Array.isArray(data.pendingAssignments) ? data.pendingAssignments : []).filter(a => a && a.id !== id);
+                const revoked = Array.isArray(data.revokedAssignments) ? data.revokedAssignments.slice() : [];
+                if (!revoked.includes(id)) revoked.push(id);
+                await updateDoc(ref, { pendingAssignments: pending, revokedAssignments: revoked.slice(-300) });
+                return true;
+            } catch (e) { console.error('cancelStudentAssignment error:', e); return false; }
+        };
+
+        // ─── Учитель: отменить ВСЕ невыполненные ДЗ ученика ───
+        window.cancelAllStudentAssignments = async function(uid) {
+            if (!db || !uid) return 0;
+            try {
+                const ref = doc(db, 'artifacts', appId, 'public', 'data', 'students', uid);
+                const snap = await getDoc(ref);
+                if (!snap.exists()) return 0;
+                const data = snap.data();
+                let ingested = [];
+                try { const st = JSON.parse(data.fullStateJson || '{}'); ingested = (st.stats || st || {}).assignments || []; } catch (e) {}
+                const activeIds = (Array.isArray(ingested) ? ingested : []).filter(a => a && a.id && a.status !== 'done').map(a => a.id);
+                const pendingIds = (Array.isArray(data.pendingAssignments) ? data.pendingAssignments : []).map(a => a && a.id).filter(Boolean);
+                const revoked = Array.isArray(data.revokedAssignments) ? data.revokedAssignments.slice() : [];
+                [...activeIds, ...pendingIds].forEach(id => { if (!revoked.includes(id)) revoked.push(id); });
+                await updateDoc(ref, { pendingAssignments: [], revokedAssignments: revoked.slice(-300) });
+                return activeIds.length + pendingIds.length;
+            } catch (e) { console.error('cancelAllStudentAssignments error:', e); return 0; }
+        };
+
         // ── Новый формат: ДЗ как набор подзаданий (items) ──
         // items[i] = {task, period, metric:'lines'|'points'|'learned', goal[, yearStart, yearEnd]}
         // yearStart/yearEnd передаются ТОЛЬКО для period==='custom' (диапазон лет), иначе теряются.
@@ -1871,6 +1968,7 @@
                         goal: Number(it.goal) || 0
                     };
                     if (o.period === 'custom') { o.yearStart = Number(it.yearStart) || 862; o.yearEnd = Number(it.yearEnd) || 2026; }
+                    else if (o.task === 'cram' && it.yearStart && it.yearEnd) { o.yearStart = Number(it.yearStart); o.yearEnd = Number(it.yearEnd); } // диапазон зубрёжки не терять
                     return o;
                 }),
                 deadline: deadline || null,
@@ -1903,6 +2001,7 @@
                         goal: Number(it.goal) || 0
                     };
                     if (o.period === 'custom') { o.yearStart = Number(it.yearStart) || 862; o.yearEnd = Number(it.yearEnd) || 2026; }
+                    else if (o.task === 'cram' && it.yearStart && it.yearEnd) { o.yearStart = Number(it.yearStart); o.yearEnd = Number(it.yearEnd); } // диапазон зубрёжки не терять
                     return o;
                 }),
                 deadline: deadline || null,

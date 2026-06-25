@@ -100,8 +100,9 @@ window.openHwComposer = function(target) {
     _renderHwComposer();
 };
 
-// ─── Список выданных классу ДЗ + отмена (вариант А) ───
+// ─── Список выданных ДЗ + отмена (вариант А): весь класс или конкретный ученик ───
 let _hwListCache = [];
+let _hwlCtx = { mode: 'class', code: '', uid: '', name: '' };
 const _HWL_TASK = { task3: '🔗№3', task4: '📍№4', task5: '👤№5', task7: '🎨№7', cram: '⚡Зубрёжка' };
 const _HWL_UNIT = { lines: 'строк', points: 'баллов', learned: 'фактов' };
 function _hwlEsc(s) { return String(s == null ? '' : s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c])); }
@@ -111,10 +112,13 @@ function _hwlItemSummary(it) {
         : (it.period === 'custom' ? `${it.yearStart || '?'}–${it.yearEnd || '?'}` : (it.period || 'all'));
     return `${_HWL_TASK[it.task] || it.task} ${it.goal} ${_HWL_UNIT[it.metric] || ''} · ${scope}`;
 }
-window.openClassAssignmentsList = function() {
-    const code = (document.getElementById('teacher-class-code-input')?.value || localStorage.getItem('teacher_class_code') || '').trim();
-    if (!code) return showToast('⚠️', 'Не задан код класса', 'bg-rose-500', 'border-rose-700');
-    if (!window.listClassAssignments) return showToast('⚠️', 'Нет подключения к серверу', 'bg-rose-500', 'border-rose-700');
+function _hwlStateBadge(state) {
+    if (state === 'done') return '<span style="font-size:9px;font-weight:900;color:#059669;background:rgba(16,185,129,0.14);border-radius:6px;padding:2px 6px">сдано ✓</span>';
+    if (state === 'pending') return '<span style="font-size:9px;font-weight:900;color:#a16207;background:rgba(245,158,11,0.16);border-radius:6px;padding:2px 6px">ожидает</span>';
+    return '<span style="font-size:9px;font-weight:900;color:#4338ca;background:rgba(99,102,241,0.14);border-radius:6px;padding:2px 6px">в работе</span>';
+}
+function _hwlCancellable(a) { return _hwlCtx.mode === 'student' ? a.state !== 'done' : true; }
+function _hwlOverlay() {
     let overlay = document.getElementById('hw-list-overlay');
     if (!overlay) {
         overlay = document.createElement('div');
@@ -123,30 +127,59 @@ window.openClassAssignmentsList = function() {
         overlay.onclick = e => { if (e.target === overlay) overlay.remove(); };
         document.body.appendChild(overlay);
     }
-    overlay.dataset.code = code;
+    return overlay;
+}
+function _hwlRenderShell(titleTxt, subTxt, noteTxt) {
+    const overlay = _hwlOverlay();
     overlay.innerHTML = `
     <div style="background:#f7f7f8;width:100%;max-width:480px;max-height:90vh;overflow-y:auto;border-radius:24px 24px 0 0;padding:18px 16px 28px;box-shadow:0 -8px 40px rgba(0,0,0,0.25)" class="dark:bg-[#141414]">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
-        <div style="font-size:16px;font-weight:900;color:#111" class="dark:text-white">📋 Выданные ДЗ</div>
+        <div style="font-size:16px;font-weight:900;color:#111" class="dark:text-white">${_hwlEsc(titleTxt)}</div>
         <button onclick="document.getElementById('hw-list-overlay').remove()" style="font-size:22px;color:#aaa;background:none;border:none;cursor:pointer;padding:2px 8px">✕</button>
       </div>
-      <div style="font-size:11px;color:#6b7280;font-weight:700;margin-bottom:4px">Класс ${_hwlEsc(code)}</div>
-      <div style="font-size:10px;color:#9ca3af;font-weight:600;margin-bottom:12px;line-height:1.4">Отмена убирает ДЗ из журнала и у тех, кто его ещё не сдал (подхватится при следующем входе ученика). У сдавших отметка сохраняется.</div>
+      <div style="font-size:11px;color:#6b7280;font-weight:700;margin-bottom:4px">${_hwlEsc(subTxt)}</div>
+      <div style="font-size:10px;color:#9ca3af;font-weight:600;margin-bottom:12px;line-height:1.4">${_hwlEsc(noteTxt)}</div>
+      <div id="hw-list-actions" style="margin-bottom:10px"></div>
       <div id="hw-list-body"><div style="text-align:center;color:#9ca3af;font-size:12px;padding:20px 0">Загрузка…</div></div>
     </div>`;
-    _loadClassAssignmentsList(code);
-};
-async function _loadClassAssignmentsList(code) {
-    let list = [];
-    try { list = await window.listClassAssignments(code); } catch (e) { console.error(e); }
-    _hwListCache = Array.isArray(list) ? list : [];
-    _paintClassAssignmentsList();
 }
-function _paintClassAssignmentsList() {
+window.openClassAssignmentsList = function() {
+    const code = (document.getElementById('teacher-class-code-input')?.value || localStorage.getItem('teacher_class_code') || '').trim();
+    if (!code) return showToast('⚠️', 'Не задан код класса', 'bg-rose-500', 'border-rose-700');
+    if (!window.listClassAssignments) return showToast('⚠️', 'Нет подключения к серверу', 'bg-rose-500', 'border-rose-700');
+    _hwlCtx = { mode: 'class', code, uid: '', name: '' };
+    _hwlRenderShell('📋 Выданные ДЗ', `Класс ${code}`, 'Отмена убирает ДЗ из журнала и у тех, кто его ещё не сдал (применится при следующем входе ученика). У сдавших отметка сохраняется.');
+    _hwlLoad();
+};
+window.openStudentAssignmentsList = function(uid, name) {
+    if (!uid) return;
+    if (!window.listStudentAssignments) return showToast('⚠️', 'Нет подключения к серверу', 'bg-rose-500', 'border-rose-700');
+    _hwlCtx = { mode: 'student', code: '', uid, name: name || 'Ученик' };
+    _hwlRenderShell('📋 ДЗ ученика', name || 'Ученик', 'Отмена убирает невыполненные ДЗ у этого ученика (применится при его следующем входе). Сданные остаются с отметкой.');
+    _hwlLoad();
+};
+async function _hwlLoad() {
+    let list = [];
+    try {
+        list = _hwlCtx.mode === 'student'
+            ? await window.listStudentAssignments(_hwlCtx.uid)
+            : await window.listClassAssignments(_hwlCtx.code);
+    } catch (e) { console.error(e); }
+    _hwListCache = Array.isArray(list) ? list : [];
+    _hwlPaint();
+}
+function _hwlPaint() {
     const body = document.getElementById('hw-list-body');
+    const actions = document.getElementById('hw-list-actions');
     if (!body) return;
+    if (actions) {
+        const n = _hwListCache.filter(_hwlCancellable).length;
+        actions.innerHTML = n > 1
+            ? `<button onclick="window._hwlAskCancelAll()" style="width:100%;background:rgba(244,63,94,0.08);color:var(--c-danger,#e11d48);border:1px solid rgba(244,63,94,0.35);border-radius:10px;padding:9px;font-size:11px;font-weight:900;cursor:pointer">🗑 Отменить все (${n}) — с чистого листа</button>`
+            : '';
+    }
     if (!_hwListCache.length) {
-        body.innerHTML = '<div style="text-align:center;color:#9ca3af;font-size:12px;padding:20px 0">Класс ещё не получал ДЗ «всему классу».</div>';
+        body.innerHTML = `<div style="text-align:center;color:#9ca3af;font-size:12px;padding:20px 0">${_hwlCtx.mode === 'student' ? 'У ученика нет активных ДЗ.' : 'Активных ДЗ класса нет.'}</div>`;
         return;
     }
     body.innerHTML = _hwListCache.map(a => {
@@ -155,15 +188,17 @@ function _paintClassAssignmentsList() {
         const dl = a.deadline ? 'срок до ' + new Date(a.deadline + 'T00:00:00').toLocaleDateString('ru-RU') : 'без срока';
         const issued = a.assignedAt ? 'выдано ' + new Date(a.assignedAt).toLocaleDateString('ru-RU') : '';
         const items = (a.items || []).map(_hwlItemSummary).join(' · ');
+        const badge = _hwlCtx.mode === 'student' ? ' ' + _hwlStateBadge(a.state) : '';
+        const action = _hwlCancellable(a)
+            ? `<button onclick="window._hwlAskCancel('${id}')" style="background:rgba(244,63,94,0.1);color:var(--c-danger,#e11d48);border:1px solid rgba(244,63,94,0.35);border-radius:9px;padding:6px 10px;font-size:11px;font-weight:900;cursor:pointer">Отменить</button>`
+            : `<span style="font-size:10px;color:#9ca3af;font-weight:800">остаётся</span>`;
         return `
         <div data-row="${id}" style="background:#fff;border:1px solid rgba(128,128,128,0.18);border-radius:14px;padding:10px 12px;margin-bottom:8px" class="dark:bg-[#1e1e1e]">
-          <div style="font-size:13px;font-weight:900;color:#111;margin-bottom:2px" class="dark:text-gray-100">${_hwlEsc(title)}</div>
+          <div style="font-size:13px;font-weight:900;color:#111;margin-bottom:2px" class="dark:text-gray-100">${_hwlEsc(title)}${badge}</div>
           <div style="font-size:10px;color:#6b7280;margin-bottom:6px">${_hwlEsc(items)}</div>
           <div style="display:flex;align-items:center;justify-content:space-between;gap:8px">
             <div style="font-size:10px;color:#9ca3af;font-weight:700">${dl} · ${issued}</div>
-            <div class="hwl-actions" style="flex-shrink:0">
-              <button onclick="window._hwlAskCancel('${id}')" style="background:rgba(244,63,94,0.1);color:var(--c-danger,#e11d48);border:1px solid rgba(244,63,94,0.35);border-radius:9px;padding:6px 10px;font-size:11px;font-weight:900;cursor:pointer">Отменить</button>
-            </div>
+            <div class="hwl-actions" style="flex-shrink:0">${action}</div>
           </div>
         </div>`;
     }).join('');
@@ -176,22 +211,46 @@ window._hwlAskCancel = function(id) {
       <button onclick="window._hwlDoCancel('${id}')" style="background:var(--c-danger,#e11d48);color:#fff;border:none;border-radius:9px;padding:6px 10px;font-size:11px;font-weight:900;cursor:pointer;margin-right:4px">Да, отменить</button>
       <button onclick="window._hwlRepaint()" style="background:#eee;color:#444;border:none;border-radius:9px;padding:6px 10px;font-size:11px;font-weight:900;cursor:pointer">Нет</button>`;
 };
-window._hwlRepaint = function() { _paintClassAssignmentsList(); };
+window._hwlRepaint = function() { _hwlPaint(); };
 window._hwlDoCancel = async function(id) {
-    const overlay = document.getElementById('hw-list-overlay');
-    const code = overlay ? overlay.dataset.code : '';
     const cell = document.querySelector(`#hw-list-body [data-row="${id}"] .hwl-actions`);
     if (cell) cell.innerHTML = '<span style="font-size:10px;color:#9ca3af;font-weight:800">Отменяю…</span>';
     let ok = false;
-    try { ok = await window.cancelClassAssignment(code, id); } catch (e) { console.error(e); }
+    try {
+        ok = _hwlCtx.mode === 'student'
+            ? await window.cancelStudentAssignment(_hwlCtx.uid, id)
+            : await window.cancelClassAssignment(_hwlCtx.code, id);
+    } catch (e) { console.error(e); }
     if (ok) {
         _hwListCache = _hwListCache.filter(a => a.id !== id);
-        _paintClassAssignmentsList();
-        showToast('🗑', 'ДЗ отменено. Ученики обновят при входе.', 'bg-emerald-500', 'border-emerald-700');
+        _hwlPaint();
+        showToast('🗑', _hwlCtx.mode === 'student' ? 'ДЗ отменено у ученика.' : 'ДЗ отменено. Ученики обновят при входе.', 'bg-emerald-500', 'border-emerald-700');
     } else {
         showToast('❌', 'Не удалось отменить ДЗ', 'bg-rose-500', 'border-rose-700');
-        _paintClassAssignmentsList();
+        _hwlPaint();
     }
+};
+window._hwlAskCancelAll = function() {
+    const actions = document.getElementById('hw-list-actions');
+    if (!actions) return;
+    actions.innerHTML = `
+      <div style="display:flex;align-items:center;gap:6px;justify-content:center;flex-wrap:wrap">
+        <span style="font-size:11px;color:#6b7280;font-weight:800">Отменить все${_hwlCtx.mode === 'student' ? ' у ученика' : ''}?</span>
+        <button onclick="window._hwlDoCancelAll()" style="background:var(--c-danger,#e11d48);color:#fff;border:none;border-radius:9px;padding:7px 12px;font-size:11px;font-weight:900;cursor:pointer">Да, всё</button>
+        <button onclick="window._hwlRepaint()" style="background:#eee;color:#444;border:none;border-radius:9px;padding:7px 12px;font-size:11px;font-weight:900;cursor:pointer">Нет</button>
+      </div>`;
+};
+window._hwlDoCancelAll = async function() {
+    const actions = document.getElementById('hw-list-actions');
+    if (actions) actions.innerHTML = '<div style="text-align:center;font-size:11px;color:#9ca3af;font-weight:800">Отменяю все…</div>';
+    let n = 0;
+    try {
+        n = _hwlCtx.mode === 'student'
+            ? await window.cancelAllStudentAssignments(_hwlCtx.uid)
+            : await window.cancelAllClassAssignments(_hwlCtx.code);
+    } catch (e) { console.error(e); }
+    await _hwlLoad();
+    showToast('🗑', `Отменено ДЗ: ${n}. Чистый лист.`, 'bg-emerald-500', 'border-emerald-700');
 };
 
 // Считать текущее состояние формы в черновик (чтобы переменные не сбрасывались при ре-рендере).
@@ -241,7 +300,21 @@ function _hwcAvail() {
     // Год-диапазон («Годы от—до») показываем И для зубрёжки — это выбор дат для ДЗ.
     if (isCram) {
         c.draft.metric = 'learned';
-        if (hint) { hint.textContent = '⚡ Зубрёжка дат. Годы (от—до) — необязательно: 862–2026 = все даты; сузишь — только этот диапазон. Цель — N дат.'; hint.style.display = ''; }
+        if (hint) {
+            let ys2 = Number(yearStart) || 862, ye2 = Number(yearEnd) || 2026;
+            if (ys2 > ye2) { const t = ys2; ys2 = ye2; ye2 = t; }
+            const narrowed = !(ys2 <= 862 && ye2 >= 2026);
+            hint.style.display = '';
+            hint.textContent = '⚡ Зубрёжка дат — считаю даты…';
+            const token = (_hwcAvail._t = (_hwcAvail._t || 0) + 1);
+            (window.cramDateCount ? window.cramDateCount(ys2, ye2) : Promise.resolve(null)).then(n => {
+                if (_hwcAvail._t !== token) return; // пришёл устаревший ответ — игнорируем
+                const h = document.getElementById('hwc-avail'); if (!h) return;
+                if (n == null) { h.textContent = '⚡ Зубрёжка дат. Годы (от—до) необязательно: 862–2026 = все даты.'; return; }
+                const scope = narrowed ? `диапазон ${ys2}–${ye2}` : 'все даты';
+                h.textContent = `⚡ Зубрёжка дат · ${scope}: ${_ruDates(n)}. Цель — сколько из них вызубрить.`;
+            });
+        }
         return;
     }
     if (!hint) return;
@@ -777,6 +850,38 @@ window.updateGamePeriodChip = function() {
 
 // ── Режим «Зубрёжка» (изолированный iframe cram.html) ──
 // Открываем полноэкранный тренажёр дат. Необязательный arg — id колоды (для ДЗ-диплинка).
+// Сколько дат в диапазоне для зубрёжки: данные дат лежат в cram.html (<script id="app-data">),
+// поэтому подгружаем их один раз и считаем тем же правилом, что и buildPeriodDeck в тренажёре.
+let _cramEventsCache = null;
+async function _loadCramEvents() {
+    if (_cramEventsCache) return _cramEventsCache;
+    try {
+        const html = await (await fetch('cram.html', { cache: 'force-cache' })).text();
+        const m = html.match(/<script[^>]*id="app-data"[^>]*>([\s\S]*?)<\/script>/);
+        const data = m ? JSON.parse(m[1]) : {};
+        _cramEventsCache = (data.events || []).filter(e => !e.isVov);
+    } catch (e) { console.error('cramDateCount: не удалось загрузить даты', e); _cramEventsCache = []; }
+    return _cramEventsCache;
+}
+function _cramEventYear(e) {
+    const pick = s => { const m = (String(s || '').match(/\d{3,4}/g) || []).map(Number).filter(y => y >= 800 && y <= 2100); return m.length ? m[0] : null; };
+    let y = pick(e.date);
+    if (y == null) y = pick((e.event || '') + ' ' + (e.know || ''));
+    if (y == null) y = pick(e.section);
+    return y;
+}
+window.cramDateCount = async function(from, to) {
+    const evs = await _loadCramEvents();
+    return evs.filter(e => { const y = _cramEventYear(e); return y != null && y >= from && y <= to; }).length;
+};
+function _ruDates(n) {
+    const a = Math.abs(n) % 100, b = n % 10;
+    if (a >= 11 && a <= 14) return n + ' дат';
+    if (b === 1) return n + ' дата';
+    if (b >= 2 && b <= 4) return n + ' даты';
+    return n + ' дат';
+}
+
 window.openCram = function(deckId) {
     haptic('light');
     const ov = document.getElementById('cram-overlay');
@@ -1004,8 +1109,11 @@ window.startHwItem = function(id, idx) {
     // Зубрёжка: запускаем тренажёр дат вместо обычного задания.
     if (it.task === 'cram') {
         const total = (a.items || []).length;
-        showToast('⚡', `Этап ${idx + 1} из ${total}: вызубрить ${it.goal} дат`, 'bg-indigo-500', 'border-indigo-700');
-        if (window.openCram) window.openCram((it.yearStart && it.yearEnd) ? ('period:' + it.yearStart + '-' + it.yearEnd) : undefined);
+        // Всегда открываем колоду периода сразу в тренировку (диапазон учителя или весь, если не сужен).
+        const ys = it.yearStart || 862, ye = it.yearEnd || 2026;
+        const rangeTxt = (it.yearStart && it.yearEnd) ? ` (${it.yearStart}–${it.yearEnd})` : '';
+        showToast('⚡', `Этап ${idx + 1} из ${total}: вызубрить ${it.goal} дат${rangeTxt}`, 'bg-indigo-500', 'border-indigo-700');
+        if (window.openCram) window.openCram('period:' + ys + '-' + ye);
         return;
     }
     const mm = HW_METRIC_META[it.metric] || HW_METRIC_META.lines;
