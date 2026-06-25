@@ -17,7 +17,7 @@
 
     function _preload() {
         try {
-            if (!_yes) { _yes = new Audio('assets/sounds/yes.mp3'); _yes.preload = 'auto'; }
+            if (!_yes) { _yes = new Audio('assets/sounds/wow.mp3'); _yes.preload = 'auto'; }
             if (!_fah) { _fah = new Audio('assets/sounds/fah.mp3'); _fah.preload = 'auto'; }
         } catch (e) {}
     }

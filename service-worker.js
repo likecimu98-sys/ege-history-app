@@ -1,6 +1,6 @@
 'use strict';
 
-const APP_VERSION = '2026-06-25-1';
+const APP_VERSION = '2026-06-25-2';
 const STATIC_CACHE = `ege-history-static-${APP_VERSION}`;
 const ASSET_CACHE = `ege-history-assets-${APP_VERSION}`;
 const CACHE_NAMES = [STATIC_CACHE, ASSET_CACHE];
@@ -41,6 +41,7 @@ const CORE_URLS = [
     './assets/icons/icon-512.png',
     './assets/icons/maskable-512.png',
     './assets/sounds/yes.mp3',
+    './assets/sounds/wow.mp3',
     './assets/sounds/fah.mp3'
 ];
 
