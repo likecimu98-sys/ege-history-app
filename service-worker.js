@@ -1,6 +1,6 @@
 'use strict';
 
-const APP_VERSION = '2026-06-24-15';
+const APP_VERSION = '2026-06-25-1';
 const STATIC_CACHE = `ege-history-static-${APP_VERSION}`;
 const ASSET_CACHE = `ege-history-assets-${APP_VERSION}`;
 const CACHE_NAMES = [STATIC_CACHE, ASSET_CACHE];
@@ -17,6 +17,8 @@ const CORE_URLS = [
     './table.js',
     './ui.js',
     './modes.js',
+    './swipe-data.js',
+    './swipe-mode.js',
     './visual-trainer.js',
     './app.js',
     './firebase-sync.js',
@@ -37,7 +39,9 @@ const CORE_URLS = [
     './assets/icons/icon-180.png',
     './assets/icons/icon-192.png',
     './assets/icons/icon-512.png',
-    './assets/icons/maskable-512.png'
+    './assets/icons/maskable-512.png',
+    './assets/sounds/yes.mp3',
+    './assets/sounds/fah.mp3'
 ];
 
 const ASSET_MANIFEST_URL = './offline-assets.json';
