@@ -108,6 +108,35 @@ function pickTargetTask3(allowed, rowsCount) {
 //      * поздний СССР + РФ (1946-2021)
 //      * СВО (>=2022)
 //   Если выбранной подкатегории нет в пуле, fallback на соседние.
+// ── Защита task5 от «событие подходит сразу двум личностям» ──
+// Активный период личности = диапазон годов всех её событий в БД (с запасом).
+// Если у двух выбранных строк КАЖДАЯ личность «дотягивается» до года события другой,
+// то событие можно отнести к обеим (Пётр/Меншиков ↔ Северная война/Гангут) → неоднозначно.
+let _t5Span = null;
+function _task5PersonSpan() {
+    if (_t5Span) return _t5Span;
+    const span = {};
+    (window.task5Data || []).forEach(d => {
+        if (typeof d.year !== 'number') return;
+        const s = span[d.person] || (span[d.person] = { min: Infinity, max: -Infinity });
+        if (d.year < s.min) s.min = d.year;
+        if (d.year > s.max) s.max = d.year;
+    });
+    return (_t5Span = span);
+}
+function _task5Interchangeable(a, b) {
+    if (!a || !b || a.person === b.person) return false;
+    if (typeof a.year !== 'number' || typeof b.year !== 'number') return false;
+    // ВОВ (1941–1945): множество разнопрофильных современников — не блокируем друг от друга.
+    if (a.year >= 1941 && a.year <= 1945 && b.year >= 1941 && b.year <= 1945) return false;
+    const sp = _task5PersonSpan(), sa = sp[a.person], sb = sp[b.person];
+    if (!sa || !sb) return false;
+    const PAD = 5;
+    const aCoversB = b.year >= sa.min - PAD && b.year <= sa.max + PAD;
+    const bCoversA = a.year >= sb.min - PAD && a.year <= sb.max + PAD;
+    return aCoversB && bCoversA;
+}
+
 function pickTargetTask5(allowed, rowsCount) {
     if (rowsCount !== 4) return null;
     const isEarly    = f => f.year < 1700;
@@ -124,6 +153,7 @@ function pickTargetTask5(allowed, rowsCount) {
         eventPersons[d.event].add(d.person);
     });
     const selectedPersons = new Set(), selectedEvents = new Set();
+    const picked = [];
     const pick1 = (pool) => {
         for (const f of pool) {
             if (slotUE.has(f.event) || slotUP.has(f.person)) continue;
@@ -131,8 +161,10 @@ function pickTargetTask5(allowed, rowsCount) {
             const fwd = [...selectedPersons].some(sp => myAlts.has(sp));
             const rev = [...selectedEvents].some(se => (eventPersons[se] || new Set()).has(f.person));
             if (fwd || rev) continue;
+            if (picked.some(p => _task5Interchangeable(f, p))) continue;
             slotUE.add(f.event); slotUP.add(f.person);
             selectedPersons.add(f.person); selectedEvents.add(f.event);
+            picked.push(f);
             return f;
         }
         return null;
@@ -992,6 +1024,7 @@ function generateTwoColumnTable() {
                 });
             }
             const shuf = shuffleArray([...allowed]);
+            const t5Deferred = [];  // task5: отложенные из-за неоднозначности (добираем, если не хватит)
             for (const f of shuf) {
                 if (target.length >= rowsCount) break;
                 if (used1.has(f[dedupeKey])) continue;
@@ -1011,12 +1044,25 @@ function generateTwoColumnTable() {
                     const fwd = [...selectedPersons5].some(sp => myAlts.has(sp));
                     const rev = [...selectedEvents5].some(se => (eventPersons5[se]||new Set()).has(f.person));
                     if (fwd || rev) continue;
+                    // событие не должно подходить сразу двум личностям с уже выбранной строкой
+                    if (target.some(t => _task5Interchangeable(f, t))) { t5Deferred.push(f); continue; }
                 }
                 target.push(f);
                 used1.add(f[dedupeKey]);
                 if (dedupeKey2) { used2.add(f[dedupeKey2]); selectedTraits.add(f[dedupeKey2]); }
                 if (task === 'task7') selectedCultures7.add(_task7CultureKey(f.culture));
                 if (task === 'task5') { selectedPersons5.add(f.person); selectedEvents5.add(f.event); }
+            }
+            // Если защита от неоднозначности не дала набрать строки (узкий период) —
+            // добираем из отложенных, чтобы задание не оказалось неполным.
+            if (task === 'task5' && target.length < rowsCount && t5Deferred.length) {
+                for (const f of t5Deferred) {
+                    if (target.length >= rowsCount) break;
+                    if (used1.has(f[dedupeKey]) || (dedupeKey2 && used2.has(f[dedupeKey2]))) continue;
+                    target.push(f);
+                    used1.add(f[dedupeKey]); if (dedupeKey2) used2.add(f[dedupeKey2]);
+                    selectedPersons5.add(f.person); selectedEvents5.add(f.event);
+                }
             }
         }
     }

@@ -16,6 +16,61 @@ function haptic(type) {
     }
 }
 
+// ── Звуковые эффекты ──
+// Единый набор Audio с «разблокировкой» по первому жесту пользователя.
+// Без этого new Audio().play() не срабатывает в мобильных браузерах и Telegram WebView
+// (autoplay блокируется, пока звук хотя бы раз не запущен внутри обработчика жеста).
+window.Sfx = (function () {
+    const FILES = {
+        wow: 'assets/sounds/wow.mp3',  // верный ответ
+        fah: 'assets/sounds/fah.mp3',  // неверный ответ
+        dun: 'assets/sounds/dun.mp3',  // пришла домашка
+    };
+    const cache = {};
+    let unlocked = false;
+
+    function get(name) {
+        if (cache[name]) return cache[name];
+        const src = FILES[name] || name;
+        try { const a = new Audio(src); a.preload = 'auto'; return (cache[name] = a); }
+        catch (e) { return null; }
+    }
+    function isMuted() { try { return localStorage.getItem('sfxMuted') === '1'; } catch (e) { return false; } }
+    function setMuted(m) { try { localStorage.setItem('sfxMuted', m ? '1' : '0'); } catch (e) {} }
+
+    function play(name, vol) {
+        if (isMuted()) return;
+        const a = get(name); if (!a) return;
+        try {
+            a.muted = false;
+            a.currentTime = 0;
+            if (vol != null) a.volume = vol;
+            const p = a.play();
+            if (p && p.catch) p.catch(() => {});
+        } catch (e) {}
+    }
+
+    function unlock() {
+        if (unlocked) return;
+        unlocked = true;
+        Object.keys(FILES).forEach(n => {
+            const a = get(n); if (!a) return;
+            try {
+                a.muted = true;
+                const p = a.play();
+                if (p && p.then) p.then(() => { a.pause(); a.currentTime = 0; a.muted = false; }).catch(() => { a.muted = false; });
+                else { a.pause(); a.muted = false; }
+            } catch (e) {}
+        });
+        ['pointerdown', 'touchstart', 'keydown', 'click'].forEach(ev =>
+            window.removeEventListener(ev, unlock, true));
+    }
+    ['pointerdown', 'touchstart', 'keydown', 'click'].forEach(ev =>
+        window.addEventListener(ev, unlock, { capture: true, passive: true }));
+
+    return { play, unlock, isMuted, setMuted };
+})();
+
 function shuffleArray(array) {
     let c = array.length, r;
     while (c !== 0) {

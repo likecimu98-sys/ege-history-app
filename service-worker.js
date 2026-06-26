@@ -1,6 +1,6 @@
 'use strict';
 
-const APP_VERSION = '2026-06-25-3';
+const APP_VERSION = '2026-06-26-1';
 const STATIC_CACHE = `ege-history-static-${APP_VERSION}`;
 const ASSET_CACHE = `ege-history-assets-${APP_VERSION}`;
 const CACHE_NAMES = [STATIC_CACHE, ASSET_CACHE];
@@ -42,7 +42,8 @@ const CORE_URLS = [
     './assets/icons/maskable-512.png',
     './assets/sounds/yes.mp3',
     './assets/sounds/wow.mp3',
-    './assets/sounds/fah.mp3'
+    './assets/sounds/fah.mp3',
+    './assets/sounds/dun.mp3'
 ];
 
 const ASSET_MANIFEST_URL = './offline-assets.json';

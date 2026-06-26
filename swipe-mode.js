@@ -4,7 +4,6 @@
 
 (function () {
     let _sw = null;
-    let _yes = null, _fah = null;
     let _muted = false;
     try { _muted = localStorage.getItem('swipeMuted') === '1'; } catch (e) {}
 
@@ -15,13 +14,8 @@
     }
     function _shuffle(a) { for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; }
 
-    function _preload() {
-        try {
-            if (!_yes) { _yes = new Audio('assets/sounds/wow.mp3'); _yes.preload = 'auto'; }
-            if (!_fah) { _fah = new Audio('assets/sounds/fah.mp3'); _fah.preload = 'auto'; }
-        } catch (e) {}
-    }
-    function _play(ok) { if (_muted) return; try { const a = ok ? _yes : _fah; if (a) { a.currentTime = 0; a.play().catch(() => {}); } } catch (e) {} }
+    function _preload() { try { if (window.Sfx) window.Sfx.unlock(); } catch (e) {} }
+    function _play(ok) { if (_muted) return; if (window.Sfx) window.Sfx.play(ok ? 'wow' : 'fah'); }
     function _muteIcon() { return _muted ? '🔇' : '🔊'; }
     function _toggleMute() {
         _muted = !_muted;
@@ -50,7 +44,7 @@
         _h('light');
         _preload();
         const deck = _buildDeck();
-        _sw = { deck, i: 0, score: 0, streak: 0, best: 0, correct: 0, wrong: 0, total: deck.length, lock: false, cur: null };
+        _sw = { deck, i: 0, score: 0, streak: 0, best: 0, correct: 0, wrong: 0, total: deck.length, lock: false, cur: null, lapses: [], reviewStart: null, reviewAdded: false };
         let ov = document.getElementById('swipe-overlay');
         if (!ov) { ov = document.createElement('div'); ov.id = 'swipe-overlay'; document.body.appendChild(ov); }
         ov.className = 'no-print';
@@ -100,7 +94,7 @@
         if (!_sw) return;
         const s = document.getElementById('sw-score'); if (s) s.textContent = _sw.score;
         const st = document.getElementById('sw-streak'); if (st) st.textContent = _sw.streak;
-        const l = document.getElementById('sw-left'); if (l) l.textContent = Math.max(0, _sw.total - _sw.i);
+        const l = document.getElementById('sw-left'); if (l) l.textContent = Math.max(0, _sw.deck.length - _sw.i);
     }
 
     function _panel(side, ruler) {
@@ -116,6 +110,13 @@
     function _nextCard() {
         if (!_sw) return;
         _sw.lock = false;
+        // Основная колода пройдена — один раз добавляем в конец карточки с ошибками.
+        if (_sw.i >= _sw.deck.length && !_sw.reviewAdded && _sw.lapses.length) {
+            _sw.reviewAdded = true;
+            _sw.reviewStart = _sw.deck.length;
+            _sw.deck = _sw.deck.concat(_shuffle(_sw.lapses.slice()));
+            if (typeof showToast === 'function') showToast('🔁', 'Повтори то, в чём ошибся', 'bg-indigo-500', 'border-indigo-700');
+        }
         const card = _sw.deck[_sw.i];
         if (!card) return _renderEnd();
         const rulers = window.swipeRulersData;
@@ -200,8 +201,14 @@
             cardEl.style.opacity = '0';
             cardEl.style.borderColor = ok ? '#22c55e' : '#ef4444';
         }
-        if (ok) { _sw.correct++; _sw.streak++; _sw.best = Math.max(_sw.best, _sw.streak); _sw.score += 10 + Math.min(20, (_sw.streak - 1) * 2); }
-        else { _sw.wrong++; _sw.streak = 0; }
+        const isReview = _sw.reviewStart != null && _sw.i >= _sw.reviewStart;
+        if (ok) {
+            _sw.streak++; _sw.best = Math.max(_sw.best, _sw.streak); _sw.score += 10 + Math.min(20, (_sw.streak - 1) * 2);
+            if (!isReview) _sw.correct++;       // точность считаем по первому проходу
+        } else {
+            _sw.streak = 0;
+            if (!isReview) { _sw.wrong++; _sw.lapses.push(_sw.cur.card); }  // ошибся — вернём карточку в конце
+        }
         _flash(ok);
         const v = document.getElementById('sw-verdict');
         if (v) {

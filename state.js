@@ -493,6 +493,7 @@ function ingestAssignment(rec) {
     if (s.assignments.some(a => a.id === rec.id)) return false;
     s.assignments.push(normalizeAssignmentRec(rec));
     window.state.isHomeworkMode = true;
+    try { window.HwNotify && window.HwNotify.onIngest(rec); } catch (e) {}
     // Ограничиваем историю выполненных, чтобы не раздувать сохранение
     const done = s.assignments.filter(a => a.status === 'done');
     if (done.length > 60) {
@@ -515,6 +516,41 @@ function reconcileRevokedAssignments(revokedIds) {
     return before - s.assignments.length;
 }
 window.reconcileRevokedAssignments = reconcileRevokedAssignments;
+
+// ── Звук «пришла домашка» ──
+// Живое поступление ДЗ (пока ученик в приложении) → звук сразу.
+// ДЗ, которое ждало ученика на момент входа → звук через 30 секунд после входа.
+// Озвучиваем каждое задание один раз (id запоминаем в localStorage.seenHwIds).
+window.HwNotify = (function () {
+    const ENTRY = Date.now();
+    const INIT_WINDOW = 5000;   // окно первичной гидратации (load + первый снапшот)
+    const DELAY = 30000;        // 30 c после входа для «ждавшего» ДЗ
+    let live = false, initialUnseen = false, scheduled = false, lastDing = 0;
+
+    function seen() { try { return new Set(JSON.parse(localStorage.getItem('seenHwIds') || '[]')); } catch (e) { return new Set(); } }
+    function save(set) { try { localStorage.setItem('seenHwIds', JSON.stringify([...set].slice(-300))); } catch (e) {} }
+    function mark(ids) { const s = seen(); ids.forEach(id => s.add(id)); save(s); }
+    function ding() { const now = Date.now(); if (now - lastDing < 3000) return; lastDing = now; try { window.Sfx && window.Sfx.play('dun'); } catch (e) {} }
+
+    function onIngest(rec) {
+        if (!rec || !rec.id || rec.status === 'done') return;
+        if (seen().has(rec.id)) return;
+        if (live) { ding(); mark([rec.id]); }   // прилетело вживую → звук сразу
+        else { initialUnseen = true; }          // ждало ученика → отложенный звук в _arm()
+    }
+    function _arm() {
+        if (!scheduled && initialUnseen) {
+            scheduled = true;
+            setTimeout(ding, Math.max(0, DELAY - (Date.now() - ENTRY)));
+            const ids = ((window.state && window.state.stats && window.state.stats.assignments) || [])
+                .filter(a => a && a.status !== 'done').map(a => a.id);
+            mark(ids);
+        }
+        live = true;
+    }
+    setTimeout(_arm, INIT_WINDOW);
+    return { onIngest };
+})();
 
 // Засчитать прогресс активному этапу ДЗ (lines/points). learned-этапы обновляются сами в refreshHwState.
 function creditActiveHwItem(task, lines, points) {
