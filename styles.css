@@ -587,9 +587,27 @@ body.zen-mode-active main { padding-bottom: 20px !important; }
 }
 .dark .visual-question-text { color: #e5e7eb; }
 
+/* ── Сетка раздела: на ПК картинка слева, вопрос+варианты справа ──
+   (раньше grid задавался инлайном, и media-query его не переопределял — все
+   варианты уезжали под фолд на десктопе) */
+.visual-main-grid {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 0.75rem;
+    align-items: start;
+}
+@media (min-width: 1024px) {
+    .visual-main-grid {
+        grid-template-columns: minmax(0, 1fr) minmax(320px, 420px);
+    }
+}
+
 /* ── Кнопки ответов ── */
 .visual-option {
     width: 100%;
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
     text-align: left;
     background: #ffffff;
     border: 1px solid #e5e7eb;
@@ -602,6 +620,19 @@ body.zen-mode-active main { padding-bottom: 20px !important; }
     cursor: pointer;
     transition: background 0.12s, transform 0.1s;
 }
+.visual-opt-key {
+    flex: 0 0 auto;
+    width: 1.35rem; height: 1.35rem;
+    display: flex; align-items: center; justify-content: center;
+    border-radius: 0.45rem;
+    background: #eef2ff;
+    color: #6366f1;
+    font-size: 0.7rem; font-weight: 900;
+}
+.dark .visual-opt-key { background: #312e81; color: #c7d2fe; }
+.visual-opt-text { min-width: 0; flex: 1; }
+/* Бейдж с цифрой полезен на ПК (клавиши 1–4); на узких экранах прячем */
+@media (max-width: 639px) { .visual-opt-key { display: none; } }
 .visual-option:hover { background: #eff6ff; border-color: #bfdbfe; }
 .visual-option:active { transform: scale(0.99); }
 .dark .visual-option {

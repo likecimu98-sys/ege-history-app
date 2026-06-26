@@ -469,11 +469,12 @@ window.renderVisualTrainer = function(forceNew) {
         `<div class="w-3 h-3 rounded-full ${i < progress.streak ? 'bg-emerald-500 shadow-[0_0_6px_rgba(16,185,129,0.6)]' : 'bg-gray-300 dark:bg-gray-600'}"></div>`
     ).join('');
 
-    // --- Options ---
-    const options = step.options.map(option => `
+    // --- Options (с цифрами 1–4 для клавиатуры на ПК) ---
+    const options = step.options.map((option, idx) => `
         <button data-action="answerVisualStep" data-arg="${option.key}" data-visual-option="${option.key}"
             class="visual-option">
-            ${visualEscape(option.text)}
+            <span class="visual-opt-key">${idx + 1}</span>
+            <span class="visual-opt-text">${visualEscape(option.text)}</span>
         </button>`).join('');
 
     area.innerHTML = `<div class="visual-trainer-root" style="width:100%;max-width:80rem;display:flex;flex-direction:column;gap:0.5rem;">
@@ -488,7 +489,7 @@ window.renderVisualTrainer = function(forceNew) {
         <div class="visual-progress-track" style="margin-bottom:0.25rem;">
             <div class="visual-cat-progress-fill" style="width:${pct}%;transition:width 0.7s;"></div>
         </div>
-        <div style="display:grid;grid-template-columns:1fr;gap:0.75rem;align-items:stretch;">
+        <div class="visual-main-grid">
             <div class="visual-item-card">
                 <div class="visual-img-box">
                     <img src="${visualEscape(item.mainImage)}" alt="Памятник">
@@ -518,14 +519,7 @@ window.renderVisualTrainer = function(forceNew) {
                 <div id="visual-feedback" class="visual-feedback"></div>
             </div>
         </div>
-    </div>
-    <style>
-    @media(min-width:1024px){
-        .visual-trainer-root > div:last-child{
-            grid-template-columns: minmax(0,1fr) minmax(300px,400px);
-        }
-    }
-    </style>`;
+    </div>`;
 };
 
 /**
@@ -560,7 +554,7 @@ window.answerVisualStep = function(optionKey) {
         ms.allCorrect = false;
         ms.wrongSteps.push(ms.currentStep);
         showVisualMistakeCard(ms.item, step);
-        if (feedback) feedback.innerHTML = `<span style="color:#e11d48;">✗ Разбор ошибки показан сверху</span>`;
+        if (feedback) feedback.innerHTML = `<span style="color:#e11d48;">✗ Неверно. ${visualEscape(visualFactLabel(step.factType))}: <b>${visualEscape(step.correctAnswer)}</b></span>`;
     }
 
     const isLast = ms.currentStep >= ms.steps.length - 1;
@@ -643,3 +637,25 @@ window.resetVisualTrainer = function() {
     window.renderVisualTrainer(true);
     showToast('🔄', category ? `Прогресс раздела «${cfg.label}» сброшен` : 'Прогресс визуала сброшен', 'bg-blue-500', 'border-blue-700');
 };
+
+// Клавиатура на ПК: 1–4 выбирают вариант ответа в активном шаге.
+function _onVisualKey(e) {
+    if (!window.state || window.state.currentMode !== 'visual') return;
+    const ms = window._visualMultiStep;
+    if (!ms || ms.finished) return;
+    if (e.ctrlKey || e.metaKey || e.altKey) return;
+    const tag = (e.target && e.target.tagName) || '';
+    if (tag === 'INPUT' || tag === 'TEXTAREA') return;
+    const area = $('visual-trainer-area'); if (!area) return;
+    const opts = [...area.querySelectorAll('.visual-option')];
+    if (!opts.length || opts[0].disabled) return;   // ещё не отвечено
+    let idx = -1;
+    if (e.key >= '1' && e.key <= '9') idx = parseInt(e.key, 10) - 1;
+    if (idx < 0 || idx >= opts.length) return;
+    e.preventDefault();
+    opts[idx].click();
+}
+if (!window._visualKeyBound) {
+    window._visualKeyBound = true;
+    document.addEventListener('keydown', _onVisualKey);
+}
