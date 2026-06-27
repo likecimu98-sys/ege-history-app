@@ -33,52 +33,36 @@ function visualIsBlockedDistractor(item, fact, answer) {
     return false;
 }
 
-let visualMistakeCardTimeout = null;
-function showVisualMistakeCard(item, step) {
-    const old = document.getElementById('visual-mistake-card');
-    if (old) old.remove();
-    if (visualMistakeCardTimeout) clearTimeout(visualMistakeCardTimeout);
+// Функция, которой кнопка «Дальше →» / клавиша Enter продолжают после разбора ошибки.
+let _visualPendingNext = null;
 
-    const card = document.createElement('div');
-    card.id = 'visual-mistake-card';
-    const facts = visualAnswerText(item.fullCharacteristic || (item.importantFacts || []).slice(0, 3).join(' '));
-    card.innerHTML = `
-        <div style="display:flex;align-items:flex-start;gap:0.75rem;">
-            <div style="width:2.25rem;height:2.25rem;border-radius:999px;background:rgba(239,68,68,0.12);display:flex;align-items:center;justify-content:center;flex:0 0 auto;font-size:1.15rem;">✕</div>
-            <div style="min-width:0;flex:1;">
-                <div style="font-size:0.68rem;font-weight:900;letter-spacing:0.12em;text-transform:uppercase;color:var(--c-danger);margin-bottom:0.18rem;">Разбор ошибки</div>
-                <div style="font-size:0.98rem;font-weight:900;color:#111827;line-height:1.15;margin-bottom:0.35rem;">${visualEscape(item.title)}</div>
-                <div style="font-size:0.78rem;font-weight:700;color:#475569;line-height:1.35;">${visualEscape(facts)}</div>
-                <div style="margin-top:0.35rem;font-size:0.78rem;font-weight:900;color:var(--c-brand-strong);">${visualEscape(visualFactLabel(step.factType))}: ${visualEscape(visualAnswerText(step.correctAnswer))}</div>
-            </div>
-        </div>`;
-    card.style.cssText = [
-        'position:fixed',
-        'left:50%',
-        'top:calc(env(safe-area-inset-top, 0px) + 0.75rem)',
-        'transform:translate(-50%, -0.75rem)',
-        'opacity:0',
-        'z-index:10050',
-        'width:min(92vw, 34rem)',
-        'padding:0.9rem 1rem',
-        'border-radius:1.1rem',
-        'background:rgba(255,255,255,0.96)',
-        'border:1px solid rgba(239,68,68,0.22)',
-        'box-shadow:0 20px 50px rgba(15,23,42,0.22)',
-        'backdrop-filter:blur(14px)',
-        'transition:opacity 180ms ease, transform 180ms ease',
-        'pointer-events:none'
-    ].join(';');
-    document.body.appendChild(card);
-    requestAnimationFrame(() => {
-        card.style.opacity = '1';
-        card.style.transform = 'translate(-50%, 0)';
-    });
-    visualMistakeCardTimeout = setTimeout(() => {
-        card.style.opacity = '0';
-        card.style.transform = 'translate(-50%, -0.75rem)';
-        setTimeout(() => card.remove(), 220);
-    }, 2500);
+// Инлайн-разбор ошибки: показывается прямо под вариантами, сразу полным,
+// и висит до нажатия «Дальше» (не гонится с таймером). Возвращает HTML.
+function visualRazborHtml(item, step) {
+    const fact = visualAnswerText(item.fullCharacteristic || (item.importantFacts || []).slice(0, 3).join(' '));
+    return `<div class="visual-razbor">
+        <div class="vr-head">Разбор</div>
+        <div class="vr-title">${visualEscape(item.title)}</div>
+        <div class="vr-answer">${visualEscape(visualFactLabel(step.factType))}: <b>${visualEscape(step.correctAnswer)}</b></div>
+        ${fact ? `<div class="vr-fact">${visualEscape(fact)}</div>` : ''}
+    </div>`;
+}
+
+function visualNextBtnHtml(text) {
+    return `<button id="visual-next-btn" class="visual-next-btn" data-visual-next>${visualEscape(text)} <span style="opacity:.7;font-weight:700">⏎</span></button>`;
+}
+
+// Ставим обработчик «Дальше» (кнопка + клавиатура). proceed() выполняет переход.
+function visualWaitNext(proceed) {
+    if (window._visualMultiStep) window._visualMultiStep.awaitingNext = true;
+    _visualPendingNext = function () {
+        const fn = proceed;
+        _visualPendingNext = null;
+        if (window._visualMultiStep) window._visualMultiStep.awaitingNext = false;
+        fn();
+    };
+    const btn = $('visual-next-btn');
+    if (btn) btn.onclick = function () { if (_visualPendingNext) _visualPendingNext(); };
 }
 
 const VISUAL_CATEGORY_CONFIG = {
@@ -545,70 +529,72 @@ window.answerVisualStep = function(optionKey) {
     });
 
     const feedback = $('visual-feedback');
-
     if (correct) {
         haptic('success');
-        if (feedback) feedback.innerHTML = `<span style="color:#059669;">✓ ${visualEscape(visualFactLabel(step.factType))}: ${visualEscape(step.correctAnswer)}</span>`;
     } else {
         haptic('error');
         ms.allCorrect = false;
         ms.wrongSteps.push(ms.currentStep);
-        showVisualMistakeCard(ms.item, step);
-        if (feedback) feedback.innerHTML = `<span style="color:#e11d48;">✗ Неверно. ${visualEscape(visualFactLabel(step.factType))}: <b>${visualEscape(step.correctAnswer)}</b></span>`;
     }
 
     const isLast = ms.currentStep >= ms.steps.length - 1;
 
-    if (isLast) {
-        // Завершение раунда — подводим итоги
-        ms.finished = true;
-        const item = ms.item;
-        const category = ms.category || visualCategoryForItem(item);
-        const cfg = visualCategoryConfig(category);
-        const progress = visualProgressFor(item, category);
-        progress.attempts = (progress.attempts || 0) + 1;
-        progress.lastUpdated = Date.now();
-
-        if (ms.allCorrect) {
-            progress.correct = (progress.correct || 0) + 1;
-            progress.streak = Math.min((progress.streak || 0) + 1, 2);
-            if (progress.streak >= 2) {
-                progress.learned = true;
-                progress.learnedAt = Date.now();
-                window.state.currentVisualId = null;
-                window.state.stats[cfg.solvedKey] = (window.state.stats[cfg.solvedKey] || 0) + 1;
-                setTimeout(() => {
-                    if (feedback) feedback.innerHTML = `<span style="color:#059669;">🏆 Все верно! <b>${visualEscape(item.title)}</b> — ВЫУЧЕНО!</span>`;
-                }, correct ? 300 : 800);
-                showToast(cfg.icon, `${item.title} выучен!`, 'bg-emerald-500', 'border-emerald-700');
-            } else {
-                window.state.currentVisualId = item.id;
-                setTimeout(() => {
-                    if (feedback) feedback.innerHTML = `<span style="color:var(--c-brand-strong);">✅ Все характеристики верны! <b>${visualEscape(item.title)}</b> — серия ${progress.streak}/2</span>`;
-                }, correct ? 300 : 800);
-            }
+    // ── Промежуточный шаг ──
+    if (!isLast) {
+        if (correct) {
+            // верно → держим темп, быстрый авто-переход
+            if (feedback) feedback.innerHTML = `<span class="vr-ok">✓ ${visualEscape(visualFactLabel(step.factType))}: ${visualEscape(step.correctAnswer)}</span>`;
+            setTimeout(() => { ms.currentStep++; window.renderVisualTrainer(); }, 750);
         } else {
-            progress.streak = 0;
-            progress.learned = false;
-            window.state.currentVisualId = null;
-            const wrongCount = ms.wrongSteps.length;
-            setTimeout(() => {
-                if (feedback) feedback.innerHTML = `<span style="color:#e11d48;">❌ Ошибок: ${wrongCount} из ${ms.steps.length}. Серия сброшена.</span>`;
-            }, correct ? 300 : 800);
+            // ошибся → полный разбор, ждём «Дальше» (своим темпом)
+            if (feedback) feedback.innerHTML = visualRazborHtml(ms.item, step) + visualNextBtnHtml('Дальше');
+            visualWaitNext(() => { ms.currentStep++; window.renderVisualTrainer(); });
         }
+        return;
+    }
 
-        saveProgress();
-        // Переход к следующему памятнику
-        const delay = ms.allCorrect ? 1500 : 2500;
-        setTimeout(() => {
-            window._visualMultiStep = null;
-            window.renderVisualTrainer();
-        }, delay);
+    // ── Последний шаг: завершаем раунд ──
+    ms.finished = true;
+    const item = ms.item;
+    const category = ms.category || visualCategoryForItem(item);
+    const cfg = visualCategoryConfig(category);
+    const progress = visualProgressFor(item, category);
+    progress.attempts = (progress.attempts || 0) + 1;
+    progress.lastUpdated = Date.now();
+
+    let summary;
+    if (ms.allCorrect) {
+        progress.correct = (progress.correct || 0) + 1;
+        progress.streak = Math.min((progress.streak || 0) + 1, 2);
+        if (progress.streak >= 2) {
+            progress.learned = true;
+            progress.learnedAt = Date.now();
+            window.state.currentVisualId = null;
+            window.state.stats[cfg.solvedKey] = (window.state.stats[cfg.solvedKey] || 0) + 1;
+            showToast(cfg.icon, `${item.title} выучен!`, 'bg-emerald-500', 'border-emerald-700');
+            summary = `<div class="visual-summary ok"><div class="vs-emoji">🏆</div><div class="vs-main">Всё верно! <b>${visualEscape(item.title)}</b> — выучено!</div></div>`;
+        } else {
+            window.state.currentVisualId = item.id;
+            summary = `<div class="visual-summary ok"><div class="vs-emoji">✅</div><div class="vs-main">Всё верно! <b>${visualEscape(item.title)}</b></div><div class="vs-sub">Серия ${progress.streak}/2 — повтори ещё раз, чтобы выучить</div></div>`;
+        }
     } else {
-        // Переход к следующему шагу
-        ms.currentStep++;
-        const delay = correct ? 700 : 1400;
-        setTimeout(() => window.renderVisualTrainer(), delay);
+        progress.streak = 0;
+        progress.learned = false;
+        window.state.currentVisualId = null;
+        const wrong = ms.wrongSteps.length;
+        summary = `<div class="visual-summary bad"><div class="vs-emoji">📚</div><div class="vs-main">Ошибок: ${wrong} из ${ms.steps.length}</div><div class="vs-sub">Серия сброшена — попробуй ещё</div></div>`;
+    }
+    saveProgress();
+
+    if (ms.allCorrect) {
+        // чистый раунд → короткая пауза и авто-переход
+        if (feedback) feedback.innerHTML = summary;
+        setTimeout(() => { window._visualMultiStep = null; window.renderVisualTrainer(); }, 1500);
+    } else {
+        // были ошибки → разбор последнего (если он неверный) + сводка + «Дальше» своим темпом
+        const razbor = !correct ? visualRazborHtml(item, step) : '';
+        if (feedback) feedback.innerHTML = razbor + summary + visualNextBtnHtml('Следующий памятник');
+        visualWaitNext(() => { window._visualMultiStep = null; window.renderVisualTrainer(); });
     }
 };
 
@@ -641,11 +627,19 @@ window.resetVisualTrainer = function() {
 // Клавиатура на ПК: 1–4 выбирают вариант ответа в активном шаге.
 function _onVisualKey(e) {
     if (!window.state || window.state.currentMode !== 'visual') return;
-    const ms = window._visualMultiStep;
-    if (!ms || ms.finished) return;
     if (e.ctrlKey || e.metaKey || e.altKey) return;
     const tag = (e.target && e.target.tagName) || '';
     if (tag === 'INPUT' || tag === 'TEXTAREA') return;
+    // Ждём «Дальше» после разбора → Enter / Space / → продолжают
+    if (_visualPendingNext) {
+        if (e.key === 'Enter' || e.key === ' ' || e.key === 'Spacebar' || e.key === 'ArrowRight') {
+            e.preventDefault();
+            _visualPendingNext();
+        }
+        return;
+    }
+    const ms = window._visualMultiStep;
+    if (!ms || ms.finished) return;
     const area = $('visual-trainer-area'); if (!area) return;
     const opts = [...area.querySelectorAll('.visual-option')];
     if (!opts.length || opts[0].disabled) return;   // ещё не отвечено

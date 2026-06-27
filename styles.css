@@ -706,6 +706,50 @@ body.zen-mode-active main { padding-bottom: 20px !important; }
     line-height: 1.4;
 }
 .dark .visual-feedback { color: #9ca3af; }
+.vr-ok { color: #059669; font-weight: 800; }
+.dark .vr-ok { color: #6ee7b7; }
+
+/* ── Инлайн-разбор ошибки (под вариантами, висит до «Дальше») ── */
+.visual-razbor {
+    border: 1px solid rgba(239, 68, 68, 0.22);
+    border-left: 4px solid #ef4444;
+    background: #fff7f7;
+    border-radius: 0.75rem;
+    padding: 0.7rem 0.85rem;
+    animation: vrIn 0.18s ease;
+}
+.dark .visual-razbor { background: rgba(239, 68, 68, 0.08); border-color: rgba(239, 68, 68, 0.3); }
+.vr-head {
+    font-size: 0.62rem; font-weight: 900; letter-spacing: 0.12em;
+    text-transform: uppercase; color: #dc2626; margin-bottom: 0.2rem;
+}
+.vr-title { font-size: 0.95rem; font-weight: 900; color: #111827; line-height: 1.15; margin-bottom: 0.25rem; }
+.dark .vr-title { color: #f3f4f6; }
+.vr-answer { font-size: 0.85rem; font-weight: 800; color: #374151; margin-bottom: 0.2rem; }
+.vr-answer b { color: #059669; }
+.dark .vr-answer { color: #d1d5db; }
+.dark .vr-answer b { color: #6ee7b7; }
+.vr-fact { font-size: 0.76rem; font-weight: 600; color: #6b7280; line-height: 1.35; }
+.dark .vr-fact { color: #9ca3af; }
+@keyframes vrIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+
+/* Кнопка «Дальше →» (своим темпом после разбора / в итогах с ошибками) */
+.visual-next-btn {
+    width: 100%; margin-top: 0.6rem;
+    background: #2563eb; color: #fff; border: none; border-radius: 0.7rem;
+    padding: 0.6rem; font-size: 0.82rem; font-weight: 900;
+    cursor: pointer; transition: background 0.12s, transform 0.1s;
+}
+.visual-next-btn:hover { background: #1d4ed8; }
+.visual-next-btn:active { transform: scale(0.99); }
+
+/* Итог раунда */
+.visual-summary { display: flex; flex-direction: column; align-items: center; text-align: center; gap: 0.1rem; padding: 0.4rem 0; animation: vrIn 0.18s ease; }
+.visual-summary .vs-emoji { font-size: 1.6rem; line-height: 1.1; }
+.visual-summary .vs-main { font-size: 0.9rem; font-weight: 900; color: #111827; }
+.dark .visual-summary .vs-main { color: #f3f4f6; }
+.visual-summary .vs-sub { font-size: 0.72rem; font-weight: 700; color: #6b7280; }
+.dark .visual-summary .vs-sub { color: #9ca3af; }
 
 /* --- Вкладки и медиа-карточки культуры --- */
 .culture-learning-tabs {
