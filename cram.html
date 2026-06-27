@@ -591,6 +591,7 @@ function svoDecoyPool(){
 }
 let state = loadState();
 let currentDeck = null;
+let hwLocked = false; // ДЗ-режим: открыто по диплинку → нельзя менять период/колоду
 let currentItem = null;
 let currentOptions = [];
 let selected = null;
@@ -618,11 +619,27 @@ function shuffle(arr){
   for(let i=a.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [a[i],a[j]]=[a[j],a[i]]; }
   return a;
 }
+// Уже выучен ли факт по облачному прогрессу родителя (factStreaks['cram:<id>']).
+// Нужен, чтобы тренажёр не гонял заново то, что ДЗ уже засчитало как «12/13»:
+// локальный прогресс зубрёжки не синхронизируется, а factStreaks — да.
+function parentLearnedCram(itemId){
+  try{
+    if(!EMBEDDED) return false;
+    const fs = window.parent.state && window.parent.state.stats && window.parent.state.stats.factStreaks;
+    const d = fs && fs['cram:' + itemId];
+    return !!(d && ((d.level||0) > 0 || (d.points||0) >= 3 || (d.streak||0) >= 3));
+  }catch(e){ return false; }
+}
 function deckState(deck){
   if(!state.decks[deck.id]) state.decks[deck.id] = freshDeckState(deck);
   const s = state.decks[deck.id];
   if(!s.items) s.items = {};
-  deck.items.forEach(e => { if(!s.items[e.id]) s.items[e.id] = {choose:0, typed:false, wrong:0, shown:0, attempts:0}; });
+  const need = needFor(deck);
+  deck.items.forEach(e => {
+    if(!s.items[e.id]) s.items[e.id] = {choose:0, typed:false, wrong:0, shown:0, attempts:0};
+    // Факт уже выучен в общей системе → помечаем пройденным (не сбрасываем дальше зашедший прогресс).
+    if(parentLearnedCram(e.id)){ const it = s.items[e.id]; it.choose = Math.max(it.choose||0, need); it.typed = true; }
+  });
   if(!s.phase) s.phase = 'choose';
   return s;
 }
@@ -886,7 +903,14 @@ function renderTrainer(){
         <button class="btn blue" id="showBtn">Показать ответ</button>
       </div>
     </div>`;
-  document.getElementById('backBtn').onclick = renderHome;
+  const _backBtn = document.getElementById('backBtn');
+  if(hwLocked){
+    // ДЗ: период/колоду задал преподаватель — не пускаем в выбор колод, только выход в приложение.
+    _backBtn.textContent = '← Выход';
+    _backBtn.onclick = () => { try{ window.parent.postMessage({type:'cram-exit'},'*'); }catch(e){} };
+  } else {
+    _backBtn.onclick = renderHome;
+  }
   document.getElementById('showBtn').onclick = onShowAnswer;
 }
 function updateStatus(){
@@ -1248,11 +1272,12 @@ function notifyMastered(deck, item){
         state.periods.unshift({ from:a, to:b });
         if(state.periods.length > 3) state.periods = state.periods.slice(0, 3);
         saveState();
+        hwLocked = true; // открыто из ДЗ → запрет менять период
         startDeck(periodDeckId(a, b));
         return;
       }
     }
-    if(getDecks().find(d => d.id === id)){ startDeck(id); return; }
+    if(getDecks().find(d => d.id === id)){ hwLocked = true; startDeck(id); return; }
   }
   renderHome();
 })();

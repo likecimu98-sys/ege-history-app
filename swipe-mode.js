@@ -92,7 +92,7 @@
         </div>
         <div id="sw-arena" style="flex:1;position:relative;display:flex;flex-direction:column;min-height:0;padding:0 12px 6px;width:100%;max-width:560px;margin:0 auto">
             <div id="sw-panels" style="display:flex;gap:8px;align-items:stretch;margin-bottom:8px;flex-shrink:0"></div>
-            <div id="sw-cardzone" style="flex:1;position:relative;display:flex;align-items:center;justify-content:center;min-height:0;overflow:hidden"></div>
+            <div id="sw-cardzone" style="flex:1;position:relative;display:flex;align-items:center;justify-content:center;min-height:0"></div>
             <div id="sw-verdict" style="height:24px;text-align:center;font-weight:900;font-size:13.5px;margin-top:4px;flex-shrink:0"></div>
         </div>
         <div style="text-align:center;color:#94a3b8;font-size:11.5px;font-weight:800;padding:6px 0 14px;flex-shrink:0">

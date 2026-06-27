@@ -568,6 +568,11 @@ window.refreshDetectiveCaseOptions = function() {
 };
 
 window.openGlobalSettings = function() {
+    // В режиме ДЗ параметры (период, число строк) задаёт преподаватель — не даём менять.
+    if (window.state.isHomeworkMode || window.state.activeHw) {
+        if (typeof showToast === 'function') showToast('🔒', 'В режиме ДЗ настройки задаёт преподаватель', 'bg-indigo-500', 'border-indigo-700');
+        return;
+    }
     $('pre-game-title').innerText = 'Глобальные настройки';
     window.refreshDetectiveCaseOptions();
     
@@ -836,8 +841,9 @@ window.updateGamePeriodChip = function() {
     if (!chip || !gear) return;
     const inHw = !!window.state.activeHw || !!window.state.isHomeworkMode;
     if (inHw) {
+        // В ДЗ всё задано преподавателем — прячем и плашку периода, и шестерёнку.
         chip.classList.add('hidden'); chip.classList.remove('flex');
-        gear.classList.remove('hidden');
+        gear.classList.add('hidden');
         return;
     }
     const txt = document.getElementById('game-period-chip-text');
