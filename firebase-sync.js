@@ -1623,13 +1623,14 @@
                 const studentsCol = collection(db, 'artifacts', appId, 'public', 'data', 'students');
                 const filterClass = document.getElementById('teacher-filter-class')?.checked;
                 
-                // Грузим всех, кто нарешал хотя бы 10 строк (totalSolved >= 10), без жёсткого лимита 200.
-                // Серверный фильтр заодно отсекает «мёртвые» аккаунты с нулевой активностью и режет стоимость чтений.
-                // Запас limit(3000) — страховка от неконтролируемого чтения на больших объёмах.
-                const MIN_SOLVED = 10;
+                // При фильтре по классу показываем ВЕСЬ класс — включая только что зарегистрированных,
+                // кто нарешал <10 (раньше порог >=10 прятал новичков, и учитель их «не находил»).
+                // Стоимость чтений ограничена самим классом, лимит(3000) — страховка.
+                // В общем списке (без фильтра по классу) оставляем порог >=1, чтобы не тянуть мёртвые нулевые аккаунты.
+                const MIN_SOLVED = 1;
                 let firestoreQuery;
                 if (filterClass && tc) {
-                    firestoreQuery = query(studentsCol, where('classCode', '==', tc), where('totalSolved', '>=', MIN_SOLVED), orderBy('totalSolved', 'desc'), limit(3000));
+                    firestoreQuery = query(studentsCol, where('classCode', '==', tc), orderBy('totalSolved', 'desc'), limit(3000));
                 } else {
                     firestoreQuery = query(studentsCol, where('totalSolved', '>=', MIN_SOLVED), orderBy('totalSolved', 'desc'), limit(3000));
                 }
