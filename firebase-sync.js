@@ -607,7 +607,10 @@
             if (!db) { _ddbg('listener: нет db'); return; }
             if (_challengeUnsub) { try { _challengeUnsub(); } catch(e) {} _challengeUnsub = null; }
             const matchesRef = collection(db, 'artifacts', appId, 'public', 'data', 'matches');
-            const waitingQuery = query(matchesRef, where('status', '==', 'waiting'), limit(10));
+            // БЕЗ limit: при limit(10) и накопившихся «брошенных» waiting-матчах свежий вызов
+            // часто не попадал в выборку (порядок не задан) → уведомление приходило «через раз».
+            // Запрос только по равенству status — составной индекс не нужен.
+            const waitingQuery = query(matchesRef, where('status', '==', 'waiting'));
             _ddbg('listener подключён, appId =', appId);
             _challengeUnsub = onSnapshot(waitingQuery, (snap) => {
                 const myUid = fbUser ? resolveUserId(fbUser) : null;
@@ -699,19 +702,26 @@
             const matchesRef = collection(db, 'artifacts', appId, 'public', 'data', 'matches');
             
             try {
-                // ✅ FIX: Ищем матчи со статусом 'waiting' точечным запросом (не getDocs всей коллекции)
-                const waitingQuery = query(matchesRef, where('status', '==', 'waiting'), limit(10));
+                // Берём ВСЕ waiting-матчи (без limit — иначе свежий кандидат мог не попасть в выборку).
+                const waitingQuery = query(matchesRef, where('status', '==', 'waiting'));
                 const snapshot = await getDocs(waitingQuery);
-                
+
                 const now = Date.now();
                 let candidateIds = [];
+                let staleIds = [];
                 snapshot.forEach(docSnap => {
                     const data = docSnap.data();
-                    if (data.player1 && data.player1.uid !== myUid && (now - data.createdAt < 30000)) {
+                    const age = now - (data.createdAt || 0);
+                    // Брошенный матч (приложение закрыли во время поиска) — на уборку,
+                    // иначе очередь разрастается и ломает выборку у всех.
+                    if (data.player2 == null && age > 45000) { staleIds.push(docSnap.id); return; }
+                    if (data.player1 && data.player1.uid !== myUid && age < 30000) {
                         candidateIds.push(docSnap.id);
                     }
                 });
-                _ddbg('поиск: в очереди', snapshot.size, '· подходящих', candidateIds.length);
+                // Best-effort уборка протухших матчей (правила разрешают delete авторизованным; 45с > окна поиска).
+                staleIds.forEach(id => { deleteDoc(doc(matchesRef, id)).catch(() => {}); });
+                _ddbg('поиск: в очереди', snapshot.size, '· подходящих', candidateIds.length, '· убрано протухших', staleIds.length);
 
                 let joinedMatchId = null;
 
