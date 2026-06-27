@@ -430,8 +430,12 @@
         let _hwUnsubscribers = [];
         
         onAuthStateChanged(auth, async (u) => { 
-            fbUser = u; 
+            fbUser = u;
             if (u) {
+                // Слушатель вызовов на дуэль — запускаем СРАЗУ после авторизации,
+                // до загрузки прогресса/ДЗ: иначе любой сбой загрузки лишал бы
+                // онлайн-игроков уведомлений о дуэли.
+                try { startChallengeListener(); } catch (e) {}
                 await waitForTelegramIdentity();
                 // ── Сохраняем Google-данные если вход через Google
                 const googleProvider = (u.providerData || []).find(p => p.providerId === 'google.com');
@@ -589,8 +593,7 @@
                 const myClass = localStorage.getItem('student_class_code');
                 if (myClass && window.pullClassAssignments) window.pullClassAssignments(myClass);
 
-                // ── Глобальный слушатель вызовов на дуэль ──
-                startChallengeListener();
+                // (слушатель вызовов на дуэль уже запущен выше, сразу после авторизации)
             }
         });
 
@@ -598,14 +601,25 @@
         // Любой матч со статусом 'waiting' = кто-то нажал «Дуэли» и ждёт соперника.
         // Слушаем такие матчи и показываем всем баннер «Принять вызов».
         let _challengeUnsub = null;
+        let _autoAccepting = false;
+        function _ddbg() { try { if (localStorage.getItem('ege_duel_debug')) console.log('[Duel]', ...arguments); } catch (e) {} }
         function startChallengeListener() {
-            if (!db) return;
+            if (!db) { _ddbg('listener: нет db'); return; }
             if (_challengeUnsub) { try { _challengeUnsub(); } catch(e) {} _challengeUnsub = null; }
             const matchesRef = collection(db, 'artifacts', appId, 'public', 'data', 'matches');
             const waitingQuery = query(matchesRef, where('status', '==', 'waiting'), limit(10));
+            _ddbg('listener подключён, appId =', appId);
             _challengeUnsub = onSnapshot(waitingQuery, (snap) => {
                 const myUid = fbUser ? resolveUserId(fbUser) : null;
                 const now = Date.now();
+                const duel = window.state.duel;
+                if (duel && duel.active) { if (window.hideDuelChallenge) window.hideDuelChallenge(); return; }
+                // «host» = я создал свой матч и жду соперника. Только в этом состоянии
+                // авто-стыкуемся. В момент самой стыковки (searching, но уже не host)
+                // не делаем ничего — иначе можно случайно присоединиться ко второму матчу.
+                const host = !!(duel && duel.searching && duel.isPlayer1 && duel.matchId);
+                if (duel && duel.searching && !host) return;
+                const myMatchId = host ? duel.matchId : null;
                 let best = null;
                 snap.forEach(docSnap => {
                     const d = docSnap.data();
@@ -613,18 +627,37 @@
                     if (myUid && d.player1.uid === myUid) return;     // не свой вызов
                     if (d.player2) return;                            // слот уже занят
                     if (now - (d.createdAt || 0) > 28000) return;     // протух
-                    if (!best || (d.createdAt || 0) > best.createdAt) best = { matchId: docSnap.id, name: d.player1.name || 'Игрок', createdAt: d.createdAt || 0 };
+                    const id = docSnap.id;
+                    // Если я сам жду — стыкуемся только с матчем с «меньшим» id.
+                    // Детерминированный тайбрейк: ровно одна сторона присоединяется,
+                    // без гонки «оба приняли друг друга».
+                    if (host && !(id < myMatchId)) return;
+                    if (!best || (d.createdAt || 0) > best.createdAt) best = { matchId: id, name: d.player1.name || 'Игрок', createdAt: d.createdAt || 0 };
                 });
-                const busy = window.state.duel && (window.state.duel.active || window.state.duel.searching);
-                if (best && !busy && window.showDuelChallenge) window.showDuelChallenge(best);
-                else if (window.hideDuelChallenge) window.hideDuelChallenge();
-            }, (err) => console.warn('[Challenge] listener error', err));
+                _ddbg('ожидающих:', snap.size, '| подходящий:', best && best.matchId, '| хозяин:', host);
+                if (!best) { if (window.hideDuelChallenge) window.hideDuelChallenge(); return; }
+                if (host) {
+                    // Оба ищут одновременно → авто-стыковка (я — сторона с «бóльшим» id).
+                    if (!_autoAccepting) {
+                        _autoAccepting = true;
+                        _ddbg('авто-стыковка к', best.matchId, '· убираю свой', myMatchId);
+                        (async () => {
+                            try {
+                                if (myMatchId) { try { await deleteDoc(doc(matchesRef, myMatchId)); } catch (e) {} }
+                                await window.acceptDuelChallengeDb(best.matchId);
+                            } finally { _autoAccepting = false; }
+                        })();
+                    }
+                } else if (window.showDuelChallenge) {
+                    window.showDuelChallenge(best);
+                }
+            }, (err) => { _ddbg('ОШИБКА слушателя:', err && (err.code || err.message)); console.warn('[Challenge] listener error', err); });
         }
 
         // Принять конкретный вызов (присоединиться к ожидающему матчу как player2)
         window.acceptDuelChallengeDb = async function(matchId) {
             if (!fbUser || !db) { showToast('❌', 'Подключитесь к сети', 'bg-rose-500', 'border-rose-700'); return false; }
-            if (window.state.duel && (window.state.duel.active || window.state.duel.searching)) { showToast('ℹ️', 'Вы уже в дуэли', 'bg-blue-500', 'border-blue-700'); return false; }
+            if (window.state.duel && window.state.duel.active) { showToast('ℹ️', 'Вы уже в дуэли', 'bg-blue-500', 'border-blue-700'); return false; }
             const myUid = resolveUserId(fbUser);
             let myName = localStorage.getItem('student_manual_name') || 'Игрок';
             if (myName.length > 12) myName = myName.substring(0, 10) + '..';
@@ -656,7 +689,7 @@
         // Это исключает Race Condition когда двое одновременно присоединяются к одному матчу
         let duelUnsubscribe = null;
         window.startDuelSearchDb = async function() {
-            if (!fbUser || !db) return showToast('❌', 'Подключитесь к сети', 'bg-rose-500', 'border-rose-700');
+            if (!fbUser || !db) { _ddbg('поиск невозможен: нет', !fbUser ? 'авторизации' : 'db'); return showToast('❌', 'Подключитесь к сети', 'bg-rose-500', 'border-rose-700'); }
             window.state.duel = { active: false, searching: true, matchId: null, isPlayer1: false, oppName: '', myScore: 0, oppScore: 0, myCombo: 0, oppCombo: 0 };
             
             const myUid = resolveUserId(fbUser);
@@ -678,6 +711,7 @@
                         candidateIds.push(docSnap.id);
                     }
                 });
+                _ddbg('поиск: в очереди', snapshot.size, '· подходящих', candidateIds.length);
 
                 let joinedMatchId = null;
 
@@ -713,6 +747,7 @@
                 if (joinedMatchId) {
                     window.state.duel.isPlayer1 = false;
                     window.state.duel.matchId = joinedMatchId;
+                    _ddbg('присоединился к матчу', joinedMatchId, '→ игра');
                     listenToDuel(joinedMatchId, myUid);
                 } else {
                     // Не нашли свободный матч — создаём свой
@@ -725,9 +760,11 @@
                         startTime: 0
                     });
                     window.state.duel.matchId = newMatch.id;
+                    _ddbg('создал свой матч', newMatch.id, '— жду соперника/авто-стыковки');
                     listenToDuel(newMatch.id, myUid);
                 }
             } catch(e) {
+                _ddbg('ОШИБКА поиска:', e && (e.code || e.message));
                 console.error("Ошибка поиска дуэли:", e);
                 showToast('❌', 'Сервер недоступен (Офлайн)', 'bg-rose-500', 'border-rose-700');
                 window.cancelDuelSearch();
