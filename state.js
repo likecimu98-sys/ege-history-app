@@ -208,6 +208,20 @@ function getFilteredPool(period, limit) {
 }
 
 // --- SRS (Spaced Repetition System) ---
+// Интервалы повторения заданы в ДНЯХ и рассчитаны под реальный ритм
+// 3-4 захода в неделю. Раньше первые шаги были в часах (12ч/1д/3д) — при
+// таком ритме они не работали: всё выученное всегда оказывалось «просрочено».
+// Лесенка по уровням: 1→2д, 2→5д, 3→12д, 4→30д, 5→60д (фон).
+// ±10% разброса — чтобы выученные факты не всплывали все в один день.
+const SRS_DAY = 24 * 3600000;
+const SRS_REVIEW_DAYS = { 1: 2, 2: 5, 3: 12, 4: 30, 5: 60 };
+const SRS_MAX_LEVEL = 5;
+const SRS_HARD_LAPSES = 4; // столько «слётов» выученного факта — и он «трудный»
+function _srsNext(level) {
+    const days = SRS_REVIEW_DAYS[level] || SRS_REVIEW_DAYS[SRS_MAX_LEVEL];
+    return Math.round(days * SRS_DAY * (0.9 + Math.random() * 0.2));
+}
+
 function updateFactSRS(fKey, isCorrect, isSure) {
     const now = Date.now();
     let data = window.state.stats.factStreaks[fKey] ||
@@ -216,30 +230,37 @@ function updateFactSRS(fKey, isCorrect, isSure) {
     // Миграция старых форматов
     if (typeof data === 'number') {
         data = { points: data >= 3 ? 3 : data, level: data >= 3 ? 1 : 0,
-                 nextReview: data >= 3 ? now + 12*3600000 : 0, lastUpdated: now };
+                 nextReview: data >= 3 ? now + SRS_REVIEW_DAYS[1] * SRS_DAY : 0, lastUpdated: now };
     }
     if (data.streak !== undefined) {
         data = { points: data.streak >= 3 ? 3 : data.streak, level: data.streak >= 3 ? 1 : 0,
-                 nextReview: data.streak >= 3 ? now + 12*3600000 : 0, lastUpdated: now };
+                 nextReview: data.streak >= 3 ? now + SRS_REVIEW_DAYS[1] * SRS_DAY : 0, lastUpdated: now };
     }
 
     if (!isCorrect) {
-        data.points = 0; data.level = 0; data.nextReview = 0;
+        if (data.level === 0) {
+            // Ещё заучиваем — сбрасываем счётчик очков, факт сразу обратно в пул
+            data.points = 0; data.nextReview = 0;
+        } else {
+            // Выученный факт «слетел» — мягкий откат на пару ступеней, НЕ в ноль
+            data.lapses = (data.lapses || 0) + 1;
+            data.level = Math.max(1, data.level - 2);
+            data.points = 3;
+            data.nextReview = now + SRS_DAY; // вернём на ближайший заход
+            if (data.lapses >= SRS_HARD_LAPSES) data.hard = true;
+        }
     } else if (data.level === 0) {
         data.points += isSure ? 1 : 0.7;
         if (data.points >= 3) {
             data.points = 3; data.level = 1;
-            data.nextReview = now + 12 * 3600000;
+            data.nextReview = now + _srsNext(1);
         }
+    } else if (isSure) {
+        data.level = Math.min(data.level + 1, SRS_MAX_LEVEL);
+        data.nextReview = now + _srsNext(data.level);
     } else {
-        if (isSure) {
-            const intervals = { 1: 24*3600000, 2: 3*24*3600000, 3: 7*24*3600000 };
-            const nextLevel = Math.min(data.level + 1, 4);
-            data.level = nextLevel;
-            data.nextReview = now + (intervals[data.level - 1] || 7*24*3600000);
-        } else {
-            data.nextReview = now + 12 * 3600000;
-        }
+        // Верно, но «сомневаюсь» — уровень не растёт, закрепим на ближайшем заходе
+        data.nextReview = now + SRS_DAY;
     }
     data.lastUpdated = now;
     window.state.stats.factStreaks[fKey] = data;
