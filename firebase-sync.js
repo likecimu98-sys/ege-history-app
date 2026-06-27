@@ -39,6 +39,9 @@
         }
 
         function rememberTelegramUser() {
+            // Метим устройство как «телеграмное» — чтобы при сбое загрузки SDK в следующий раз
+            // не свалиться в случайный анонимный id (см. resolveUserId).
+            if (isTelegramMiniAppContext()) localStorage.setItem('was_telegram_device', '1');
             const tgU = getTelegramUser();
             if (tgU && tgU.id) {
                 localStorage.setItem('known_tg_id', String(tgU.id));
@@ -101,7 +104,10 @@
                 canonical = 'google_' + googleUid;
             } else if (oldStable) {
                 canonical = oldStable;
-            } else if (isTelegramMiniAppContext()) {
+            } else if (isTelegramMiniAppContext() || localStorage.getItem('was_telegram_device')) {
+                // Telegram-устройство, но tg-id ещё не получен (SDK не успел/не загрузился):
+                // НЕ создаём случайный анонимный документ — ждём появления tg-id,
+                // иначе прогресс ученика «переезжает» на случайный id «через раз».
                 localStorage.setItem('ege_sync_identity_warning', 'telegram_id_missing');
                 return '';
             } else {

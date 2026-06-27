@@ -1,6 +1,6 @@
 'use strict';
 
-const APP_VERSION = '2026-06-28-3';
+const APP_VERSION = '2026-06-28-4';
 const STATIC_CACHE = `ege-history-static-${APP_VERSION}`;
 const ASSET_CACHE = `ege-history-assets-${APP_VERSION}`;
 const CACHE_NAMES = [STATIC_CACHE, ASSET_CACHE];
@@ -11,6 +11,7 @@ const CORE_URLS = [
     './cram.html',
     './manifest.webmanifest',
     './pwa.js',
+    './vendor/telegram-web-app.js',
     './config.js',
     './utils.js',
     './state.js',

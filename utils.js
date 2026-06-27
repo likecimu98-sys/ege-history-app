@@ -4,8 +4,16 @@
 const $ = id => document.getElementById(id);
 const $$ = sel => document.querySelectorAll(sel);
 
-const tg = window.Telegram ? window.Telegram.WebApp : null;
+// Не const: если Telegram SDK инициализируется чуть позже скрипта (медленная сеть/VPN),
+// переснимаем ссылку на DOMContentLoaded, чтобы tg не «залип» в null
+// (иначе haptic/ready/expand и считывание tg-id молча отваливаются).
+let tg = (window.Telegram && window.Telegram.WebApp) || null;
 window.tgApp = tg;
+if (!tg && typeof document !== 'undefined') {
+    document.addEventListener('DOMContentLoaded', function () {
+        if (!tg && window.Telegram && window.Telegram.WebApp) { tg = window.Telegram.WebApp; window.tgApp = tg; }
+    });
+}
 
 function haptic(type) {
     if (!tg || !tg.HapticFeedback) return;

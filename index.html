@@ -24,7 +24,10 @@
     <link rel="stylesheet" href="theme-aurora.css">
     <link rel="stylesheet" href="styles.css">
     
-    <script src="https://telegram.org/js/telegram-web-app.js" defer></script>
+    <!-- Самохостинг telegram-web-app.js: telegram.org часто недоступен (сеть/VPN),
+         тогда window.Telegram не создавался → known_tg_id не считывался → случайный id «через раз».
+         Локальная копия отдаётся с того же origin и кэшируется service worker'ом. -->
+    <script src="vendor/telegram-web-app.js" defer></script>
 
     <style>
         /* Этот inline-блок намеренно МИНИМАЛЕН: только то, что должно сработать на
