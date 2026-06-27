@@ -1,6 +1,6 @@
 'use strict';
 
-const APP_VERSION = '2026-06-28-1';
+const APP_VERSION = '2026-06-28-2';
 const STATIC_CACHE = `ege-history-static-${APP_VERSION}`;
 const ASSET_CACHE = `ege-history-assets-${APP_VERSION}`;
 const CACHE_NAMES = [STATIC_CACHE, ASSET_CACHE];
@@ -130,7 +130,11 @@ async function networkFirstNavigation(request) {
     // а не под index.html — иначе навигация iframe затирала бы кэш главной страницы.
     const url = new URL(request.url);
     const isRootNav = url.pathname.endsWith('/') || url.pathname.endsWith('/index.html');
-    const cacheKey = isRootNav ? scopedRequest('./index.html') : request;
+    // cram.html открывается с ?cb=<timestamp> (форс-перезагрузка iframe для диплинка) —
+    // нормализуем ключ кэша к ./cram.html, иначе каждый запуск плодил бы новую запись.
+    const isCramNav = url.pathname.endsWith('/cram.html');
+    const cacheKey = isRootNav ? scopedRequest('./index.html')
+        : (isCramNav ? scopedRequest('./cram.html') : request);
 
     try {
         const response = await fetch(request);

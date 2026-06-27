@@ -894,8 +894,11 @@ window.openCram = function(deckId) {
     const frame = document.getElementById('cram-frame');
     if (!ov || !frame) return;
     const hash = deckId ? ('#deck=' + encodeURIComponent(deckId)) : '';
-    // Перезагружаем src каждый раз, чтобы подхватить диплинк и свежий прогресс.
-    frame.src = 'cram.html' + hash;
+    // ВАЖНО: при изменении только #hash (или том же URL) iframe НЕ перезагружается —
+    // диплинк (startDeck) не срабатывает и остаётся старый экран (меню «Зубрёжки»).
+    // Меняем не-фрагментную часть (?cb=…), чтобы каждый раз была полная перезагрузка:
+    // диплинк отрабатывает всегда и подхватывается свежий прогресс «выучено».
+    frame.src = 'cram.html?cb=' + Date.now() + hash;
     ov.style.display = ''; // сбрасываем инлайн display:none, если он остался от запасного выхода
     ov.classList.remove('hidden');
     document.body.classList.add('cram-open');

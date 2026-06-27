@@ -58,7 +58,8 @@
     .progress{height:14px;background:#fff;border:3px solid var(--line);border-radius:999px;overflow:hidden}
     .fill{display:block;height:100%;width:0%;background:var(--pink);border-right:3px solid var(--line);transition:width .25s ease}
     .deck.done .fill{background:var(--green)}
-    .topbar{position:sticky;top:0;z-index:10;background:rgba(255,247,214,.88);backdrop-filter:blur(10px);padding:10px 0 12px;display:flex;justify-content:space-between;align-items:center;gap:10px}
+    /* flex-start (а не space-between): заголовок колоды держим слева, чтобы он не уезжал под фиксированную кнопку «✕ Выйти» в правом верхнем углу. */
+    .topbar{position:sticky;top:0;z-index:10;background:rgba(255,247,214,.88);backdrop-filter:blur(10px);padding:10px 88px 12px 0;display:flex;justify-content:flex-start;align-items:center;gap:10px}
     .btn{border:3px solid var(--line);border-radius:16px;background:#fff;box-shadow:var(--shadow-sm);padding:12px 14px;font-weight:1000;cursor:pointer;min-height:48px}
     .btn.primary{background:var(--yellow)} .btn.blue{background:var(--blue)} .btn.pink{background:var(--pink)} .btn.green{background:var(--green)}
     .btn:disabled{opacity:.55;cursor:not-allowed;filter:grayscale(.2)}
@@ -905,10 +906,11 @@ function renderTrainer(){
     </div>`;
   const _backBtn = document.getElementById('backBtn');
   if(hwLocked){
-    // ДЗ: период/колоду задал преподаватель — не пускаем в выбор колод, только выход в приложение.
-    _backBtn.textContent = '← Выход';
-    _backBtn.onclick = () => { try{ window.parent.postMessage({type:'cram-exit'},'*'); }catch(e){} };
+    // ДЗ: период/колоду задал преподаватель — кнопки «← Блоки» нет (нельзя менять период),
+    // выход только через единственную «✕ Выйти» в правом верхнем углу (без дубля).
+    _backBtn.style.display = 'none';
   } else {
+    _backBtn.style.display = '';
     _backBtn.onclick = renderHome;
   }
   document.getElementById('showBtn').onclick = onShowAnswer;
