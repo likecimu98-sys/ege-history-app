@@ -1163,10 +1163,14 @@ let _challengeAudioCtx = null;
 let _lastChallengeShownId = null;
 const _dismissedChallenges = new Set();
 
-// Короткий ненавязчивый «дзынь» (Web Audio, без ассетов). Можно заглушить: localStorage duel_challenge_muted=1
+// Зов на дуэль: зацикленный звук (assets/sounds/duel.mp3), играет пока висит
+// баннер, и обрывается при «Принять» / «✕» / авто-скрытии (см. hideDuelChallenge).
+// Заглушить: localStorage duel_challenge_muted=1.
 function _playChallengeChime() {
     try {
         if (localStorage.getItem('duel_challenge_muted') === '1') return;
+        if (window.Sfx && window.Sfx.loop) { window.Sfx.loop('duel'); return; }
+        // Фолбэк — короткий синтетический «дзынь», если Sfx недоступен
         const Ctx = window.AudioContext || window.webkitAudioContext;
         if (!Ctx) return;
         _challengeAudioCtx = _challengeAudioCtx || new Ctx();
@@ -1182,6 +1186,9 @@ function _playChallengeChime() {
             o.start(t + dt); o.stop(t + dt + 0.2);
         });
     } catch (e) {}
+}
+function _stopChallengeChime() {
+    try { if (window.Sfx && window.Sfx.stop) window.Sfx.stop('duel'); } catch (e) {}
 }
 
 window.showDuelChallenge = function(ch) {
@@ -1221,6 +1228,7 @@ window.showDuelChallenge = function(ch) {
 };
 window.hideDuelChallenge = function() {
     clearTimeout(_challengeHideTimer);
+    _stopChallengeChime();
     const el = document.getElementById('duel-challenge-banner');
     if (!el) return;
     el.style.transform = 'translateX(-50%) translateY(-140%)';

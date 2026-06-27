@@ -1,6 +1,6 @@
 'use strict';
 
-const APP_VERSION = '2026-06-27-1';
+const APP_VERSION = '2026-06-27-2';
 const STATIC_CACHE = `ege-history-static-${APP_VERSION}`;
 const ASSET_CACHE = `ege-history-assets-${APP_VERSION}`;
 const CACHE_NAMES = [STATIC_CACHE, ASSET_CACHE];
@@ -43,7 +43,8 @@ const CORE_URLS = [
     './assets/sounds/yes.mp3',
     './assets/sounds/wow.mp3',
     './assets/sounds/fah.mp3',
-    './assets/sounds/dun.mp3'
+    './assets/sounds/dun.mp3',
+    './assets/sounds/duel.mp3'
 ];
 
 const ASSET_MANIFEST_URL = './offline-assets.json';

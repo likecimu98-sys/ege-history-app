@@ -25,6 +25,7 @@ window.Sfx = (function () {
         wow: 'assets/sounds/wow.mp3',  // верный ответ
         fah: 'assets/sounds/fah.mp3',  // неверный ответ
         dun: 'assets/sounds/dun.mp3',  // пришла домашка
+        duel: 'assets/sounds/duel.mp3', // зов на дуэль (зацикленный)
     };
     const cache = {};
     let unlocked = false;
@@ -65,10 +66,26 @@ window.Sfx = (function () {
         ['pointerdown', 'touchstart', 'keydown', 'click'].forEach(ev =>
             window.removeEventListener(ev, unlock, true));
     }
+    // Зацикленное воспроизведение (для зова на дуэль) — без проверки isMuted,
+    // глушением управляет вызывающий код (свой ключ duel_challenge_muted).
+    function loop(name, vol) {
+        const a = get(name); if (!a) return;
+        try {
+            a.loop = true; a.muted = false; a.currentTime = 0;
+            if (vol != null) a.volume = vol;
+            const p = a.play();
+            if (p && p.catch) p.catch(() => {});
+        } catch (e) {}
+    }
+    function stop(name) {
+        const a = cache[name]; if (!a) return;
+        try { a.pause(); a.loop = false; a.currentTime = 0; } catch (e) {}
+    }
+
     ['pointerdown', 'touchstart', 'keydown', 'click'].forEach(ev =>
         window.addEventListener(ev, unlock, { capture: true, passive: true }));
 
-    return { play, unlock, isMuted, setMuted };
+    return { play, loop, stop, unlock, isMuted, setMuted };
 })();
 
 function shuffleArray(array) {
