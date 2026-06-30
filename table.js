@@ -99,6 +99,44 @@ function pickTargetTask3(allowed, rowsCount) {
     return target.length === 4 ? shuffleArray(target) : null;
 }
 
+function _task1EventVariants(row) {
+    const variants = Array.isArray(row?.eventVariants) && row.eventVariants.length
+        ? row.eventVariants
+        : [row?.event];
+    return variants.map(v => String(v || '').trim()).filter(Boolean);
+}
+
+function _task1PickEvent(row, usedEvents) {
+    const variants = shuffleArray(_task1EventVariants(row));
+    if (usedEvents) {
+        const unused = variants.find(v => !usedEvents.has(v));
+        if (unused) return unused;
+    }
+    return variants[0] || String(row?.event || '');
+}
+
+function _task1MaterializeEvent(row, usedEvents) {
+    if (!row) return row;
+    return { ...row, event: _task1PickEvent(row, usedEvents) };
+}
+
+function pickTargetTask1(allowed, rowsCount) {
+    const picked = [];
+    const usedEvents = new Set();
+    const usedYears = new Set();
+    for (const f of shuffleArray([...allowed])) {
+        if (picked.length >= rowsCount) break;
+        const year = String(f?.year || '').trim();
+        if (!year || usedYears.has(year)) continue;
+        const variants = _task1EventVariants(f);
+        if (!variants.length || variants.some(v => usedEvents.has(v))) continue;
+        picked.push(f);
+        usedYears.add(year);
+        variants.forEach(v => usedEvents.add(v));
+    }
+    return picked.length === rowsCount ? shuffleArray(picked) : null;
+}
+
 // Task5: слоты по твоей схеме —
 //   Слот 1 (100%): Древность и Смута (<1700)
 //   Слот 2 (100%): XVIII и XIX века вместе (1700 — 1917 включительно, чтобы 1901-1918 не пустовали)
@@ -196,51 +234,29 @@ function pickTargetTask7(allowed, rowsCount) {
     const ep = {};
     TASK_EPOCHS.forEach(e => { ep[e] = allowed.filter(f => f.c === e); });
 
-    // Строим индекс: для каждого нормализованного памятника/произведения — все его traits из БД.
-    // Это склеивает варианты вроде «рассказ/повесть» и не даёт им попасть в одно задание.
-    const cultureTraits = {};
-    (window.task7Data || []).forEach(d => {
-        const key = _task7CultureKey(d.culture);
-        if (!cultureTraits[key]) cultureTraits[key] = new Set();
-        cultureTraits[key].add(d.trait);
-    });
-
-    const pickFrom = (pool, count, usedC, usedT, selectedTraits, selectedCultures) => {
+    const pickFrom = (pool, count, usedC, usedT, selectedRows) => {
         const res = [];
         for (const f of shuffleArray([...pool])) {
             if (res.length >= count) break;
-            const cultureKey = _task7CultureKey(f.culture);
-            if (usedC.has(cultureKey) || usedT.has(f.trait)) continue;
-            const myAltTraits = cultureTraits[cultureKey] || new Set();
-            // Прямая проверка: ранее выбранный trait подходит этой culture?
-            const fwd = [...selectedTraits].some(st => myAltTraits.has(st));
-            // Обратная проверка: trait этой записи подходит ранее выбранной culture?
-            const rev = [...selectedCultures].some(sc => {
-                const scAlts = cultureTraits[sc] || new Set();
-                return scAlts.has(f.trait);
-            });
-            if (fwd || rev) continue;
+            if (!_task7CanUseAsTarget(f, selectedRows, usedC, usedT)) continue;
             res.push(f);
-            usedC.add(cultureKey);
-            usedT.add(f.trait);
-            selectedTraits.add(f.trait);
-            selectedCultures.add(cultureKey);
+            _task7RememberTarget(f, selectedRows, usedC, usedT);
         }
         return res;
     };
-    const usedC = new Set(), usedT = new Set(), selectedTraits = new Set(), selectedCultures = new Set();
+    const usedC = new Set(), usedT = new Set(), selectedRows = [];
     let picked = [];
     if (Math.random() < 0.5) {
-        TASK_EPOCHS.forEach(e => { picked.push(...pickFrom(ep[e], 1, usedC, usedT, selectedTraits, selectedCultures)); });
+        TASK_EPOCHS.forEach(e => { picked.push(...pickFrom(ep[e], 1, usedC, usedT, selectedRows)); });
     } else {
-        picked.push(...pickFrom(ep['early'], 1, usedC, usedT, selectedTraits, selectedCultures));
-        picked.push(...pickFrom(ep['19th'], 2, usedC, usedT, selectedTraits, selectedCultures));
-        picked.push(...pickFrom(ep['20th'], 1, usedC, usedT, selectedTraits, selectedCultures));
+        picked.push(...pickFrom(ep['early'], 1, usedC, usedT, selectedRows));
+        picked.push(...pickFrom(ep['19th'], 2, usedC, usedT, selectedRows));
+        picked.push(...pickFrom(ep['20th'], 1, usedC, usedT, selectedRows));
     }
     return picked.length === 4 ? shuffleArray(picked) : null;
 }
 
-const EPOCH_PICKERS = { task3: pickTargetTask3, task4: pickTargetTask4, task5: pickTargetTask5, task7: pickTargetTask7 };
+const EPOCH_PICKERS = { task1: pickTargetTask1, task3: pickTargetTask3, task4: pickTargetTask4, task5: pickTargetTask5, task7: pickTargetTask7 };
 
 // ═══════════════════════════════════════════════════════════
 //  SMART DISTRACTORS — генерация ловушек
@@ -311,6 +327,68 @@ function _task7CultureKey(culture) {
     }
 
     return type + ':' + _task7Slug(title);
+}
+
+function _task7RowId(row) {
+    const id = parseInt(row?.id, 10);
+    return Number.isFinite(id) ? id : null;
+}
+
+function _task7TraitVariants(row) {
+    const variants = Array.isArray(row?.traitVariants) && row.traitVariants.length
+        ? row.traitVariants
+        : [row?.trait];
+    return variants.map(v => String(v || '').trim()).filter(Boolean);
+}
+
+function _task7PickTrait(row, usedVals) {
+    const variants = shuffleArray(_task7TraitVariants(row));
+    if (usedVals) {
+        const unused = variants.find(v => !usedVals.has(v));
+        if (unused) return unused;
+    }
+    return variants[0] || String(row?.trait || '');
+}
+
+function _task7MaterializeTrait(row) {
+    if (!row || !Array.isArray(row.traitVariants) || row.traitVariants.length < 2) return row;
+    return { ...row, trait: _task7PickTrait(row) };
+}
+
+function _task7AppliesToIds(row) {
+    const ids = Array.isArray(row?.appliesToIds) ? row.appliesToIds : [row?.id];
+    return ids.map(id => parseInt(id, 10)).filter(id => Number.isFinite(id));
+}
+
+function _task7CanUseAsTarget(candidate, selectedRows, usedCultures, usedTraits) {
+    const cultureKey = _task7CultureKey(candidate?.culture);
+    if (usedCultures.has(cultureKey)) return false;
+    if (_task7TraitVariants(candidate).some(trait => usedTraits.has(trait))) return false;
+
+    const candidateId = _task7RowId(candidate);
+    if (candidateId === null) return true;
+    const candidateApplies = new Set(_task7AppliesToIds(candidate));
+
+    return selectedRows.every(selected => {
+        const selectedId = _task7RowId(selected);
+        if (selectedId === null) return true;
+        const selectedApplies = new Set(_task7AppliesToIds(selected));
+        return !candidateApplies.has(selectedId) && !selectedApplies.has(candidateId);
+    });
+}
+
+function _task7RememberTarget(row, selectedRows, usedCultures, usedTraits) {
+    selectedRows.push(row);
+    usedCultures.add(_task7CultureKey(row?.culture));
+    _task7TraitVariants(row).forEach(trait => usedTraits.add(trait));
+}
+
+function _task7IsSafeDistractor(candidate, targetRows) {
+    const applies = new Set(_task7AppliesToIds(candidate));
+    return targetRows.every(target => {
+        const targetId = _task7RowId(target);
+        return targetId === null || !applies.has(targetId);
+    });
 }
 
 function _task7AddTextKeys(keys, text) {
@@ -454,8 +532,67 @@ function _task7TraitSemanticKeys(trait) {
     return keys;
 }
 
+function _task1CorrectYearsSet() {
+    const rows = typeof task1Data !== 'undefined' ? task1Data : (window.task1Data || []);
+    const years = new Set();
+    rows.forEach(d => {
+        if (d?.year) years.add(String(d.year));
+        if (Number.isFinite(d?.yearNum)) years.add(`${d.yearNum} г.`);
+    });
+    return years;
+}
+
+function _task1DistractorYearList() {
+    const src = typeof task1DistractorYears !== 'undefined'
+        ? task1DistractorYears
+        : (window.task1DistractorYears || []);
+    return Array.isArray(src) ? src.map(y => String(y).trim()).filter(Boolean) : [];
+}
+
+function _task1AddGeneratedYears(target, poolItems, used, correctYears, needed) {
+    const nums = target.map(t => Number.isFinite(t?.yearNum) ? t.yearNum : parseInt(String(t?.year || '').replace(/\D/g, ''), 10))
+        .filter(y => Number.isFinite(y));
+    const deltas = [1, -1, 2, -2, 3, -3, 5, -5, 7, -7, 10, -10, 15, -15, 20, -20, 25, -25, 30, -30];
+    for (const base of shuffleArray(nums)) {
+        for (const delta of deltas) {
+            if (poolItems.length >= needed) return;
+            const y = base + delta;
+            if (y < 800 || y > 2026) continue;
+            const label = `${y} г.`;
+            if (used.has(label) || correctYears.has(label)) continue;
+            used.add(label);
+            poolItems.push(label);
+        }
+    }
+}
+
+function generateDistractorsTask1(target, poolItems) {
+    const fakesCount = Math.ceil(target.length / 2);
+    const needed = target.length + fakesCount;
+    const used = new Set(poolItems.map(v => String(v)));
+    const correctYears = _task1CorrectYearsSet();
+    const selectedYears = new Set(target.map(t => String(t?.year || '')).filter(Boolean));
+
+    for (const year of shuffleArray(_task1DistractorYearList())) {
+        if (poolItems.length >= needed) break;
+        if (used.has(year) || selectedYears.has(year) || correctYears.has(year)) continue;
+        used.add(year);
+        poolItems.push(year);
+    }
+
+    if (poolItems.length < needed) {
+        _task1AddGeneratedYears(target, poolItems, used, correctYears, needed);
+    }
+
+    return poolItems;
+}
+
 function generateDistractors(task, target, missing) {
     const poolItems = [...missing];
+
+    if (task === 'task1') {
+        return generateDistractorsTask1(target, poolItems);
+    }
 
     if (task === 'task4') {
         return generateDistractorsTask4(target, poolItems);
@@ -464,6 +601,7 @@ function generateDistractors(task, target, missing) {
     // Task3/5/7: единая логика
     const cfg = TASK_CONFIG[task];
     const dataSource = cfg.data();
+    const task7UsesAudit = task === 'task7' && dataSource.some(d => Array.isArray(d.appliesToIds));
     const targetPeriods = [...new Set(target.map(t => t.c))];
     const periodOrder = TASK_EPOCHS;
     const adjSet = new Set();
@@ -481,23 +619,34 @@ function generateDistractors(task, target, missing) {
 
     // ── Собираем все "запрещённые" значения поля field ──
     const usedVals = new Set(poolItems);
+    if (task === 'task7') {
+        target.forEach(t => _task7TraitVariants(t).forEach(v => usedVals.add(v)));
+    }
     const targetDisplayVals = new Set(target.map(t => t[displayField]));
     const task7TargetDisplayKeys = task === 'task7'
         ? new Set(target.map(t => _task7CultureKey(t[displayField])))
         : null;
-    const task7TargetSemanticKeys = task === 'task7'
+    const task7TargetSemanticKeys = task === 'task7' && !task7UsesAudit
         ? target.reduce((keys, t) => {
             _task7FactSemanticKeys(t).forEach(k => keys.add(k));
             return keys;
         }, new Set())
         : null;
 
+    const markUsedValue = d => {
+        if (task === 'task7') {
+            _task7TraitVariants(d).forEach(v => usedVals.add(v));
+        } else {
+            usedVals.add(d[field]);
+        }
+    };
+
     // 1) Прямая блокировка: любое значение field, которое в базе связано
     //    с каким-то из target[displayField] — уже валидный ответ → не дистрактор.
     dataSource.forEach(d => {
-        if (targetDisplayVals.has(d[displayField])) usedVals.add(d[field]);
+        if (targetDisplayVals.has(d[displayField])) markUsedValue(d);
         if (task7TargetDisplayKeys && task7TargetDisplayKeys.has(_task7CultureKey(d[displayField]))) {
-            usedVals.add(d[field]);
+            markUsedValue(d);
         }
     });
 
@@ -511,15 +660,19 @@ function generateDistractors(task, target, missing) {
     const fieldToDisplayKeys = {};
     const fieldToSemanticKeys = {};
     dataSource.forEach(d => {
-        const v = d[field];
-        if (!fieldToDisplays[v]) fieldToDisplays[v] = new Set();
-        fieldToDisplays[v].add(d[displayField]);
-        if (task === 'task7') {
-            if (!fieldToDisplayKeys[v]) fieldToDisplayKeys[v] = new Set();
-            fieldToDisplayKeys[v].add(_task7CultureKey(d[displayField]));
-            if (!fieldToSemanticKeys[v]) fieldToSemanticKeys[v] = new Set();
-            _task7FactSemanticKeys(d).forEach(k => fieldToSemanticKeys[v].add(k));
-        }
+        const values = task === 'task7' ? _task7TraitVariants(d) : [d[field]];
+        values.forEach(v => {
+            if (!fieldToDisplays[v]) fieldToDisplays[v] = new Set();
+            fieldToDisplays[v].add(d[displayField]);
+            if (task === 'task7') {
+                if (!fieldToDisplayKeys[v]) fieldToDisplayKeys[v] = new Set();
+                fieldToDisplayKeys[v].add(_task7CultureKey(d[displayField]));
+                if (!task7UsesAudit) {
+                    if (!fieldToSemanticKeys[v]) fieldToSemanticKeys[v] = new Set();
+                    _task7FactSemanticKeys(d).forEach(k => fieldToSemanticKeys[v].add(k));
+                }
+            }
+        });
     });
 
     // ── Определяем эпох-диапазон и порог ±N лет ──
@@ -529,7 +682,7 @@ function generateDistractors(task, target, missing) {
     const epochSpan = relevantYears.length
         ? (Math.max(...relevantYears) - Math.min(...relevantYears))
         : 0;
-    const initMinDist = _computeMinYearDistance(epochSpan);
+    const initMinDist = task7UsesAudit ? 0 : _computeMinYearDistance(epochSpan);
     const targetYears = target.map(t => t.year).filter(y => typeof y === 'number');
 
     // ── Собираем кандидатов с данным порогом yearDist ──
@@ -549,8 +702,9 @@ function generateDistractors(task, target, missing) {
         const scored = [];
         const seen = new Set();
         dataSource.forEach(d => {
-            const val = d[field];
+            const val = task === 'task7' ? _task7PickTrait(d, usedVals) : d[field];
             if (seen.has(val) || usedVals.has(val)) return;
+            if (task7UsesAudit && !_task7IsSafeDistractor(d, target)) return;
             // ── Слой 3: правитель эпохи не может быть дистрактором для события
             //    своего правления (он сам — защитимый ответ). Только task5 (val = личность).
             if (task === 'task5' && typeof isReigningAuthority === 'function' &&
@@ -999,20 +1153,13 @@ function generateTwoColumnTable() {
         if (target.length === 0) {
             // Fallback: случайный выбор с дедупликацией
             target = [];
-            const dedupeKey = task === 'task7' ? 'culture' : (task === 'task3' ? 'process' : 'event');
-            const dedupeKey2 = task === 'task3' ? 'fact' : (task === 'task5' ? 'person' : 'trait');
+            const dedupeKey = task === 'task7' ? 'culture' : (cfg.displayField || 'event');
+            const dedupeKey2 = cfg.fieldName || (task === 'task3' ? 'fact' : (task === 'task5' ? 'person' : 'trait'));
             const used1 = new Set(), used2 = new Set();
             // Task7: дополнительная проверка на кросс-неоднозначность
             const selectedTraits = new Set();
             const selectedCultures7 = new Set();
-            const cultureTraits7 = {};
-            if (task === 'task7') {
-                (window.task7Data || []).forEach(d => {
-                    const cultureKey = _task7CultureKey(d.culture);
-                    if (!cultureTraits7[cultureKey]) cultureTraits7[cultureKey] = new Set();
-                    cultureTraits7[cultureKey].add(d.trait);
-                });
-            }
+            const selectedRows7 = [];
             // Task5: аналогичная проверка для event→person
             const selectedPersons5 = new Set();
             const selectedEvents5 = new Set();
@@ -1027,16 +1174,13 @@ function generateTwoColumnTable() {
             const t5Deferred = [];  // task5: отложенные из-за неоднозначности (добираем, если не хватит)
             for (const f of shuf) {
                 if (target.length >= rowsCount) break;
-                if (used1.has(f[dedupeKey])) continue;
+                if (task === 'task1') {
+                    if (_task1EventVariants(f).some(v => used1.has(v))) continue;
+                } else if (used1.has(f[dedupeKey])) continue;
                 if (dedupeKey2 && used2.has(f[dedupeKey2])) continue;
                 // Task7: trait не должен быть альтернативой другой уже выбранной culture и наоборот
                 if (task === 'task7') {
-                    const cultureKey = _task7CultureKey(f.culture);
-                    if (selectedCultures7.has(cultureKey)) continue;
-                    const myAlts = cultureTraits7[cultureKey] || new Set();
-                    const fwd = [...selectedTraits].some(st => myAlts.has(st));
-                    const rev = [...selectedCultures7].some(sc => (cultureTraits7[sc]||new Set()).has(f[dedupeKey2]));
-                    if (fwd || rev) continue;
+                    if (!_task7CanUseAsTarget(f, selectedRows7, selectedCultures7, selectedTraits)) continue;
                 }
                 // Task5: person не должен быть альтернативой другого уже выбранного event и наоборот
                 if (task === 'task5') {
@@ -1048,9 +1192,10 @@ function generateTwoColumnTable() {
                     if (target.some(t => _task5Interchangeable(f, t))) { t5Deferred.push(f); continue; }
                 }
                 target.push(f);
-                used1.add(f[dedupeKey]);
+                if (task === 'task1') _task1EventVariants(f).forEach(v => used1.add(v));
+                else used1.add(f[dedupeKey]);
                 if (dedupeKey2) { used2.add(f[dedupeKey2]); selectedTraits.add(f[dedupeKey2]); }
-                if (task === 'task7') selectedCultures7.add(_task7CultureKey(f.culture));
+                if (task === 'task7') _task7RememberTarget(f, selectedRows7, selectedCultures7, selectedTraits);
                 if (task === 'task5') { selectedPersons5.add(f.person); selectedEvents5.add(f.event); }
             }
             // Если защита от неоднозначности не дала набрать строки (узкий период) —
@@ -1067,8 +1212,21 @@ function generateTwoColumnTable() {
         }
     }
 
+    if (task === 'task1') {
+        const usedEvents = new Set();
+        target = target.map(row => {
+            const materialized = _task1MaterializeEvent(row, usedEvents);
+            if (materialized?.event) usedEvents.add(materialized.event);
+            return materialized;
+        });
+    }
+
+    if (task === 'task7') {
+        target = target.map(_task7MaterializeTrait);
+    }
+
     // Сортировка по году для хронологических и культурных заданий
-    if (task === 'task3' || task === 'task7') {
+    if (task === 'task1' || task === 'task3' || task === 'task7') {
         const sortByYear = $('filter-sort-year') && $('filter-sort-year').checked;
         if (sortByYear) target.sort((a, b) => getYearFromFact(a) - getYearFromFact(b));
     }
@@ -1076,7 +1234,7 @@ function generateTwoColumnTable() {
     window.state.currentTargetData = target;
 
     // Определяем скрытое поле и отображаемое
-    const fieldMap = { task3: ['process', 'fact'], task5: ['event', 'person'], task7: ['culture', 'trait'] };
+    const fieldMap = { task1: ['event', 'year'], task3: ['process', 'fact'], task5: ['event', 'person'], task7: ['culture', 'trait'] };
     const [displayField, hiddenField] = fieldMap[task];
 
     const missing = [];

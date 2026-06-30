@@ -54,7 +54,7 @@ function isMediaTaskChoice(task) {
 }
 
 function supportsYearSort(task) {
-    return task === 'task3' || task === 'task7' || isMediaTaskChoice(task);
+    return task === 'task1' || task === 'task3' || task === 'task7' || isMediaTaskChoice(task);
 }
 
 window.quickStartGame = function(task, mode) {
@@ -233,7 +233,7 @@ window.handleSettingsChange = function() {
 // === ЕГЭ-БАЛЛЫ ЗА ЗАДАНИЕ ===
 // Критерии оценивания:
 //   task4: 3 балла — без ошибок, 2 — 1 ошибка, 1 — 2 ошибки, 0 — 3+
-//   task3, task5, task7: 2 балла — без ошибок, 1 — 1 ошибка, 0 — 2+
+//   task1, task3, task5, task7: 2 балла — без ошибок, 1 — 1 ошибка, 0 — 2+
 // «Ошибка» = строка, которую ученик исправлял хотя бы раз (scored="fixed")
 // или строка, на которую был показан ответ (answersRevealed)
 function calculateEgePoints(rows, task) {
@@ -302,7 +302,7 @@ function checkAnswers(isSure, auto) {
         const slots = tr.querySelectorAll('.dnd-slot');
         let rowAllCor = true, rowFilled = 0;
 
-        // Слой 2: множество допустимых ответов (только task3/5/7, не детектив)
+        // Слой 2: множество допустимых ответов (task1/3/5/7, не детектив)
         const acceptSet = (window.state.currentMode !== 'detective')
             ? window.acceptableAnswerSet(fact, window.state.currentTask)
             : null;

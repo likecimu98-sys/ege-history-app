@@ -23,6 +23,9 @@
         });
         
         let fbUser = null; 
+        const TEXT_TASK_KEYS = ['task1', 'task3', 'task4', 'task5', 'task7'];
+        const TEXT_TASK_EMOJI = { task1: '⏳', task3: '🔗', task4: '📍', task5: '👤', task7: '🎨' };
+        const TEXT_TASK_SHORT = { task1: '№1', task3: '№3', task4: '№4', task5: '№5', task7: '№7' };
 
         function getTelegramWebApp() {
             return window.Telegram && window.Telegram.WebApp ? window.Telegram.WebApp : null;
@@ -540,9 +543,10 @@
                         updateDoc(docSnap.ref, { pendingAssignments: arrayRemove(...pending) }).catch(console.error);
                         if (added > 0) {
                             if (window.recomputeHwMirror) window.recomputeHwMirror();
-                            const by = { task3: 0, task4: 0, task5: 0, task7: 0 };
+                            const by = { task1: 0, task3: 0, task4: 0, task5: 0, task7: 0 };
                             pending.forEach(r => { by[r.task] = (by[r.task] || 0) + (Number(r.total) || 0); });
                             const parts = [];
+                            if (by.task1) parts.push(`⏳№1: ${by.task1}`);
                             if (by.task3) parts.push(`🔗№3: ${by.task3}`);
                             if (by.task4) parts.push(`📍№4: ${by.task4}`);
                             if (by.task5) parts.push(`👤№5: ${by.task5}`);
@@ -555,21 +559,23 @@
                     }
 
                     // ── Legacy: накопительные поля → конвертируем в отдельные задания ──
+                    const t1 = data.hwAssignTask1 || 0;
                     const t3 = data.hwAssignTask3 || 0;
                     const t4 = data.hwAssignTask4 || 0;
                     const t5 = data.hwAssignTask5 || 0;
                     const t7 = data.hwAssignTask7 || 0;
-                    const totalHw = t3 + t4 + t5 + t7;
+                    const totalHw = t1 + t3 + t4 + t5 + t7;
                     const dl = data.assignedTeacherHwDeadline || null;
                     const mkLegacy = (task, n) => n > 0 && window.ingestAssignment && window.ingestAssignment({
                         id: 'legacy_' + task + '_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5),
                         task, total: n, deadline: dl, assignedAt: Date.now()
                     });
                     if (totalHw > 0) {
-                        mkLegacy('task3', t3); mkLegacy('task4', t4); mkLegacy('task5', t5); mkLegacy('task7', t7);
+                        mkLegacy('task1', t1); mkLegacy('task3', t3); mkLegacy('task4', t4); mkLegacy('task5', t5); mkLegacy('task7', t7);
                         if (window.recomputeHwMirror) window.recomputeHwMirror();
-                        setDoc(docSnap.ref, { hwAssignTask3: 0, hwAssignTask4: 0, hwAssignTask5: 0, hwAssignTask7: 0, assignedTeacherHw: 0 }, { merge: true }).catch(console.error);
+                        setDoc(docSnap.ref, { hwAssignTask1: 0, hwAssignTask3: 0, hwAssignTask4: 0, hwAssignTask5: 0, hwAssignTask7: 0, assignedTeacherHw: 0 }, { merge: true }).catch(console.error);
                         const parts = [];
+                        if (t1 > 0) parts.push(`⏳№1: ${t1}`);
                         if (t3 > 0) parts.push(`🔗№3: ${t3}`);
                         if (t4 > 0) parts.push(`📍№4: ${t4}`);
                         if (t5 > 0) parts.push(`👤№5: ${t5}`);
@@ -884,8 +890,10 @@
             const rawEra = stats.eraStats || {};
 
             // Поддержка обоих форматов: старый flat и новый per-task
-            const isNewFormat = rawEra.task3 || rawEra.task4 || rawEra.task5 || rawEra.task7;
+            const isNewFormat = rawEra.task1 || rawEra.task3 || rawEra.task4 || rawEra.task5 || rawEra.task7;
             const taskDefs = [
+                { key: 'task1', label: '⏳ №1 Хронология', color: '#0891b2' },
+                { key: 'task3', label: '🔗 №3 Процессы', color: 'var(--c-success)' },
                 { key: 'task4', label: '📍 №4 География', color: 'var(--c-brand)' },
                 { key: 'task5', label: '👤 №5 Личности',  color: 'var(--c-purple)' },
                 { key: 'task7', label: '🎨 №7 Культура',  color: 'var(--c-warn)' },
@@ -898,7 +906,7 @@
             for (const eKey of Object.keys(eraNames)) {
                 let c = 0, tot = 0;
                 if (isNewFormat) {
-                    for (const tk of ['task3','task4','task5','task7']) {
+                    for (const tk of TEXT_TASK_KEYS) {
                         const e = (rawEra[tk] || {})[eKey] || {};
                         c   += e.correct || 0;
                         tot += e.total   || 0;
@@ -939,11 +947,11 @@
                 const dStr = d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
                 const val = (dStat[dStr] && dStat[dStr].solved) || 0;
                 const valT4 = (dStat[dStr] && dStat[dStr].solvedTask4) || 0;
-                const perTaskVal = (dStat[dStr] ? ((dStat[dStr].solvedTask4||0)+(dStat[dStr].solvedTask3||0)+(dStat[dStr].solvedTask5||0)+(dStat[dStr].solvedTask7||0)) : 0);
+                const perTaskVal = (dStat[dStr] ? ((dStat[dStr].solvedTask1||0)+(dStat[dStr].solvedTask4||0)+(dStat[dStr].solvedTask3||0)+(dStat[dStr].solvedTask5||0)+(dStat[dStr].solvedTask7||0)) : 0);
                 const dayScore = perTaskVal > 0 ? perTaskVal : val;
                 const dayEge = (dStat[dStr] && dStat[dStr].egePoints) || 0;
                 if (dStr >= monStr) { wScore += dayScore; wScoreTask4 += valT4; wEgePoints += dayEge; }
-                last7.push({ date: dStr, val, t4: (dStat[dStr] && dStat[dStr].solvedTask4) || 0, t5: (dStat[dStr] && dStat[dStr].solvedTask5) || 0, t7: (dStat[dStr] && dStat[dStr].solvedTask7) || 0, mins: dStat[dStr] ? Math.floor((dStat[dStr].timeSpent || 0) / 60) : 0, egePoints: dayEge });
+                last7.push({ date: dStr, val, t1: (dStat[dStr] && dStat[dStr].solvedTask1) || 0, t4: (dStat[dStr] && dStat[dStr].solvedTask4) || 0, t5: (dStat[dStr] && dStat[dStr].solvedTask5) || 0, t7: (dStat[dStr] && dStat[dStr].solvedTask7) || 0, mins: dStat[dStr] ? Math.floor((dStat[dStr].timeSpent || 0) / 60) : 0, egePoints: dayEge });
             }
             // No totalSolved fallback — must come from actual dailyStats
 
@@ -964,6 +972,8 @@
                                 : (Array.isArray(state.assignments) ? state.assignments : []);
             const docPending   = Array.isArray(s.pendingAssignments) ? s.pendingAssignments : [];
             let hwFromAssign = 0, hwDoneOnTime = 0, hwDoneLate = 0, hwOverdue = 0, nearestDl = null;
+            let hwTotalUnits = 0, hwOpenAssignments = 0, hwDoneAssignments = 0, hwTotalAssignments = 0;
+            let hwActiveAssignments = 0, hwPendingAssignments = 0, hwOverdueAssignments = 0, hwStartedAssignments = 0;
             const nowMs = Date.now();
             // Выучивание считаем живьём по выученным фактам периода у самого ученика (общая система isFactLearned).
             const hwStreaks = stats.factStreaks || state.factStreaks || {};
@@ -981,17 +991,23 @@
                 return learned;
             };
             // Зубрёжка: считаем выученные в тренажёре факты (ключи cram:* в factStreaks ученика).
-            const cramLearnedCount = () => {
+            const cramLearnedCount = (item) => {
+                const hasRange = item && item.yearStart && item.yearEnd;
+                const rangeIds = hasRange && window.cramEventIdsInRange
+                    ? window.cramEventIdsInRange(item.yearStart, item.yearEnd)
+                    : null;
                 let n = 0;
                 for (const k in hwStreaks) {
                     if (k.indexOf('cram:') !== 0) continue;
+                    if (rangeIds && !rangeIds.has(k.slice(5))) continue;
+                    if (hasRange && !rangeIds) continue;
                     const v = hwStreaks[k];
                     if (v && ((v.level || 0) > 0 || (v.points || 0) >= 3 || (v.streak || 0) >= 3)) n++;
                 }
                 return n;
             };
             const itemRemaining = (it) => it.task === 'cram'
-                ? Math.max(0, (it.goal || 0) - cramLearnedCount())
+                ? Math.max(0, (it.goal || 0) - cramLearnedCount(it))
                 : (it.metric === 'learned'
                     ? Math.max(0, (it.goal || 0) - learnedCountFor(it.task, it.period))
                     : Math.max(0, (it.goal || 0) - (it.progress || 0)));
@@ -999,25 +1015,47 @@
                 const items = Array.isArray(a.items) ? a.items
                     : (a.task ? [{ task: a.task, period: 'all', metric: 'lines', goal: Number(a.total) || 0, progress: (Number(a.total) || 0) - (Number(a.remaining) || 0) }] : []);
                 const rem = items.reduce((x, it) => x + itemRemaining(it), 0);
-                if (a.status === 'done' || (items.length && rem === 0)) { a.onTime ? hwDoneOnTime++ : hwDoneLate++; return; }
+                const goal = items.reduce((x, it) => x + (Number(it.goal) || 0), 0);
+                if (items.length || a.task) hwTotalAssignments++;
+                hwTotalUnits += goal;
+                if (a.status === 'done' || (items.length && rem === 0)) { hwDoneAssignments++; a.onTime ? hwDoneOnTime++ : hwDoneLate++; return; }
                 if (rem > 0) {
+                    hwOpenAssignments++;
+                    hwActiveAssignments++;
+                    if (goal > rem) hwStartedAssignments++;
                     hwFromAssign += rem;
                     if (a.deadline) {
                         if (!nearestDl || a.deadline < nearestDl) nearestDl = a.deadline;
-                        if (new Date(a.deadline + 'T23:59:59').getTime() < nowMs) hwOverdue += rem;
+                        if (new Date(a.deadline + 'T23:59:59').getTime() < nowMs) { hwOverdue += rem; hwOverdueAssignments++; }
                     }
                 }
             });
             docPending.forEach(r => {
                 const g = Array.isArray(r.items) ? r.items.reduce((x, it) => x + (Number(it.goal) || 0), 0) : (Number(r.total) || 0);
+                hwTotalAssignments++;
+                hwOpenAssignments++;
+                hwPendingAssignments++;
+                hwTotalUnits += g;
                 hwFromAssign += g;
                 if (r.deadline && (!nearestDl || r.deadline < nearestDl)) nearestDl = r.deadline;
+                if (r.deadline && new Date(r.deadline + 'T23:59:59').getTime() < nowMs) { hwOverdue += g; hwOverdueAssignments++; }
             });
             // Legacy-поля (ученик ещё не обновил приложение)
-            const hwLegacy = (Number(s.hwAssignTask3)||0)+(Number(s.hwAssignTask4)||0)+(Number(s.hwAssignTask5)||0)+(Number(s.hwAssignTask7)||0)
+            const hwLegacy = (Number(s.hwAssignTask1)||0)+(Number(s.hwAssignTask3)||0)+(Number(s.hwAssignTask4)||0)+(Number(s.hwAssignTask5)||0)+(Number(s.hwAssignTask7)||0)
                            + (assignments.length ? 0 : Number(stats.hwFlashcardsToSolve || state.hwFlashcardsToSolve || 0));
+            if (hwLegacy > 0) {
+                hwTotalAssignments++;
+                hwOpenAssignments++;
+                hwActiveAssignments++;
+                hwTotalUnits += hwLegacy;
+                if (s.assignedTeacherHwDeadline && new Date(s.assignedTeacherHwDeadline + 'T23:59:59').getTime() < nowMs) hwOverdueAssignments++;
+            }
             const hwRemaining  = hwFromAssign + hwLegacy;
             const hwDeadline   = nearestDl || s.assignedTeacherHwDeadline || null;
+            const hwProgressPct = hwTotalUnits ? Math.max(0, Math.min(100, Math.round((hwTotalUnits - hwRemaining) / hwTotalUnits * 100))) : (hwDoneAssignments ? 100 : 0);
+            const hwStatus = hwRemaining > 0
+                ? (hwOverdue > 0 || hwOverdueAssignments > 0 ? 'overdue' : (hwPendingAssignments > 0 ? 'pending' : 'active'))
+                : (hwDoneAssignments > 0 ? 'done' : 'none');
             const adH = (stats.achievementsData || state.achievementsData || {});
             const hwOnTimeTotal = Number(adH.hwOnTime || 0);
             const hwLateTotal   = Number(adH.hwLate || 0);
@@ -1026,8 +1064,8 @@
             // ── Разбор ошибок: где ученик сейчас чаще ошибается (актуальный пул) ──
             const mistakesPool = Array.isArray(state.mistakesPool) ? state.mistakesPool
                                : (Array.isArray(stats.mistakesPool) ? stats.mistakesPool : []);
-            const labelField = { task3: 'process', task4: 'event', task5: 'event', task7: 'culture' };
-            const mistakesByTask = { task3: 0, task4: 0, task5: 0, task7: 0 };
+            const labelField = { task1: 'event', task3: 'process', task4: 'event', task5: 'event', task7: 'culture' };
+            const mistakesByTask = { task1: 0, task3: 0, task4: 0, task5: 0, task7: 0 };
             const mistakeList = [];
             mistakesPool.forEach(m => {
                 if (!m || !m.fact) return;
@@ -1042,6 +1080,8 @@
                      daysSinceActive, isToday: daysSinceActive === 0, atRisk: daysSinceActive >= 3,
                      lastActiveStr, weakEra, totalCorrect, totalAttempts, hwRemaining, hwDeadline,
                      hwOverdue, hwDoneOnTime, hwDoneLate, hwOnTimeTotal, hwLateTotal, hwStreakMax,
+                     hwTotalUnits, hwProgressPct, hwStatus, hwOpenAssignments, hwDoneAssignments,
+                     hwTotalAssignments, hwActiveAssignments, hwPendingAssignments, hwOverdueAssignments, hwStartedAssignments,
                      mistakesByTask, mistakeTotal: mistakeList.length, mistakeList, solvedByTask };
         }
 
@@ -1079,6 +1119,7 @@
                 const dayIdx = (new Date(d.date).getDay() + 6) % 7;
                 const dateStr = new Date(d.date).toLocaleDateString('ru-RU', {day:'2-digit', month:'2-digit'});
                 const parts = [];
+                if (d.t1) parts.push(`<span style="color:#0891b2">⏳${d.t1}</span>`);
                 if (d.t4) parts.push(`<span style="color:var(--c-brand)">📍${d.t4}</span>`);
                 if (d.t5) parts.push(`<span style="color:var(--c-purple)">👤${d.t5}</span>`);
                 if (d.t7) parts.push(`<span style="color:var(--c-warn)">🎨${d.t7}</span>`);
@@ -1112,7 +1153,7 @@
             const weakBlock = s.weakEra
                 ? `<div style="margin-top:6px;font-size:10px;color:#9ca3af;font-weight:700">📍 Слабая тема: <span style="color:var(--c-danger-soft)">${s.weakEra.name} — ${s.weakEra.pct}%</span></div>` : '';
             const _sbt = s.solvedByTask || {}, _mbt = s.mistakesByTask || {};
-            const _tm = [['task3','🔗'],['task4','📍'],['task5','👤'],['task7','🎨']];
+            const _tm = [['task1','⏳'],['task3','🔗'],['task4','📍'],['task5','👤'],['task7','🎨']];
             const solvedRow = _tm.map(([t,e]) => `<span>${e}<b style="color:var(--c-brand);margin-left:2px">${_sbt[t]||0}</b></span>`).join('');
             const mistRow = _tm.map(([t,e]) => `<span>${e}<b style="color:${(_mbt[t]||0)>0?'var(--c-danger)':'#94a3b8'};margin-left:2px">${_mbt[t]||0}</b></span>`).join('');
 
@@ -1179,14 +1220,128 @@
 
         window._cachedStudents = [];
 
+        window._teacherHwFilter = window._teacherHwFilter || 'problem';
+        function renderTeacherHwControl(students) {
+            const cont = document.getElementById('teacher-hw-control');
+            if (!cont) return;
+            const esc = t => String(t || '').replace(/[<>&"]/g, c => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;', '"': '&quot;' }[c]));
+            const js = t => String(t || '')
+                .replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]))
+                .replace(/\\/g, '\\\\')
+                .replace(/'/g, "\\'");
+            const rows = (students || []).filter(s => (s.hwStatus && s.hwStatus !== 'none') || (s.hwRemaining || 0) > 0 || (s.hwTotalAssignments || 0) > 0);
+            if (!rows.length) {
+                cont.classList.remove('hidden');
+                const hasStudents = Array.isArray(students) && students.length > 0;
+                cont.innerHTML = `
+                  <div class="bg-white dark:bg-[#1e1e1e] border border-rose-200 dark:border-rose-900/40 rounded-xl overflow-hidden shadow-sm">
+                    <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;padding:11px 12px">
+                        <div>
+                            <div class="dark:text-gray-100" style="font-size:13px;font-weight:900;color:#111827">Контроль ДЗ</div>
+                            <div style="font-size:10px;color:#64748b;font-weight:700;margin-top:1px">${hasStudents ? 'У загруженных учеников сейчас нет выданных ДЗ' : 'Загрузите учеников класса, чтобы увидеть выполнение ДЗ'}</div>
+                        </div>
+                        <button onclick="window.openClassAssignmentsList&&window.openClassAssignmentsList()" style="background:#fff1f2;color:#be123c;border:1px solid #fecdd3;border-radius:10px;padding:8px 10px;font-size:10px;font-weight:900;cursor:pointer;white-space:nowrap">список ДЗ</button>
+                    </div>
+                  </div>`;
+                return;
+            }
+            cont.classList.remove('hidden');
+
+            const meta = {
+                overdue: { title: 'Просрочили', short: 'просрочено', icon: '🔴', color: '#dc2626', bg: '#fef2f2', border: '#fecaca' },
+                pending: { title: 'Не приняли', short: 'не принято', icon: '🟠', color: '#d97706', bg: '#fffbeb', border: '#fde68a' },
+                active:  { title: 'В работе', short: 'в работе', icon: '🔵', color: '#2563eb', bg: '#eff6ff', border: '#bfdbfe' },
+                done:    { title: 'Сдали', short: 'сдано', icon: '🟢', color: '#059669', bg: '#ecfdf5', border: '#bbf7d0' },
+                none:    { title: 'Без ДЗ', short: 'без ДЗ', icon: '⚪', color: '#64748b', bg: '#f8fafc', border: '#e2e8f0' }
+            };
+            const rank = s => ({ overdue: 0, pending: 1, active: 2, done: 3, none: 4 }[s.hwStatus] ?? 4);
+            const byStatus = key => rows.filter(s => (s.hwStatus || 'none') === key).length;
+            const problemCount = byStatus('overdue') + byStatus('pending') + byStatus('active');
+            const filter = window._teacherHwFilter || 'problem';
+            const btn = (key, label, count, color) => {
+                const active = filter === key;
+                return `<button onclick="window.setTeacherHwFilter('${key}')" style="border:1px solid ${active ? color : 'rgba(148,163,184,.35)'};background:${active ? color : 'rgba(255,255,255,.72)'};color:${active ? '#fff' : '#475569'};border-radius:10px;padding:8px 7px;text-align:center;cursor:pointer;min-width:0">
+                    <div style="font-size:16px;font-weight:900;line-height:1">${count}</div>
+                    <div style="font-size:8px;font-weight:900;text-transform:uppercase;letter-spacing:.04em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${label}</div>
+                </button>`;
+            };
+            let shown = rows;
+            if (filter === 'problem') shown = rows.filter(s => ['overdue', 'pending', 'active'].includes(s.hwStatus));
+            else if (filter !== 'all') shown = rows.filter(s => (s.hwStatus || 'none') === filter);
+            shown = shown.sort((a, b) =>
+                rank(a) - rank(b) ||
+                (b.hwRemaining || 0) - (a.hwRemaining || 0) ||
+                ((a.hwDeadline ? Date.parse(a.hwDeadline) : Infinity) - (b.hwDeadline ? Date.parse(b.hwDeadline) : Infinity)) ||
+                String(a.name || '').localeCompare(String(b.name || ''), 'ru')
+            ).slice(0, 18);
+
+            const rowHtml = shown.length ? shown.map(s => {
+                const m = meta[s.hwStatus] || meta.none;
+                const pct = s.hwStatus === 'done' ? 100 : (s.hwProgressPct || 0);
+                const safeUid = js(s.uid);
+                const safeName = js(s.name || 'Ученик');
+                const deadline = s.hwDeadline ? 'до ' + new Date(s.hwDeadline + 'T00:00:00').toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' }) : 'без срока';
+                const rest = (s.hwRemaining || 0) > 0 ? `осталось ${s.hwRemaining}` : 'готово';
+                const note = s.hwStatus === 'pending' ? 'задание ещё не открыл'
+                    : (s.hwStatus === 'active' && !(s.hwStartedAssignments || 0) ? 'ещё не начал'
+                    : (s.hwStatus === 'done' ? `${s.hwDoneAssignments || 1} ДЗ сдано` : `${s.hwOpenAssignments || 1} ДЗ открыто`));
+                return `<div style="display:flex;align-items:center;gap:9px;padding:9px 0;border-top:1px solid rgba(226,232,240,.8)">
+                    <div style="width:34px;height:34px;border-radius:10px;background:${m.bg};border:1px solid ${m.border};display:flex;align-items:center;justify-content:center;flex-shrink:0">${m.icon}</div>
+                    <div style="flex:1;min-width:0">
+                        <div style="display:flex;align-items:center;gap:6px;min-width:0">
+                            <div class="dark:text-gray-200" style="font-size:12px;font-weight:900;color:#0f172a;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(s.name || 'Без имени')}</div>
+                            <span style="font-size:9px;font-weight:900;color:${m.color};background:${m.bg};border:1px solid ${m.border};border-radius:999px;padding:2px 6px;white-space:nowrap">${m.short}</span>
+                        </div>
+                        <div style="display:flex;align-items:center;gap:7px;margin-top:5px">
+                            <div style="flex:1;height:6px;background:#e5e7eb;border-radius:999px;overflow:hidden"><div style="height:100%;width:${pct}%;background:${m.color};border-radius:999px"></div></div>
+                            <span style="font-size:10px;font-weight:900;color:${m.color};min-width:34px;text-align:right">${pct}%</span>
+                        </div>
+                        <div style="font-size:9px;color:#64748b;font-weight:700;margin-top:3px">${rest} · ${deadline} · ${note}</div>
+                    </div>
+                    <button onclick="window.openStudentAssignmentsList&&window.openStudentAssignmentsList('${safeUid}','${safeName}')" style="flex-shrink:0;background:#eef2ff;color:#4338ca;border:none;border-radius:10px;padding:8px 9px;font-size:10px;font-weight:900;cursor:pointer">ДЗ</button>
+                </div>`;
+            }).join('') : `<div style="padding:12px 0;text-align:center;font-size:11px;font-weight:800;color:#059669;border-top:1px solid rgba(226,232,240,.8)">По выбранному фильтру пусто</div>`;
+
+            const titleMap = { problem: 'Кому нужно внимание', overdue: 'Просрочили', pending: 'Не приняли задание', active: 'В работе', done: 'Сдали', all: 'Все с ДЗ' };
+            cont.innerHTML = `
+              <div class="bg-white dark:bg-[#1e1e1e] border border-rose-200 dark:border-rose-900/40 rounded-xl overflow-hidden shadow-sm">
+                <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;padding:11px 12px;border-bottom:1px solid rgba(254,205,211,.75)">
+                    <div>
+                        <div class="dark:text-gray-100" style="font-size:13px;font-weight:900;color:#111827">Контроль ДЗ</div>
+                        <div style="font-size:10px;color:#64748b;font-weight:700;margin-top:1px">быстро видно, кто сдал, кто завис и кто просрочил</div>
+                    </div>
+                    <button onclick="var s=document.getElementById('teacher-sort-select');if(s){s.value='homework';window.sortAndRenderStudents&&window.sortAndRenderStudents();}" style="background:#fff1f2;color:#be123c;border:1px solid #fecdd3;border-radius:10px;padding:8px 10px;font-size:10px;font-weight:900;cursor:pointer;white-space:nowrap">долги ↑</button>
+                </div>
+                <div style="display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:6px;padding:10px 10px 8px">
+                    ${btn('problem', 'надо проверить', problemCount, '#be123c')}
+                    ${btn('overdue', 'просрочили', byStatus('overdue'), meta.overdue.color)}
+                    ${btn('pending', 'не приняли', byStatus('pending'), meta.pending.color)}
+                    ${btn('active', 'в работе', byStatus('active'), meta.active.color)}
+                    ${btn('done', 'сдали', byStatus('done'), meta.done.color)}
+                </div>
+                <div style="padding:0 12px 10px">
+                    <div style="display:flex;align-items:center;justify-content:space-between;margin:2px 0 5px">
+                        <div style="font-size:10px;color:#94a3b8;font-weight:900;text-transform:uppercase;letter-spacing:.06em">${titleMap[filter] || 'ДЗ'}</div>
+                        <button onclick="window.setTeacherHwFilter('all')" style="background:none;border:none;color:#64748b;font-size:10px;font-weight:900;cursor:pointer">показать все</button>
+                    </div>
+                    ${rowHtml}
+                </div>
+              </div>`;
+        }
+        window.renderTeacherHwControl = renderTeacherHwControl;
+        window.setTeacherHwFilter = function(filter) {
+            window._teacherHwFilter = filter || 'problem';
+            renderTeacherHwControl(window._cachedStudents || []);
+        };
+
         // Сводная аналитика по всему классу/курсу
         function renderClassAnalytics(students) {
             const cont = document.getElementById('teacher-class-analytics');
             if (!cont) return;
             if (!students || !students.length) { cont.innerHTML = '<p style="font-size:10px;color:#94a3b8;text-align:center;padding:6px 0">Нет данных</p>'; return; }
 
-            const solved = { task3:0, task4:0, task5:0, task7:0 };
-            const mistByTask = { task3:0, task4:0, task5:0, task7:0 };
+            const solved = { task1:0, task3:0, task4:0, task5:0, task7:0 };
+            const mistByTask = { task1:0, task3:0, task4:0, task5:0, task7:0 };
             const eraAgg = {};
             const mistByKey = {};
             let hwDone = 0, hwAssigned = 0, accNumer = 0, accDenom = 0;
@@ -1196,11 +1351,11 @@
             const isOverdue = dl => dl ? (new Date(dl + 'T23:59:59').getTime() < nowTs) : false;
 
             students.forEach(s => {
-                ['task3','task4','task5','task7'].forEach(t => { solved[t] += (s.solvedByTask?.[t]||0); mistByTask[t] += (s.mistakesByTask?.[t]||0); });
+                TEXT_TASK_KEYS.forEach(t => { solved[t] += (s.solvedByTask?.[t]||0); mistByTask[t] += (s.mistakesByTask?.[t]||0); });
                 if (s.totalAttempts) { accNumer += s.totalCorrect||0; accDenom += s.totalAttempts||0; }
                 Object.entries(s.eraData||{}).forEach(([k,e]) => { if (e && e.total) { (eraAgg[k] = eraAgg[k]||{name:e.name,c:0,t:0}); eraAgg[k].c += e.correct||0; eraAgg[k].t += e.total||0; } });
                 (s.mistakeList||[]).forEach(m => { const key = m.task+'|'+m.label; (mistByKey[key] = mistByKey[key]||{count:0,task:m.task,label:m.label}); mistByKey[key].count++; });
-                if (s.hwDeadline) { hwAssigned++; if ((s.hwRemaining||0)===0) hwDone++; }
+                if ((s.hwTotalAssignments || 0) > 0) { hwAssigned++; if (s.hwStatus === 'done') hwDone++; }
                 hwOnTimeSum += (s.hwOnTimeTotal||0); hwLateSum += (s.hwLateTotal||0);
                 if ((s.hwRemaining||0) > 0) debtors.push({ name: s.name || 'Без имени', remaining: s.hwRemaining, deadline: s.hwDeadline, overdue: isOverdue(s.hwDeadline) });
             });
@@ -1210,10 +1365,10 @@
 
             const classAcc = accDenom >= 10 ? Math.round(accNumer/accDenom*100) : null;
             const topMistakes = Object.values(mistByKey).sort((a,b)=>b.count-a.count).slice(0,10);
-            const em = { task3:'🔗', task4:'📍', task5:'👤', task7:'🎨' };
+            const em = TEXT_TASK_EMOJI;
             const esc = t => String(t||'').replace(/[<>&]/g, c => ({'<':'&lt;','>':'&gt;','&':'&amp;'}[c]));
 
-            const solvedHtml = ['task3','task4','task5','task7'].map(t =>
+            const solvedHtml = TEXT_TASK_KEYS.map(t =>
                 `<div style="text-align:center"><div style="font-size:15px">${em[t]}</div><div style="font-size:13px;font-weight:900;color:var(--c-brand)">${solved[t]}</div><div style="font-size:8px;color:${mistByTask[t]>0?'var(--c-danger)':'#94a3b8'}">−${mistByTask[t]}</div></div>`).join('');
 
             const eraHtml = ['early','18th','19th','20th'].filter(k=>eraAgg[k]).map(k => {
@@ -1228,7 +1383,7 @@
             // ── Прогресс выучивания: сколько фактов из общего пула выучил каждый ученик ──
             let totalPool = 0;
             if (typeof TASK_CONFIG !== 'undefined') {
-                ['task3','task4','task5','task7'].forEach(tk => {
+                TEXT_TASK_KEYS.forEach(tk => {
                     const cfg = TASK_CONFIG[tk];
                     if (cfg && cfg.data) {
                         const seen = new Set();
@@ -1249,7 +1404,7 @@
 
             cont.innerHTML = `
               <div style="font-size:9px;color:#94a3b8;font-weight:700;text-transform:uppercase;margin:2px 0 4px">Решено по заданиям (− активные ошибки)</div>
-              <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-bottom:8px">${solvedHtml}</div>
+              <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:6px;margin-bottom:8px">${solvedHtml}</div>
               ${(classAcc!==null || hwAssigned) ? `<div style="font-size:10px;color:#64748b;font-weight:700;margin-bottom:6px">${classAcc!==null?`Средняя точность класса: <b style="color:${classAcc>=80?'var(--c-success)':classAcc>=60?'var(--c-warn)':'var(--c-danger-soft)'}">${classAcc}%</b>`:''}${hwAssigned?`${classAcc!==null?' · ':''}ДЗ сдали: <b style="color:#16a34a">${hwDone}/${hwAssigned}</b>`:''}</div>`:''}
               ${hwTimingTotal ? `<div style="font-size:10px;color:#64748b;font-weight:700;margin-bottom:6px">⏱ Сдают вовремя: <b style="color:${hwOnTimePct>=80?'var(--c-success)':hwOnTimePct>=50?'var(--c-warn)':'var(--c-danger-soft)'}">${hwOnTimePct}%</b> <span style="color:#94a3b8;font-weight:400">(вовремя ${hwOnTimeSum} · с опозданием ${hwLateSum})</span></div>`:''}
               <div style="font-size:9px;color:#94a3b8;font-weight:700;text-transform:uppercase;margin:8px 0 4px">Точность класса по эпохам</div>
@@ -1269,15 +1424,15 @@
         window.downloadClassReportPDF = async function() {
             const students = window._cachedStudents || [];
             if (!students.length) { showToast('⚠️', 'Класс не загружен', 'bg-rose-500', 'border-rose-700'); return; }
-            const solved={task3:0,task4:0,task5:0,task7:0}, mistByTask={task3:0,task4:0,task5:0,task7:0};
+            const solved={task1:0,task3:0,task4:0,task5:0,task7:0}, mistByTask={task1:0,task3:0,task4:0,task5:0,task7:0};
             const eraAgg={}, mistByKey={}; let accN=0,accD=0,hwDone=0,hwAssigned=0,hwOnTimeSum=0,hwLateSum=0; const debtors=[];
             const nowTs=Date.now(); const isOverdue=dl=>dl?new Date(dl+'T23:59:59').getTime()<nowTs:false;
             students.forEach(s=>{
-                ['task3','task4','task5','task7'].forEach(t=>{solved[t]+=(s.solvedByTask?.[t]||0);mistByTask[t]+=(s.mistakesByTask?.[t]||0);});
+                TEXT_TASK_KEYS.forEach(t=>{solved[t]+=(s.solvedByTask?.[t]||0);mistByTask[t]+=(s.mistakesByTask?.[t]||0);});
                 if(s.totalAttempts){accN+=s.totalCorrect||0;accD+=s.totalAttempts||0;}
                 Object.entries(s.eraData||{}).forEach(([k,e])=>{if(e&&e.total){(eraAgg[k]=eraAgg[k]||{name:e.name,c:0,t:0});eraAgg[k].c+=e.correct||0;eraAgg[k].t+=e.total||0;}});
                 (s.mistakeList||[]).forEach(m=>{const key=m.task+'|'+m.label;(mistByKey[key]=mistByKey[key]||{count:0,task:m.task,label:m.label});mistByKey[key].count++;});
-                if(s.hwDeadline){hwAssigned++;if((s.hwRemaining||0)===0)hwDone++;}
+                if((s.hwTotalAssignments||0)>0){hwAssigned++;if(s.hwStatus==='done')hwDone++;}
                 hwOnTimeSum+=(s.hwOnTimeTotal||0); hwLateSum+=(s.hwLateTotal||0);
                 if((s.hwRemaining||0)>0)debtors.push({name:s.name||'Без имени',remaining:s.hwRemaining,overdue:isOverdue(s.hwDeadline)});
             });
@@ -1305,7 +1460,7 @@
             } catch(e){} }
 
             const M=14, PW=210, CW=PW-M*2; let y=M;
-            const em={task3:'№3',task4:'№4',task5:'№5',task7:'№7'};
+            const em=TEXT_TASK_SHORT;
             function need(mm){ if(y+mm>297-M){ doc.addPage(); y=M; } }
             doc.setFillColor(37,99,235); doc.roundedRect(M,y,CW,16,2,2,'F');
             doc.setFont(FONT,'bold'); doc.setFontSize(13); doc.setTextColor(255,255,255);
@@ -1315,7 +1470,7 @@
 
             doc.setFont(FONT,'bold'); doc.setFontSize(11); doc.setTextColor(30,41,59); doc.text('Решено по заданиям', M, y); y+=6;
             doc.setFont(FONT,'normal'); doc.setFontSize(9); doc.setTextColor(51,65,85);
-            ['task3','task4','task5','task7'].forEach(t=>{ doc.text(`${em[t]}: ${solved[t]}  (ошибок ${mistByTask[t]})`, M, y); y+=5; });
+            TEXT_TASK_KEYS.forEach(t=>{ doc.text(`${em[t]}: ${solved[t]}  (ошибок ${mistByTask[t]})`, M, y); y+=5; });
             y+=2; doc.text(`Средняя точность класса: ${classAcc}%${hwAssigned?`    ДЗ сдали: ${hwDone}/${hwAssigned}`:''}`, M, y); y+=5;
             if (hwTimingTotal) { doc.text(`Сдают вовремя: ${hwOnTimePct}%  (вовремя ${hwOnTimeSum} / с опозданием ${hwLateSum})`, M, y); y+=5; }
             y+=3;
@@ -1346,6 +1501,12 @@
                 if (sort === 'streak')    return (b.streak||0)       - (a.streak||0);
                 if (sort === 'learned')   return (b.learnedCount||0) - (a.learnedCount||0);
                 if (sort === 'accuracy')  return (b.accuracy||0)     - (a.accuracy||0);
+                if (sort === 'homework') {
+                    const rank = x => ({ overdue: 0, pending: 1, active: 2, done: 3, none: 4 }[x.hwStatus] ?? 4);
+                    return rank(a) - rank(b)
+                        || (b.hwRemaining || 0) - (a.hwRemaining || 0)
+                        || ((a.hwDeadline ? Date.parse(a.hwDeadline) : Infinity) - (b.hwDeadline ? Date.parse(b.hwDeadline) : Infinity));
+                }
                 if (sort === 'lastActive') return (b.lastActive||0)  - (a.lastActive||0);
                 return (b.totalSolved||0) - (a.totalSolved||0);
             });
@@ -1574,13 +1735,14 @@
                     needSpace(7);
                     doc.setFont(PDF_FONT,'bold'); doc.setFontSize(7.5); doc.setTextColor(244,63,94);
                     doc.text(String(i + 1) + '.', M, y + 2.5);
-                    const taskLabel = m.task === 'task7' ? '№7' : m.task === 'task5' ? '№5' : m.task === 'task3' ? '№3' : '№4';
+                    const taskLabel = TEXT_TASK_SHORT[m.task] || '№4';
                     doc.setFont(PDF_FONT,'bold'); doc.setFontSize(7); doc.setTextColor(100,116,139);
                     doc.text('[' + taskLabel + ']', M + 6, y + 2.5);
                     let mText = '';
                     if (m.task === 'task7') mText = m.fact.culture + ' → ' + m.fact.trait;
                     else if (m.task === 'task5') mText = m.fact.event + ' → ' + m.fact.person;
                     else if (m.task === 'task3') mText = m.fact.process + ' → ' + m.fact.fact;
+                    else if (m.task === 'task1') mText = m.fact.event + ' → ' + m.fact.year;
                     else mText = m.fact.geo + ' | ' + m.fact.year + ' | ' + m.fact.event;
                     doc.setFont(PDF_FONT,'normal'); doc.setFontSize(7.5); doc.setTextColor(30,41,59);
                     const lines = doc.splitTextToSize(mText, CW - 18);
@@ -1645,6 +1807,7 @@
                 const enriched = st.map(s => computeStudentData(s, monStr, monday));
                 enriched.sort((a,b) => (b.totalSolved||0) - (a.totalSolved||0));
                 window._cachedStudents = enriched;
+                renderTeacherHwControl(enriched);
                 renderClassAnalytics(enriched);
 
                 // Сводка
@@ -1685,6 +1848,17 @@
             } catch(e) {
                 console.error(e);
                 cont.innerHTML = '<p class="text-rose-500 text-xs font-bold text-center py-4">Нет подключения к серверу (Офлайн)</p>';
+                const hwCtrl = document.getElementById('teacher-hw-control');
+                if (hwCtrl) {
+                    hwCtrl.classList.remove('hidden');
+                    hwCtrl.innerHTML = `
+                      <div class="bg-white dark:bg-[#1e1e1e] border border-rose-200 dark:border-rose-900/40 rounded-xl overflow-hidden shadow-sm">
+                        <div style="padding:11px 12px">
+                            <div class="dark:text-gray-100" style="font-size:13px;font-weight:900;color:#111827">Контроль ДЗ</div>
+                            <div style="font-size:10px;color:#be123c;font-weight:800;margin-top:2px">Не удалось загрузить данные учеников. Проверьте подключение и обновите кабинет.</div>
+                        </div>
+                      </div>`;
+                }
                 if (wCont) wCont.innerHTML = '';
             }
         };
@@ -1739,7 +1913,7 @@
                                 let computed = 0;
                                 for (const day in ds) {
                                     if (day >= monStr) {
-                                        const perTask = (ds[day].solvedTask4||0)+(ds[day].solvedTask3||0)
+                                        const perTask = (ds[day].solvedTask1||0)+(ds[day].solvedTask4||0)+(ds[day].solvedTask3||0)
                                                   + (ds[day].solvedTask5||0)+(ds[day].solvedTask7||0);
                                         computed += perTask > 0 ? perTask : (ds[day].solved||0);
                                     }
@@ -1820,7 +1994,7 @@
 
         window._assignHwDb = async function(studentId, num, task, deadline, silent) {
             if (!db) return;
-            const taskLabels = { task3: '№3 (Процессы)', task4: '№4 (География)', task5: '№5 (Личности)', task7: '№7 (Культура)' };
+            const taskLabels = { task1: '№1 (Хронология)', task3: '№3 (Процессы)', task4: '№4 (География)', task5: '№5 (Личности)', task7: '№7 (Культура)' };
             const deadlineStr = deadline ? ` до ${new Date(deadline + 'T00:00:00').toLocaleDateString('ru-RU')}` : '';
             // Новая модель: каждое ДЗ — отдельная запись (не затирает и не суммируется со старым)
             const rec = {
@@ -2089,7 +2263,7 @@
         window._assignHwToClassDb = async function(num, task, deadline) {
             const students = (window._cachedStudents || []).filter(s => s.uid);
             if (!students.length) { showToast('⚠️', 'Класс не загружен', 'bg-rose-500', 'border-rose-700'); return; }
-            const taskLabels = { task3: '№3', task4: '№4', task5: '№5', task7: '№7' };
+            const taskLabels = TEXT_TASK_SHORT;
             showToast('⏳', `Выдаю ДЗ ${students.length} ученикам…`, 'bg-blue-500', 'border-blue-700');
             let ok = 0, fail = 0;
             for (const s of students) {
@@ -2146,15 +2320,15 @@
             const st = merged.stats;
 
             ['totalSolvedEver','streak','bestSpeedrunScore','flashcardsSolved','totalTimeSpent',
-             'egePoints','hwFlashcardsToSolve','hwTask3','hwTask4','hwTask5','hwTask7',
+             'egePoints','hwFlashcardsToSolve','hwTask1','hwTask3','hwTask4','hwTask5','hwTask7',
              'visualArchitectureSolved','visualPaintingSolved'].forEach(k => {
                 const hasValue = states.some(s => s.stats?.[k] !== undefined);
                 if (hasValue) st[k] = Math.max(...states.map(s => Number(s.stats?.[k]) || 0));
             });
-            st.solvedByTask = { task3: 0, task4: 0, task5: 0, task7: 0 };
+            st.solvedByTask = { task1: 0, task3: 0, task4: 0, task5: 0, task7: 0 };
             states.forEach(s => {
                 const sbt = s.stats?.solvedByTask || {};
-                ['task3','task4','task5','task7'].forEach(k => { st.solvedByTask[k] = Math.max(st.solvedByTask[k], sbt[k] || 0); });
+                TEXT_TASK_KEYS.forEach(k => { st.solvedByTask[k] = Math.max(st.solvedByTask[k], sbt[k] || 0); });
             });
             st.factStreaks = {};
             states.forEach(s => {
@@ -2207,7 +2381,7 @@
 
         const CLOUD_STATE_FIELDS = [
             'streak','totalSolvedEver','solvedByTask','flashcardsSolved','eraStats','factStreaks',
-            'hwFlashcardsToSolve','hwTask3','hwTask4','hwTask5','hwTask7','totalTimeSpent',
+            'hwFlashcardsToSolve','hwTask1','hwTask3','hwTask4','hwTask5','hwTask7','totalTimeSpent',
             'bestSpeedrunScore','dailyStats','achievements','achievementsData','egePoints',
             'visualArchitectureProgress','visualArchitectureSolved','visualPaintingProgress','visualPaintingSolved'
         ];
@@ -2447,7 +2621,8 @@
             let weeklyEgePoints = 0; // баллы по критериям ЕГЭ за неделю
             for (const d in dStat) {
                 if (d >= monStr2) {
-                    const perTask = (dStat[d].solvedTask4 || 0)
+                    const perTask = (dStat[d].solvedTask1 || 0)
+                                  + (dStat[d].solvedTask4 || 0)
                                   + (dStat[d].solvedTask3 || 0)
                                   + (dStat[d].solvedTask5 || 0)
                                   + (dStat[d].solvedTask7 || 0);

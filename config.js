@@ -18,8 +18,22 @@ const TASK_EPOCH_SHORT = {
     '20th': 'XX в.'
 };
 
-// Единый конфиг заданий — устраняет десятки if/else ветвлений по task3/4/5/7
+// Единый конфиг заданий — устраняет десятки if/else ветвлений по task1/3/4/5/7
 const TASK_CONFIG = {
+    task1: {
+        prefix:    't1_',
+        keyFn:     f => 't1_' + f.id,
+        matchFn:   (a, b) => a.id === b.id,
+        dedupeKey: f => f.id,
+        data:      () => window.task1Data || [],
+        emoji:     '⏳',
+        label:     'Задание №1',
+        shortLabel:'№1',
+        fieldName: 'year',
+        displayField: 'event',
+        tableHeaders: ['📜 Событие', '⏳ Дата'],
+        headerWidths: ['65%', '35%'],
+    },
     task3: {
         prefix:    't3_',
         keyFn:     f => 't3_' + f.process + '|' + f.fact,
@@ -120,7 +134,7 @@ const TASK_CONFIG = {
     },
 };
 
-const TASK_LIST = ['task3', 'task4', 'task5', 'task7'];
+const TASK_LIST = ['task1', 'task3', 'task4', 'task5', 'task7'];
 
 // ── Слой 3: «авторитеты эпохи» (правители/вожди) ──
 // Правитель почти всегда — защитимый ответ для события его правления,

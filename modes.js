@@ -205,7 +205,7 @@ function studyPoolForCurrentTask() {
 
 function pickFlashcardFact(allowed) {
     const sortByYear = $('filter-sort-year') && $('filter-sort-year').checked;
-    if ((window.state.currentTask === 'task7' || isMediaLearningTask(window.state.currentTask)) && sortByYear) {
+    if ((window.state.currentTask === 'task1' || window.state.currentTask === 'task7' || isMediaLearningTask(window.state.currentTask)) && sortByYear) {
         const sorted = [...allowed].sort((a, b) => getYearFromFact(a) - getYearFromFact(b));
         const key = `${window.state.currentTask}|${$('filter-period').value || 'all'}`;
         if (!window._cultureFlashcardCursor) window._cultureFlashcardCursor = {};
@@ -574,14 +574,15 @@ function renderMediaStudyCard(fact, progressText) {
 }
 
 // Лицевая сторона (обычный режим) — «название».
-const FC_LABEL = { task3: 'Процесс', task4: 'Событие', task5: 'Участник', task7: 'Памятник культуры' };
-const FC_TITLE = { task3: f => f.process, task4: f => f.event, task5: f => f.person, task7: f => f.culture };
+const FC_LABEL = { task1: 'Событие', task3: 'Процесс', task4: 'Событие', task5: 'Участник', task7: 'Памятник культуры' };
+const FC_TITLE = { task1: f => f.event, task3: f => f.process, task4: f => f.event, task5: f => f.person, task7: f => f.culture };
 // Лицевая сторона в перевёрнутом режиме — спрашиваем название по факту.
-const FC_REVERSE_LABEL = { task3: 'Назови процесс', task4: 'Назови событие', task5: 'Назови личность', task7: 'Назови памятник' };
+const FC_REVERSE_LABEL = { task1: 'Назови событие', task3: 'Назови процесс', task4: 'Назови событие', task5: 'Назови личность', task7: 'Назови памятник' };
 
 // HTML «детали» (оборот в обычном режиме / лицо в перевёрнутом): год, место, событие, характеристика.
 function _fcDetailContent(fact, task) {
     const contentMap = {
+        task1: () => `<div class="bg-white dark:bg-[#181818]/50 p-5 rounded-2xl shadow-sm border border-cyan-100 dark:border-[#2c2c2c] w-full text-center"><span class="text-[10px] text-gray-400 uppercase font-black block mb-1 tracking-widest">Дата</span><span class="text-2xl font-black text-cyan-700 dark:text-cyan-300">${fact.year}</span></div>`,
         task3: () => `<div class="bg-white dark:bg-[#181818]/50 p-5 rounded-2xl shadow-sm border border-emerald-100 dark:border-[#2c2c2c] w-full text-center mb-3"><span class="text-[10px] text-gray-400 uppercase font-black block mb-1 tracking-widest">Факт</span><span class="text-[14px] font-bold text-emerald-700 dark:text-emerald-400 leading-relaxed">${fact.fact}</span></div><div class="bg-white dark:bg-[#181818]/50 p-4 rounded-2xl shadow-sm border border-blue-100 dark:border-[#2c2c2c] w-full text-center"><span class="text-[10px] text-gray-400 uppercase font-black block mb-1 tracking-widest">Год</span><span class="text-2xl font-black text-examBlue dark:text-blue-300">${fact.year}</span></div>`,
         task4: () => {
             let mapLink = '';
@@ -596,7 +597,7 @@ function _fcDetailContent(fact, task) {
 
 // HTML «название» как ответ (оборот в перевёрнутом режиме). Цвета — инлайном, чтобы не зависеть от purge Tailwind.
 function _fcTitleAnswerHtml(fact, task) {
-    const palette = { task3: '#059669', task4: '#2563eb', task5: '#9333ea', task7: '#d97706' };
+    const palette = { task1: '#0891b2', task3: '#059669', task4: '#2563eb', task5: '#9333ea', task7: '#d97706' };
     const col = palette[task] || '#2563eb';
     const title = (FC_TITLE[task] || FC_TITLE.task4)(fact);
     return `<div class="bg-white dark:bg-[#181818]/50 p-5 rounded-2xl shadow-sm border border-gray-100 dark:border-[#2c2c2c] w-full text-center"><span class="text-[10px] text-gray-400 uppercase font-black block mb-1 tracking-widest">${FC_LABEL[task] || 'Ответ'}</span><span class="text-xl sm:text-2xl font-bold leading-relaxed" style="color:${col}">${title}</span></div>`;
@@ -816,21 +817,22 @@ window.renderStudyCard = function() {
         $('study-area').innerHTML = tabs + renderMediaStudyCard(it, progressText);
         return;
     }
-    const labelMap = { task3: 'Процесс → Факт', task4: 'География', task5: 'Личность', task7: 'Культура' };
+    const labelMap = { task1: 'Хронология', task3: 'Процесс → Факт', task4: 'География', task5: 'Личность', task7: 'Культура' };
     const titleMap = {
+        task1: it => it.event,
         task3: it => `${it.year} г. • ${it.process}`,
         task4: it => `${it.year} г. • ${it.geo}`,
         task5: it => `${it.year} • ${it.person}`,
         task7: it => `${it.culture}`,
     };
-    const descMap = { task3: it => it.fact, task4: it => it.event, task5: it => it.event, task7: it => it.trait };
+    const descMap = { task1: it => it.year, task3: it => it.fact, task4: it => it.event, task5: it => it.event, task7: it => it.trait };
 
     const e = ['📜','⚔️','🛡️','👑','🚂','🚀','🏛️','🗺️','💡','🎨','⚓'];
     const b = ['from-blue-500 to-purple-600','from-emerald-400 to-teal-600','from-orange-400 to-rose-500','from-indigo-500 to-blue-600'];
     const tpl = $('study-card-template').content.cloneNode(true);
 
     tpl.querySelector('.st-bg').className = `h-32 sm:h-40 flex items-center justify-center text-7xl shadow-inner transition-colors bg-gradient-to-br ${b[Math.floor(Math.random() * b.length)]}`;
-    tpl.querySelector('.st-emoji').innerText = task === 'task7' ? '🎨' : (task === 'task3' ? '🔗' : e[Math.floor(Math.random() * e.length)]);
+    tpl.querySelector('.st-emoji').innerText = task === 'task1' ? '⏳' : (task === 'task7' ? '🎨' : (task === 'task3' ? '🔗' : e[Math.floor(Math.random() * e.length)]));
     tpl.querySelector('.st-label').innerText = labelMap[task] || 'Событие';
     tpl.querySelector('.st-title').innerText = titleMap[task](it);
     tpl.querySelector('.st-desc').innerText = descMap[task](it);

@@ -58,6 +58,7 @@ window.openMapModal = function(geo) {
 window._hwComposer = null;
 
 const HWC_TASKS = [
+    { v: 'task1', t: '⏳ №1 Хронология' },
     { v: 'task4', t: '📍 №4 География' },
     { v: 'task3', t: '🔗 №3 Процессы' },
     { v: 'task5', t: '👤 №5 Личности' },
@@ -103,7 +104,7 @@ window.openHwComposer = function(target) {
 // ─── Список выданных ДЗ + отмена (вариант А): весь класс или конкретный ученик ───
 let _hwListCache = [];
 let _hwlCtx = { mode: 'class', code: '', uid: '', name: '' };
-const _HWL_TASK = { task3: '🔗№3', task4: '📍№4', task5: '👤№5', task7: '🎨№7', cram: '⚡Зубрёжка' };
+const _HWL_TASK = { task1: '⏳№1', task3: '🔗№3', task4: '📍№4', task5: '👤№5', task7: '🎨№7', cram: '⚡Зубрёжка' };
 const _HWL_UNIT = { lines: 'строк', points: 'баллов', learned: 'фактов' };
 function _hwlEsc(s) { return String(s == null ? '' : s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c])); }
 function _hwlItemSummary(it) {
@@ -397,7 +398,7 @@ function _renderHwComposer() {
         ? `Весь класс — ${c.target.count} ${c.target.count === 1 ? 'ученик' : 'учеников'}`
         : c.target.name;
     const metricUnit = { lines: 'строк', points: 'баллов', learned: 'фактов' };
-    const taskShort = { task3: '🔗№3', task4: '📍№4', task5: '👤№5', task7: '🎨№7', cram: '⚡Зубрёжка' };
+    const taskShort = { task1: '⏳№1', task3: '🔗№3', task4: '📍№4', task5: '👤№5', task7: '🎨№7', cram: '⚡Зубрёжка' };
     const periodShort = Object.fromEntries(HWC_PERIODS.map(p => [p.v, p.t]));
     const itemScope = it => it.task === 'cram'
         ? (it.yearStart && it.yearEnd ? `даты ${it.yearStart}–${it.yearEnd} гг.` : 'даты (любые блоки)')
@@ -708,6 +709,7 @@ window.startHwFromBanner = function() {
     haptic('light');
     const s = window.state.stats;
     const tasks = [
+        { key: 'task1', cnt: s.hwTask1||0 },
         { key: 'task3', cnt: s.hwTask3||0 },
         { key: 'task4', cnt: s.hwTask4||0 },
         { key: 'task5', cnt: s.hwTask5||0 },
@@ -721,6 +723,7 @@ window.showHwTasksSequential = function() {
     haptic('light');
     const s = window.state.stats;
     const tasks = [];
+    if ((s.hwTask1||0) > 0) tasks.push({ key: 'task1', emoji: '⏳', name: 'Задание №1 — Хронология', cnt: s.hwTask1 });
     if ((s.hwTask3||0) > 0) tasks.push({ key: 'task3', emoji: '🔗', name: 'Задание №3 — Процессы', cnt: s.hwTask3 });
     if ((s.hwTask4||0) > 0) tasks.push({ key: 'task4', emoji: '📍', name: 'Задание №4 — География', cnt: s.hwTask4 });
     if ((s.hwTask5||0) > 0) tasks.push({ key: 'task5', emoji: '👤', name: 'Задание №5 — Личности', cnt: s.hwTask5 });
@@ -781,6 +784,7 @@ window.showHwTasksSequential = function() {
 
 // ── Вкладка «ДЗ» ученика: набор подзаданий (этапов) с автопереходом ──
 const HW_TASK_META = {
+    task1: { emoji: '⏳', name: 'Задание №1 — Хронология' },
     task3: { emoji: '🔗', name: 'Задание №3 — Процессы' },
     task4: { emoji: '📍', name: 'Задание №4 — География' },
     task5: { emoji: '👤', name: 'Задание №5 — Личности' },
@@ -859,8 +863,11 @@ window.updateGamePeriodChip = function() {
 // Сколько дат в диапазоне для зубрёжки: данные дат лежат в cram.html (<script id="app-data">),
 // поэтому подгружаем их один раз и считаем тем же правилом, что и buildPeriodDeck в тренажёре.
 let _cramEventsCache = null;
+let _cramEventsPromise = null;
 async function _loadCramEvents() {
     if (_cramEventsCache) return _cramEventsCache;
+    if (_cramEventsPromise) return _cramEventsPromise;
+    _cramEventsPromise = (async () => {
     try {
         const html = await (await fetch('cram.html', { cache: 'force-cache' })).text();
         const m = html.match(/<script[^>]*id="app-data"[^>]*>([\s\S]*?)<\/script>/);
@@ -868,6 +875,8 @@ async function _loadCramEvents() {
         _cramEventsCache = (data.events || []).filter(e => !e.isVov);
     } catch (e) { console.error('cramDateCount: не удалось загрузить даты', e); _cramEventsCache = []; }
     return _cramEventsCache;
+    })();
+    return _cramEventsPromise;
 }
 function _cramEventYear(e) {
     const pick = s => { const m = (String(s || '').match(/\d{3,4}/g) || []).map(Number).filter(y => y >= 800 && y <= 2100); return m.length ? m[0] : null; };
@@ -879,6 +888,25 @@ function _cramEventYear(e) {
 window.cramDateCount = async function(from, to) {
     const evs = await _loadCramEvents();
     return evs.filter(e => { const y = _cramEventYear(e); return y != null && y >= from && y <= to; }).length;
+};
+function _refreshCramDependentUi() {
+    if (window.refreshHwState) window.refreshHwState();
+    if (window.updateGlobalUI) window.updateGlobalUI();
+    if (window.updateHwNavBadge) window.updateHwNavBadge();
+    const teacherModal = document.getElementById('teacher-modal');
+    if (teacherModal && !teacherModal.classList.contains('hidden') && window.loadClassProgress) window.loadClassProgress();
+}
+window.cramEventIdsInRange = function(from, to) {
+    const a = Number(from), b = Number(to);
+    if (!Number.isFinite(a) || !Number.isFinite(b)) return null;
+    if (!_cramEventsCache) {
+        _loadCramEvents().then(_refreshCramDependentUi);
+        return null;
+    }
+    const lo = Math.min(a, b), hi = Math.max(a, b);
+    return new Set(_cramEventsCache
+        .filter(e => { const y = _cramEventYear(e); return y != null && y >= lo && y <= hi; })
+        .map(e => String(e.id)));
 };
 function _ruDates(n) {
     const a = Math.abs(n) % 100, b = n % 10;
@@ -945,11 +973,16 @@ window.cramMastered = function(payload) {
 };
 
 // Сколько фактов зубрёжки выучено (для ДЗ-метрики). Опционально по префиксу колоды.
-window.cramLearnedCount = function(deckPrefix) {
+window.cramLearnedCount = function(deckPrefixOrFrom, maybeTo) {
     const fs = (window.state && window.state.stats && window.state.stats.factStreaks) || {};
+    const isRange = Number.isFinite(Number(deckPrefixOrFrom)) && Number.isFinite(Number(maybeTo));
+    const rangeIds = isRange ? window.cramEventIdsInRange(deckPrefixOrFrom, maybeTo) : null;
+    const deckPrefix = isRange ? null : deckPrefixOrFrom;
     let n = 0;
     for (const k in fs) {
         if (k.indexOf('cram:') !== 0) continue;
+        if (rangeIds && !rangeIds.has(k.slice(5))) continue;
+        if (isRange && !rangeIds) continue;
         if (deckPrefix && k.indexOf('cram:' + deckPrefix) !== 0) continue;
         if (window.isFactLearned && window.isFactLearned(fs[k])) n++;
     }
@@ -1257,6 +1290,7 @@ window.openEGEModal = function() {
 
     const rows = [
         { label:'База', val:'+20', pct:29, color:'#888' },
+        { label:'Задание №1 (хронология)', val:'+'+Math.round(r.s1), pct:Math.round((r.s1/10)*100), color:'#0891b2' },
         { label:'Задание №4 (факты)', val:'+'+Math.round(r.s4), pct:Math.round((r.s4/20)*100), color:'#185FA5' },
         { label:'Задание №3 (процессы)', val:'+'+Math.round(r.s3), pct:Math.round((r.s3/17)*100), color:'#1D9E75' },
         { label:'Задание №5 (даты)', val:'+'+Math.round(r.s5), pct:Math.round((r.s5/16)*100), color:'var(--c-purple)' },
@@ -1288,10 +1322,11 @@ window.openEGEModal = function() {
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
         ${(function(){
           const mx4 = typeof bigData !== 'undefined' ? bigData.length : 500;
+          const mx1 = typeof task1Data !== 'undefined' ? task1Data.length : (window.task1Data || []).length || 150;
           const mx5 = typeof task5Data !== 'undefined' ? task5Data.length : 250;
           const mx3 = typeof task3Data !== 'undefined' ? task3Data.length : 150;
           const mx7 = typeof window.task7Data !== 'undefined' ? window.task7Data.length : 180;
-          return [['📍 №4',r.d4,mx4,'#185FA5'],['👤 №5',r.d5,mx5,'var(--c-purple)'],['🔗 №3',r.d3,mx3,'#1D9E75'],['🎨 №7',r.d7,mx7,'#d97706']].map(([lbl,cnt,mx,clr])=>`
+          return [['⏳ №1',r.d1,mx1,'#0891b2'],['📍 №4',r.d4,mx4,'#185FA5'],['👤 №5',r.d5,mx5,'var(--c-purple)'],['🔗 №3',r.d3,mx3,'#1D9E75'],['🎨 №7',r.d7,mx7,'#d97706']].map(([lbl,cnt,mx,clr])=>`
           <div style="background:rgba(128,128,128,0.07);border-radius:8px;padding:8px 10px">
             <div style="font-size:11px;color:#888;margin-bottom:4px">${lbl}</div>
             <div style="font-size:16px;font-weight:700;color:${clr}">${cnt}<span style="font-size:10px;font-weight:400;color:#aaa"> / ${mx}</span></div>
@@ -1338,7 +1373,7 @@ function updateGlobalUI() {
 
     let totalCorrect = 0, totalAttempts = 0;
     const es = window.state.stats.eraStats || {};
-    ['task3','task4','task5','task7'].forEach(tk => {
+    ['task1','task3','task4','task5','task7'].forEach(tk => {
         ['early','18th','19th','20th'].forEach(era => {
             const e = (es[tk] || {})[era] || {};
             totalCorrect += e.correct || 0;
@@ -1354,6 +1389,7 @@ function updateGlobalUI() {
     const hwTotal = window.state.stats.hwFlashcardsToSolve || 0;
     const hwMode = hwTotal > 0 ? {
         total: hwTotal,
+        t1: window.state.stats.hwTask1 || 0,
         t3: window.state.stats.hwTask3 || 0,
         t4: window.state.stats.hwTask4 || 0,
         t5: window.state.stats.hwTask5 || 0,
@@ -1383,6 +1419,7 @@ function updateGlobalUI() {
     updateText($('modal-stat-mistakes'), window.state.mistakesPool.length);
 
     const sbt = window.state.stats.solvedByTask || {};
+    if ($('modal-stat-task1')) updateText($('modal-stat-task1'), sbt.task1 || 0);
     if ($('modal-stat-task3')) $('modal-stat-task3').textContent = sbt.task3 || 0;
     if ($('modal-stat-task4')) updateText($('modal-stat-task4'), sbt.task4 || 0);
     if ($('modal-stat-task5')) updateText($('modal-stat-task5'), sbt.task5 || 0);
@@ -1447,6 +1484,7 @@ window.openStatsModal = function() {
     updateGlobalUI();
     if ($('stats-era-container')) {
         const tasks = [
+            { key: 'task1', label: '⏳ Задание №1', color: 'text-cyan-600 dark:text-cyan-400' },
             { key: 'task3', label: '🔗 Задание №3', color: 'text-emerald-600 dark:text-emerald-400' },
             { key: 'task4', label: '📍 Задание №4', color: 'text-blue-600 dark:text-blue-400' },
             { key: 'task5', label: '👤 Задание №5', color: 'text-purple-600 dark:text-purple-400' },
@@ -1476,7 +1514,7 @@ window.openStatsModal = function() {
         });
         $('stats-era-container').innerHTML = eH || '<p class="text-[11px] font-bold text-gray-400 uppercase tracking-widest text-center py-4">Ещё нет данных</p>';
     }
-    if ($('stats-daily-container')) { const dStat = window.state.stats.dailyStats || {}; const dts = Object.keys(dStat).sort((a,b) => new Date(b) - new Date(a)).slice(0, 7); if (dts.length > 0) { let dH = ''; dts.forEach(d => { const day = dStat[d]; const mins = Math.floor((day.timeSpent || 0) / 60); const t3 = day.solvedTask3 || 0; const t4 = day.solvedTask4 || 0; const t5 = day.solvedTask5 || 0; const t7 = day.solvedTask7 || 0; const total = day.solved || 0; const taskParts = []; if (t3) taskParts.push(`<span class="text-emerald-500">🔗${t3}</span>`); if (t4) taskParts.push(`<span class="text-blue-500">📍${t4}</span>`); if (t5) taskParts.push(`<span class="text-purple-500">👤${t5}</span>`); if (t7) taskParts.push(`<span class="text-amber-500">🎨${t7}</span>`); const taskStr = taskParts.length > 0 ? taskParts.join(' ') : `<span class="text-examBlue dark:text-blue-400">${total}</span>`; dH += `<div class="bg-gray-50 dark:bg-[#181818] p-3 rounded-xl border border-gray-100 dark:border-[#2c2c2c]"><div class="flex justify-between items-center"><span class="text-[11px] font-black text-gray-500 dark:text-gray-400 uppercase tracking-widest">${new Date(d).toLocaleDateString('ru-RU', {day:'2-digit', month:'2-digit'})}</span><span class="font-bold text-yellow-600 dark:text-yellow-500 text-[11px]">⏱ ${mins} мин</span></div><div class="flex gap-3 mt-1.5 text-[11px] font-black">${taskStr}<span class="text-gray-400 ml-auto">Всего: ${total}</span></div></div>`; }); $('stats-daily-container').innerHTML = dH; } else $('stats-daily-container').innerHTML = '<p class="text-[11px] font-bold text-gray-500 text-center py-4 uppercase tracking-widest">Пока нет данных.</p>'; }
+    if ($('stats-daily-container')) { const dStat = window.state.stats.dailyStats || {}; const dts = Object.keys(dStat).sort((a,b) => new Date(b) - new Date(a)).slice(0, 7); if (dts.length > 0) { let dH = ''; dts.forEach(d => { const day = dStat[d]; const mins = Math.floor((day.timeSpent || 0) / 60); const t1 = day.solvedTask1 || 0; const t3 = day.solvedTask3 || 0; const t4 = day.solvedTask4 || 0; const t5 = day.solvedTask5 || 0; const t7 = day.solvedTask7 || 0; const total = day.solved || 0; const taskParts = []; if (t1) taskParts.push(`<span class="text-cyan-600 dark:text-cyan-400">⏳${t1}</span>`); if (t3) taskParts.push(`<span class="text-emerald-500">🔗${t3}</span>`); if (t4) taskParts.push(`<span class="text-blue-500">📍${t4}</span>`); if (t5) taskParts.push(`<span class="text-purple-500">👤${t5}</span>`); if (t7) taskParts.push(`<span class="text-amber-500">🎨${t7}</span>`); const taskStr = taskParts.length > 0 ? taskParts.join(' ') : `<span class="text-examBlue dark:text-blue-400">${total}</span>`; dH += `<div class="bg-gray-50 dark:bg-[#181818] p-3 rounded-xl border border-gray-100 dark:border-[#2c2c2c]"><div class="flex justify-between items-center"><span class="text-[11px] font-black text-gray-500 dark:text-gray-400 uppercase tracking-widest">${new Date(d).toLocaleDateString('ru-RU', {day:'2-digit', month:'2-digit'})}</span><span class="font-bold text-yellow-600 dark:text-yellow-500 text-[11px]">⏱ ${mins} мин</span></div><div class="flex gap-3 mt-1.5 text-[11px] font-black">${taskStr}<span class="text-gray-400 ml-auto">Всего: ${total}</span></div></div>`; }); $('stats-daily-container').innerHTML = dH; } else $('stats-daily-container').innerHTML = '<p class="text-[11px] font-bold text-gray-500 text-center py-4 uppercase tracking-widest">Пока нет данных.</p>'; }
     showModal('stats-modal');
 };
 
@@ -1486,8 +1524,8 @@ window.openMistakesListModal = function() {
     else { 
         let ht = '<div class="flex flex-col gap-2">'; 
         pool.forEach((m, idx) => { 
-            let mTitle = m.task === 'task7' ? '🎨 Задание 7' : (m.task === 'task5' ? '👤 Задание 5' : (m.task === 'task3' ? '🔗 Задание 3' : '📍 Задание 4'));
-            let mContent = m.task === 'task7' ? `<span class="text-amber-600 dark:text-amber-400">${m.fact.culture}</span> ➡️ ${m.fact.trait}` : (m.task === 'task5' ? `<span class="text-blue-600 dark:text-blue-400">${m.fact.person}</span> ➡️ ${m.fact.event}` : (m.task === 'task3' ? `<span class="text-emerald-600 dark:text-emerald-400">${m.fact.process}</span> ➡️ ${m.fact.fact}` : `<span class="text-emerald-600 dark:text-emerald-400">${m.fact.geo}</span> | <span class="text-blue-600 dark:text-blue-400">${m.fact.year}</span><br>${m.fact.event}`));
+            let mTitle = m.task === 'task7' ? '🎨 Задание 7' : (m.task === 'task5' ? '👤 Задание 5' : (m.task === 'task3' ? '🔗 Задание 3' : (m.task === 'task1' ? '⏳ Задание 1' : '📍 Задание 4')));
+            let mContent = m.task === 'task7' ? `<span class="text-amber-600 dark:text-amber-400">${m.fact.culture}</span> ➡️ ${m.fact.trait}` : (m.task === 'task5' ? `<span class="text-blue-600 dark:text-blue-400">${m.fact.person}</span> ➡️ ${m.fact.event}` : (m.task === 'task3' ? `<span class="text-emerald-600 dark:text-emerald-400">${m.fact.process}</span> ➡️ ${m.fact.fact}` : (m.task === 'task1' ? `<span class="text-cyan-700 dark:text-cyan-400">${m.fact.event}</span> ➡️ ${m.fact.year}` : `<span class="text-emerald-600 dark:text-emerald-400">${m.fact.geo}</span> | <span class="text-blue-600 dark:text-blue-400">${m.fact.year}</span><br>${m.fact.event}`)));
             ht += `<div class="bg-white dark:bg-[#1e1e1e] p-3 rounded-xl border border-rose-100 dark:border-rose-900/30 shadow-sm flex gap-3 text-sm"><div class="font-black text-rose-300 w-4 text-right shrink-0">${idx + 1}.</div><div class="flex flex-col"><span class="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1">${mTitle}</span><span class="font-medium text-gray-800 dark:text-gray-300 leading-tight">${mContent}</span></div></div>`; 
         }); 
         ht += '</div>'; 
@@ -1541,7 +1579,7 @@ window.copyTextReport = function() {
     }
 
     t += `📈 Точность по эпохам:\n`;
-    const tasks = ['task3', 'task4', 'task5', 'task7'];
+    const tasks = ['task1', 'task3', 'task4', 'task5', 'task7'];
     const eMap = { 'early': 'Древность', '18th': 'XVIII в.', '19th': 'XIX в.', '20th': 'XX в.' };
     const combinedEra = { 'early': {c:0,t:0}, '18th': {c:0,t:0}, '19th': {c:0,t:0}, '20th': {c:0,t:0} };
     
@@ -1569,6 +1607,7 @@ window.copyTextReport = function() {
             if (m.task === 'task7') t += `${i + 1}. ${m.fact.culture} ➡️ ${m.fact.trait}\n`;
             else if (m.task === 'task5') t += `${i + 1}. ${m.fact.event} ➡️ ${m.fact.person}\n`;
             else if (m.task === 'task3') t += `${i + 1}. ${m.fact.process} ➡️ ${m.fact.fact}\n`;
+            else if (m.task === 'task1') t += `${i + 1}. ${m.fact.event} ➡️ ${m.fact.year}\n`;
             else t += `${i + 1}. ${m.fact.geo} | ${m.fact.event} | ${m.fact.year}\n`; 
         }); 
     } else t += `\n🎉 Ошибок нет!\n`; 

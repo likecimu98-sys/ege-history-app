@@ -640,6 +640,9 @@ function deckState(deck){
     if(!s.items[e.id]) s.items[e.id] = {choose:0, typed:false, wrong:0, shown:0, attempts:0};
     // Факт уже выучен в общей системе → помечаем пройденным (не сбрасываем дальше зашедший прогресс).
     if(parentLearnedCram(e.id)){ const it = s.items[e.id]; it.choose = Math.max(it.choose||0, need); it.typed = true; }
+    // Обратная синхронизация: если колода уже была пройдена локально в iframe,
+    // но общий прогресс родителя не получил один cram:<id>, досылаем его при открытии.
+    if(EMBEDDED && s.items[e.id] && s.items[e.id].typed && !parentLearnedCram(e.id)) notifyMastered(deck, e);
   });
   if(!s.phase) s.phase = 'choose';
   return s;

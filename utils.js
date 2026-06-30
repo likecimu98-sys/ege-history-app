@@ -190,7 +190,7 @@ function countLearnedForTask(taskKey, streaks) {
     Object.entries(src).forEach(([k, v]) => {
         const match = prefix
             ? k.startsWith(prefix)
-            : (!k.startsWith('t5_') && !k.startsWith('t7_') && !k.startsWith('t3_') &&
+            : (!k.startsWith('t1_') && !k.startsWith('t5_') && !k.startsWith('t7_') && !k.startsWith('t3_') &&
                !k.startsWith('vp_') && !k.startsWith('va_') && !k.startsWith('vm_'));
         if (match && window.isFactLearned(v)) count++;
     });
@@ -217,6 +217,7 @@ function cacheDOM() {
 // Для task4 (множественные поля) и детектива возвращаем null → точное сравнение.
 const _ACCEPT_PAIRS = { task3: ['process', 'fact'], task5: ['event', 'person'], task7: ['culture', 'trait'] };
 window.acceptableAnswerSet = function(row, task) {
+    if (task === 'task1' && row?.year) return new Set([String(row.year)]);
     const pair = _ACCEPT_PAIRS[task];
     if (!pair || !row) return null;
     const [disp, hid] = pair;

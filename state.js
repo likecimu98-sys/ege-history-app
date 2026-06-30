@@ -2,6 +2,7 @@
 'use strict';
 
 // --- Инициализация глобальных данных из data.js ---
+window.task1Data = typeof task1Data !== 'undefined' ? task1Data : [];
 window.task7Data = typeof task7Data !== 'undefined' ? task7Data : [];
 
 // --- Глобальное состояние ---
@@ -13,7 +14,7 @@ window.state = {
     stats: {
         streak: 0,
         totalSolvedEver: 0,
-        solvedByTask: { task3: 0, task4: 0, task5: 0, task7: 0 },
+        solvedByTask: { task1: 0, task3: 0, task4: 0, task5: 0, task7: 0 },
         flashcardsSolved: 0,
         eraStats: {},
         factStreaks: {},
@@ -22,7 +23,7 @@ window.state = {
         egePoints: 0,
         dailyStats: {},
         hwFlashcardsToSolve: 0,
-        hwTask3: 0, hwTask4: 0, hwTask5: 0, hwTask7: 0,
+        hwTask1: 0, hwTask3: 0, hwTask4: 0, hwTask5: 0, hwTask7: 0,
         assignments: [],
         visualArchitectureProgress: {},
         visualArchitectureSolved: 0,
@@ -57,7 +58,7 @@ window.state = {
 };
 
 // --- Прекомпилированные пулы ---
-const precomputed = { task3: {}, task4: {}, task5: {}, task7: {} };
+const precomputed = { task1: {}, task3: {}, task4: {}, task5: {}, task7: {} };
 const periodsList = ['all', 'early', '18th', '19th', '20th'];
 
 function romanCenturyToNumber(value) {
@@ -106,6 +107,7 @@ window.normalizeVisualData = function normalizeVisualData() {
 
 function initPrecomputed() {
     window.bigData   = typeof bigData   !== 'undefined' ? bigData   : (window.bigData   || []);
+    window.task1Data = typeof task1Data !== 'undefined' ? task1Data : (window.task1Data || []);
     window.task3Data = typeof task3Data !== 'undefined' ? task3Data : (window.task3Data || []);
     window.task5Data = typeof task5Data !== 'undefined' ? task5Data : (window.task5Data || []);
     window.task7Data = typeof task7Data !== 'undefined' ? task7Data : (window.task7Data || []);
@@ -113,7 +115,7 @@ function initPrecomputed() {
     // window.visualArchitectureData / visualPaintingData / visualStudyData нормализуются
     // в window.normalizeVisualData() — они грузятся в фоне после открытия приложения.
 
-    const totalItems = (window.bigData?.length || 0) + (window.task3Data?.length || 0) +
+    const totalItems = (window.bigData?.length || 0) + (window.task1Data?.length || 0) + (window.task3Data?.length || 0) +
                        (window.task5Data?.length || 0) + (window.task7Data?.length || 0);
     if (totalItems === 0) {
         console.error('[data.js] База данных не загружена!');
@@ -133,6 +135,7 @@ function initPrecomputed() {
 
     const filterData = (data, p) => p === 'all' ? [...(data || [])] : (data || []).filter(d => d.c === p);
     periodsList.forEach(p => {
+        precomputed.task1[p] = filterData(window.task1Data, p);
         precomputed.task3[p] = filterData(window.task3Data, p);
         precomputed.task4[p] = filterData(window.bigData, p);
         precomputed.task5[p] = filterData(window.task5Data, p);
@@ -272,7 +275,7 @@ const STORAGE_KEY = 'ege_final_storage_v4';
 const SAVE_FIELDS = [
     'streak', 'totalSolvedEver', 'solvedByTask', 'flashcardsSolved',
     'eraStats', 'factStreaks', 'hwFlashcardsToSolve', 'totalTimeSpent',
-    'egePoints', 'hwTask3', 'hwTask4', 'hwTask5', 'hwTask7', 'assignments',
+    'egePoints', 'hwTask1', 'hwTask3', 'hwTask4', 'hwTask5', 'hwTask7', 'assignments',
     'visualArchitectureProgress', 'visualArchitectureSolved',
     'visualPaintingProgress', 'visualPaintingSolved',
     'bestSpeedrunScore', 'dailyStats', 'achievements', 'achievementsData'
@@ -326,7 +329,7 @@ function updateScoreAndStats(linesCount, isPerfectHw, egePointsToAdd) {
     const s = window.state.stats;
     const curTask = window.state.currentTask || 'task4';
     s.totalSolvedEver += linesCount;
-    if (!s.solvedByTask) s.solvedByTask = { task3: 0, task4: 0, task5: 0, task7: 0 };
+    if (!s.solvedByTask) s.solvedByTask = { task1: 0, task3: 0, task4: 0, task5: 0, task7: 0 };
     s.solvedByTask[curTask] = (s.solvedByTask[curTask] || 0) + linesCount;
 
     // ── ЕГЭ-баллы ──────────────────────────────────────────────────────────
@@ -400,7 +403,7 @@ window.learnedCountInPeriod = learnedCountInPeriod;
 function hwItemProgress(item) {
     if (!item) return 0;
     // Зубрёжка: прогресс = число выученных в тренажёре фактов (cram:* в factStreaks).
-    if (item.task === 'cram') return Math.min(item.goal || 0, (window.cramLearnedCount ? window.cramLearnedCount() : 0));
+    if (item.task === 'cram') return Math.min(item.goal || 0, (window.cramLearnedCount ? window.cramLearnedCount(item.yearStart, item.yearEnd) : 0));
     // Выучивание = живой счёт выученных фактов периода по ОБЩЕЙ системе приложения (isFactLearned).
     // Уже выученные факты идут в автозачёт; прогресс в ДЗ и в обычной нарешке — один и тот же счётчик.
     if (item.metric === 'learned') return Math.min(item.goal || 0, learnedCountInPeriod(item.task, item.period, item.yearStart, item.yearEnd).learned);
@@ -448,7 +451,7 @@ function normalizeAssignmentRec(rec) {
 // чтобы баннер/шапка/бейдж работали. total = сумма остатка по всем этапам активных ДЗ.
 function recomputeHwMirror() {
     const s = window.state.stats;
-    const per = { task3: 0, task4: 0, task5: 0, task7: 0 };
+    const per = { task1: 0, task3: 0, task4: 0, task5: 0, task7: 0 };
     let total = 0, nearest = null;
     (s.assignments || []).forEach(a => {
         if (a.status !== 'active') return;
@@ -459,7 +462,7 @@ function recomputeHwMirror() {
         });
         if (a.deadline && (!nearest || a.deadline < nearest)) nearest = a.deadline;
     });
-    s.hwTask3 = per.task3; s.hwTask4 = per.task4; s.hwTask5 = per.task5; s.hwTask7 = per.task7;
+    s.hwTask1 = per.task1; s.hwTask3 = per.task3; s.hwTask4 = per.task4; s.hwTask5 = per.task5; s.hwTask7 = per.task7;
     s.hwFlashcardsToSolve = total;
     try {
         if (nearest) localStorage.setItem('teacher_hw_deadline', nearest);
@@ -657,12 +660,13 @@ function loadFromStorage() {
             && (window.state.stats.hwFlashcardsToSolve || 0) > 0) {
             const dl = (() => { try { return localStorage.getItem('teacher_hw_deadline') || null; } catch (e) { return null; } })();
             const per = {
+                task1: window.state.stats.hwTask1 || 0,
                 task3: window.state.stats.hwTask3 || 0,
                 task4: window.state.stats.hwTask4 || 0,
                 task5: window.state.stats.hwTask5 || 0,
                 task7: window.state.stats.hwTask7 || 0
             };
-            const anyPer = per.task3 + per.task4 + per.task5 + per.task7;
+            const anyPer = per.task1 + per.task3 + per.task4 + per.task5 + per.task7;
             const mk = (task, n) => ingestAssignment({
                 id: 'legacy_' + task + '_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5),
                 task, total: n, deadline: dl, assignedAt: Date.now()
@@ -674,7 +678,7 @@ function loadFromStorage() {
             }
         }
         if (typeof refreshHwState === 'function') refreshHwState();
-        if (!window.state.stats.solvedByTask) window.state.stats.solvedByTask = { task3: 0, task4: 0, task5: 0, task7: 0 };
+        if (!window.state.stats.solvedByTask) window.state.stats.solvedByTask = { task1: 0, task3: 0, task4: 0, task5: 0, task7: 0 };
         if (!window.state.stats.egePoints) window.state.stats.egePoints = 0;
         if (!window.state.stats.visualArchitectureProgress) window.state.stats.visualArchitectureProgress = {};
         if (window.state.stats.visualArchitectureSolved === undefined) window.state.stats.visualArchitectureSolved = 0;
@@ -702,11 +706,11 @@ function loadFromStorage() {
         const eras = window.state.stats.eraStats || {};
         const oldFormat = TASK_EPOCHS.some(k => eras[k] && typeof eras[k].correct === 'number');
         if (oldFormat) {
-            const migrated = { task3: {}, task4: {}, task5: {}, task7: {} };
+            const migrated = { task1: {}, task3: {}, task4: {}, task5: {}, task7: {} };
             for (const era of TASK_EPOCHS) {
                 if (eras[era]) {
                     migrated.task4[era] = { ...eras[era] };
-                    ['task3', 'task5', 'task7'].forEach(tk => { migrated[tk][era] = { correct: 0, total: 0 }; });
+                    ['task1', 'task3', 'task5', 'task7'].forEach(tk => { migrated[tk][era] = { correct: 0, total: 0 }; });
                 }
             }
             window.state.stats.eraStats = migrated;
@@ -729,22 +733,24 @@ function estimateEGEScore(stats) {
     const ERAS = TASK_EPOCHS;
     const W = ERA_WEIGHTS;
 
-    let d4 = 0, d5 = 0, d3 = 0, d7 = 0;
+    let d1 = 0, d4 = 0, d5 = 0, d3 = 0, d7 = 0;
     Object.entries(streaks).forEach(([k, v]) => {
         if (!v || typeof v !== 'object') return;
         const learned = v.level >= 1 || (v.level === 0 && (v.streak || 0) >= 3);
         if (!learned) return;
-        if (k.startsWith('t5_'))      d5++;
+        if (k.startsWith('t1_'))      d1++;
+        else if (k.startsWith('t5_')) d5++;
         else if (k.startsWith('t7_')) d7++;
         else if (k.startsWith('t3_')) d3++;
         else                          d4++;
     });
 
     const s4 = 20 * Math.min(d4 / 500, 1);
+    const s1 = 10 * Math.min(d1 / 110, 1);
     const s3 = 17 * Math.min(d3 / 150, 1);
     const s5 = 16 * Math.min(d5 / 250, 1);
     const s7 = 12 * Math.min(d7 / 180, 1);
-    const factBase = s4 + s5 + s3 + s7;
+    const factBase = s1 + s4 + s5 + s3 + s7;
 
     const isNew = !!(es.task4 || es.task3);
     const eTot = {};
@@ -787,7 +793,7 @@ function estimateEGEScore(stats) {
     return {
         score, ceiling: ceil, factBase: Math.round(factBase),
         pen: Math.round(pen), accAdj: Math.round(accAdj),
-        d4, d5, d3, d7, s4, s5, s3, s7,
+        d1, d4, d5, d3, d7, s1, s4, s5, s3, s7,
         weakEra: weakEra ? ERA_NAMES[weakEra] : null,
         accuracy: tt >= 30 ? Math.round(tc / tt * 100) : null
     };
@@ -803,7 +809,7 @@ function getTaskProgress(task) {
     for (const [key, val] of Object.entries(streaks)) {
         const match = prefix
             ? key.startsWith(prefix)
-            : (!key.startsWith('t5_') && !key.startsWith('t7_') && !key.startsWith('t3_') &&
+            : (!key.startsWith('t1_') && !key.startsWith('t5_') && !key.startsWith('t7_') && !key.startsWith('t3_') &&
                !key.startsWith('vp_') && !key.startsWith('va_') && !key.startsWith('vm_'));
         if (match && window.isFactLearned(val)) learned++;
     }
