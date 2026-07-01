@@ -155,7 +155,7 @@ function computeWeeklyScore(dailyStats) {
     for (const d in dailyStats) {
         if (d >= monStr) {
             const day = dailyStats[d];
-            const perTask = (day.solvedTask3 || 0) + (day.solvedTask4 || 0) +
+            const perTask = (day.solvedTask1 || 0) + (day.solvedTask3 || 0) + (day.solvedTask4 || 0) +
                             (day.solvedTask5 || 0) + (day.solvedTask7 || 0);
             // Используем per-task если есть, иначе fallback на старый solved
             total += perTask > 0 ? perTask : (day.solved || 0);

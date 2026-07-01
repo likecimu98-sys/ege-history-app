@@ -535,8 +535,10 @@
                     if (pending.length) {
                         let added = 0;
                         const revoked = window._classRevoked; // отозванные учителем ДЗ не подхватываем
+                        const sweepTs = Number(window._classRevokeBefore) || 0; // «с чистого листа»: старое не подхватываем
                         pending.forEach(rec => {
                             if (rec && rec.id && revoked && revoked.has(rec.id)) return;
+                            if (sweepTs && rec && (rec.assignedAt || 0) < sweepTs) return;
                             if (window.ingestAssignment && window.ingestAssignment(rec)) added++;
                         });
                         // снимаем обработанные записи с документа (точное соответствие объектов)
@@ -1799,10 +1801,26 @@
                 
                 const qS = await getDocs(firestoreQuery);
                 let st = [];
+                const seenIds = new Set();
                 qS.forEach(docSnap => {
                     const d = docSnap.data(); d.uid = docSnap.id;
+                    seenIds.add(docSnap.id);
                     st.push(d);
                 });
+                // Новички класса (только зарегистрировались, 0 решено, ждут ДЗ) не проходят порог
+                // totalSolved>=1 общего запроса — доюниониваем точный запрос по коду класса,
+                // чтобы они были видны учителю сразу, а не после первой решённой строки.
+                if (tc && !filterClass) {
+                    try {
+                        const extraSnap = await getDocs(query(studentsCol, where('classCode', '==', tc), limit(500)));
+                        extraSnap.forEach(docSnap => {
+                            if (seenIds.has(docSnap.id)) return;
+                            const d = docSnap.data(); d.uid = docSnap.id;
+                            seenIds.add(docSnap.id);
+                            st.push(d);
+                        });
+                    } catch (e) { console.warn('[Teacher] Доп. запрос по классу не удался:', e); }
+                }
 
                 const enriched = st.map(s => computeStudentData(s, monStr, monday));
                 enriched.sort((a,b) => (b.totalSolved||0) - (a.totalSolved||0));
@@ -2023,6 +2041,15 @@
             return window._classRevoked;
         }
 
+        // Попадает ли ДЗ под «с чистого листа» (метка revokeBefore на документе класса).
+        // legacy_* (старый формат выдачи) считаем выданным «до метки» всегда: их конвертация могла
+        // случиться ПОЗЖЕ нажатия кнопки (assignedAt ставится в момент конвертации), а по сути они старые.
+        function _sweptByTeacher(a, sweepTs) {
+            if (!sweepTs || !a || a.status === 'done') return false;
+            if (String(a.id || '').indexOf('legacy_') === 0) return true;
+            return (a.assignedAt || 0) < sweepTs;
+        }
+
         // ─── Журнал ДЗ класса: чтобы ученики, добавленные на курс позже, получили старые задания ───
         function _classDocId(code) {
             return String(code || '').trim().replace(/[\/#?%]/g, '_');
@@ -2042,11 +2069,24 @@
                 const revoked = Array.isArray(data.revokedAssignments) ? data.revokedAssignments : [];
                 const revokedSet = _mergeRevoked(revoked); // копим в общий набор (классовые + индивидуальные)
                 let removed = (window.reconcileRevokedAssignments ? window.reconcileRevokedAssignments(revoked) : 0);
+                // «С чистого листа»: метка revokeBefore снимает ЛЮБЫЕ невыполненные ДЗ, выданные до неё —
+                // в т.ч. старые legacy-ДЗ со случайными id, которых нет в журнале. Сданные не трогаем.
+                const sweepTs = Number(data.revokeBefore) || 0;
+                if (sweepTs) {
+                    window._classRevokeBefore = Math.max(Number(window._classRevokeBefore) || 0, sweepTs);
+                    const asg = window.state && window.state.stats && window.state.stats.assignments;
+                    if (Array.isArray(asg)) {
+                        const before = asg.length;
+                        window.state.stats.assignments = asg.filter(a => !_sweptByTeacher(a, sweepTs));
+                        removed += before - window.state.stats.assignments.length;
+                    }
+                }
                 const today = new Date().toISOString().split('T')[0];
                 let added = 0;
                 list.forEach(rec => {
                     if (!rec || !rec.id) return;
                     if (revokedSet.has(rec.id)) return; // отозвано — не подхватываем
+                    if (sweepTs && (rec.assignedAt || 0) < sweepTs) return; // снято оптом — не подхватываем
                     const r = Object.assign({}, rec);
                     // опоздавшему просроченные на момент входа дедлайны снимаем — не штрафуем за то, что задано до его прихода
                     if (r.deadline && r.deadline < today) r.deadline = null;
@@ -2107,7 +2147,10 @@
         };
 
         // ─── Учитель: отменить ВСЕ выданные классу ДЗ («с нового листа») ───
-        // Чистим журнал класса и отзываем все его id. Сданные у учеников остаются (вариант А).
+        // Чистим журнал класса, отзываем все его id И ставим метку revokeBefore: ученики при входе
+        // снимут у себя ЛЮБЫЕ невыполненные ДЗ, выданные до этого момента — включая старые legacy-ДЗ
+        // (id вида legacy_*), которых в журнале никогда не было и которые иначе было «не убрать».
+        // Сданные у учеников остаются с отметкой (вариант А).
         window.cancelAllClassAssignments = async function(rawCode) {
             if (!db) return 0;
             const code = _classDocId(rawCode);
@@ -2119,7 +2162,7 @@
                 const ids = (Array.isArray(data.assignments) ? data.assignments : []).map(a => a && a.id).filter(Boolean);
                 const revoked = Array.isArray(data.revokedAssignments) ? data.revokedAssignments.slice() : [];
                 ids.forEach(id => { if (!revoked.includes(id)) revoked.push(id); });
-                await setDoc(ref, { assignments: [], revokedAssignments: revoked.slice(-300), updatedAt: Date.now() }, { merge: true });
+                await setDoc(ref, { assignments: [], revokedAssignments: revoked.slice(-300), revokeBefore: Date.now(), updatedAt: Date.now() }, { merge: true });
                 return ids.length;
             } catch (e) { console.error('cancelAllClassAssignments error:', e); return 0; }
         };
@@ -2364,10 +2407,34 @@
             const achSet = new Set();
             states.forEach(s => (s.stats?.achievements || []).forEach(a => achSet.add(a)));
             st.achievements = [...achSet];
-            st.achievementsData = states.reduce((best, s) => {
-                const a = s.stats?.achievementsData || {};
-                return { nightOwls: Math.max(best.nightOwls||0,a.nightOwls||0), earlyBirds: Math.max(best.earlyBirds||0,a.earlyBirds||0), hwDone: Math.max(best.hwDone||0,a.hwDone||0), hwPerfect: Math.max(best.hwPerfect||0,a.hwPerfect||0), maxMistakes: Math.max(best.maxMistakes||0,a.maxMistakes||0) };
-            }, {});
+            // achievementsData: max по ВСЕМ числовым счётчикам. Раньше переносились только 5 ключей —
+            // hwOnTime/hwLate/hwStreak и прочие обнулялись при каждом слиянии.
+            st.achievementsData = {};
+            states.forEach(s => {
+                Object.entries(s.stats?.achievementsData || {}).forEach(([k, v]) => {
+                    if (typeof v === 'number') st.achievementsData[k] = Math.max(st.achievementsData[k] || 0, v);
+                });
+            });
+            // ДЗ (assignments): объединяем по id — сданная версия важнее активной, у активных берём
+            // максимальный прогресс каждого этапа. КРИТИЧНО: раньше assignments сюда не переносились
+            // вовсе, и pre-write merge перед каждой записью в облако стирал их из fullStateJson —
+            // учитель видел пустой список ДЗ ученика (нечего отменять), прогресс ДЗ терялся при
+            // смене устройства, «Контроль ДЗ» показывал неверные статусы.
+            const asgById = new Map();
+            states.forEach(s => {
+                (Array.isArray(s.stats?.assignments) ? s.stats.assignments : []).forEach(a => {
+                    if (!a || !a.id) return;
+                    const cur = asgById.get(a.id);
+                    if (!cur) { asgById.set(a.id, JSON.parse(JSON.stringify(a))); return; }
+                    if (cur.status === 'done') return;
+                    if (a.status === 'done') { asgById.set(a.id, JSON.parse(JSON.stringify(a))); return; }
+                    (cur.items || []).forEach((it, i) => {
+                        const o = (a.items || [])[i];
+                        if (o && (Number(o.progress) || 0) > (Number(it.progress) || 0)) it.progress = Number(o.progress) || 0;
+                    });
+                });
+            });
+            st.assignments = [...asgById.values()];
             const mistakeKeys = new Set();
             states.forEach(s => {
                 (s.mistakesPool || s.stats?.mistakesPool || []).forEach(m => {
@@ -2393,10 +2460,21 @@
             CLOUD_STATE_FIELDS.forEach(k => {
                 if (st[k] !== undefined) window.state.stats[k] = st[k];
             });
+            // ДЗ: применяем слитые задания с фильтром отозванных и «снятых оптом» (revokeBefore) —
+            // иначе отменённое учителем ДЗ «воскресало» бы из старой облачной копии fullStateJson.
+            // Сданные (done) сохраняем всегда — отметка и ачивка остаются (вариант А).
+            if (Array.isArray(st.assignments)) {
+                const revokedSet = (window._classRevoked instanceof Set) ? window._classRevoked : new Set();
+                const sweepTs = Number(window._classRevokeBefore) || 0;
+                st.assignments = st.assignments.filter(a => a && a.id &&
+                    (a.status === 'done' || (!revokedSet.has(a.id) && !_sweptByTeacher(a, sweepTs))));
+                window.state.stats.assignments = st.assignments;
+                if (window.recomputeHwMirror) window.recomputeHwMirror();
+            }
             if (Array.isArray(normalized.mistakesPool)) window.state.mistakesPool = normalized.mistakesPool;
             window.state.hideLearned = normalized.hideLearned !== false;
             if (!window.state.stats.dailyStats) window.state.stats.dailyStats = {};
-            if (!window.state.stats.solvedByTask) window.state.stats.solvedByTask = { task3:0, task4:0, task5:0, task7:0 };
+            if (!window.state.stats.solvedByTask) window.state.stats.solvedByTask = { task1:0, task3:0, task4:0, task5:0, task7:0 };
             if (!window.state.stats.achievements) window.state.stats.achievements = [];
             if (!window.state.stats.achievementsData) window.state.stats.achievementsData = {};
             if (!window.state.stats.visualArchitectureProgress) window.state.stats.visualArchitectureProgress = {};
