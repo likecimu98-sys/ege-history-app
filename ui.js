@@ -175,12 +175,21 @@ function _hwlPaint() {
     if (!body) return;
     if (actions) {
         const n = _hwListCache.filter(_hwlCancellable).length;
-        actions.innerHTML = n > 1
-            ? `<button onclick="window._hwlAskCancelAll()" style="width:100%;background:rgba(244,63,94,0.08);color:var(--c-danger,#e11d48);border:1px solid rgba(244,63,94,0.35);border-radius:10px;padding:9px;font-size:11px;font-weight:900;cursor:pointer">🗑 Отменить все (${n}) — с чистого листа</button>`
-            : '';
+        if (_hwlCtx.mode === 'class') {
+            // Для класса кнопка «с чистого листа» доступна ВСЕГДА: старые ДЗ (выданные до появления
+            // журнала) в списке не значатся, но метка revokeBefore снимает и их. Если показывать
+            // кнопку только при заполненном журнале — именно старьё было бы «не убрать».
+            actions.innerHTML = `<button onclick="window._hwlAskCancelAll()" style="width:100%;background:rgba(244,63,94,0.08);color:var(--c-danger,#e11d48);border:1px solid rgba(244,63,94,0.35);border-radius:10px;padding:9px;font-size:11px;font-weight:900;cursor:pointer">🧹 С чистого листа — снять все невыполненные ДЗ класса${n ? ` (в журнале: ${n})` : ', включая старые'}</button>`;
+        } else {
+            actions.innerHTML = n > 1
+                ? `<button onclick="window._hwlAskCancelAll()" style="width:100%;background:rgba(244,63,94,0.08);color:var(--c-danger,#e11d48);border:1px solid rgba(244,63,94,0.35);border-radius:10px;padding:9px;font-size:11px;font-weight:900;cursor:pointer">🗑 Отменить все (${n}) — с чистого листа</button>`
+                : '';
+        }
     }
     if (!_hwListCache.length) {
-        body.innerHTML = `<div style="text-align:center;color:#9ca3af;font-size:12px;padding:20px 0">${_hwlCtx.mode === 'student' ? 'У ученика нет активных ДЗ.' : 'Активных ДЗ класса нет.'}</div>`;
+        body.innerHTML = `<div style="text-align:center;color:#9ca3af;font-size:12px;padding:20px 0">${_hwlCtx.mode === 'student'
+            ? 'У ученика нет активных ДЗ.'
+            : 'Журнал ДЗ пуст. Старые ДЗ (выданные до журнала) в списке не видны — их снимает кнопка «С чистого листа» выше.'}</div>`;
         return;
     }
     body.innerHTML = _hwListCache.map(a => {
@@ -251,7 +260,10 @@ window._hwlDoCancelAll = async function() {
             : await window.cancelAllClassAssignments(_hwlCtx.code);
     } catch (e) { console.error(e); }
     await _hwlLoad();
-    showToast('🗑', `Отменено ДЗ: ${n}. Чистый лист.`, 'bg-emerald-500', 'border-emerald-700');
+    // Для класса счётчик журнала не показываем: снимаются и старые ДЗ, которых в журнале нет.
+    showToast('🧹', _hwlCtx.mode === 'class'
+        ? 'Чистый лист: все невыполненные ДЗ класса снимутся у учеников при следующем входе.'
+        : `Отменено ДЗ: ${n}. Чистый лист.`, 'bg-emerald-500', 'border-emerald-700');
 };
 
 // Считать текущее состояние формы в черновик (чтобы переменные не сбрасывались при ре-рендере).
