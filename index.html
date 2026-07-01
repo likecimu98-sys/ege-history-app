@@ -864,6 +864,8 @@
                         <input type="checkbox" id="teacher-filter-class" onchange="window.loadClassProgress()" class="w-5 h-5 text-examBlue bg-white border-gray-300 rounded shrink-0">
                         <span class="text-[11px] sm:text-xs font-black text-gray-700 dark:text-gray-300 uppercase tracking-wide">Только мой класс</span>
                     </label>
+                    <!-- Что реально показано: класс / все — заполняет loadClassProgress -->
+                    <div id="teacher-filter-mode-note" class="hidden w-full sm:w-auto text-center text-[10px] font-bold text-gray-400 dark:text-gray-500"></div>
                 </div>
                 <!-- Массовая выдача ДЗ + PDF-сводка -->
                 <div class="flex gap-2 mb-3 shrink-0">

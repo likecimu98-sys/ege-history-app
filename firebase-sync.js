@@ -1293,6 +1293,7 @@
                         <div style="display:flex;align-items:center;gap:6px;min-width:0">
                             <div class="dark:text-gray-200" style="font-size:12px;font-weight:900;color:#0f172a;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(s.name || 'Без имени')}</div>
                             <span style="font-size:9px;font-weight:900;color:${m.color};background:${m.bg};border:1px solid ${m.border};border-radius:999px;padding:2px 6px;white-space:nowrap">${m.short}</span>
+                            ${s.classCode ? `<span style="font-size:9px;font-weight:800;color:#94a3b8;white-space:nowrap">·&nbsp;${esc(s.classCode)}</span>` : ''}
                         </div>
                         <div style="display:flex;align-items:center;gap:7px;margin-top:5px">
                             <div style="flex:1;height:6px;background:#e5e7eb;border-radius:999px;overflow:hidden"><div style="height:100%;width:${pct}%;background:${m.color};border-radius:999px"></div></div>
@@ -1827,6 +1828,22 @@
                 window._cachedStudents = enriched;
                 renderTeacherHwControl(enriched);
                 renderClassAnalytics(enriched);
+
+                // Прозрачность фильтра: показываем, какой запрос реально выполнен, и сколько в выборке
+                // ЧУЖИХ кодов класса. Если при включённом «только мой класс» число большое — это не баг
+                // фильтра, а признак того, что все регистрируются с одним общим кодом.
+                const byCls = {};
+                enriched.forEach(s => { const c = (s.classCode || '—'); byCls[c] = (byCls[c] || 0) + 1; });
+                console.log('[Teacher] запрос:', (filterClass && tc) ? `класс "${tc}"` : 'общий (все классы)',
+                    '· получено:', enriched.length, '· по кодам:', JSON.stringify(byCls));
+                const modeEl = document.getElementById('teacher-filter-mode-note');
+                if (modeEl) {
+                    const foreign = enriched.length - (byCls[tc] || 0);
+                    modeEl.textContent = (filterClass && tc)
+                        ? `показан класс ${tc}` + (foreign > 0 ? ` · ⚠️ чужих кодов: ${foreign}` : '')
+                        : `показаны все классы (${Object.keys(byCls).length} кодов)` + (tc ? ` · с кодом ${tc}: ${byCls[tc] || 0}` : '');
+                    modeEl.classList.remove('hidden');
+                }
 
                 // Сводка
                 const summaryEl = document.getElementById('teacher-class-summary');
