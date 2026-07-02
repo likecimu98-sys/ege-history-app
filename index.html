@@ -870,16 +870,11 @@
                         <input type="checkbox" id="teacher-filter-class" onchange="window.loadClassProgress()" class="w-5 h-5 text-examBlue bg-white border-gray-300 rounded shrink-0">
                         <span class="text-[11px] sm:text-xs font-black text-gray-700 dark:text-gray-300 uppercase tracking-wide">Только мой класс</span>
                     </label>
-                    <!-- «Сейчас проходим»: период потока — влияет на кнопку «Продолжить» у учеников -->
-                    <label class="flex items-center gap-2 w-full sm:w-auto justify-center bg-gray-50 dark:bg-[#181818] px-3 py-2 rounded-xl border border-gray-200 dark:border-[#2c2c2c] shrink-0">
-                        <span class="text-[10px] font-black text-gray-500 dark:text-gray-400 uppercase tracking-wide shrink-0">Проходим:</span>
-                        <select id="teacher-current-period" onchange="window.saveClassCurrentPeriod&&window.saveClassCurrentPeriod(this.value)" class="text-[11px] font-black text-gray-700 dark:text-gray-300 bg-transparent outline-none cursor-pointer">
-                            <option value="">— не задано —</option>
-                            <option value="early">Древность и Смута</option>
-                            <option value="18th">XVIII век</option>
-                            <option value="19th">XIX век</option>
-                            <option value="20th">XX век</option>
-                        </select>
+                    <!-- «Дошли до года»: граница пройденного — ученики повторяют всё от 862 до этого года (кнопка «Продолжить») -->
+                    <label class="flex items-center gap-2 w-full sm:w-auto justify-center bg-gray-50 dark:bg-[#181818] px-3 py-2 rounded-xl border border-gray-200 dark:border-[#2c2c2c] shrink-0" title="До какого года дошли на занятиях — ученики будут повторять всё от 862 года до этой границы">
+                        <span class="text-[10px] font-black text-gray-500 dark:text-gray-400 uppercase tracking-wide shrink-0">Дошли до:</span>
+                        <input type="number" id="teacher-current-upto" min="862" max="2026" placeholder="год" onchange="window.saveClassCurrentUpto&&window.saveClassCurrentUpto(this.value)" class="w-20 text-center text-[12px] font-black text-gray-700 dark:text-gray-300 bg-transparent outline-none">
+                        <span class="text-[10px] font-black text-gray-500 dark:text-gray-400 shrink-0">г.</span>
                     </label>
                     <!-- Что реально показано: класс / все — заполняет loadClassProgress -->
                     <div id="teacher-filter-mode-note" class="hidden w-full sm:w-auto text-center text-[10px] font-bold text-gray-400 dark:text-gray-500"></div>
@@ -920,7 +915,10 @@
                     </summary>
                     <div id="teacher-class-analytics" class="px-3 pb-3 pt-1 border-t border-blue-100 dark:border-blue-900/30"></div>
                 </details>
-                <!-- Сортировка -->
+                <!-- Поиск + сортировка -->
+                <div class="mb-3 shrink-0">
+                    <input type="search" id="teacher-student-search" placeholder="🔍 Найти ученика: имя, ТГ-ID или код класса…" oninput="window.sortAndRenderStudents&&window.sortAndRenderStudents()" class="w-full bg-white dark:bg-[#1e1e1e] border border-gray-200 dark:border-[#2c2c2c] text-[11px] font-bold text-gray-700 dark:text-gray-300 rounded-xl px-3 py-2 outline-none">
+                </div>
                 <div class="flex items-center gap-2 mb-3 shrink-0">
                     <span class="text-[10px] font-black text-gray-400 uppercase tracking-widest shrink-0">Сортировка:</span>
                     <select id="teacher-sort-select" onchange="window.sortAndRenderStudents()" class="flex-1 bg-white dark:bg-[#1e1e1e] border border-gray-200 dark:border-[#2c2c2c] text-[11px] font-bold text-gray-700 dark:text-gray-300 rounded-xl px-3 py-2 outline-none">

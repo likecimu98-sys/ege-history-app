@@ -1402,18 +1402,41 @@ function _dueReviewCounts() {
     return { by, total };
 }
 
-// «Рабочий период» ученика: период активного ДЗ → «сейчас проходим» потока
-// (задаёт учитель, приходит с журналом класса) → последний период самого ученика.
+// «Рабочий период» ученика: период активного ДЗ → «дошли до года» потока
+// (задаёт учитель: повторяем ВСЁ от 862 до границы, а не один век) →
+// легаси-период потока → последний период самого ученика.
+// Возвращает { era: 'early'|... } либо { upto: год }, null — если ничего нет.
 function _workingPeriod() {
     const s = window.state.stats;
     const act = (s.assignments || []).find(a => a.status === 'active');
     const it = act && (act.items || []).find(i => !window.hwItemDone(i));
-    if (it && it.period && it.period !== 'all' && it.period !== 'custom') return it.period;
+    if (it && it.period && it.period !== 'all' && it.period !== 'custom') return { era: it.period };
+    const upto = parseInt(localStorage.getItem('class_current_upto'), 10);
+    if (upto >= 862 && upto <= 2026) return { upto };
     const cp = localStorage.getItem('class_current_period');
-    if (cp && TASK_EPOCHS.includes(cp)) return cp;
+    if (cp && TASK_EPOCHS.includes(cp)) return { era: cp };
     const lp = localStorage.getItem('ege_last_period');
-    if (lp && TASK_EPOCHS.includes(lp)) return lp;
+    if (lp && TASK_EPOCHS.includes(lp)) return { era: lp };
     return null;
+}
+
+function _wpLabel(wp) {
+    if (!wp) return '';
+    if (wp.upto) return `до ${wp.upto} г.`;
+    return (TASK_EPOCH_SHORT && TASK_EPOCH_SHORT[wp.era]) || '';
+}
+
+// Применить рабочий период к фильтру: граница года → кастомный диапазон 862..год.
+function _applyWpFilter(wp) {
+    const sel = $('filter-period');
+    if (!sel) return;
+    if (wp && wp.upto) {
+        sel.value = 'custom';
+        if ($('custom-year-start')) $('custom-year-start').value = 862;
+        if ($('custom-year-end')) $('custom-year-end').value = wp.upto;
+    } else {
+        sel.value = (wp && TASK_EPOCHS.includes(wp.era)) ? wp.era : 'all';
+    }
 }
 
 // Самая слабая пара (задание, эпоха): минимум точности при ≥10 попытках.
@@ -1440,7 +1463,7 @@ function computeMainAction() {
     const base = { due, hwCount: active.length, hwRemaining, doneToday };
 
     if (!(s.totalSolvedEver > 0)) {
-        const p = _workingPeriod() || 'early';
+        const p = _workingPeriod() || { era: 'early' };
         return { ...base, kind: 'start', period: p };
     }
     if (active.length && hwRemaining > 0) {
@@ -1481,8 +1504,9 @@ window.mainActionGo = function(kind) {
         return quickStartGame(bestTask, 'mistakes');
     }
     if (act === 'continue' || act === 'start') {
-        const period = a.period || 'all';
-        if ($('filter-period')) $('filter-period').value = TASK_EPOCHS.includes(period) ? period : 'all';
+        // continue хранит период строкой (свой последний), start — объект рабочего периода
+        const wp = (typeof a.period === 'string') ? { era: a.period } : a.period;
+        _applyWpFilter(wp);
         return quickStartGame(act === 'start' ? 'task1' : a.task, 'normal');
     }
     if (act === 'weak') {
@@ -1517,7 +1541,7 @@ function renderMainAction() {
     } else if (a.kind === 'review') {
         const shown = Math.min(a.due.total, 20);
         title = `Повторить ${shown} фактов`;
-        sub = a.period ? `сначала ${periodName(a.period)} — твой период` : 'память просит освежить';
+        sub = a.period ? `твой материал: ${_wpLabel(a.period)}` : 'память просит освежить';
         if (a.due.total > shown) sub += ` · всего ${a.due.total}`;
     } else if (a.kind === 'continue') {
         const cfg = TASK_CONFIG[a.task] || TASK_CONFIG.task4;
@@ -1525,7 +1549,7 @@ function renderMainAction() {
     } else if (a.kind === 'done') {
         sub = `стрик ${a.streak} дн. · хочешь дуэль?`;
     } else if (a.kind === 'start') {
-        title = `Начать: ${periodName(a.period) || 'Древность'}`;
+        title = `Начать: ${_wpLabel(a.period) || 'Древность'}`;
         sub = 'первые факты за 2 минуты';
     }
     const chip = (label, val, act, dim) => `

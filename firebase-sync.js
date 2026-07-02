@@ -1264,7 +1264,7 @@
                   <div class="bg-white dark:bg-[#1e1e1e] border border-rose-200 dark:border-rose-900/40 rounded-xl overflow-hidden shadow-sm">
                     <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;padding:11px 12px">
                         <div>
-                            <div class="dark:text-gray-100" style="font-size:13px;font-weight:900;color:#111827">Контроль ДЗ</div>
+                            <div class="text-gray-900 dark:text-gray-100" style="font-size:13px;font-weight:900">Контроль ДЗ</div>
                             <div style="font-size:10px;color:#64748b;font-weight:700;margin-top:1px">${hasStudents ? 'У загруженных учеников сейчас нет выданных ДЗ' : 'Загрузите учеников класса, чтобы увидеть выполнение ДЗ'}</div>
                         </div>
                         <button onclick="window.openClassAssignmentsList&&window.openClassAssignmentsList()" style="background:#fff1f2;color:#be123c;border:1px solid #fecdd3;border-radius:10px;padding:8px 10px;font-size:10px;font-weight:900;cursor:pointer;white-space:nowrap">список ДЗ</button>
@@ -1316,7 +1316,7 @@
                     <div style="width:34px;height:34px;border-radius:10px;background:${m.bg};border:1px solid ${m.border};display:flex;align-items:center;justify-content:center;flex-shrink:0">${m.icon}</div>
                     <div style="flex:1;min-width:0">
                         <div style="display:flex;align-items:center;gap:6px;min-width:0">
-                            <div class="dark:text-gray-200" style="font-size:12px;font-weight:900;color:#0f172a;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(s.name || 'Без имени')}</div>
+                            <div class="text-gray-900 dark:text-gray-200" style="font-size:12px;font-weight:900;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(s.name || 'Без имени')}</div>
                             <span style="font-size:9px;font-weight:900;color:${m.color};background:${m.bg};border:1px solid ${m.border};border-radius:999px;padding:2px 6px;white-space:nowrap">${m.short}</span>
                             ${s.classCode ? `<span style="font-size:9px;font-weight:800;color:#94a3b8;white-space:nowrap">·&nbsp;${esc(s.classCode)}</span>` : ''}
                         </div>
@@ -1335,7 +1335,7 @@
               <div class="bg-white dark:bg-[#1e1e1e] border border-rose-200 dark:border-rose-900/40 rounded-xl overflow-hidden shadow-sm">
                 <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;padding:11px 12px;border-bottom:1px solid rgba(254,205,211,.75)">
                     <div>
-                        <div class="dark:text-gray-100" style="font-size:13px;font-weight:900;color:#111827">Контроль ДЗ</div>
+                        <div class="text-gray-900 dark:text-gray-100" style="font-size:13px;font-weight:900">Контроль ДЗ</div>
                         <div style="font-size:10px;color:#64748b;font-weight:700;margin-top:1px">быстро видно, кто сдал, кто завис и кто просрочил</div>
                     </div>
                     <button onclick="var s=document.getElementById('teacher-sort-select');if(s){s.value='homework';window.sortAndRenderStudents&&window.sortAndRenderStudents();}" style="background:#fff1f2;color:#be123c;border:1px solid #fecdd3;border-radius:10px;padding:8px 10px;font-size:10px;font-weight:900;cursor:pointer;white-space:nowrap">долги ↑</button>
@@ -1405,7 +1405,7 @@
             }).join('');
 
             const mistHtml = topMistakes.length ? topMistakes.map((m,i) =>
-                `<div style="display:flex;align-items:center;gap:6px;font-size:10px;padding:2px 0"><span style="color:#cbd5e1;min-width:14px">${i+1}.</span><span>${em[m.task]||''}</span><span style="flex:1;color:#334155;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" class="dark:text-gray-300" title="${esc(m.label)}">${esc(m.label)}</span><span style="font-weight:900;color:var(--c-danger);min-width:54px;text-align:right">${m.count} уч.</span></div>`).join('')
+                `<div style="display:flex;align-items:center;gap:6px;font-size:10px;padding:2px 0"><span style="color:#cbd5e1;min-width:14px">${i+1}.</span><span>${em[m.task]||''}</span><span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" class="text-slate-800 dark:text-gray-300" title="${esc(m.label)}">${esc(m.label)}</span><span style="font-weight:900;color:var(--c-danger);min-width:54px;text-align:right">${m.count} уч.</span></div>`).join('')
                 : '<p style="font-size:10px;color:var(--c-success);font-weight:700;padding:4px 0">Активных ошибок нет 🎉</p>';
 
             // ── Прогресс выучивания: сколько фактов из общего пула выучил каждый ученик ──
@@ -1427,7 +1427,7 @@
             const learnColor = pc => pc>=66?'var(--c-success)':pc>=33?'var(--c-warn)':'var(--c-danger-soft)';
             const learnHtml = (totalPool && learnRows.length) ? learnRows.map(r => {
                 const pc = Math.round(r.learned/totalPool*100), col = learnColor(pc);
-                return `<div style="display:flex;align-items:center;gap:6px;font-size:10px;margin-bottom:3px"><span style="min-width:84px;color:#334155;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" class="dark:text-gray-300" title="${esc(r.name)}">${esc(r.name)}</span><div style="flex:1;height:6px;background:#f1f5f9;border-radius:3px;overflow:hidden"><div style="height:100%;width:${pc}%;background:${col}"></div></div><span style="min-width:70px;text-align:right;font-weight:700;color:${col}">${r.learned}<span style="color:#cbd5e1;font-weight:400">/${totalPool}</span> · ${pc}%</span></div>`;
+                return `<div style="display:flex;align-items:center;gap:6px;font-size:10px;margin-bottom:3px"><span style="min-width:84px;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" class="text-slate-800 dark:text-gray-300" title="${esc(r.name)}">${esc(r.name)}</span><div style="flex:1;height:6px;background:#f1f5f9;border-radius:3px;overflow:hidden"><div style="height:100%;width:${pc}%;background:${col}"></div></div><span style="min-width:70px;text-align:right;font-weight:700;color:${col}">${r.learned}<span style="color:#cbd5e1;font-weight:400">/${totalPool}</span> · ${pc}%</span></div>`;
             }).join('') : '<p style="font-size:10px;color:#94a3b8">Нет данных</p>';
 
             cont.innerHTML = `
@@ -1523,8 +1523,13 @@
         window.sortAndRenderStudents = function() {
             const st = window._cachedStudents;
             if (!st || !st.length) return;
+            const q = (document.getElementById('teacher-student-search')?.value || '').trim().toLowerCase();
+            const pool = !q ? st : st.filter(s =>
+                String(s.name || '').toLowerCase().includes(q) ||
+                String(s.tgId || s.knownTgId || s.uid || '').toLowerCase().includes(q) ||
+                String(s.classCode || '').toLowerCase().includes(q));
             const sort = document.getElementById('teacher-sort-select')?.value || 'total';
-            const sorted = [...st].sort((a, b) => {
+            const sorted = [...pool].sort((a, b) => {
                 if (sort === 'weekly')    return (b.wScore||0)       - (a.wScore||0);
                 if (sort === 'streak')    return (b.streak||0)       - (a.streak||0);
                 if (sort === 'learned')   return (b.learnedCount||0) - (a.learnedCount||0);
@@ -1539,7 +1544,9 @@
                 return (b.totalSolved||0) - (a.totalSolved||0);
             });
             const cont = document.getElementById('teacher-class-stats');
-            if (cont) cont.innerHTML = sorted.map((s, i) => renderStudentCard(s, i)).join('');
+            if (cont) cont.innerHTML = sorted.length
+                ? sorted.map((s, i) => renderStudentCard(s, i)).join('')
+                : '<p class="text-center py-4 text-xs font-bold text-gray-500">По запросу никого не нашли — проверь имя</p>';
         };
 
         window.downloadStudentPDF = async function(uid) {
@@ -1848,11 +1855,11 @@
                     } catch (e) { console.warn('[Teacher] Доп. запрос по классу не удался:', e); }
                 }
 
-                // Подтягиваем «Сейчас проходим» потока в селект кабинета (не блокируя список).
+                // Подтягиваем «Дошли до года» потока в поле кабинета (не блокируя список).
                 if (tc) {
                     getDoc(doc(db, 'artifacts', appId, 'public', 'data', 'classes', _classDocId(tc))).then(cs => {
-                        const sel = document.getElementById('teacher-current-period');
-                        if (sel) sel.value = (cs.exists() && cs.data().currentPeriod) || '';
+                        const inp = document.getElementById('teacher-current-upto');
+                        if (inp) inp.value = (cs.exists() && cs.data().currentUpto) || '';
                     }).catch(() => {});
                 }
 
@@ -1922,7 +1929,7 @@
                     hwCtrl.innerHTML = `
                       <div class="bg-white dark:bg-[#1e1e1e] border border-rose-200 dark:border-rose-900/40 rounded-xl overflow-hidden shadow-sm">
                         <div style="padding:11px 12px">
-                            <div class="dark:text-gray-100" style="font-size:13px;font-weight:900;color:#111827">Контроль ДЗ</div>
+                            <div class="text-gray-900 dark:text-gray-100" style="font-size:13px;font-weight:900">Контроль ДЗ</div>
                             <div style="font-size:10px;color:#be123c;font-weight:800;margin-top:2px">Не удалось загрузить данные учеников. Проверьте подключение и обновите кабинет.</div>
                         </div>
                       </div>`;
@@ -2119,8 +2126,11 @@
                 const revoked = Array.isArray(data.revokedAssignments) ? data.revokedAssignments : [];
                 const revokedSet = _mergeRevoked(revoked); // копим в общий набор (классовые + индивидуальные)
                 let removed = (window.reconcileRevokedAssignments ? window.reconcileRevokedAssignments(revoked) : 0);
-                // «Сейчас проходим» потока → рабочий период для кнопки «Продолжить».
+                // «Дошли до года» потока → граница повторения для кнопки «Продолжить».
+                // currentPeriod оставляем как легаси-фолбэк для старых клиентов.
                 try {
+                    if (data.currentUpto) localStorage.setItem('class_current_upto', String(data.currentUpto));
+                    else localStorage.removeItem('class_current_upto');
                     if (data.currentPeriod) localStorage.setItem('class_current_period', data.currentPeriod);
                     else localStorage.removeItem('class_current_period');
                 } catch (e) {}
@@ -2165,18 +2175,23 @@
             } catch (e) { console.error('pullClassAssignments error:', e); }
         };
 
-        // ─── Учитель: «Сейчас проходим» — период потока ───
+        // ─── Учитель: «Дошли до года» — граница пройденного материала потока ───
         // Хранится в документе класса; ученики подхватывают вместе с журналом ДЗ
-        // (pullClassAssignments) и используют в кнопке «Продолжить» как рабочий период.
-        window.saveClassCurrentPeriod = async function(period) {
+        // (pullClassAssignments): кнопка «Продолжить» повторяет всё от 862 до этого года.
+        // Для старых клиентов параллельно пишем производный период (currentPeriod).
+        window.saveClassCurrentUpto = async function(rawYear) {
             const tc = (document.getElementById('teacher-class-code-input')?.value || localStorage.getItem('teacher_class_code') || '').trim();
             const code = _classDocId(tc);
             if (!db || !code) return;
+            const y = parseInt(rawYear, 10) || 0;
+            const valid = y >= 862 && y <= 2026;
+            if (rawYear && !valid) { showToast('⚠️', 'Год должен быть от 862 до 2026', 'bg-amber-500', 'border-amber-700'); return; }
+            const era = !valid ? '' : (y < 1700 ? 'early' : y < 1800 ? '18th' : y < 1900 ? '19th' : '20th');
             try {
                 await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'classes', code),
-                    { currentPeriod: period || '', updatedAt: Date.now() }, { merge: true });
-                showToast('🗓', period ? 'Период потока сохранён — ученики увидят при входе' : 'Период потока снят', 'bg-indigo-500', 'border-indigo-700');
-            } catch (e) { console.error('saveClassCurrentPeriod error:', e); showToast('❌', 'Не удалось сохранить период', 'bg-rose-500', 'border-rose-700'); }
+                    { currentUpto: valid ? y : 0, currentPeriod: era, updatedAt: Date.now() }, { merge: true });
+                showToast('🗓', valid ? `Граница потока: до ${y} г. — ученики повторяют всё до неё` : 'Граница потока снята', 'bg-indigo-500', 'border-indigo-700');
+            } catch (e) { console.error('saveClassCurrentUpto error:', e); showToast('❌', 'Не удалось сохранить границу', 'bg-rose-500', 'border-rose-700'); }
         };
 
         // ─── Учитель: список выданных классу ДЗ (из журнала класса) ───
