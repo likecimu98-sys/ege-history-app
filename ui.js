@@ -1586,19 +1586,28 @@ function updateGlobalUI() {
     } : null;
     renderTopBar({ daysLeft, sc, egePoints, totalL, totalSolved: window.state.stats.totalSolvedEver || 0, hwMode });
 
-    const egeEl = $('stat-ege');
-    if (egeEl) {
-        egeEl.textContent = sc;
-        egeEl.className = 'text-[14px] sm:text-[16px] font-black text-[#fbbf24] leading-none group-hover:scale-110 transition-transform';
+    // Кольцо цели дня: заполняется решёнными сегодня строками, в центре — стрик.
+    // Прогноз ЕГЭ переехал в статистику (в баре он менялся слишком редко и демотивировал новичков).
+    const goalEl = $('stat-goal');
+    const goalRing = $('goal-ring');
+    if (goalEl || goalRing) {
+        const doneToday = (window.state.stats.dailyStats && window.state.stats.dailyStats[getTodayString()] &&
+            window.state.stats.dailyStats[getTodayString()].solved) || 0;
+        const goalPct = Math.min(1, doneToday / DAILY_GOAL_LINES);
+        if (goalRing) {
+            goalRing.style.strokeDashoffset = 97.4 * (1 - goalPct);
+            goalRing.style.stroke = goalPct >= 1 ? '#fbbf24' : '#34d399'; // выполнено — золото
+        }
+        if (goalEl) updateText(goalEl, `🔥${window.state.stats.streak || 0}`);
     }
-    const egeRing = $('ege-ring');
-    if (egeRing) {
-        const circumference = 97.4;
-        const pct = Math.min(sc / 100, 1);
-        egeRing.style.strokeDashoffset = circumference * (1 - pct);
-        egeRing.style.stroke = '#fbbf24';
+    // Дни до ЕГЭ — только когда их ≤150: раньше это шум, ближе к экзамену — мотивация.
+    const daysBox = $('stat-days-box');
+    if (daysBox) {
+        const showDays = daysLeft > 0 && daysLeft <= 150;
+        daysBox.classList.toggle('hidden', !showDays);
+        daysBox.classList.toggle('flex', showDays);
+        if (showDays) updateText($('stat-days'), daysLeft);
     }
-    if ($('stat-days')) updateText($('stat-days'), daysLeft);
 
     updateText($('stat-streak'), window.state.stats.streak);
     updateText($('stat-solved'), window.state.stats.egePoints || 0);
@@ -1679,7 +1688,17 @@ window.openStatsModal = function() {
             { key: 'task5', label: '👤 Задание №5', color: 'text-purple-600 dark:text-purple-400' },
             { key: 'task7', label: '🎨 Задание №7', color: 'text-amber-600 dark:text-amber-400' },
         ];
-        let eH = '';
+        // Прогноз ЕГЭ живёт здесь (из шапки убран): показываем только при достаточных данных.
+        const _egeR = estimateEGEScore(window.state.stats);
+        let _attempts = 0;
+        Object.values(window.state.stats.eraStats || {}).forEach(t => Object.values(t || {}).forEach(e => { _attempts += (e && e.total) || 0; }));
+        let eH = `<div onclick="window.openEGEModal&&window.openEGEModal()" class="flex items-center justify-between bg-yellow-50 dark:bg-yellow-900/15 border border-yellow-200 dark:border-yellow-900/40 rounded-xl p-3 mb-3 cursor-pointer active:scale-[0.98] transition-transform">
+            <div>
+                <div class="text-[10px] font-black text-yellow-700 dark:text-yellow-400 uppercase tracking-widest">🎯 Прогноз ЕГЭ</div>
+                <div class="text-[10px] font-bold text-gray-400 mt-0.5">${_attempts >= 300 ? 'нажми — из чего складывается' : 'пока копим данные — реши ещё ' + Math.max(0, 300 - _attempts) + ' строк для точности'}</div>
+            </div>
+            <div class="text-2xl font-black ${_attempts >= 300 ? 'text-yellow-600 dark:text-yellow-400' : 'text-gray-300 dark:text-gray-600'}">${_attempts >= 300 ? _egeR.score : '~' + _egeR.score}</div>
+        </div>`;
         tasks.forEach(({ key, label, color }) => {
             const taskEra = (window.state.stats.eraStats || {})[key] || {};
             const totalAttempts = Object.values(taskEra).reduce((s, e) => s + (e.total || 0), 0);

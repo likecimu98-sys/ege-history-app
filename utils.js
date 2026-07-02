@@ -226,7 +226,18 @@ window.acceptableAnswerSet = function(row, task) {
     const target = row[disp];
     if (target === undefined) return null;
     const set = new Set();
-    cfg.data().forEach(d => { if (d[disp] === target) set.add(String(d[hid])); });
+    const addVals = (d) => {
+        if (d[hid] !== undefined) set.add(String(d[hid]));
+        // task7: у записи может быть несколько равноправных формулировок характеристики —
+        // раунд показывает одну из traitVariants, засчитываем любую.
+        if (task === 'task7' && Array.isArray(d.traitVariants)) d.traitVariants.forEach(v => set.add(String(v)));
+    };
+    // КРИТИЧНО: сама строка — всегда валидный ответ. Без этого, если текст строки
+    // «уехал» от базы (снимок из mistakesPool после правки данных) или показан
+    // вариант из traitVariants, множество получалось ПУСТЫМ — и даже верная
+    // карточка помечалась ошибкой (slot.expected генерится из этой же строки).
+    addVals(row);
+    cfg.data().forEach(d => { if (d[disp] === target) addVals(d); });
     return set;
 };
 

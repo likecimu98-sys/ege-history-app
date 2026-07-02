@@ -354,12 +354,14 @@
                         <span class="text-lg sm:text-xl drop-shadow-md">🏛️</span>
                     </div>
                     
-                    <button data-action="openEGEModal" title="Нажми — прогноз балла ЕГЭ" class="relative flex items-center justify-center w-10 h-10 sm:w-11 sm:h-11 active:scale-95 transition-all shrink-0 group cursor-pointer rounded-full hover:ring-2 hover:ring-blue-400/40">
+                    <!-- Кольцо цели дня (заполняется решёнными строками), в центре — стрик.
+                         Клик — то же действие, что и кнопка «Продолжить». -->
+                    <button data-action="mainActionGo" title="Цель дня и стрик — нажми, чтобы продолжить" class="relative flex items-center justify-center w-10 h-10 sm:w-11 sm:h-11 active:scale-95 transition-all shrink-0 group cursor-pointer rounded-full hover:ring-2 hover:ring-emerald-400/40">
                         <svg class="absolute inset-0 w-full h-full -rotate-90 drop-shadow-md overflow-visible" viewBox="0 0 36 36" style="overflow:visible">
                             <circle cx="18" cy="18" r="15.5" fill="none" stroke="rgba(255,255,255,0.15)" stroke-width="3"/>
-                            <circle id="ege-ring" cx="18" cy="18" r="15.5" fill="none" stroke="#fbbf24" stroke-width="3" stroke-linecap="round" stroke-dasharray="97.4" stroke-dashoffset="20" style="transition:stroke-dashoffset 0.8s ease, stroke 0.4s"/>
+                            <circle id="goal-ring" cx="18" cy="18" r="15.5" fill="none" stroke="#34d399" stroke-width="3" stroke-linecap="round" stroke-dasharray="97.4" stroke-dashoffset="97.4" style="transition:stroke-dashoffset 0.8s ease, stroke 0.4s"/>
                         </svg>
-                        <span class="text-[14px] sm:text-[16px] font-black text-[#fbbf24] leading-none group-hover:scale-110 transition-transform" id="stat-ege">84</span>
+                        <span class="text-[12px] sm:text-[13px] font-black text-white leading-none group-hover:scale-110 transition-transform" id="stat-goal">🔥0</span>
                     </button>
                 </div>
 
@@ -382,7 +384,8 @@
 
                     <div class="w-px h-6 bg-white/10 hidden sm:block"></div>
 
-                    <div class="flex flex-col items-center min-w-[38px] sm:min-w-[60px]" title="Дней до ЕГЭ">
+                    <!-- Дни до ЕГЭ показываем только когда их ≤150 (иначе это шум, а не мотивация) -->
+                    <div id="stat-days-box" class="hidden flex-col items-center min-w-[38px] sm:min-w-[60px]" title="Дней до ЕГЭ">
                         <span class="text-[15px] sm:text-[18px] font-black text-[#FB7185] leading-none mb-1 drop-shadow-sm" id="stat-days">—</span>
                         <span class="text-[7px] sm:text-[9px] font-black text-white/50 uppercase tracking-widest">дней</span>
                     </div>
