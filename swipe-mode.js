@@ -508,6 +508,8 @@
             if (!isReview) { _sw.correct++; _sw.seen++; }
         } else {
             _sw.streak = 0;
+            // Дуэль: ошибка снимает очки — наугад свайпать невыгодно
+            if (_sw.duel) _sw.score = Math.max(0, _sw.score - 5);
             if (!isReview) { _sw.seen++; if (!_sw.duel) _sw.lapses.push(_sw.cur.card); }
         }
         if (_sw.duel && !_sw.duel.over) { _sw.duel.done++; _duelReport(); _updateDuelBar(); }
@@ -515,7 +517,7 @@
         const v = document.getElementById('sw-verdict');
         if (v) {
             if (ok) { v.style.color = '#4ade80'; v.textContent = pick(WIN) + (_sw.streak >= 3 ? ` 🔥×${_sw.streak}` : ' ✅'); }
-            else { const correct = _byId(_sw.cur.card.correctId); v.style.color = '#f87171'; v.textContent = pick(FAIL) + ' Это ' + (correct ? correct.name : '') + ' ❌'; }
+            else { const correct = _byId(_sw.cur.card.correctId); v.style.color = '#f87171'; v.textContent = pick(FAIL) + ' Это ' + (correct ? correct.name : '') + (_sw.duel ? ' · −5 очков ❌' : ' ❌'); }
         }
         _sw.i++;
         _updateHeader();

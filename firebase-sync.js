@@ -630,7 +630,8 @@
                 const myUid = fbUser ? resolveUserId(fbUser) : null;
                 const now = Date.now();
                 const duel = window.state.duel;
-                if (duel && duel.active) { if (window.hideDuelChallenge) window.hideDuelChallenge(); return; }
+                // Занят дуэлью (играет или ждёт отсчёта старта) — вызовы не показываем и прячем висящий
+                if (duel && (duel.active || (duel.matchId && !duel.searching))) { if (window.hideDuelChallenge) window.hideDuelChallenge(); return; }
                 // «host» = я создал свой матч и жду соперника. Только в этом состоянии
                 // авто-стыкуемся. В момент самой стыковки (searching, но уже не host)
                 // не делаем ничего — иначе можно случайно присоединиться ко второму матчу.
@@ -829,6 +830,7 @@
                 
                 if (data.status === 'playing' && window.state.duel.searching) {
                     window.state.duel.searching = false;
+                    if (window.hideDuelChallenge) window.hideDuelChallenge(); // соперник найден — чужие вызовы убираем сразу
                     const opp = window.state.duel.isPlayer1 ? data.player2 : data.player1;
                     window.state.duel.oppName = opp ? opp.name : 'Соперник';
                     // Режим и колода дуэли — из документа матча (единая точка для обеих сторон).
@@ -1559,14 +1561,49 @@
             showToast('📄','PDF-сводка скачана!','bg-blue-500','border-blue-700');
         };
 
+        // Сегменты учеников: быстрые срезы списка (риск / долги ДЗ / новички / топ недели)
+        const _SEGMENT_FILTERS = {
+            risk: s => s.atRisk,                                   // 3+ дня не заходил
+            debt: s => (s.hwRemaining || 0) > 0,                   // есть невыполненное ДЗ
+            new:  s => (s.totalSolved || 0) < 10,                  // только начали (<10 строк)
+        };
+        window._teacherSegment = window._teacherSegment || 'all';
+        window.setTeacherSegment = function(seg) {
+            window._teacherSegment = seg || 'all';
+            document.querySelectorAll('#teacher-segments button[data-seg]').forEach(b => {
+                const on = b.dataset.seg === window._teacherSegment;
+                b.classList.toggle('bg-blue-600', on);
+                b.classList.toggle('text-white', on);
+                b.classList.toggle('border-blue-600', on);
+                b.classList.toggle('bg-white', !on);
+                b.classList.toggle('dark:bg-[#1e1e1e]', !on);
+                b.classList.toggle('text-gray-500', !on);
+                b.classList.toggle('dark:text-gray-400', !on);
+                b.classList.toggle('border-gray-200', !on);
+                b.classList.toggle('dark:border-[#2c2c2c]', !on);
+            });
+            window.sortAndRenderStudents();
+        };
+        function _updateSegmentCounts(students) {
+            const set = (seg, n) => {
+                const el = document.querySelector(`#teacher-segments [data-segcnt="${seg}"]`);
+                if (el) el.textContent = n ? `· ${n}` : '';
+            };
+            set('all', (students || []).length);
+            for (const seg in _SEGMENT_FILTERS) set(seg, (students || []).filter(_SEGMENT_FILTERS[seg]).length);
+        }
+
         window.sortAndRenderStudents = function() {
             const st = window._cachedStudents;
             if (!st || !st.length) return;
             const q = (document.getElementById('teacher-student-search')?.value || '').trim().toLowerCase();
-            const pool = !q ? st : st.filter(s =>
+            let pool = !q ? st : st.filter(s =>
                 String(s.name || '').toLowerCase().includes(q) ||
                 String(s.tgId || s.knownTgId || s.uid || '').toLowerCase().includes(q) ||
                 String(s.classCode || '').toLowerCase().includes(q));
+            const seg = window._teacherSegment || 'all';
+            if (_SEGMENT_FILTERS[seg]) pool = pool.filter(_SEGMENT_FILTERS[seg]);
+            else if (seg === 'top') pool = [...pool].sort((a, b) => (b.wEgePoints || 0) - (a.wEgePoints || 0) || (b.wScore || 0) - (a.wScore || 0)).slice(0, 10);
             const sort = document.getElementById('teacher-sort-select')?.value || 'total';
             const sorted = [...pool].sort((a, b) => {
                 if (sort === 'weekly')    return (b.wScore||0)       - (a.wScore||0);
@@ -1585,7 +1622,7 @@
             const cont = document.getElementById('teacher-class-stats');
             if (cont) cont.innerHTML = sorted.length
                 ? sorted.map((s, i) => renderStudentCard(s, i)).join('')
-                : '<p class="text-center py-4 text-xs font-bold text-gray-500">По запросу никого не нашли — проверь имя</p>';
+                : '<p class="text-center py-4 text-xs font-bold text-gray-500">В этом срезе никого нет — сними фильтр или поменяй запрос</p>';
         };
 
         window.downloadStudentPDF = async function(uid) {
@@ -1842,8 +1879,13 @@
             showToast('📄', 'PDF отчёт скачан!', 'bg-blue-500', 'border-blue-700');
         };
 
+        // Порядковый номер загрузки: кабинет открывают/фильтруют быстрее, чем приходит ответ
+        // Firestore, и МЕДЛЕННЫЙ старый запрос (все классы, 3000 док.) финишировал ПОСЛЕ
+        // быстрого фильтрованного, затирая его результат — «только мой класс работал через раз».
+        let _loadSeq = 0;
         window.loadClassProgress = async function() {
             if (!db) return;
+            const mySeq = ++_loadSeq;
             const tc  = document.getElementById('teacher-class-code-input').value.trim();
             const cont  = document.getElementById('teacher-class-stats');
             const wCont = document.getElementById('weekly-class-stats');
@@ -1857,7 +1899,11 @@
                 const monStr = monday.getFullYear() + '-' + String(monday.getMonth()+1).padStart(2,'0') + '-' + String(monday.getDate()).padStart(2,'0');
 
                 const studentsCol = collection(db, 'artifacts', appId, 'public', 'data', 'students');
-                const filterClass = document.getElementById('teacher-filter-class')?.checked;
+                // Галочка «только мой класс» переживает переоткрытие кабинета
+                const fcb = document.getElementById('teacher-filter-class');
+                if (fcb && !fcb.dataset.init) { fcb.dataset.init = '1'; fcb.checked = localStorage.getItem('teacher_filter_class') === '1'; }
+                const filterClass = fcb?.checked;
+                try { localStorage.setItem('teacher_filter_class', filterClass ? '1' : '0'); } catch (e) {}
                 
                 // При фильтре по классу показываем ВЕСЬ класс — включая только что зарегистрированных,
                 // кто нарешал <10 (раньше порог >=10 прятал новичков, и учитель их «не находил»).
@@ -1872,6 +1918,7 @@
                 }
                 
                 const qS = await getDocs(firestoreQuery);
+                if (mySeq !== _loadSeq) return; // пришёл устаревший ответ — свежая загрузка уже идёт
                 let st = [];
                 const seenIds = new Set();
                 qS.forEach(docSnap => {
@@ -1885,6 +1932,7 @@
                 if (tc && !filterClass) {
                     try {
                         const extraSnap = await getDocs(query(studentsCol, where('classCode', '==', tc), limit(500)));
+                        if (mySeq !== _loadSeq) return;
                         extraSnap.forEach(docSnap => {
                             if (seenIds.has(docSnap.id)) return;
                             const d = docSnap.data(); d.uid = docSnap.id;
@@ -1907,6 +1955,7 @@
                 window._cachedStudents = enriched;
                 renderTeacherHwControl(enriched);
                 renderClassAnalytics(enriched);
+                _updateSegmentCounts(enriched);
 
                 // Прозрачность фильтра: показываем, какой запрос реально выполнен, и сколько в выборке
                 // ЧУЖИХ кодов класса. Если при включённом «только мой класс» число большое — это не баг

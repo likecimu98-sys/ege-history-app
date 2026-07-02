@@ -62,6 +62,9 @@ window.initDuelStart = function(startTime) {
 };
 
 window.startDuelGame = function() {
+    // Матч начался — убираем чужой вызов на дуэль (и его зацикленный звук),
+    // иначе баннер, показанный в окно отсчёта, играл бы всю дуэль.
+    if (window.hideDuelChallenge) window.hideDuelChallenge();
     // Свайп-дуэль живёт в собственном оверлее — классический игровой экран не трогаем.
     if ((window.state.duel || {}).mode === 'swipe' && window.openSwipeDuel) {
         window.state.currentMode = 'duel';

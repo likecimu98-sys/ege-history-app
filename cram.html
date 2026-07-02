@@ -1037,10 +1037,14 @@ function renderComplete(){
       <div class="emoji">💚</div>
       <h2>${esc(currentDeck.title)}${currentDeck.kind === 'svo' ? ' — выучено' : ' выучен'}</h2>
       <div class="mini">${currentDeck.kind === 'svo' ? ('Все ' + currentDeck.items.length + ' личностей узнаны по ' + NEED_SVO + ' раза подряд. Готов к заданию №5.') : (currentDeck.kind === 'film' ? 'Все фильмы прошли выбор и точный ввод периода/автора.' : 'Все события прошли выбор и точный ввод. Блок будет гореть зелёным на главной.')}</div>
-      <button class="btn green" id="homeBtn">К блокам</button>
+      <button class="btn green" id="homeBtn">${hwLocked ? 'Продолжить ДЗ →' : 'К блокам'}</button>
     </div>`;
   document.getElementById('bottomActions').classList.add('hidden');
-  document.getElementById('homeBtn').onclick = renderHome;
+  // ДЗ-режим: главный экран зубрёжки ученику не нужен — возвращаемся в приложение,
+  // где родитель сам запустит следующий этап ДЗ (или покажет главное меню).
+  document.getElementById('homeBtn').onclick = hwLocked
+    ? function(){ try { window.parent.postMessage({ type: 'cram-exit' }, '*'); } catch(e){ renderHome(); } }
+    : renderHome;
 }
 function onShowAnswer(){
   if(!currentItem) return;

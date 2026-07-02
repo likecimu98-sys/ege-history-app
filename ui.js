@@ -952,6 +952,8 @@ window.closeCram = function() {
     if (window.refreshHwState) window.refreshHwState();
     if (window.updateGlobalUI) window.updateGlobalUI();
     if (window.updateHwNavBadge) window.updateHwNavBadge();
+    // Этап-зубрёжка выполнен → сразу запускаем следующий этап ДЗ (иначе остаёмся в меню).
+    if (window.maybeAdvanceHw) window.maybeAdvanceHw();
 };
 
 // Запасной канал выхода из iframe «Зубрёжки» (если прямой вызов closeCram недоступен).
@@ -1248,7 +1250,8 @@ function _stopChallengeChime() {
 window.showDuelChallenge = function(ch) {
     if (!ch || !ch.matchId) return;
     if (_dismissedChallenges.has(ch.matchId)) return;
-    if (window.state.duel && (window.state.duel.active || window.state.duel.searching)) return;
+    // matchId ловит и окно «соперник найден → отсчёт», когда searching уже false, а active ещё false
+    if (window.state.duel && (window.state.duel.active || window.state.duel.searching || window.state.duel.matchId)) return;
     const name = String(ch.name || 'Игрок').replace(/[<>&]/g, '');
     const isNew = ch.matchId !== _lastChallengeShownId;   // привлекаем внимание только для нового вызова
     _lastChallengeShownId = ch.matchId;
