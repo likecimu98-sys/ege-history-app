@@ -1267,8 +1267,8 @@ window.showDuelChallenge = function(ch) {
     }
     el.dataset.matchId = ch.matchId;
     el.innerHTML = `
-        <span style="font-size:16px;flex-shrink:0">🗡️</span>
-        <span style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis"><b>${name}</b> вызывает на дуэль!</span>
+        <span style="font-size:16px;flex-shrink:0">${ch.mode === 'swipe' ? '🃏' : '🗡️'}</span>
+        <span style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis"><b>${name}</b> зовёт: ${ch.mode === 'swipe' ? 'свайп-дуэль' : 'дуэль'}!</span>
         <button onclick="window.acceptDuelChallenge&&window.acceptDuelChallenge('${ch.matchId}')" style="flex-shrink:0;background:#fff;color:#4f46e5;border:none;border-radius:9px;padding:6px 12px;font-size:12px;font-weight:900;cursor:pointer">Принять</button>
         <button onclick="window.dismissDuelChallenge&&window.dismissDuelChallenge('${ch.matchId}')" style="flex-shrink:0;background:rgba(255,255,255,.2);color:#fff;border:none;border-radius:9px;width:26px;height:26px;font-size:13px;font-weight:900;cursor:pointer;line-height:1">✕</button>`;
     requestAnimationFrame(() => { el.style.transform = 'translateX(-50%) translateY(0)'; });
@@ -1373,7 +1373,184 @@ window.openEGEModal = function() {
     </div>`;
 };
 
+// ═══ Главная кнопка «Продолжить» ═══════════════════════════════════════════
+// Одно действие, которое приложение выбирает за ученика. Приоритет:
+// ДЗ (ближайший дедлайн) → повторение SRS (≥5 фактов) → цель дня (продолжить
+// последний режим) → всё сделано (награда). Новичок — отдельная ветка «Начать».
+
+const DAILY_GOAL_LINES = 15;
+
+// Сколько фактов «к повтору» (SRS: level>0, nextReview прошёл) по заданиям таблицы.
+// Зубрёжка (cram:) и визуальные (vp_/va_/vm_) сюда не входят — у них свои тренажёры.
+function _dueReviewCounts() {
+    const now = Date.now();
+    const fs = window.state.stats.factStreaks || {};
+    const by = { task1: 0, task3: 0, task4: 0, task5: 0, task7: 0 };
+    let total = 0;
+    for (const k in fs) {
+        const d = fs[k];
+        if (!d || !(d.level > 0) || !(d.nextReview <= now)) continue;
+        let t;
+        if (k.indexOf('t1_') === 0) t = 'task1';
+        else if (k.indexOf('t3_') === 0) t = 'task3';
+        else if (k.indexOf('t5_') === 0) t = 'task5';
+        else if (k.indexOf('t7_') === 0) t = 'task7';
+        else if (k.indexOf('vp_') === 0 || k.indexOf('va_') === 0 || k.indexOf('vm_') === 0 || k.indexOf('cram:') === 0) continue;
+        else t = 'task4';
+        by[t]++; total++;
+    }
+    return { by, total };
+}
+
+// «Рабочий период» ученика: период активного ДЗ → «сейчас проходим» потока
+// (задаёт учитель, приходит с журналом класса) → последний период самого ученика.
+function _workingPeriod() {
+    const s = window.state.stats;
+    const act = (s.assignments || []).find(a => a.status === 'active');
+    const it = act && (act.items || []).find(i => !window.hwItemDone(i));
+    if (it && it.period && it.period !== 'all' && it.period !== 'custom') return it.period;
+    const cp = localStorage.getItem('class_current_period');
+    if (cp && TASK_EPOCHS.includes(cp)) return cp;
+    const lp = localStorage.getItem('ege_last_period');
+    if (lp && TASK_EPOCHS.includes(lp)) return lp;
+    return null;
+}
+
+// Самая слабая пара (задание, эпоха): минимум точности при ≥10 попытках.
+function _weakestSpot() {
+    const es = window.state.stats.eraStats || {};
+    let worst = null;
+    ['task1', 'task3', 'task4', 'task5', 'task7'].forEach(tk => {
+        TASK_EPOCHS.forEach(era => {
+            const e = (es[tk] || {})[era];
+            if (!e || (e.total || 0) < 10) return;
+            const acc = (e.correct || 0) / e.total;
+            if (!worst || acc < worst.acc) worst = { task: tk, era, acc };
+        });
+    });
+    return worst;
+}
+
+function computeMainAction() {
+    const s = window.state.stats;
+    const due = _dueReviewCounts();
+    const active = (s.assignments || []).filter(a => a.status === 'active');
+    const hwRemaining = active.reduce((n, a) => n + (a.items || []).reduce((m, it) => m + window.hwItemRemaining(it), 0), 0);
+    const doneToday = (s.dailyStats && s.dailyStats[getTodayString()] && s.dailyStats[getTodayString()].solved) || 0;
+    const base = { due, hwCount: active.length, hwRemaining, doneToday };
+
+    if (!(s.totalSolvedEver > 0)) {
+        const p = _workingPeriod() || 'early';
+        return { ...base, kind: 'start', period: p };
+    }
+    if (active.length && hwRemaining > 0) {
+        const sorted = active.slice().sort((a, b) => String(a.deadline || '9999') < String(b.deadline || '9999') ? -1 : 1);
+        const a = sorted.find(x => (x.items || []).some(it => !window.hwItemDone(it))) || sorted[0];
+        const idx = Math.max(0, (a.items || []).findIndex(it => !window.hwItemDone(it)));
+        const overdue = !!(a.deadline && a.deadline < getTodayString());
+        return { ...base, kind: overdue ? 'hw-overdue' : 'hw', hwId: a.id, hwIdx: idx, deadline: a.deadline };
+    }
+    if (due.total >= 5) {
+        let bestTask = 'task4', bestN = -1;
+        for (const t in due.by) if (due.by[t] > bestN) { bestN = due.by[t]; bestTask = t; }
+        return { ...base, kind: 'review', task: bestTask, period: _workingPeriod() };
+    }
+    if (doneToday < DAILY_GOAL_LINES) {
+        const lt = localStorage.getItem('ege_last_task');
+        return { ...base, kind: 'continue',
+            task: (lt && TASK_CONFIG[lt]) ? lt : 'task1',
+            period: localStorage.getItem('ege_last_period') || 'all',
+            left: DAILY_GOAL_LINES - doneToday };
+    }
+    return { ...base, kind: 'done', streak: s.streak || 0 };
+}
+
+window.mainActionGo = function(kind) {
+    const a = computeMainAction();
+    const act = kind || a.kind;
+    haptic('medium');
+    if (act === 'hw' || act === 'hw-overdue') {
+        if (a.hwId != null && window.startHwItem) return window.startHwItem(a.hwId, a.hwIdx);
+        return window.openHwTab && window.openHwTab();
+    }
+    if (act === 'review') {
+        if (a.due.total === 0) return showToast('🎉', 'Повторять пока нечего — всё свежо!', 'bg-emerald-500', 'border-emerald-700');
+        let bestTask = a.task || 'task4', bestN = -1;
+        if (!a.task) { for (const t in a.due.by) if (a.due.by[t] > bestN) { bestN = a.due.by[t]; bestTask = t; } }
+        if ($('filter-period')) $('filter-period').value = 'all';
+        return quickStartGame(bestTask, 'mistakes');
+    }
+    if (act === 'continue' || act === 'start') {
+        const period = a.period || 'all';
+        if ($('filter-period')) $('filter-period').value = TASK_EPOCHS.includes(period) ? period : 'all';
+        return quickStartGame(act === 'start' ? 'task1' : a.task, 'normal');
+    }
+    if (act === 'weak') {
+        const w = _weakestSpot();
+        if (!w) return showToast('💪', 'Слабых мест не видно — решай дальше!', 'bg-blue-500', 'border-blue-700');
+        if ($('filter-period')) $('filter-period').value = w.era;
+        return quickStartGame(w.task, 'normal');
+    }
+    if (act === 'done') return window.startDuelSearch && window.startDuelSearch();
+    if (act === 'hwtab') return window.openHwTab && window.openHwTab();
+};
+
+const _MAIN_ACTION_META = {
+    'hw':         { bg: 'linear-gradient(135deg,#f43f5e,#e11d48)', icon: '📚', title: 'Продолжить ДЗ' },
+    'hw-overdue': { bg: 'linear-gradient(135deg,#e11d48,#9f1239)', icon: '🔥', title: 'Догони ДЗ' },
+    'review':     { bg: 'linear-gradient(135deg,#6366f1,#4f46e5)', icon: '🧠', title: 'Повторить' },
+    'continue':   { bg: 'linear-gradient(135deg,#3b82f6,#2563eb)', icon: '▶️', title: 'Продолжить занятие' },
+    'done':       { bg: 'linear-gradient(135deg,#10b981,#059669)', icon: '🏆', title: 'Цель дня закрыта!' },
+    'start':      { bg: 'linear-gradient(135deg,#f59e0b,#d97706)', icon: '🚀', title: 'Начать обучение' }
+};
+
+function renderMainAction() {
+    const box = $('main-action');
+    if (!box) return;
+    const a = computeMainAction();
+    const m = _MAIN_ACTION_META[a.kind];
+    const periodName = p => (TASK_EPOCH_SHORT && TASK_EPOCH_SHORT[p]) || '';
+    let title = m.title, sub = '';
+    if (a.kind === 'hw' || a.kind === 'hw-overdue') {
+        const dl = a.deadline ? ' · до ' + new Date(a.deadline + 'T00:00:00').toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' }) : '';
+        sub = `осталось ${a.hwRemaining}${a.hwCount > 1 ? ` · заданий: ${a.hwCount}` : ''}${dl}`;
+    } else if (a.kind === 'review') {
+        const shown = Math.min(a.due.total, 20);
+        title = `Повторить ${shown} фактов`;
+        sub = a.period ? `сначала ${periodName(a.period)} — твой период` : 'память просит освежить';
+        if (a.due.total > shown) sub += ` · всего ${a.due.total}`;
+    } else if (a.kind === 'continue') {
+        const cfg = TASK_CONFIG[a.task] || TASK_CONFIG.task4;
+        sub = `${cfg.shortLabel} · ${TASK_EPOCHS.includes(a.period) ? periodName(a.period) : 'все периоды'} · ещё ${a.left} до цели дня`;
+    } else if (a.kind === 'done') {
+        sub = `стрик ${a.streak} дн. · хочешь дуэль?`;
+    } else if (a.kind === 'start') {
+        title = `Начать: ${periodName(a.period) || 'Древность'}`;
+        sub = 'первые факты за 2 минуты';
+    }
+    const chip = (label, val, act, dim) => `
+        <button onclick="window.mainActionGo('${act}')" style="flex:1;min-width:0;background:${dim ? 'rgba(255,255,255,0.6)' : '#fff'};border:1px solid rgba(0,0,0,0.08);border-radius:999px;padding:7px 6px;font-size:10px;font-weight:900;color:#475569;cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" class="dark:!bg-[#1e1e1e] dark:!text-gray-300 active:scale-95 transition-transform">${label}${val != null ? ` · ${val}` : ''}</button>`;
+    box.innerHTML = `
+        <div onclick="window.mainActionGo()" style="background:${m.bg};border-radius:18px;padding:16px 18px;cursor:pointer;color:#fff;box-shadow:0 8px 24px rgba(0,0,0,0.18)" class="active:scale-[0.98] transition-transform">
+            <div style="display:flex;align-items:center;gap:14px">
+                <div style="font-size:30px;line-height:1;flex-shrink:0">${m.icon}</div>
+                <div style="flex:1;min-width:0">
+                    <div style="font-size:17px;font-weight:900;letter-spacing:.01em">${title}</div>
+                    ${sub ? `<div style="font-size:12px;font-weight:700;opacity:.85;margin-top:2px">${sub}</div>` : ''}
+                </div>
+                <div style="font-size:20px;opacity:.8;flex-shrink:0">›</div>
+            </div>
+        </div>
+        <div style="display:flex;gap:8px;margin-top:8px">
+            ${chip('📚 ДЗ', a.hwCount || null, 'hwtab', !a.hwCount)}
+            ${chip('🧠 Повтор', a.due.total || null, 'review', !a.due.total)}
+            ${chip('🎯 Слабое место', null, 'weak', false)}
+        </div>`;
+}
+window.renderMainAction = renderMainAction;
+
 function updateGlobalUI() {
+    renderMainAction();
     const now = Date.now();
     let totalL = 0, freshL = 0;
     Object.values(window.state.stats.factStreaks || {}).forEach(d => {

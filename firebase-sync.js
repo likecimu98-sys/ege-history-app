@@ -645,11 +645,13 @@
                     if (d.player2) return;                            // слот уже занят
                     if (now - (d.createdAt || 0) > 28000) return;     // протух
                     const id = docSnap.id;
+                    // Хозяин стыкуется только с искателем ТОГО ЖЕ режима (классика/свайп).
+                    if (host && (d.mode || 'classic') !== (duel.mode || 'classic')) return;
                     // Если я сам жду — стыкуемся только с матчем с «меньшим» id.
                     // Детерминированный тайбрейк: ровно одна сторона присоединяется,
                     // без гонки «оба приняли друг друга».
                     if (host && !(id < myMatchId)) return;
-                    if (!best || (d.createdAt || 0) > best.createdAt) best = { matchId: id, name: d.player1.name || 'Игрок', createdAt: d.createdAt || 0 };
+                    if (!best || (d.createdAt || 0) > best.createdAt) best = { matchId: id, name: d.player1.name || 'Игрок', createdAt: d.createdAt || 0, mode: d.mode || 'classic' };
                 });
                 _ddbg('ожидающих:', snap.size, '| подходящий:', best && best.matchId, '| хозяин:', host);
                 if (!best) { if (window.hideDuelChallenge) window.hideDuelChallenge(); return; }
@@ -705,10 +707,12 @@
         // ✅ FIX: Используем runTransaction для атомарного захвата слота player2
         // Это исключает Race Condition когда двое одновременно присоединяются к одному матчу
         let duelUnsubscribe = null;
-        window.startDuelSearchDb = async function() {
+        window.startDuelSearchDb = async function(mode) {
+            mode = mode === 'swipe' ? 'swipe' : 'classic';
             if (!fbUser || !db) { _ddbg('поиск невозможен: нет', !fbUser ? 'авторизации' : 'db'); return showToast('❌', 'Подключитесь к сети', 'bg-rose-500', 'border-rose-700'); }
             window.state.duel = { active: false, searching: true, matchId: null, isPlayer1: false, oppName: '', myScore: 0, oppScore: 0, myCombo: 0, oppCombo: 0 };
-            
+            window.state.duel.mode = mode;
+
             const myUid = resolveUserId(fbUser);
             let myName = localStorage.getItem('student_manual_name') || 'Игрок';
             if (myName.length > 12) myName = myName.substring(0, 10) + '..';
@@ -729,6 +733,7 @@
                     // Брошенный матч (приложение закрыли во время поиска) — на уборку,
                     // иначе очередь разрастается и ломает выборку у всех.
                     if (data.player2 == null && age > 45000) { staleIds.push(docSnap.id); return; }
+                    if ((data.mode || 'classic') !== mode) return; // стыкуем только одинаковые режимы
                     if (data.player1 && data.player1.uid !== myUid && age < 30000) {
                         candidateIds.push(docSnap.id);
                     }
@@ -774,10 +779,23 @@
                     _ddbg('присоединился к матчу', joinedMatchId, '→ игра');
                     listenToDuel(joinedMatchId, myUid);
                 } else {
-                    // Не нашли свободный матч — создаём свой
+                    // Не нашли свободный матч — создаём свой.
+                    // Для свайпа колоду генерирует создатель и кладёт прямо в документ матча
+                    // (со снапшотами правителей) — оба игрока получают идентичные карточки.
+                    let swipeSections = null;
+                    if (mode === 'swipe') {
+                        swipeSections = window.buildSwipeDuelSections ? window.buildSwipeDuelSections() : null;
+                        if (!swipeSections) {
+                            showToast('⚠️', 'Данные свайпа ещё грузятся, попробуй через пару секунд', 'bg-amber-500', 'border-amber-700');
+                            window.cancelDuelSearch();
+                            return;
+                        }
+                    }
                     window.state.duel.isPlayer1 = true;
                     const newMatch = await addDoc(matchesRef, {
                         status: 'waiting',
+                        mode,
+                        ...(swipeSections ? { swipeSections } : {}),
                         createdAt: Date.now(),
                         player1: { uid: myUid, name: myName, score: 0, combo: 0 },
                         player2: null,
@@ -813,15 +831,21 @@
                     window.state.duel.searching = false;
                     const opp = window.state.duel.isPlayer1 ? data.player2 : data.player1;
                     window.state.duel.oppName = opp ? opp.name : 'Соперник';
+                    // Режим и колода дуэли — из документа матча (единая точка для обеих сторон).
+                    window.state.duel.mode = data.mode || 'classic';
+                    window.state.duel.swipeSections = data.swipeSections || null;
+                    window.state.duel.startTime = data.startTime || Date.now();
                     window.initDuelStart(data.startTime);
                 }
-                
+
                 if (data.status === 'playing' && !window.state.duel.searching) {
                     const opp = window.state.duel.isPlayer1 ? data.player2 : data.player1;
                     if (opp) {
                         window.state.duel.oppScore = opp.score || 0;
                         window.state.duel.oppCombo = opp.combo || 0;
                         window.updateDuelUI();
+                        // Свайп-дуэль: живой прогресс соперника (done/correct пишутся вместе со счётом).
+                        if ((window.state.duel.mode || data.mode) === 'swipe' && window.updateSwipeDuelOpp) window.updateSwipeDuelOpp(opp);
                     }
                 }
                 
@@ -836,16 +860,17 @@
         }
 
         // ✅ FIX: Функция теперь async с правильным await — без молчаливых падений
-        window.updateDuelScoreDb = async function(score, combo) {
+        window.updateDuelScoreDb = async function(score, combo, extra) {
             if (!db || !window.state.duel.matchId || !fbUser) return;
             const matchesRef = collection(db, 'artifacts', appId, 'public', 'data', 'matches');
             try {
                 await updateDoc(doc(matchesRef, window.state.duel.matchId), {
-                    [window.state.duel.isPlayer1 ? 'player1' : 'player2']: { 
-                        uid: resolveUserId(fbUser), 
-                        name: localStorage.getItem('student_manual_name') || 'Игрок', 
-                        score: score, 
-                        combo: combo 
+                    [window.state.duel.isPlayer1 ? 'player1' : 'player2']: {
+                        uid: resolveUserId(fbUser),
+                        name: localStorage.getItem('student_manual_name') || 'Игрок',
+                        score: score,
+                        combo: combo,
+                        ...(extra || {}) // свайп-дуэль: {done, correct} — живой прогресс для соперника
                     }
                 });
             } catch(e) { console.error('[Duel] updateDuelScoreDb error:', e); }
@@ -1823,6 +1848,14 @@
                     } catch (e) { console.warn('[Teacher] Доп. запрос по классу не удался:', e); }
                 }
 
+                // Подтягиваем «Сейчас проходим» потока в селект кабинета (не блокируя список).
+                if (tc) {
+                    getDoc(doc(db, 'artifacts', appId, 'public', 'data', 'classes', _classDocId(tc))).then(cs => {
+                        const sel = document.getElementById('teacher-current-period');
+                        if (sel) sel.value = (cs.exists() && cs.data().currentPeriod) || '';
+                    }).catch(() => {});
+                }
+
                 const enriched = st.map(s => computeStudentData(s, monStr, monday));
                 enriched.sort((a,b) => (b.totalSolved||0) - (a.totalSolved||0));
                 window._cachedStudents = enriched;
@@ -2086,6 +2119,11 @@
                 const revoked = Array.isArray(data.revokedAssignments) ? data.revokedAssignments : [];
                 const revokedSet = _mergeRevoked(revoked); // копим в общий набор (классовые + индивидуальные)
                 let removed = (window.reconcileRevokedAssignments ? window.reconcileRevokedAssignments(revoked) : 0);
+                // «Сейчас проходим» потока → рабочий период для кнопки «Продолжить».
+                try {
+                    if (data.currentPeriod) localStorage.setItem('class_current_period', data.currentPeriod);
+                    else localStorage.removeItem('class_current_period');
+                } catch (e) {}
                 // «С чистого листа»: метка revokeBefore снимает ЛЮБЫЕ невыполненные ДЗ, выданные до неё —
                 // в т.ч. старые legacy-ДЗ со случайными id, которых нет в журнале. Сданные не трогаем.
                 const sweepTs = Number(data.revokeBefore) || 0;
@@ -2125,6 +2163,20 @@
                     showToast('📚', `Добавлены задания класса: ${added}`, 'bg-indigo-500', 'border-indigo-700');
                 }
             } catch (e) { console.error('pullClassAssignments error:', e); }
+        };
+
+        // ─── Учитель: «Сейчас проходим» — период потока ───
+        // Хранится в документе класса; ученики подхватывают вместе с журналом ДЗ
+        // (pullClassAssignments) и используют в кнопке «Продолжить» как рабочий период.
+        window.saveClassCurrentPeriod = async function(period) {
+            const tc = (document.getElementById('teacher-class-code-input')?.value || localStorage.getItem('teacher_class_code') || '').trim();
+            const code = _classDocId(tc);
+            if (!db || !code) return;
+            try {
+                await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'classes', code),
+                    { currentPeriod: period || '', updatedAt: Date.now() }, { merge: true });
+                showToast('🗓', period ? 'Период потока сохранён — ученики увидят при входе' : 'Период потока снят', 'bg-indigo-500', 'border-indigo-700');
+            } catch (e) { console.error('saveClassCurrentPeriod error:', e); showToast('❌', 'Не удалось сохранить период', 'bg-rose-500', 'border-rose-700'); }
         };
 
         // ─── Учитель: список выданных классу ДЗ (из журнала класса) ───

@@ -14,7 +14,13 @@
             : String(s == null ? '' : s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
     }
     function _shuffle(a) { for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; }
-    function _byId(id) { return (window.swipeRulersData || []).find(r => r.id === id); }
+    function _byId(id) {
+        // В дуэли правители берутся из снапшота матча — работает даже при разных версиях данных.
+        if (_sw && _sw.duel) {
+            for (const s of _sw.duel.sections) { if (s.a.id === id) return s.a; if (s.b.id === id) return s.b; }
+        }
+        return (window.swipeRulersData || []).find(r => r.id === id);
+    }
 
     function _preload() { try { if (window.Sfx) window.Sfx.unlock(); } catch (e) {} }
     function _play(ok) { if (_muted) return; if (window.Sfx) window.Sfx.play(ok ? 'wow' : 'fah'); }
@@ -37,6 +43,145 @@
         const cards = [];
         [a, b].forEach(r => (r.facts || []).forEach(f => cards.push({ fact: f, correctId: r.id })));
         return _shuffle(cards);
+    }
+
+    // ─── Дуэль-свайп: у обоих игроков ОДИНАКОВЫЕ карточки ───
+    // Колоду генерирует создатель матча и кладёт в документ матча (снапшоты правителей
+    // включены) — рассинхрон при разных версиях приложения исключён.
+    const DUEL_SECTIONS = 3, DUEL_CARDS_PER_SECTION = 10, DUEL_MS = 120000;
+
+    window.buildSwipeDuelSections = function () {
+        const pool = _shuffle((window.swipeRulersData || []).slice());
+        if (pool.length < DUEL_SECTIONS * 2) return null;
+        const snap = r => ({ id: r.id, name: r.name, years: r.years || '', emoji: r.emoji || '👑' });
+        const sections = [];
+        for (let s = 0; s < DUEL_SECTIONS; s++) {
+            const a = pool[s * 2], b = pool[s * 2 + 1];
+            const cards = _buildPairDeck(a, b).slice(0, DUEL_CARDS_PER_SECTION).map(c => ({ f: c.fact, c: c.correctId }));
+            sections.push({ a: snap(a), b: snap(b), cards });
+        }
+        return sections;
+    };
+
+    window.openSwipeDuel = function (opts) {
+        const sections = (opts && opts.sections) || [];
+        const total = sections.reduce((n, s) => n + ((s && s.cards) || []).length, 0);
+        if (!total) {
+            if (typeof showToast === 'function') showToast('⚠️', 'Не удалось получить колоду дуэли', 'bg-rose-500', 'border-rose-700');
+            try { window.cancelDuelDb && window.cancelDuelDb(); } catch (e) {}
+            return;
+        }
+        _h('medium');
+        _preload();
+        _sw = {
+            pool: [], used: new Set(), left: null, right: null,
+            deck: [], i: 0, lapses: [], reviewStart: null, reviewAdded: true, // без повтора ошибок — прогресс должен совпадать у обоих
+            score: 0, streak: 0, best: 0, correct: 0, seen: 0,
+            lock: false, cur: null, picking: false,
+            duel: {
+                sections, secIdx: -1, total, done: 0,
+                oppName: (opts && opts.oppName) || 'Соперник',
+                oppScore: 0, oppDone: 0, oppCorrect: 0,
+                endsAt: (opts && opts.endsAt) || (Date.now() + DUEL_MS),
+                finishedMine: false, over: false, timerIv: null
+            }
+        };
+        let ov = document.getElementById('swipe-overlay');
+        if (!ov) { ov = document.createElement('div'); ov.id = 'swipe-overlay'; document.body.appendChild(ov); }
+        ov.className = 'no-print';
+        ov.style.cssText = 'position:fixed;inset:0;z-index:10050;display:flex;flex-direction:column;background:radial-gradient(circle at 50% 0%,#1e293b,#0b1120);overscroll-behavior:contain;touch-action:none;overflow:hidden';
+        _renderShell();
+        _duelNextSection();
+        document.addEventListener('keydown', _onKey);
+        _sw.duel.timerIv = setInterval(_duelTick, 500);
+        _duelTick();
+    };
+
+    function _duelNextSection() {
+        const d = _sw && _sw.duel; if (!d) return;
+        d.secIdx++;
+        const sec = d.sections[d.secIdx];
+        if (!sec) return _duelMineDone();
+        _sw.left = sec.a; _sw.right = sec.b;
+        _sw.deck = (sec.cards || []).map(c => ({ fact: c.f, correctId: c.c }));
+        _sw.i = 0;
+        _renderPanels();
+        _nextCard();
+    }
+
+    function _duelReport() {
+        const d = _sw && _sw.duel; if (!d) return;
+        try { window.updateDuelScoreDb && window.updateDuelScoreDb(_sw.score, _sw.streak, { done: d.done, correct: _sw.correct }); } catch (e) {}
+    }
+
+    function _updateDuelBar() {
+        const d = _sw && _sw.duel; if (!d) return;
+        const me = document.getElementById('sw-d-me'), op = document.getElementById('sw-d-opp');
+        const meB = document.getElementById('sw-d-me-bar'), opB = document.getElementById('sw-d-opp-bar');
+        if (me) me.textContent = `${d.done}/${d.total} · ✓${_sw.correct} · ${_sw.score}`;
+        if (op) op.textContent = `${d.oppDone}/${d.total} · ✓${d.oppCorrect} · ${d.oppScore}`;
+        if (meB) meB.style.width = Math.round(d.done / d.total * 100) + '%';
+        if (opB) opB.style.width = Math.round(d.oppDone / d.total * 100) + '%';
+    }
+
+    window.updateSwipeDuelOpp = function (opp) {
+        const d = _sw && _sw.duel; if (!d || !opp) return;
+        d.oppScore = opp.score || 0;
+        d.oppDone = opp.done || 0;
+        d.oppCorrect = opp.correct || 0;
+        _updateDuelBar();
+        if (d.finishedMine && d.oppDone >= d.total && !d.over) _duelFinish();
+    };
+
+    function _duelTick() {
+        const d = _sw && _sw.duel; if (!d) return;
+        const left = Math.max(0, d.endsAt - Date.now());
+        const t = document.getElementById('sw-timer');
+        if (t) t.textContent = Math.floor(left / 60000) + ':' + String(Math.floor(left % 60000 / 1000)).padStart(2, '0');
+        if (left <= 0 && !d.over) _duelFinish();
+    }
+
+    function _duelMineDone() {
+        const d = _sw && _sw.duel; if (!d || d.over) return;
+        d.finishedMine = true;
+        _duelReport();
+        _updateDuelBar();
+        if (d.oppDone >= d.total) return _duelFinish();
+        const zone = document.getElementById('sw-cardzone');
+        if (zone) zone.innerHTML = `
+            <div style="color:#e2e8f0;text-align:center">
+                <div style="font-size:44px">⏳</div>
+                <div style="font-size:16px;font-weight:900;margin-top:6px">Ты закончил: ✓${_sw.correct} из ${d.total}</div>
+                <div style="font-size:12.5px;opacity:.75;margin-top:4px">Ждём соперника…</div>
+            </div>`;
+    }
+
+    function _duelFinish() {
+        const d = _sw && _sw.duel; if (!d || d.over) return;
+        d.over = true;
+        if (d.timerIv) { clearInterval(d.timerIv); d.timerIv = null; }
+        _duelReport();
+        try { if (window.state && window.state.duel) window.state.duel.active = false; } catch (e) {}
+        try { window.cancelDuelDb && window.cancelDuelDb(); } catch (e) {}
+        const my = _sw.score, opp = d.oppScore;
+        const win = my > opp, draw = my === opp;
+        _h(win ? 'success' : 'error');
+        const panels = document.getElementById('sw-panels'); if (panels) panels.innerHTML = '';
+        const zone = document.getElementById('sw-cardzone'); if (!zone) return;
+        zone.innerHTML = `
+        <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;color:#e2e8f0;text-align:center;gap:8px">
+            <div style="font-size:54px">${win ? '🏆' : draw ? '🤝' : '💔'}</div>
+            <div style="font-size:22px;font-weight:1000;color:${win ? '#4ade80' : draw ? '#e2e8f0' : '#f87171'}">${win ? 'ПОБЕДА!' : draw ? 'НИЧЬЯ' : 'ПОРАЖЕНИЕ'}</div>
+            <div style="font-size:18px;font-weight:900">${my} <span style="opacity:.5">:</span> ${opp}</div>
+            <div style="font-size:12.5px;opacity:.75">Ты: ✓${_sw.correct}/${d.total} · ${_esc(d.oppName)}: ✓${d.oppCorrect}/${d.total}</div>
+            <div style="display:flex;gap:10px;margin-top:14px">
+                <button id="sw-d-rematch" style="background:#6366f1;color:#fff;border:none;border-radius:14px;padding:12px 22px;font-size:14px;font-weight:900;cursor:pointer">⚔️ Ещё раз</button>
+                <button id="sw-d-exit" style="background:rgba(255,255,255,0.12);color:#fff;border:none;border-radius:14px;padding:12px 22px;font-size:14px;font-weight:900;cursor:pointer">Выход</button>
+            </div>
+        </div>`;
+        zone.querySelector('#sw-d-rematch').onclick = () => { window.closeSwipeMode(); if (window.startDuelSearch) window.startDuelSearch('swipe'); };
+        zone.querySelector('#sw-d-exit').onclick = window.closeSwipeMode;
+        _updateDuelBar();
     }
 
     window.openSwipeMode = function () {
@@ -63,6 +208,14 @@
     };
 
     window.closeSwipeMode = function () {
+        // Выход из незаконченной дуэли = сдача: чистим таймер и закрываем матч.
+        if (_sw && _sw.duel) {
+            if (_sw.duel.timerIv) { clearInterval(_sw.duel.timerIv); _sw.duel.timerIv = null; }
+            if (!_sw.duel.over) {
+                try { if (window.state && window.state.duel) window.state.duel.active = false; } catch (e) {}
+                try { window.cancelDuelDb && window.cancelDuelDb(); } catch (e) {}
+            }
+        }
         document.removeEventListener('keydown', _onKey);
         const ov = document.getElementById('swipe-overlay');
         if (ov) ov.remove();
@@ -80,27 +233,47 @@
 
     function _renderShell() {
         const ov = document.getElementById('swipe-overlay'); if (!ov) return;
+        const duel = _sw && _sw.duel;
         ov.innerHTML = `
         <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 14px;color:#e2e8f0;flex-shrink:0">
             <button id="sw-close" style="background:rgba(255,255,255,0.1);border:none;color:#fff;width:34px;height:34px;border-radius:11px;font-size:17px;cursor:pointer">✕</button>
             <div style="display:flex;gap:11px;align-items:center;font-weight:900">
                 <span style="font-size:12.5px">Счёт: <span id="sw-score" style="color:#fbbf24">0</span></span>
                 <span style="font-size:12.5px">🔥 <span id="sw-streak">0</span></span>
-                <span style="font-size:12.5px;opacity:.7">осталось: <span id="sw-left">0</span></span>
+                ${duel
+                    ? '<span style="font-size:12.5px;color:#f87171">⏱ <span id="sw-timer">2:00</span></span>'
+                    : '<span style="font-size:12.5px;opacity:.7">осталось: <span id="sw-left">0</span></span>'}
                 <button id="sw-mute" title="Звук вкл/выкл" style="background:rgba(255,255,255,0.1);border:none;width:30px;height:30px;border-radius:9px;font-size:14px;cursor:pointer;opacity:${_muted ? '0.55' : '1'}">${_muteIcon()}</button>
             </div>
         </div>
+        ${duel ? `
+        <div style="padding:0 14px 6px;flex-shrink:0;color:#e2e8f0;max-width:560px;width:100%;margin:0 auto">
+            <div style="display:flex;align-items:center;gap:8px;font-size:11px;font-weight:900">
+                <span style="width:64px;flex-shrink:0;color:#60a5fa">ТЫ</span>
+                <div style="flex:1;height:7px;background:rgba(255,255,255,0.12);border-radius:999px;overflow:hidden"><div id="sw-d-me-bar" style="width:0%;height:100%;background:#60a5fa;border-radius:999px;transition:width .3s"></div></div>
+                <span id="sw-d-me" style="flex-shrink:0;opacity:.9">0/0 · ✓0 · 0</span>
+            </div>
+            <div style="display:flex;align-items:center;gap:8px;font-size:11px;font-weight:900;margin-top:4px">
+                <span style="width:64px;flex-shrink:0;color:#fbbf24;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${_esc(duel.oppName).toUpperCase()}</span>
+                <div style="flex:1;height:7px;background:rgba(255,255,255,0.12);border-radius:999px;overflow:hidden"><div id="sw-d-opp-bar" style="width:0%;height:100%;background:#fbbf24;border-radius:999px;transition:width .3s"></div></div>
+                <span id="sw-d-opp" style="flex-shrink:0;opacity:.9">0/0 · ✓0 · 0</span>
+            </div>
+        </div>` : ''}
         <div id="sw-arena" style="flex:1;position:relative;display:flex;flex-direction:column;min-height:0;padding:0 12px 6px;width:100%;max-width:560px;margin:0 auto">
             <div id="sw-panels" style="display:flex;gap:8px;align-items:stretch;margin-bottom:8px;flex-shrink:0"></div>
             <div id="sw-cardzone" style="flex:1;position:relative;display:flex;align-items:center;justify-content:center;min-height:0"></div>
             <div id="sw-verdict" style="height:24px;text-align:center;font-weight:900;font-size:13.5px;margin-top:4px;flex-shrink:0"></div>
         </div>
         <div style="text-align:center;color:#94a3b8;font-size:11.5px;font-weight:800;padding:6px 0 14px;flex-shrink:0">
-            ← свайпни карточку · тап по имени — сменить правителя
+            ${duel ? '⚔️ одинаковые карточки у обоих — кто наберёт больше очков' : '← свайпни карточку · тап по имени — сменить правителя'}
         </div>`;
-        ov.querySelector('#sw-close').onclick = window.closeSwipeMode;
+        ov.querySelector('#sw-close').onclick = () => {
+            if (_sw && _sw.duel && !_sw.duel.over && !confirm('Выйти из дуэли? Это засчитается как сдача.')) return;
+            window.closeSwipeMode();
+        };
         const mb = ov.querySelector('#sw-mute'); if (mb) mb.onclick = _toggleMute;
         _updateHeader();
+        if (duel) _updateDuelBar();
     }
 
     function _updateHeader() {
@@ -117,7 +290,7 @@
             <div style="font-size:22px;line-height:1">${ruler.emoji || '👑'}</div>
             <div style="font-size:13px;font-weight:900;line-height:1.05">${_esc(ruler.name)}</div>
             <div style="font-size:9px;opacity:.7;font-weight:700">${_esc(ruler.years || '')}</div>
-            <div style="font-size:9px;opacity:.55;font-weight:800;margin-top:1px">▾ сменить</div>
+            ${_sw && _sw.duel ? '' : '<div style="font-size:9px;opacity:.55;font-weight:800;margin-top:1px">▾ сменить</div>'}
         </button>`;
     }
 
@@ -141,6 +314,7 @@
 
     function _advancePair() {
         if (!_sw) return;
+        if (_sw.duel) return _duelNextSection(); // дуэль идёт по фиксированным секциям матча
         const rest = _sw.pool.filter(r => !_sw.used.has(r.id));
         if (rest.length >= 2) { _setPair(rest[0], rest[1]); }
         else { _renderEnd(); }
@@ -160,6 +334,7 @@
 
     function _openPicker(side) {
         if (!_sw) return;
+        if (_sw.duel) return; // в дуэли пары фиксированы — колода должна совпадать у обоих
         _sw.picking = true;
         const ov = document.getElementById('swipe-overlay'); if (!ov) return;
         _closePicker();
@@ -284,8 +459,9 @@
             if (!isReview) { _sw.correct++; _sw.seen++; }
         } else {
             _sw.streak = 0;
-            if (!isReview) { _sw.seen++; _sw.lapses.push(_sw.cur.card); }
+            if (!isReview) { _sw.seen++; if (!_sw.duel) _sw.lapses.push(_sw.cur.card); }
         }
+        if (_sw.duel && !_sw.duel.over) { _sw.duel.done++; _duelReport(); _updateDuelBar(); }
         _flash(ok);
         const v = document.getElementById('sw-verdict');
         if (v) {

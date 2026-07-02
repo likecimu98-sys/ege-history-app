@@ -65,6 +65,14 @@ window.quickStartGame = function(task, mode) {
     window.state.currentTask = task;
     $('filter-task').value = task;
     $('filter-mode').value = mode;
+    // Запоминаем последнее занятие для кнопки «Продолжить» (только табличные задания).
+    if (TASK_LIST.includes(task)) {
+        try {
+            localStorage.setItem('ege_last_task', task);
+            const p = $('filter-period') ? $('filter-period').value : '';
+            if (p && p !== 'custom') localStorage.setItem('ege_last_period', p);
+        } catch (e) {}
+    }
     const sortYC = $('pg-sort-year-container');
     if (sortYC) sortYC.classList.toggle('hidden', !supportsYearSort(task));
     if (!$('filter-period').value) $('filter-period').value = 'all';
@@ -619,6 +627,7 @@ const ACTION_HANDLERS = {
     toggleFocusMode:        () => window.toggleFocusMode?.(),
     toggleTheme:            () => window.toggleTheme?.(),
     startDuelSearch:        () => window.startDuelSearch?.(),
+    openDuelModeChooser:    () => window.openDuelModeChooser?.(),
     cancelDuelSearch:       () => window.cancelDuelSearch?.(),
     startHwFromBanner:      () => window.startHwFromBanner?.(),
     openHwTab:              () => window.openHwTab?.(),

@@ -9,10 +9,10 @@
 let duelSearchTimer = null;
 let duelSearchSeconds = 0;
 
-window.startDuelSearch = function() {
+window.startDuelSearch = function(mode) {
     haptic('medium');
     showModal('duel-search-modal');
-    $('duel-search-status').innerText = "Поиск соперника...";
+    $('duel-search-status').innerText = mode === 'swipe' ? 'Поиск соперника (свайп)...' : 'Поиск соперника...';
     duelSearchSeconds = 0;
     $('duel-search-timer').innerText = `Ожидание: 0с`;
     duelSearchTimer = setInterval(() => {
@@ -20,7 +20,42 @@ window.startDuelSearch = function() {
         $('duel-search-timer').innerText = `Ожидание: ${duelSearchSeconds}с`;
         if (duelSearchSeconds > 30) window.cancelDuelSearch('Никого нет в сети 😢');
     }, 1000);
-    if (window.startDuelSearchDb) window.startDuelSearchDb();
+    if (window.startDuelSearchDb) window.startDuelSearchDb(mode);
+};
+
+// Выбор режима дуэли: классика (таблица №4) или свайп (правители).
+window.openDuelModeChooser = function() {
+    haptic('light');
+    let ov = document.getElementById('duel-mode-chooser');
+    if (ov) ov.remove();
+    ov = document.createElement('div');
+    ov.id = 'duel-mode-chooser';
+    ov.style.cssText = 'position:fixed;inset:0;z-index:10040;background:rgba(2,6,23,0.6);display:flex;align-items:center;justify-content:center;padding:20px';
+    ov.innerHTML = `
+      <div style="background:#fff;border-radius:20px;max-width:340px;width:100%;padding:16px;box-shadow:0 20px 60px rgba(0,0,0,0.35)" class="dark:!bg-[#1e1e1e]">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+            <span style="font-size:15px;font-weight:900" class="dark:text-gray-100">⚔️ Выбери дуэль</span>
+            <button data-close style="background:none;border:none;font-size:18px;color:#9ca3af;cursor:pointer;padding:2px 6px">✕</button>
+        </div>
+        <button data-mode="classic" style="display:flex;align-items:center;gap:12px;width:100%;text-align:left;background:rgba(99,102,241,0.08);border:2px solid rgba(99,102,241,0.35);border-radius:14px;padding:12px;cursor:pointer;margin-bottom:8px">
+            <span style="font-size:26px">📍</span>
+            <span><span style="display:block;font-size:14px;font-weight:900" class="dark:text-gray-100">Классика</span>
+            <span style="display:block;font-size:11px;color:#6b7280;font-weight:700">таблица №4 · 60 секунд</span></span>
+        </button>
+        <button data-mode="swipe" style="display:flex;align-items:center;gap:12px;width:100%;text-align:left;background:rgba(251,191,36,0.1);border:2px solid rgba(251,191,36,0.45);border-radius:14px;padding:12px;cursor:pointer">
+            <span style="font-size:26px">🃏</span>
+            <span><span style="display:block;font-size:14px;font-weight:900" class="dark:text-gray-100">Свайп</span>
+            <span style="display:block;font-size:11px;color:#6b7280;font-weight:700">одинаковые карточки · виден прогресс соперника</span></span>
+        </button>
+      </div>`;
+    ov.addEventListener('click', e => { if (e.target === ov) ov.remove(); });
+    ov.querySelector('[data-close]').onclick = () => ov.remove();
+    ov.querySelectorAll('[data-mode]').forEach(b => b.addEventListener('click', () => {
+        const m = b.dataset.mode;
+        ov.remove();
+        window.startDuelSearch(m);
+    }));
+    document.body.appendChild(ov);
 };
 
 window.cancelDuelSearch = function(msg) {
@@ -59,6 +94,17 @@ window.initDuelStart = function(startTime) {
 };
 
 window.startDuelGame = function() {
+    // Свайп-дуэль живёт в собственном оверлее — классический игровой экран не трогаем.
+    if ((window.state.duel || {}).mode === 'swipe' && window.openSwipeDuel) {
+        window.state.currentMode = 'duel';
+        Object.assign(window.state.duel, { active: true, myScore: 0, myCombo: 0 });
+        window.openSwipeDuel({
+            sections: window.state.duel.swipeSections || [],
+            oppName: window.state.duel.oppName,
+            endsAt: (window.state.duel.startTime || Date.now()) + 120000
+        });
+        return;
+    }
     $('lobby-area').classList.add('hidden');
     $('game-container').classList.remove('hidden');
     $('game-container').classList.add('flex');
