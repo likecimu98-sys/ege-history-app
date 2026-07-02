@@ -905,7 +905,9 @@
         function computeStudentData(s, monStr, monday) {
             let state = {}; try { state = JSON.parse(s.fullStateJson || '{}'); } catch(e) {}
             const stats = state.stats || state || {};
-            const streak = stats.streak || state.streak || 0;
+            // Дневной стрик из dailyStats (stats.streak — серия верных ответов, не дни)
+            const streak = (typeof window.computeDayStreak === 'function')
+                ? window.computeDayStreak(stats.dailyStats || state.dailyStats || {}) : 0;
             const timeSpentMin = Math.floor((stats.totalTimeSpent || state.totalTimeSpent || 0) / 60);
 
             let learnedCount = 0;
@@ -1038,6 +1040,8 @@
                 : (it.metric === 'learned'
                     ? Math.max(0, (it.goal || 0) - learnedCountFor(it.task, it.period))
                     : Math.max(0, (it.goal || 0) - (it.progress || 0)));
+            // Срез по каждому заданию — для сводки «Сдача по заданиям» в Контроле ДЗ
+            const hwPerAssignment = [];
             assignments.forEach(a => {
                 const items = Array.isArray(a.items) ? a.items
                     : (a.task ? [{ task: a.task, period: 'all', metric: 'lines', goal: Number(a.total) || 0, progress: (Number(a.total) || 0) - (Number(a.remaining) || 0) }] : []);
@@ -1045,7 +1049,12 @@
                 const goal = items.reduce((x, it) => x + (Number(it.goal) || 0), 0);
                 if (items.length || a.task) hwTotalAssignments++;
                 hwTotalUnits += goal;
-                if (a.status === 'done' || (items.length && rem === 0)) { hwDoneAssignments++; a.onTime ? hwDoneOnTime++ : hwDoneLate++; return; }
+                if (a.status === 'done' || (items.length && rem === 0)) {
+                    hwDoneAssignments++; a.onTime ? hwDoneOnTime++ : hwDoneLate++;
+                    hwPerAssignment.push({ id: a.id, title: a.title, deadline: a.deadline, assignedAt: a.assignedAt || 0, state: 'done' });
+                    return;
+                }
+                if (rem > 0) hwPerAssignment.push({ id: a.id, title: a.title, deadline: a.deadline, assignedAt: a.assignedAt || 0, state: 'active' });
                 if (rem > 0) {
                     hwOpenAssignments++;
                     hwActiveAssignments++;
@@ -1058,6 +1067,7 @@
                 }
             });
             docPending.forEach(r => {
+                hwPerAssignment.push({ id: r.id, title: r.title, deadline: r.deadline, assignedAt: r.assignedAt || 0, state: 'pending' });
                 const g = Array.isArray(r.items) ? r.items.reduce((x, it) => x + (Number(it.goal) || 0), 0) : (Number(r.total) || 0);
                 hwTotalAssignments++;
                 hwOpenAssignments++;
@@ -1109,7 +1119,7 @@
                      hwOverdue, hwDoneOnTime, hwDoneLate, hwOnTimeTotal, hwLateTotal, hwStreakMax,
                      hwTotalUnits, hwProgressPct, hwStatus, hwOpenAssignments, hwDoneAssignments,
                      hwTotalAssignments, hwActiveAssignments, hwPendingAssignments, hwOverdueAssignments, hwStartedAssignments,
-                     mistakesByTask, mistakeTotal: mistakeList.length, mistakeList, solvedByTask };
+                     hwPerAssignment, mistakesByTask, mistakeTotal: mistakeList.length, mistakeList, solvedByTask };
         }
 
         function renderMiniBar(last7) {
@@ -1237,6 +1247,7 @@
                     <span>✅ Верных: <b style="color:var(--c-success)">${s.totalCorrect||0}</b></span>
                 </div>
                 <div style="display:flex;gap:6px;padding-top:8px;border-top:1px solid #f1f5f9">
+                    ${/^\d{5,}$/.test(String(s.tgId || s.knownTgId || '')) ? `<button onclick="window.open('tg://user?id=${String(s.tgId || s.knownTgId)}')" class="bg-sky-50 text-sky-600 hover:bg-sky-100 dark:bg-sky-900/20 dark:text-sky-400 px-3 py-2 rounded-xl text-[10px] font-black uppercase tracking-wider transition-colors active:scale-95" title="Написать ученику в Telegram">✈️</button>` : ''}
                     <button onclick="window.promptAssignHw('${safeUid}','${safeName}')" class="flex-1 bg-rose-50 text-rose-600 hover:bg-rose-100 dark:bg-rose-900/20 dark:text-rose-400 py-2 rounded-xl text-[10px] font-black uppercase tracking-wider transition-colors active:scale-95">📝 ДЗ</button>
                     <button onclick="window.openStudentAssignmentsList('${safeUid}','${safeName}')" class="bg-indigo-50 text-indigo-600 hover:bg-indigo-100 dark:bg-indigo-900/20 dark:text-indigo-400 px-3 py-2 rounded-xl text-[10px] font-black uppercase tracking-wider transition-colors active:scale-95" title="Выданные ДЗ ученика и отмена">📋</button>
                     <button onclick="window.downloadStudentPDF('${safeUid}')" class="flex-1 bg-blue-50 text-blue-600 hover:bg-blue-100 dark:bg-blue-900/20 dark:text-blue-400 py-2 rounded-xl text-[10px] font-black uppercase tracking-wider transition-colors active:scale-95">📄 Отчёт</button>
@@ -1330,6 +1341,33 @@
                 </div>`;
             }).join('') : `<div style="padding:12px 0;text-align:center;font-size:11px;font-weight:800;color:#059669;border-top:1px solid rgba(226,232,240,.8)">По выбранному фильтру пусто</div>`;
 
+            // «Сдача по заданиям»: по каждому выданному ДЗ — сколько получивших его сдали
+            const asgMap = {};
+            rows.forEach(s => (s.hwPerAssignment || []).forEach(p => {
+                const key = p.id || p.title || '?';
+                const rec = asgMap[key] || (asgMap[key] = { title: p.title || 'Задание', deadline: null, assignedAt: 0, done: 0, total: 0 });
+                rec.total++;
+                if (p.state === 'done') rec.done++;
+                if ((p.assignedAt || 0) > rec.assignedAt) rec.assignedAt = p.assignedAt || 0;
+                if (p.deadline && (!rec.deadline || p.deadline > rec.deadline)) rec.deadline = p.deadline;
+            }));
+            const asgList = Object.values(asgMap).sort((a, b) => (b.assignedAt || 0) - (a.assignedAt || 0)).slice(0, 5);
+            const asgHtml = asgList.length ? `<div style="padding:2px 12px 6px;border-bottom:1px solid rgba(226,232,240,.6)">
+                <div style="font-size:10px;color:#94a3b8;font-weight:900;text-transform:uppercase;letter-spacing:.06em;margin:2px 0 6px">Сдача по заданиям</div>
+                ${asgList.map(r => {
+                    const pct = r.total ? Math.round(r.done / r.total * 100) : 0;
+                    const col = pct >= 80 ? '#059669' : pct >= 40 ? '#d97706' : '#dc2626';
+                    const dl = r.deadline ? ' · до ' + new Date(r.deadline + 'T00:00:00').toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' }) : '';
+                    return `<div style="margin-bottom:7px">
+                        <div style="display:flex;justify-content:space-between;align-items:baseline;gap:8px;font-size:10px;font-weight:800">
+                            <span class="text-slate-800 dark:text-gray-300" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0">${esc(r.title)}</span>
+                            <span style="color:${col};white-space:nowrap;flex-shrink:0">сдали ${r.done}/${r.total}${dl}</span>
+                        </div>
+                        <div style="height:5px;background:#e5e7eb;border-radius:999px;overflow:hidden;margin-top:3px"><div style="height:100%;width:${pct}%;background:${col};border-radius:999px"></div></div>
+                    </div>`;
+                }).join('')}
+            </div>` : '';
+
             const titleMap = { problem: 'Кому нужно внимание', overdue: 'Просрочили', pending: 'Не приняли задание', active: 'В работе', done: 'Сдали', all: 'Все с ДЗ' };
             cont.innerHTML = `
               <div class="bg-white dark:bg-[#1e1e1e] border border-rose-200 dark:border-rose-900/40 rounded-xl overflow-hidden shadow-sm">
@@ -1347,6 +1385,7 @@
                     ${btn('active', 'в работе', byStatus('active'), meta.active.color)}
                     ${btn('done', 'сдали', byStatus('done'), meta.done.color)}
                 </div>
+                ${asgHtml}
                 <div style="padding:0 12px 10px">
                     <div style="display:flex;align-items:center;justify-content:space-between;margin:2px 0 5px">
                         <div style="font-size:10px;color:#94a3b8;font-weight:900;text-transform:uppercase;letter-spacing:.06em">${titleMap[filter] || 'ДЗ'}</div>

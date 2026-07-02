@@ -164,6 +164,24 @@ function computeWeeklyScore(dailyStats) {
     return total;
 }
 
+// Дневной стрик: сколько дней ПОДРЯД решали хотя бы одну строку.
+// Если сегодня ещё не решал — серия не сгорает в ноль, считаем от вчера.
+// НЕ путать со stats.streak — это серия верных ответов подряд внутри игры.
+window.computeDayStreak = function(dailyStats) {
+    const ds = dailyStats || (window.state && window.state.stats && window.state.stats.dailyStats) || {};
+    const key = dt => {
+        const t = new Date(dt);
+        t.setMinutes(t.getMinutes() - t.getTimezoneOffset());
+        return t.toISOString().split('T')[0];
+    };
+    const solvedOn = d => { const x = ds[d]; return !!(x && (x.solved || 0) > 0); };
+    const day = new Date();
+    if (!solvedOn(key(day))) day.setDate(day.getDate() - 1);
+    let streak = 0;
+    while (solvedOn(key(day))) { streak++; day.setDate(day.getDate() - 1); }
+    return streak;
+};
+
 // Хелперы для SRS-ключей
 function factKey(f, task) {
     const t = task || window.state.currentTask;

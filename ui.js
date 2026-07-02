@@ -1352,7 +1352,8 @@ window.openEGEModal = function() {
     if (!overlay) {
         overlay = document.createElement('div');
         overlay.id = overlayId;
-        overlay.style.cssText = 'position:fixed;inset:0;z-index:9000;background:rgba(0,0,0,0.55);display:flex;align-items:flex-end;justify-content:center;padding:0';
+        // z-index выше модалок (10001/10006): прогноз открывается ИЗ окна статистики и должен лечь поверх него
+        overlay.style.cssText = 'position:fixed;inset:0;z-index:10010;background:rgba(0,0,0,0.55);display:flex;align-items:flex-end;justify-content:center;padding:0';
         overlay.onclick = e => { if(e.target===overlay) overlay.remove(); };
         document.body.appendChild(overlay);
     }
@@ -1485,7 +1486,7 @@ function computeMainAction() {
             period: localStorage.getItem('ege_last_period') || 'all',
             left: DAILY_GOAL_LINES - doneToday };
     }
-    return { ...base, kind: 'done', streak: s.streak || 0 };
+    return { ...base, kind: 'done', streak: (window.computeDayStreak && window.computeDayStreak()) || 0 };
 }
 
 window.mainActionGo = function(kind) {
@@ -1622,7 +1623,8 @@ function updateGlobalUI() {
             goalRing.style.strokeDashoffset = 97.4 * (1 - goalPct);
             goalRing.style.stroke = goalPct >= 1 ? '#fbbf24' : '#34d399'; // выполнено — золото
         }
-        if (goalEl) updateText(goalEl, `🔥${window.state.stats.streak || 0}`);
+        // Дневной стрик (дни подряд с решёнными строками), НЕ серия верных ответов
+        if (goalEl) updateText(goalEl, `🔥${(window.computeDayStreak && window.computeDayStreak()) || 0}`);
     }
     // Дни до ЕГЭ — только когда их ≤150: раньше это шум, ближе к экзамену — мотивация.
     const daysBox = $('stat-days-box');
@@ -1700,7 +1702,7 @@ window.closeGameOverModal = function() {
     else { hideModal('game-over-modal'); $('board-overlay').classList.add('hidden'); backToLobby(); } 
 };
 
-function shareTelegram() { const text = `🔥 Мой стрик в тренажере ЕГЭ по истории — ${window.state.stats.streak}! Попробуй побить: `; window.open(`https://t.me/share/url?url=${encodeURIComponent(window.location.href)}&text=${encodeURIComponent(text)}`); }
+function shareTelegram() { const text = `🔥 Мой стрик в тренажере ЕГЭ по истории — ${(window.computeDayStreak && window.computeDayStreak()) || 0} дн. подряд! Попробуй побить: `; window.open(`https://t.me/share/url?url=${encodeURIComponent(window.location.href)}&text=${encodeURIComponent(text)}`); }
 
 window.openStatsModal = function() {
     updateGlobalUI();
