@@ -860,43 +860,49 @@
              
              <!-- ВКЛАДКА: УЧЕНИКИ -->
              <div class="flex-grow p-3 sm:p-4 overflow-y-auto overflow-x-hidden custom-scroll flex flex-col bg-gray-50 dark:bg-[#121212] relative w-full" id="teacher-tab-stats">
-                <!-- Код класса + фильтр -->
-                <div class="bg-white dark:bg-[#1e1e1e] border border-gray-200 dark:border-[#2c2c2c] rounded-2xl p-3 mb-3 flex flex-col sm:flex-row items-center justify-between shadow-sm gap-3 shrink-0">
-                    <div class="flex items-center gap-3 w-full sm:w-auto justify-between">
-                        <span class="text-xs font-black text-gray-500 dark:text-gray-400 uppercase tracking-widest shrink-0">Код класса:</span>
-                        <input type="text" id="teacher-class-code-input" class="w-20 text-center font-mono font-black text-examBlue dark:text-blue-300 text-lg p-2 border border-gray-300 rounded-xl dark:bg-[#2c2c2c] dark:border-[#3f3f46] outline-none bg-blue-50 dark:bg-blue-900/20 shrink-0" onchange="saveTeacherClassCode()">
+                <!-- Панель потока: код класса · «дошли до года» · фильтр -->
+                <div class="mb-3 shrink-0 rounded-2xl p-3 shadow-md" style="background:linear-gradient(135deg,#4f46e5,#2563eb)">
+                    <div class="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
+                        <label class="flex items-center gap-2 bg-white/15 rounded-xl px-3 py-2 justify-center">
+                            <span class="text-[10px] font-black text-white/70 uppercase tracking-widest shrink-0">Класс</span>
+                            <input type="text" id="teacher-class-code-input" placeholder="код" onchange="saveTeacherClassCode()" class="w-20 text-center font-mono font-black text-white text-base bg-transparent outline-none placeholder-white/40">
+                        </label>
+                        <!-- «Дошли до года»: ученики повторяют всё от 862 до этой границы (кнопка «Продолжить») -->
+                        <label class="flex items-center gap-2 bg-white/15 rounded-xl px-3 py-2 justify-center" title="До какого года дошли на занятиях — ученики будут повторять всё от 862 года до этой границы">
+                            <span class="text-[10px] font-black text-white/70 uppercase tracking-widest shrink-0">Дошли до</span>
+                            <input type="number" id="teacher-current-upto" min="862" max="2026" placeholder="год" onchange="window.saveClassCurrentUpto&&window.saveClassCurrentUpto(this.value)" class="w-16 text-center font-black text-white text-sm bg-transparent outline-none placeholder-white/40">
+                            <span class="text-[10px] font-black text-white/70 shrink-0">г.</span>
+                        </label>
+                        <label class="flex items-center gap-2 bg-white/15 rounded-xl px-3 py-2 justify-center cursor-pointer sm:ml-auto">
+                            <input type="checkbox" id="teacher-filter-class" onchange="window.loadClassProgress()" class="w-4 h-4 rounded shrink-0">
+                            <span class="text-[10px] font-black text-white uppercase tracking-wide">Только мой класс</span>
+                        </label>
                     </div>
-                    <label class="flex items-center gap-3 cursor-pointer w-full sm:w-auto justify-center bg-gray-50 dark:bg-[#181818] px-4 py-2 rounded-xl border border-gray-200 dark:border-[#2c2c2c] shrink-0">
-                        <input type="checkbox" id="teacher-filter-class" onchange="window.loadClassProgress()" class="w-5 h-5 text-examBlue bg-white border-gray-300 rounded shrink-0">
-                        <span class="text-[11px] sm:text-xs font-black text-gray-700 dark:text-gray-300 uppercase tracking-wide">Только мой класс</span>
-                    </label>
-                    <!-- «Дошли до года»: граница пройденного — ученики повторяют всё от 862 до этого года (кнопка «Продолжить») -->
-                    <label class="flex items-center gap-2 w-full sm:w-auto justify-center bg-gray-50 dark:bg-[#181818] px-3 py-2 rounded-xl border border-gray-200 dark:border-[#2c2c2c] shrink-0" title="До какого года дошли на занятиях — ученики будут повторять всё от 862 года до этой границы">
-                        <span class="text-[10px] font-black text-gray-500 dark:text-gray-400 uppercase tracking-wide shrink-0">Дошли до:</span>
-                        <input type="number" id="teacher-current-upto" min="862" max="2026" placeholder="год" onchange="window.saveClassCurrentUpto&&window.saveClassCurrentUpto(this.value)" class="w-20 text-center text-[12px] font-black text-gray-700 dark:text-gray-300 bg-transparent outline-none">
-                        <span class="text-[10px] font-black text-gray-500 dark:text-gray-400 shrink-0">г.</span>
-                    </label>
                     <!-- Что реально показано: класс / все — заполняет loadClassProgress -->
-                    <div id="teacher-filter-mode-note" class="hidden w-full sm:w-auto text-center text-[10px] font-bold text-gray-400 dark:text-gray-500"></div>
+                    <div id="teacher-filter-mode-note" class="hidden w-full text-center text-[10px] font-bold text-white/60 mt-2"></div>
                 </div>
-                <!-- Сводка по классу -->
+                <!-- Сводка по классу: «сегодня одним взглядом» -->
                 <div id="teacher-class-summary" class="hidden mb-3 shrink-0">
                     <div class="grid grid-cols-4 gap-2">
-                        <div class="bg-white dark:bg-[#1e1e1e] border border-gray-200 dark:border-[#2c2c2c] rounded-xl p-2 text-center shadow-sm">
-                            <div class="text-[9px] text-gray-400 uppercase font-black tracking-widest">Учеников</div>
-                            <div class="text-lg font-black text-blue-600 dark:text-blue-400" id="summary-count">0</div>
+                        <div class="rounded-xl p-2.5 text-center shadow-sm bg-blue-50 dark:bg-blue-900/20 border border-blue-100 dark:border-blue-900/40">
+                            <div class="text-base leading-none">👥</div>
+                            <div class="text-lg font-black text-blue-600 dark:text-blue-400 leading-tight" id="summary-count">0</div>
+                            <div class="text-[8px] text-blue-500/70 dark:text-blue-400/70 uppercase font-black tracking-widest">учеников</div>
                         </div>
-                        <div class="bg-white dark:bg-[#1e1e1e] border border-gray-200 dark:border-[#2c2c2c] rounded-xl p-2 text-center shadow-sm">
-                            <div class="text-[9px] text-gray-400 uppercase font-black tracking-widest">Ср. решено</div>
-                            <div class="text-lg font-black text-emerald-600 dark:text-emerald-400" id="summary-avg">0</div>
+                        <div class="rounded-xl p-2.5 text-center shadow-sm bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-100 dark:border-emerald-900/40">
+                            <div class="text-base leading-none">⚡</div>
+                            <div class="text-lg font-black text-emerald-600 dark:text-emerald-400 leading-tight" id="summary-active">0</div>
+                            <div class="text-[8px] text-emerald-500/70 dark:text-emerald-400/70 uppercase font-black tracking-widest">сегодня</div>
                         </div>
-                        <div class="bg-white dark:bg-[#1e1e1e] border border-gray-200 dark:border-[#2c2c2c] rounded-xl p-2 text-center shadow-sm">
-                            <div class="text-[9px] text-gray-400 uppercase font-black tracking-widest">Активны сегодня</div>
-                            <div class="text-lg font-black text-purple-600 dark:text-purple-400" id="summary-active">0</div>
+                        <div class="rounded-xl p-2.5 text-center shadow-sm bg-purple-50 dark:bg-purple-900/20 border border-purple-100 dark:border-purple-900/40">
+                            <div class="text-base leading-none">📈</div>
+                            <div class="text-lg font-black text-purple-600 dark:text-purple-400 leading-tight" id="summary-avg">0</div>
+                            <div class="text-[8px] text-purple-500/70 dark:text-purple-400/70 uppercase font-black tracking-widest">ср. решено</div>
                         </div>
-                        <div class="bg-white dark:bg-[#1e1e1e] border border-gray-200 dark:border-[#2c2c2c] rounded-xl p-2 text-center shadow-sm">
-                            <div class="text-[9px] text-red-400 uppercase font-black tracking-widest">3д без входа</div>
-                            <div class="text-lg font-black text-red-500" id="summary-atrisk">0</div>
+                        <div class="rounded-xl p-2.5 text-center shadow-sm bg-rose-50 dark:bg-rose-900/20 border border-rose-100 dark:border-rose-900/40">
+                            <div class="text-base leading-none">💤</div>
+                            <div class="text-lg font-black text-rose-500 leading-tight" id="summary-atrisk">0</div>
+                            <div class="text-[8px] text-rose-500/70 uppercase font-black tracking-widest">3д+ молчат</div>
                         </div>
                     </div>
                 </div>
@@ -907,6 +913,7 @@
                     <button onclick="window.openClassAssignmentsList&&window.openClassAssignmentsList()" class="shrink-0 bg-indigo-50 text-indigo-600 hover:bg-indigo-100 dark:bg-indigo-900/20 dark:text-indigo-400 active:scale-95 transition-all font-black uppercase tracking-wide rounded-2xl px-4 py-3 text-[11px] sm:text-sm" title="Список выданных ДЗ и отмена">📋 ДЗ</button>
                     <button onclick="window.downloadClassReportPDF&&window.downloadClassReportPDF()" class="shrink-0 bg-blue-50 text-blue-600 hover:bg-blue-100 dark:bg-blue-900/20 dark:text-blue-400 active:scale-95 transition-all font-black uppercase tracking-wide rounded-2xl px-4 py-3 text-[11px] sm:text-sm" title="Скачать PDF-сводку класса">📄 PDF</button>
                 </div>
+                <div class="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1.5 px-1 shrink-0 mt-1">👥 Ученики</div>
                 <!-- Сегменты учеников: быстрые фильтры списка карточек -->
                 <div id="teacher-segments" class="flex gap-1.5 mb-2 shrink-0 overflow-x-auto custom-scroll">
                     <button data-seg="all" onclick="window.setTeacherSegment&&window.setTeacherSegment('all')" class="shrink-0 bg-blue-600 text-white border border-blue-600 rounded-xl px-3 py-1.5 text-[10px] font-black uppercase tracking-wide transition-colors">Все <span data-segcnt="all"></span></button>

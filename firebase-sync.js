@@ -1174,7 +1174,10 @@
         function renderStudentCard(s, idx) {
             const safeUid  = (s.uid  || '').replace(/'/g, "\\'");
             const safeName = (s.name || 'Без имени').replace(/'/g, "\\'").replace(/"/g, '&quot;');
-            const medal    = idx === 0 ? '🥇' : idx === 1 ? '🥈' : idx === 2 ? '🥉' : `<span style="color:#9ca3af;font-size:12px">#${idx+1}</span>`;
+            const medal    = idx === 0 ? '🥇' : idx === 1 ? '🥈' : idx === 2 ? '🥉' : '';
+            // Аватар: инициал на стабильном цвете из uid — ученика легко находить глазами в списке
+            const initial  = (String(s.name || '?').trim().charAt(0) || '?').toUpperCase();
+            const hue      = Array.from(String(s.uid || s.name || 'x')).reduce((h, c) => (h * 31 + c.charCodeAt(0)) >>> 0, 7) % 360;
             const timeStr  = s.timeSpentMin >= 60 ? `${Math.floor(s.timeSpentMin/60)}ч ${s.timeSpentMin%60}м` : `${s.timeSpentMin}м`;
             const accStr   = s.accuracy !== null ? `${s.accuracy}%` : '—';
             const accColor = s.accuracy === null ? '#9ca3af' : s.accuracy >= 80 ? 'var(--c-success)' : s.accuracy >= 60 ? 'var(--c-warn)' : 'var(--c-danger-soft)';
@@ -1198,11 +1201,15 @@
 
             return `<div class="bg-white dark:bg-[#1e1e1e] rounded-2xl p-4 shadow-sm border border-gray-100 dark:border-[#2c2c2c] flex flex-col">
                 <div style="display:flex;justify-content:space-between;align-items:flex-start;padding-bottom:10px;border-bottom:1px solid #f1f5f9;gap:8px">
-                    <div style="display:flex;align-items:center;gap:8px;flex:1;min-width:0">
-                        <span style="font-size:18px;flex-shrink:0">${medal}</span>
+                    <div style="display:flex;align-items:center;gap:9px;flex:1;min-width:0">
+                        <div style="position:relative;flex-shrink:0">
+                            <div style="width:37px;height:37px;border-radius:12px;background:linear-gradient(135deg,hsl(${hue},68%,52%),hsl(${(hue + 42) % 360},68%,40%));color:#fff;display:flex;align-items:center;justify-content:center;font-weight:900;font-size:16px;box-shadow:0 2px 6px rgba(0,0,0,.15)">${initial}</div>
+                            ${medal ? `<span style="position:absolute;bottom:-5px;right:-6px;font-size:14px;filter:drop-shadow(0 1px 1px rgba(0,0,0,.3))">${medal}</span>` : ''}
+                        </div>
                         <div style="min-width:0">
                             <div class="dark:text-gray-200" style="font-weight:900;font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${s.name || 'Без имени'}</div>
                             <div style="font-size:9px;color:#94a3b8;margin-top:1px;display:flex;gap:6px;flex-wrap:wrap">
+                                <span style="color:#cbd5e1;font-weight:800">#${idx + 1}</span>
                                 <span style="font-family:monospace;color:#64748b">🆔 ${s.tgId || s.knownTgId || s.canonicalId || s.uid || '—'}</span>
                                 ${s.classCode ? `<span style="color:var(--c-brand);font-weight:700">класс ${s.classCode}</span>` : ''}
                             </div>

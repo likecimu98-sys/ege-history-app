@@ -39,10 +39,29 @@
     const THRESH = 80;   // порог свайпа для засчёта
     const STAMP_FULL = 55; // на какой дистанции штамп «ТУДА/СЮДА» становится полностью видимым
 
+    // Колода пары: стороны уравнены по числу карточек и перемешаны с ограничением
+    // «не больше 2 одной стороны подряд». Чистый шафл здесь плох: при неравных
+    // пулах фактов хвост колоды — сплошь один правитель, и игрок это чувствует
+    // как «много лево подряд, потом много право».
     function _buildPairDeck(a, b) {
+        const A = _shuffle((a.facts || []).slice()).map(f => ({ fact: f, correctId: a.id }));
+        const B = _shuffle((b.facts || []).slice()).map(f => ({ fact: f, correctId: b.id }));
+        const n = Math.min(A.length, B.length);
+        A.length = n; B.length = n;
         const cards = [];
-        [a, b].forEach(r => (r.facts || []).forEach(f => cards.push({ fact: f, correctId: r.id })));
-        return _shuffle(cards);
+        let run = 0, last = null;
+        while (A.length || B.length) {
+            let side;
+            if (!A.length) side = 'b';
+            else if (!B.length) side = 'a';
+            else if (run >= 2) side = last === 'a' ? 'b' : 'a';
+            // вероятность пропорциональна остатку — стороны кончаются одновременно
+            else side = Math.random() < A.length / (A.length + B.length) ? 'a' : 'b';
+            cards.push(side === 'a' ? A.pop() : B.pop());
+            run = side === last ? run + 1 : 1;
+            last = side;
+        }
+        return cards;
     }
 
     // ─── Дуэль-свайп: у обоих игроков ОДИНАКОВЫЕ карточки ───
