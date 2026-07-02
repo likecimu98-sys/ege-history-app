@@ -48,19 +48,54 @@
     // ─── Дуэль-свайп: у обоих игроков ОДИНАКОВЫЕ карточки ───
     // Колоду генерирует создатель матча и кладёт в документ матча (снапшоты правителей
     // включены) — рассинхрон при разных версиях приложения исключён.
-    const DUEL_SECTIONS = 3, DUEL_CARDS_PER_SECTION = 10, DUEL_MS = 120000;
+    // 45 секунд на матч: побеждает тот, кто наберёт больше очков до конца таймера.
+    // Пары — современники (разница начал правлений ≤100 лет), чтобы было честно-сложно;
+    // исключение: Алексей Михайлович — «джокер», можно с любым до Николая II включительно.
+    const DUEL_SECTIONS = 4, DUEL_CARDS_PER_SECTION = 10, DUEL_MS = 45000;
+    window.SWIPE_DUEL_MS = DUEL_MS;
+    const PAIR_MAX_GAP = 100;
+    const WILDCARD_ID = 'aleksey';
+    const WILDCARD_PARTNER_MAX_START = 1894; // начало правления Николая II
+
+    function _startYear(r) {
+        const m = String((r && r.years) || '').match(/\d{3,4}/);
+        return m ? parseInt(m[0], 10) : null;
+    }
+    function _pairCompatible(a, b) {
+        const ya = _startYear(a), yb = _startYear(b);
+        if (ya == null || yb == null) return false;
+        if (a.id === WILDCARD_ID) return yb <= WILDCARD_PARTNER_MAX_START;
+        if (b.id === WILDCARD_ID) return ya <= WILDCARD_PARTNER_MAX_START;
+        return Math.abs(ya - yb) <= PAIR_MAX_GAP;
+    }
 
     window.buildSwipeDuelSections = function () {
         const pool = _shuffle((window.swipeRulersData || []).slice());
         if (pool.length < DUEL_SECTIONS * 2) return null;
         const snap = r => ({ id: r.id, name: r.name, years: r.years || '', emoji: r.emoji || '👑' });
-        const sections = [];
-        for (let s = 0; s < DUEL_SECTIONS; s++) {
-            const a = pool[s * 2], b = pool[s * 2 + 1];
-            const cards = _buildPairDeck(a, b).slice(0, DUEL_CARDS_PER_SECTION).map(c => ({ f: c.fact, c: c.correctId }));
-            sections.push({ a: snap(a), b: snap(b), cards });
+        const used = new Set();
+        const pairs = [];
+        for (const r of pool) {
+            if (pairs.length >= DUEL_SECTIONS) break;
+            if (used.has(r.id)) continue;
+            const partners = pool.filter(o => !used.has(o.id) && o.id !== r.id && _pairCompatible(r, o));
+            if (!partners.length) continue;
+            const p = partners[Math.floor(Math.random() * partners.length)];
+            used.add(r.id); used.add(p.id);
+            pairs.push([r, p]);
         }
-        return sections;
+        // Страховка: если совместимых пар не хватило — добираем соседей по хронологии.
+        if (pairs.length < DUEL_SECTIONS) {
+            const rest = pool.filter(r => !used.has(r.id)).sort((x, y) => (_startYear(x) || 0) - (_startYear(y) || 0));
+            for (let i = 0; i + 1 < rest.length && pairs.length < DUEL_SECTIONS; i += 2) {
+                pairs.push([rest[i], rest[i + 1]]);
+            }
+        }
+        if (pairs.length < DUEL_SECTIONS) return null;
+        return pairs.map(([a, b]) => ({
+            a: snap(a), b: snap(b),
+            cards: _buildPairDeck(a, b).slice(0, DUEL_CARDS_PER_SECTION).map(c => ({ f: c.fact, c: c.correctId }))
+        }));
     };
 
     window.openSwipeDuel = function (opts) {
@@ -146,34 +181,50 @@
         d.finishedMine = true;
         _duelReport();
         _updateDuelBar();
-        if (d.oppDone >= d.total) return _duelFinish();
+        if (d.oppDone >= d.total) return _duelFinish(); // оба прошли всё — не ждём таймер
         const zone = document.getElementById('sw-cardzone');
         if (zone) zone.innerHTML = `
             <div style="color:#e2e8f0;text-align:center">
-                <div style="font-size:44px">⏳</div>
-                <div style="font-size:16px;font-weight:900;margin-top:6px">Ты закончил: ✓${_sw.correct} из ${d.total}</div>
-                <div style="font-size:12.5px;opacity:.75;margin-top:4px">Ждём соперника…</div>
+                <div style="font-size:44px">🚀</div>
+                <div style="font-size:16px;font-weight:900;margin-top:6px">Все карточки! ✓${_sw.correct} из ${d.total}</div>
+                <div style="font-size:12.5px;opacity:.75;margin-top:4px">Жди конца таймера — соперник ещё играет</div>
             </div>`;
     }
 
+    // Конец матча (таймер/оба закончили): блокируем свайпы, шлём финальный счёт
+    // и даём 1.2 с на прилёт последних очков соперника, потом — вердикт.
     function _duelFinish() {
         const d = _sw && _sw.duel; if (!d || d.over) return;
         d.over = true;
+        _sw.lock = true;
         if (d.timerIv) { clearInterval(d.timerIv); d.timerIv = null; }
         _duelReport();
+        const zone = document.getElementById('sw-cardzone');
+        if (zone) zone.innerHTML = `
+            <div style="color:#e2e8f0;text-align:center">
+                <div style="font-size:44px">⏱</div>
+                <div style="font-size:17px;font-weight:1000;margin-top:6px">Время!</div>
+                <div style="font-size:12.5px;opacity:.75;margin-top:4px">Считаем очки…</div>
+            </div>`;
+        setTimeout(_duelVerdict, 1200);
+    }
+
+    function _duelVerdict() {
+        const d = _sw && _sw.duel; if (!d) return;
         try { if (window.state && window.state.duel) window.state.duel.active = false; } catch (e) {}
         try { window.cancelDuelDb && window.cancelDuelDb(); } catch (e) {}
         const my = _sw.score, opp = d.oppScore;
         const win = my > opp, draw = my === opp;
         _h(win ? 'success' : 'error');
+        _play(win);
         const panels = document.getElementById('sw-panels'); if (panels) panels.innerHTML = '';
         const zone = document.getElementById('sw-cardzone'); if (!zone) return;
         zone.innerHTML = `
         <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;color:#e2e8f0;text-align:center;gap:8px">
             <div style="font-size:54px">${win ? '🏆' : draw ? '🤝' : '💔'}</div>
             <div style="font-size:22px;font-weight:1000;color:${win ? '#4ade80' : draw ? '#e2e8f0' : '#f87171'}">${win ? 'ПОБЕДА!' : draw ? 'НИЧЬЯ' : 'ПОРАЖЕНИЕ'}</div>
-            <div style="font-size:18px;font-weight:900">${my} <span style="opacity:.5">:</span> ${opp}</div>
-            <div style="font-size:12.5px;opacity:.75">Ты: ✓${_sw.correct}/${d.total} · ${_esc(d.oppName)}: ✓${d.oppCorrect}/${d.total}</div>
+            <div style="font-size:20px;font-weight:900">${my} <span style="opacity:.5">:</span> ${opp}</div>
+            <div style="font-size:12.5px;opacity:.75">Ты: ✓${_sw.correct} из ${d.done} · ${_esc(d.oppName)}: ✓${d.oppCorrect} из ${d.oppDone}</div>
             <div style="display:flex;gap:10px;margin-top:14px">
                 <button id="sw-d-rematch" style="background:#6366f1;color:#fff;border:none;border-radius:14px;padding:12px 22px;font-size:14px;font-weight:900;cursor:pointer">⚔️ Ещё раз</button>
                 <button id="sw-d-exit" style="background:rgba(255,255,255,0.12);color:#fff;border:none;border-radius:14px;padding:12px 22px;font-size:14px;font-weight:900;cursor:pointer">Выход</button>
@@ -208,13 +259,11 @@
     };
 
     window.closeSwipeMode = function () {
-        // Выход из незаконченной дуэли = сдача: чистим таймер и закрываем матч.
+        // Выход из дуэли: чистим таймер и закрываем матч (cancelDuelDb идемпотентен).
         if (_sw && _sw.duel) {
             if (_sw.duel.timerIv) { clearInterval(_sw.duel.timerIv); _sw.duel.timerIv = null; }
-            if (!_sw.duel.over) {
-                try { if (window.state && window.state.duel) window.state.duel.active = false; } catch (e) {}
-                try { window.cancelDuelDb && window.cancelDuelDb(); } catch (e) {}
-            }
+            try { if (window.state && window.state.duel) window.state.duel.active = false; } catch (e) {}
+            try { window.cancelDuelDb && window.cancelDuelDb(); } catch (e) {}
         }
         document.removeEventListener('keydown', _onKey);
         const ov = document.getElementById('swipe-overlay');
@@ -241,7 +290,7 @@
                 <span style="font-size:12.5px">Счёт: <span id="sw-score" style="color:#fbbf24">0</span></span>
                 <span style="font-size:12.5px">🔥 <span id="sw-streak">0</span></span>
                 ${duel
-                    ? '<span style="font-size:12.5px;color:#f87171">⏱ <span id="sw-timer">2:00</span></span>'
+                    ? '<span style="font-size:12.5px;color:#f87171">⏱ <span id="sw-timer">0:45</span></span>'
                     : '<span style="font-size:12.5px;opacity:.7">осталось: <span id="sw-left">0</span></span>'}
                 <button id="sw-mute" title="Звук вкл/выкл" style="background:rgba(255,255,255,0.1);border:none;width:30px;height:30px;border-radius:9px;font-size:14px;cursor:pointer;opacity:${_muted ? '0.55' : '1'}">${_muteIcon()}</button>
             </div>

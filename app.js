@@ -627,7 +627,6 @@ const ACTION_HANDLERS = {
     toggleFocusMode:        () => window.toggleFocusMode?.(),
     toggleTheme:            () => window.toggleTheme?.(),
     startDuelSearch:        () => window.startDuelSearch?.(),
-    openDuelModeChooser:    () => window.openDuelModeChooser?.(),
     cancelDuelSearch:       () => window.cancelDuelSearch?.(),
     startHwFromBanner:      () => window.startHwFromBanner?.(),
     openHwTab:              () => window.openHwTab?.(),
