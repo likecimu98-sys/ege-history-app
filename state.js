@@ -25,6 +25,7 @@ window.state = {
         hwFlashcardsToSolve: 0,
         hwTask1: 0, hwTask3: 0, hwTask4: 0, hwTask5: 0, hwTask7: 0,
         assignments: [],
+        duelElo: 1000, duelGames: 0, duelWins: 0, duelLosses: 0, duelDraws: 0,
         visualArchitectureProgress: {},
         visualArchitectureSolved: 0,
         visualPaintingProgress: {},
@@ -278,7 +279,8 @@ const SAVE_FIELDS = [
     'egePoints', 'hwTask1', 'hwTask3', 'hwTask4', 'hwTask5', 'hwTask7', 'assignments',
     'visualArchitectureProgress', 'visualArchitectureSolved',
     'visualPaintingProgress', 'visualPaintingSolved',
-    'bestSpeedrunScore', 'dailyStats', 'achievements', 'achievementsData'
+    'bestSpeedrunScore', 'dailyStats', 'achievements', 'achievementsData',
+    'duelElo', 'duelGames', 'duelWins', 'duelLosses', 'duelDraws'
 ];
 
 const MAX_MISTAKES_POOL = 200;

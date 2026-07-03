@@ -15,6 +15,30 @@ if (!tg && typeof document !== 'undefined') {
     });
 }
 
+// ── Elo-рейтинг дуэлей ──
+// Классическая формула Elo: ожидание E = 1/(1+10^((R_opp−R_my)/400)), дельта = K·(S−E).
+// Старт 1000, пол 100. K=40 первые 10 матчей (быстрый разгон новичка), дальше 24.
+// Каждый игрок считает и пишет ТОЛЬКО свой рейтинг (рейтинг соперника берём из документа матча) —
+// никто не трогает чужие данные, а результат у обеих сторон сходится, т.к. входные одинаковые.
+window.applyDuelResult = function (myScore, oppScore, oppEloRaw) {
+    const s = window.state && window.state.stats;
+    if (!s) return null;
+    const my = Number(myScore) || 0, op = Number(oppScore) || 0;
+    const oppElo = Number(oppEloRaw) || 1000;
+    const elo = Number(s.duelElo) || 1000;
+    const S = my > op ? 1 : (my < op ? 0 : 0.5);
+    const E = 1 / (1 + Math.pow(10, (oppElo - elo) / 400));
+    const games = Number(s.duelGames) || 0;
+    const K = games < 10 ? 40 : 24;
+    const delta = Math.round(K * (S - E));
+    s.duelElo = Math.max(100, elo + delta);
+    s.duelGames = games + 1;
+    if (S === 1) s.duelWins = (Number(s.duelWins) || 0) + 1;
+    else if (S === 0) s.duelLosses = (Number(s.duelLosses) || 0) + 1;
+    else s.duelDraws = (Number(s.duelDraws) || 0) + 1;
+    return { delta, elo: s.duelElo };
+};
+
 function haptic(type) {
     if (!tg || !tg.HapticFeedback) return;
     if (['light', 'medium', 'heavy', 'rigid', 'soft'].includes(type)) {

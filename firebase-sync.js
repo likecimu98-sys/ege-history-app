@@ -690,7 +690,7 @@
                     if (!snap.exists()) throw new Error('match_gone');
                     const d = snap.data();
                     if (d.status !== 'waiting' || d.player2 !== null || (d.player1 && d.player1.uid === myUid)) throw new Error('slot_taken');
-                    transaction.update(ref, { status: 'playing', player2: { uid: myUid, name: myName, score: 0, combo: 0 }, startTime: Date.now() + 4000 });
+                    transaction.update(ref, { status: 'playing', player2: { uid: myUid, name: myName, score: 0, combo: 0, elo: _myDuelElo() }, startTime: Date.now() + 4000 });
                 });
                 window.state.duel.matchId = matchId;
                 window.state.duel.isPlayer1 = false;
@@ -708,6 +708,10 @@
         // ✅ FIX: Используем runTransaction для атомарного захвата слота player2
         // Это исключает Race Condition когда двое одновременно присоединяются к одному матчу
         let duelUnsubscribe = null;
+        // Мой текущий Elo для документа матча (соперник считает свою дельту от него).
+        function _myDuelElo() {
+            return Number(window.state && window.state.stats && window.state.stats.duelElo) || 1000;
+        }
         window.startDuelSearchDb = async function(mode) {
             mode = mode === 'swipe' ? 'swipe' : 'classic';
             if (!fbUser || !db) { _ddbg('поиск невозможен: нет', !fbUser ? 'авторизации' : 'db'); return showToast('❌', 'Подключитесь к сети', 'bg-rose-500', 'border-rose-700'); }
@@ -760,7 +764,7 @@
                             // Атомарно занимаем слот
                             transaction.update(matchDocRef, {
                                 status: 'playing',
-                                player2: { uid: myUid, name: myName, score: 0, combo: 0 },
+                                player2: { uid: myUid, name: myName, score: 0, combo: 0, elo: _myDuelElo() },
                                 startTime: Date.now() + 4000
                             });
                         });
@@ -798,7 +802,7 @@
                         mode,
                         ...(swipeSections ? { swipeSections } : {}),
                         createdAt: Date.now(),
-                        player1: { uid: myUid, name: myName, score: 0, combo: 0 },
+                        player1: { uid: myUid, name: myName, score: 0, combo: 0, elo: _myDuelElo() },
                         player2: null,
                         startTime: 0
                     });
@@ -833,6 +837,7 @@
                     if (window.hideDuelChallenge) window.hideDuelChallenge(); // соперник найден — чужие вызовы убираем сразу
                     const opp = window.state.duel.isPlayer1 ? data.player2 : data.player1;
                     window.state.duel.oppName = opp ? opp.name : 'Соперник';
+                    window.state.duel.oppElo = (opp && Number(opp.elo)) || 1000; // для расчёта Elo после матча
                     // Режим и колода дуэли — из документа матча (единая точка для обеих сторон).
                     window.state.duel.mode = data.mode || 'classic';
                     window.state.duel.swipeSections = data.swipeSections || null;
@@ -872,6 +877,7 @@
                         name: localStorage.getItem('student_manual_name') || 'Игрок',
                         score: score,
                         combo: combo,
+                        elo: _myDuelElo(), // объект перезаписывается целиком — рейтинг нельзя терять
                         ...(extra || {}) // свайп-дуэль: {done, correct} — живой прогресс для соперника
                     }
                 });
@@ -999,9 +1005,17 @@
 
             // ── ДЗ: сколько осталось ──
             // Новая модель: задания в stats.assignments (подхвачены) + pendingAssignments на документе (ещё не подхвачены).
-            const assignments  = Array.isArray(stats.assignments) ? stats.assignments
-                                : (Array.isArray(state.assignments) ? state.assignments : []);
-            const docPending   = Array.isArray(s.pendingAssignments) ? s.pendingAssignments : [];
+            // Отозванные учителем ДЗ (revokedAssignments / revokeBefore класса) выкидываем из расчёта:
+            // ученик почистит их у себя при следующем входе, но в кабинете «долг» не должен
+            // висеть уже сейчас — иначе «снять старые ДЗ» выглядит неработающим.
+            const _tRevoked = (window._teacherRevoked instanceof Set) ? window._teacherRevoked : null;
+            const _tSweep   = Number(window._teacherSweepTs) || 0;
+            const _notRevoked = a => a && !(_tRevoked && _tRevoked.has(a.id)) && !_sweptByTeacher(a, _tSweep);
+            const assignments  = (Array.isArray(stats.assignments) ? stats.assignments
+                                : (Array.isArray(state.assignments) ? state.assignments : []))
+                                .filter(a => a && (a.status === 'done' || _notRevoked(a)));
+            const docPending   = (Array.isArray(s.pendingAssignments) ? s.pendingAssignments : [])
+                                .filter(r => r && !(_tRevoked && _tRevoked.has(r.id)) && !(_tSweep && (r.assignedAt || 0) < _tSweep));
             let hwFromAssign = 0, hwDoneOnTime = 0, hwDoneLate = 0, hwOverdue = 0, nearestDl = null;
             let hwTotalUnits = 0, hwOpenAssignments = 0, hwDoneAssignments = 0, hwTotalAssignments = 0;
             let hwActiveAssignments = 0, hwPendingAssignments = 0, hwOverdueAssignments = 0, hwStartedAssignments = 0;
@@ -1079,9 +1093,11 @@
                 if (r.deadline && (!nearestDl || r.deadline < nearestDl)) nearestDl = r.deadline;
                 if (r.deadline && new Date(r.deadline + 'T23:59:59').getTime() < nowMs) { hwOverdue += g; hwOverdueAssignments++; }
             });
-            // Legacy-поля (ученик ещё не обновил приложение)
-            const hwLegacy = (Number(s.hwAssignTask1)||0)+(Number(s.hwAssignTask3)||0)+(Number(s.hwAssignTask4)||0)+(Number(s.hwAssignTask5)||0)+(Number(s.hwAssignTask7)||0)
-                           + (assignments.length ? 0 : Number(stats.hwFlashcardsToSolve || state.hwFlashcardsToSolve || 0));
+            // Legacy-поля (ученик ещё не обновил приложение). При «чистом листе» (revokeBefore)
+            // они по определению старые (новая выдача их не пишет) — в долг не считаем.
+            const hwLegacy = _tSweep ? 0
+                : (Number(s.hwAssignTask1)||0)+(Number(s.hwAssignTask3)||0)+(Number(s.hwAssignTask4)||0)+(Number(s.hwAssignTask5)||0)+(Number(s.hwAssignTask7)||0)
+                  + (assignments.length ? 0 : Number(stats.hwFlashcardsToSolve || state.hwFlashcardsToSolve || 0));
             if (hwLegacy > 0) {
                 hwTotalAssignments++;
                 hwOpenAssignments++;
@@ -1953,12 +1969,20 @@
                     } catch (e) { console.warn('[Teacher] Доп. запрос по классу не удался:', e); }
                 }
 
-                // Подтягиваем «Дошли до года» потока в поле кабинета (не блокируя список).
+                // Документ класса: «дошли до года» для поля кабинета + отозванные ДЗ.
+                // Отзывы (revokedAssignments / revokeBefore) нужны ДО расчёта карточек:
+                // иначе снятые учителем ДЗ висели бы «долгом» у учеников, которые ещё
+                // не заходили в приложение и не почистили их у себя.
                 if (tc) {
-                    getDoc(doc(db, 'artifacts', appId, 'public', 'data', 'classes', _classDocId(tc))).then(cs => {
+                    try {
+                        const cs = await getDoc(doc(db, 'artifacts', appId, 'public', 'data', 'classes', _classDocId(tc)));
+                        if (mySeq !== _loadSeq) return;
+                        const cd = cs.exists() ? cs.data() : {};
                         const inp = document.getElementById('teacher-current-upto');
-                        if (inp) inp.value = (cs.exists() && cs.data().currentUpto) || '';
-                    }).catch(() => {});
+                        if (inp) inp.value = cd.currentUpto || '';
+                        window._teacherRevoked = new Set(Array.isArray(cd.revokedAssignments) ? cd.revokedAssignments : []);
+                        window._teacherSweepTs = Number(cd.revokeBefore) || 0;
+                    } catch (e) { console.warn('[Teacher] класс-док не прочитан:', e); }
                 }
 
                 const enriched = st.map(s => computeStudentData(s, monStr, monday));
@@ -2126,11 +2150,38 @@
             }
         };
 
-        window.openGlobalTopModal = async function() {
+        window.openGlobalTopModal = async function(tab) {
+            tab = tab === 'duel' ? 'duel' : 'solved';
             const cont = document.getElementById('global-top-container'); window.showModal('global-top-modal');
             if (!db) return;
-            cont.innerHTML = '<p class="text-[10px] font-bold text-gray-500 text-center py-4">⏳ Загрузка...</p>';
+            const tabBtn = (t, label) => `<button onclick="window.openGlobalTopModal('${t}')" style="flex:1;border:none;border-radius:10px;padding:8px;font-size:11px;font-weight:900;cursor:pointer;${tab === t ? 'background:#2563eb;color:#fff' : 'background:rgba(128,128,128,0.12);color:#6b7280'}">${label}</button>`;
+            const tabs = `<div style="display:flex;gap:6px;margin-bottom:10px">${tabBtn('solved', '📚 Решено')}${tabBtn('duel', '⚔️ Рейтинг дуэлей')}</div>`;
+            cont.innerHTML = tabs + '<p class="text-[10px] font-bold text-gray-500 text-center py-4">⏳ Загрузка...</p>';
+            const escTop = v => String(v == null ? '' : v).replace(/[<>&]/g, c => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;' }[c]));
             try {
+                // ── Вкладка «Рейтинг дуэлей» (Elo) ──
+                if (tab === 'duel') {
+                    const studentsCol = collection(db, 'artifacts', appId, 'public', 'data', 'students');
+                    const qD = await getDocs(query(studentsCol, orderBy('duelRating', 'desc'), limit(20)));
+                    const rows = [];
+                    qD.forEach(dS => { const d = dS.data(); if ((d.duelGames || 0) > 0) rows.push(d); });
+                    const s0 = window.state && window.state.stats;
+                    const myLine = (s0 && (s0.duelGames || 0) > 0)
+                        ? `<div style="text-align:center;font-size:11px;font-weight:900;color:#7c3aed;margin-bottom:8px">Твой рейтинг: 🏅${Number(s0.duelElo) || 1000} · ${s0.duelWins || 0}П/${s0.duelLosses || 0}Пр${s0.duelDraws ? '/' + s0.duelDraws + 'Н' : ''}</div>`
+                        : `<div style="text-align:center;font-size:11px;font-weight:800;color:#9ca3af;margin-bottom:8px">Сыграй дуэль — получишь рейтинг (старт: 1000)</div>`;
+                    let ht = '<div class="flex flex-col gap-2">';
+                    rows.forEach((s, idx) => {
+                        ht += `<div class="bg-white dark:bg-[#1e1e1e] rounded-xl p-3 shadow-sm border border-gray-100 dark:border-[#2c2c2c] flex justify-between items-center">
+                            <div class="flex items-center gap-3"><span class="text-xl sm:text-2xl drop-shadow-sm font-black">${idx===0?'🥇':(idx===1?'🥈':(idx===2?'🥉':`<span class="text-gray-400 w-5 inline-block text-center text-base">${idx+1}</span>`))}</span>
+                            <div class="flex flex-col"><span class="font-black text-xs sm:text-sm text-gray-800 dark:text-gray-300 leading-tight">${escTop(s.name || 'Аноним')}</span>
+                            <span class="text-[9px] font-bold text-gray-400 leading-tight">${s.duelWins || 0} побед · ${s.duelLosses || 0} пораж. · матчей: ${s.duelGames || 0}</span></div></div>
+                            <span class="text-sm font-black text-purple-600 dark:text-purple-400 bg-purple-50 dark:bg-purple-900/30 px-2 py-0.5 rounded-lg border border-purple-100 dark:border-purple-800/50">🏅${s.duelRating || 1000}</span></div>`;
+                    });
+                    if (!rows.length) ht += '<p class="text-[11px] font-bold text-gray-500 text-center py-4">Пока никто не сыграл рейтинговую дуэль — будь первым! ⚔️</p>';
+                    ht += '</div>';
+                    cont.innerHTML = tabs + myLine + ht;
+                    return;
+                }
                 // ✅ FIX: Сначала пробуем кэш-документ (leaderboards/global) —
                 // 1 чтение вместо 20 чтений. Если кэша нет — делаем прямой запрос.
                 const lbCacheRef = doc(db, 'artifacts', appId, 'public', 'data', 'leaderboards', 'global');
@@ -2159,10 +2210,10 @@
                     ht += `<div class="bg-white dark:bg-[#1e1e1e] rounded-xl p-3 shadow-sm border border-gray-100 dark:border-[#2c2c2c] flex justify-between items-center transition-transform hover:-translate-y-0.5"><div class="flex items-center gap-3"><span class="text-xl sm:text-2xl drop-shadow-sm font-black">${idx===0?'🥇':(idx===1?'🥈':(idx===2?'🥉':`<span class="text-gray-400 w-5 inline-block text-center text-base">${idx+1}</span>`))}</span><div class="flex flex-col"><span class="font-black text-xs sm:text-sm text-gray-800 dark:text-gray-300 leading-tight">${String(s.name || 'Аноним').replace(/[<>&]/g, c => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;' }[c]))}</span>${s.username ? `<span class="text-[9px] font-bold text-blue-500 block leading-tight">@${String(s.username).replace(/[<>&]/g, c => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;' }[c]))}</span>` : ''}</div></div><div class="text-right flex flex-col items-end"><span class="text-sm font-black text-examBlue dark:text-blue-400 bg-blue-50 dark:bg-blue-900/30 px-2 py-0.5 rounded-lg border border-blue-100 dark:border-blue-800/50">${s.totalSolved || 0}</span></div></div>`; 
                 });
                 if (fromCache) ht += `<div class="text-center text-[9px] text-gray-400 pt-1">Обновлено ${new Date(cacheUpdatedAt).toLocaleTimeString('ru-RU', {hour:'2-digit',minute:'2-digit'})}</div>`;
-                ht += '</div>'; cont.innerHTML = ht;
-            } catch (e) { 
+                ht += '</div>'; cont.innerHTML = tabs + ht;
+            } catch (e) {
                 console.error(e);
-                cont.innerHTML = '<p class="text-rose-500 text-xs font-bold text-center py-4">Нет подключения к серверу (Офлайн)</p>'; 
+                cont.innerHTML = tabs + '<p class="text-rose-500 text-xs font-bold text-center py-4">Нет подключения к серверу (Офлайн)</p>';
             }
         };
 
@@ -2348,6 +2399,61 @@
                 await setDoc(ref, { assignments: [], revokedAssignments: revoked.slice(-300), revokeBefore: Date.now(), updatedAt: Date.now() }, { merge: true });
                 return ids.length;
             } catch (e) { console.error('cancelAllClassAssignments error:', e); return 0; }
+        };
+
+        // ─── Учитель: снять долги, выданные ДО даты (мягкий «чистый лист») ───
+        // Отличие от cancelAllClassAssignments: ДЗ, выданные ПОСЛЕ даты, остаются в силе.
+        // 1) Документ класса: revokeBefore = дата, старые записи журнала → revokedAssignments
+        //    (ученики почистят свои копии при следующем входе).
+        // 2) Документы учеников класса: убираем старые pendingAssignments и legacy-поля
+        //    (hwAssignTask*, assignedTeacherHw). Пишем ТОЛЬКО верхнеуровневые поля —
+        //    fullStateJson ученика не трогаем никогда.
+        window.sweepClassDebtsBefore = async function(rawCode, dateStr) {
+            if (!db) return null;
+            const code = _classDocId(rawCode);
+            const ts = new Date(String(dateStr || '') + 'T00:00:00').getTime();
+            if (!code || !Number.isFinite(ts)) return null;
+            const out = { journal: 0, students: 0 };
+            try {
+                const ref = doc(db, 'artifacts', appId, 'public', 'data', 'classes', code);
+                const snap = await getDoc(ref);
+                const data = snap.exists() ? snap.data() : {};
+                const list = Array.isArray(data.assignments) ? data.assignments : [];
+                const keep = list.filter(a => a && (a.assignedAt || 0) >= ts);
+                const oldIds = list.filter(a => a && (a.assignedAt || 0) < ts).map(a => a.id).filter(Boolean);
+                const revoked = Array.isArray(data.revokedAssignments) ? data.revokedAssignments.slice() : [];
+                oldIds.forEach(id => { if (!revoked.includes(id)) revoked.push(id); });
+                out.journal = oldIds.length;
+                await setDoc(ref, {
+                    assignments: keep,
+                    revokedAssignments: revoked.slice(-300),
+                    revokeBefore: Math.max(Number(data.revokeBefore) || 0, ts),
+                    updatedAt: Date.now()
+                }, { merge: true });
+            } catch (e) { console.error('sweepClassDebtsBefore: класс', e); return null; }
+            try {
+                const studentsCol = collection(db, 'artifacts', appId, 'public', 'data', 'students');
+                const qs = await getDocs(query(studentsCol, where('classCode', '==', String(rawCode || '').trim()), limit(1000)));
+                for (const dSnap of qs.docs) {
+                    const d = dSnap.data();
+                    const upd = {};
+                    const pend = Array.isArray(d.pendingAssignments) ? d.pendingAssignments : [];
+                    const pendKeep = pend.filter(r => r && (r.assignedAt || 0) >= ts);
+                    if (pendKeep.length !== pend.length) {
+                        upd.pendingAssignments = pendKeep;
+                        const rv = Array.isArray(d.revokedAssignments) ? d.revokedAssignments.slice() : [];
+                        pend.forEach(r => { if (r && r.id && (r.assignedAt || 0) < ts && !rv.includes(r.id)) rv.push(r.id); });
+                        upd.revokedAssignments = rv.slice(-300);
+                    }
+                    ['hwAssignTask1','hwAssignTask3','hwAssignTask4','hwAssignTask5','hwAssignTask7','assignedTeacherHw'].forEach(k => {
+                        if (Number(d[k]) > 0) upd[k] = 0;
+                    });
+                    if (Object.keys(upd).length) {
+                        try { await setDoc(dSnap.ref, upd, { merge: true }); out.students++; } catch (e) { console.warn('sweep: ученик', dSnap.id, e); }
+                    }
+                }
+            } catch (e) { console.warn('sweepClassDebtsBefore: ученики', e); }
+            return out;
         };
 
         // ─── Учитель: список ДЗ конкретного ученика (pending + подхваченные из его fullStateJson) ───
@@ -2547,10 +2653,21 @@
 
             ['totalSolvedEver','streak','bestSpeedrunScore','flashcardsSolved','totalTimeSpent',
              'egePoints','hwFlashcardsToSolve','hwTask1','hwTask3','hwTask4','hwTask5','hwTask7',
-             'visualArchitectureSolved','visualPaintingSolved'].forEach(k => {
+             'visualArchitectureSolved','visualPaintingSolved',
+             'duelGames','duelWins','duelLosses','duelDraws'].forEach(k => {
                 const hasValue = states.some(s => s.stats?.[k] !== undefined);
                 if (hasValue) st[k] = Math.max(...states.map(s => Number(s.stats?.[k]) || 0));
             });
+            // Elo дуэлей: не max (иначе поражения «откатывались» бы при слиянии устройств),
+            // а рейтинг той копии, где сыграно больше матчей — она самая свежая по дуэлям.
+            {
+                let bestGames = -1;
+                states.forEach(s => {
+                    if (s.stats?.duelElo === undefined) return;
+                    const g = Number(s.stats?.duelGames) || 0;
+                    if (g > bestGames) { bestGames = g; st.duelElo = Number(s.stats.duelElo) || 1000; }
+                });
+            }
             st.solvedByTask = { task1: 0, task3: 0, task4: 0, task5: 0, task7: 0 };
             states.forEach(s => {
                 const sbt = s.stats?.solvedByTask || {};
@@ -2633,7 +2750,8 @@
             'streak','totalSolvedEver','solvedByTask','flashcardsSolved','eraStats','factStreaks',
             'hwFlashcardsToSolve','hwTask1','hwTask3','hwTask4','hwTask5','hwTask7','totalTimeSpent',
             'bestSpeedrunScore','dailyStats','achievements','achievementsData','egePoints',
-            'visualArchitectureProgress','visualArchitectureSolved','visualPaintingProgress','visualPaintingSolved'
+            'visualArchitectureProgress','visualArchitectureSolved','visualPaintingProgress','visualPaintingSolved',
+            'duelElo','duelGames','duelWins','duelLosses','duelDraws'
         ];
 
         function applyMergedState(merged) {
@@ -2904,7 +3022,15 @@
                 weeklyEgePoints: weeklyEgePoints,     // ЕГЭ-баллы за неделю
                 weekStartStr: monStr2,
                 fullStateJson: localStorage.getItem('ege_final_storage_v4') || '{}',
-                lastActive: nw
+                lastActive: nw,
+                // Рейтинг дуэлей — верхнеуровнево для orderBy в топе. Пишем только
+                // сыгравшим: иначе топ забился бы стартовой тысячей у всех подряд.
+                ...((Number(s.duelGames) || 0) > 0 ? {
+                    duelRating: Number(s.duelElo) || 1000,
+                    duelGames: Number(s.duelGames) || 0,
+                    duelWins: Number(s.duelWins) || 0,
+                    duelLosses: Number(s.duelLosses) || 0
+                } : {})
             };
             
             // ✅ FIX: Пишем ТОЛЬКО в один канонический документ — никаких Race Conditions

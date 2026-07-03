@@ -14,6 +14,13 @@ window.startDuelSearch = function(mode) {
     haptic('medium');
     showModal('duel-search-modal');
     $('duel-search-status').innerText = mode === 'swipe' ? 'Поиск соперника (свайп)...' : 'Поиск соперника...';
+    // Рейтинг Elo в окне поиска: видно, за что играем
+    const eloEl = $('duel-my-elo');
+    if (eloEl) {
+        const s = window.state.stats;
+        eloEl.textContent = `🏅 Твой рейтинг: ${Number(s.duelElo) || 1000}${(Number(s.duelGames) || 0) > 0 ? ` · ${s.duelWins || 0}П / ${s.duelLosses || 0}Пр` : ' · первый матч!'}`;
+        eloEl.classList.remove('hidden');
+    }
     duelSearchSeconds = 0;
     $('duel-search-timer').innerText = `Ожидание: 0с`;
     duelSearchTimer = setInterval(() => {
@@ -119,6 +126,9 @@ window.updateDuelUI = function() {
 window.endDuel = function() {
     clearInterval(window.state.timerInterval);
     const myS = window.state.duel.myScore, oppS = window.state.duel.oppScore;
+    // Elo считаем до cancelDuelDb — он сбрасывает duel-стейт вместе с рейтингом соперника
+    let rate = null;
+    try { rate = window.applyDuelResult ? window.applyDuelResult(myS, oppS, window.state.duel.oppElo || 1000) : null; } catch (e) {}
     window.state.duel.active = false;
     if (window.cancelDuelDb) window.cancelDuelDb();
 
@@ -128,7 +138,8 @@ window.endDuel = function() {
 
     $('modal-emoji').innerText = emoji;
     $('modal-main-title').innerText = title;
-    $('modal-score').innerHTML = `<span class="${color}">${myS}</span> <span class="text-gray-400 text-3xl mx-2">:</span> <span class="text-gray-500">${oppS}</span>`;
+    $('modal-score').innerHTML = `<span class="${color}">${myS}</span> <span class="text-gray-400 text-3xl mx-2">:</span> <span class="text-gray-500">${oppS}</span>`
+        + (rate ? `<div class="text-sm font-black mt-1 ${rate.delta >= 0 ? 'text-emerald-500' : 'text-rose-500'}">🏅 Рейтинг: ${rate.elo} (${rate.delta >= 0 ? '+' : ''}${rate.delta})</div>` : '');
     showModal('game-over-modal');
     $('board-overlay').classList.remove('hidden');
     saveLocal();

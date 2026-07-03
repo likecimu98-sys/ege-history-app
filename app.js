@@ -578,6 +578,10 @@ function initStorage() {
     cacheDOM();
     if (tg && tg.initDataUnsafe) {
         tg.expand(); tg.ready();
+        // Жест «смахнуть вниз» в Telegram сворачивал мини-апп во время свайпа карточек
+        // (iOS засчитывает диагональное движение как вертикальное) — отключаем его совсем:
+        // приложение закрывается только через шапку Telegram.
+        try { if (tg.isVersionAtLeast && tg.isVersionAtLeast('7.7')) tg.disableVerticalSwipes(); } catch (e) {}
         // Тема по умолчанию — светлая. Тёмную из Telegram больше не навязываем новым
         // пользователям; кто хочет тёмную — переключает сам (выбор сохраняется в ege_theme).
     }

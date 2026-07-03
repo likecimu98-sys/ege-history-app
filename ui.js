@@ -179,7 +179,12 @@ function _hwlPaint() {
             // Для класса кнопка «с чистого листа» доступна ВСЕГДА: старые ДЗ (выданные до появления
             // журнала) в списке не значатся, но метка revokeBefore снимает и их. Если показывать
             // кнопку только при заполненном журнале — именно старьё было бы «не убрать».
-            actions.innerHTML = `<button onclick="window._hwlAskCancelAll()" style="width:100%;background:rgba(244,63,94,0.08);color:var(--c-danger,#e11d48);border:1px solid rgba(244,63,94,0.35);border-radius:10px;padding:9px;font-size:11px;font-weight:900;cursor:pointer">🧹 С чистого листа — снять все невыполненные ДЗ класса${n ? ` (в журнале: ${n})` : ', включая старые'}</button>`;
+            actions.innerHTML = `<button onclick="window._hwlAskCancelAll()" style="width:100%;background:rgba(244,63,94,0.08);color:var(--c-danger,#e11d48);border:1px solid rgba(244,63,94,0.35);border-radius:10px;padding:9px;font-size:11px;font-weight:900;cursor:pointer">🧹 С чистого листа — снять все невыполненные ДЗ класса${n ? ` (в журнале: ${n})` : ', включая старые'}</button>
+              <div style="display:flex;gap:6px;margin-top:6px;align-items:stretch">
+                <input type="date" id="hwl-sweep-date" value="${new Date(Date.now() - 7 * 86400000).toISOString().split('T')[0]}" style="flex:0 0 auto;background:#fff;border:1px solid rgba(128,128,128,0.3);border-radius:10px;padding:7px 8px;font-size:11px;font-weight:800;color:#374151" class="dark:!bg-[#1e1e1e] dark:!text-gray-300">
+                <button onclick="window._hwlSweepOld()" style="flex:1;background:rgba(245,158,11,0.1);color:#b45309;border:1px solid rgba(245,158,11,0.4);border-radius:10px;padding:7px;font-size:11px;font-weight:900;cursor:pointer">🗓 Снять долги, выданные ДО этой даты</button>
+              </div>
+              <div style="font-size:9.5px;color:#9ca3af;font-weight:700;margin-top:4px;line-height:1.35">Новые ДЗ (после даты) остаются. Снимает и «невидимые» старые долги с карточек учеников — в т.ч. у тех, кто давно не заходил.</div>`;
         } else {
             actions.innerHTML = n > 1
                 ? `<button onclick="window._hwlAskCancelAll()" style="width:100%;background:rgba(244,63,94,0.08);color:var(--c-danger,#e11d48);border:1px solid rgba(244,63,94,0.35);border-radius:10px;padding:9px;font-size:11px;font-weight:900;cursor:pointer">🗑 Отменить все (${n}) — с чистого листа</button>`
@@ -250,6 +255,25 @@ window._hwlAskCancelAll = function() {
         <button onclick="window._hwlRepaint()" style="background:#eee;color:#444;border:none;border-radius:9px;padding:7px 12px;font-size:11px;font-weight:900;cursor:pointer">Нет</button>
       </div>`;
 };
+// «Снять долги до даты»: мягкий чистый лист — ДЗ после даты остаются в силе.
+window._hwlSweepOld = async function() {
+    const inp = document.getElementById('hwl-sweep-date');
+    const dateStr = inp && inp.value;
+    if (!dateStr) return showToast('⚠️', 'Выбери дату', 'bg-amber-500', 'border-amber-700');
+    if (!window.sweepClassDebtsBefore) return showToast('⚠️', 'Нет подключения к серверу', 'bg-rose-500', 'border-rose-700');
+    const actions = document.getElementById('hw-list-actions');
+    if (actions) actions.innerHTML = `<div style="text-align:center;font-size:11px;color:#9ca3af;font-weight:800">Снимаю долги до ${dateStr}… (обхожу учеников класса)</div>`;
+    let res = null;
+    try { res = await window.sweepClassDebtsBefore(_hwlCtx.code, dateStr); } catch (e) { console.error(e); }
+    await _hwlLoad();
+    if (res) {
+        showToast('🗓', `Долги до ${new Date(dateStr + 'T00:00:00').toLocaleDateString('ru-RU')} сняты: журнал −${res.journal}, очищено карточек учеников: ${res.students}.`, 'bg-emerald-500', 'border-emerald-700');
+        if (window.loadClassProgress) window.loadClassProgress(); // кабинет пересчитает долги сразу
+    } else {
+        showToast('❌', 'Не удалось снять долги', 'bg-rose-500', 'border-rose-700');
+    }
+};
+
 window._hwlDoCancelAll = async function() {
     const actions = document.getElementById('hw-list-actions');
     if (actions) actions.innerHTML = '<div style="text-align:center;font-size:11px;color:#9ca3af;font-weight:800">Отменяю все…</div>';
@@ -618,7 +642,46 @@ window.openGlobalSettings = function() {
 };
 
 window.closePreGameModal = function() { hideModal('pre-game-modal'); $('pg-sheet').classList.add('translate-y-full'); };
-window.checkCustomPeriod = function() { $('pg-custom-period-container').classList.toggle('hidden', $('pg-filter-period').value !== 'custom'); };
+window.checkCustomPeriod = function() {
+    const isCustom = $('pg-filter-period').value === 'custom';
+    $('pg-custom-period-container').classList.toggle('hidden', !isCustom);
+    // Кнопка «точные годы» видна при любой выбранной эпохе — новички должны знать,
+    // что период можно задать годами, даже если случайно выбрали век.
+    const yrBtn = $('pg-year-range-btn');
+    if (yrBtn) yrBtn.classList.toggle('hidden', isCustom);
+    // Чип «как в классе» — если учитель отметил «дошли до года».
+    const upto = parseInt(localStorage.getItem('class_current_upto'), 10);
+    const clsBtn = $('pg-class-upto-btn');
+    if (clsBtn) {
+        const show = upto >= 862 && upto <= 2026;
+        clsBtn.classList.toggle('hidden', !show);
+        if (show && $('pg-class-upto-year')) $('pg-class-upto-year').textContent = upto;
+    }
+};
+
+// «Задать точные годы»: переключаем эпоху → свой период, преднаполняем границы выбранной эпохи.
+window.pgShowYearRange = function() {
+    haptic('light');
+    const sel = $('pg-filter-period');
+    const era = sel.value;
+    const y = (window.EPOCH_YEARS && window.EPOCH_YEARS[era]) || [862, 2026];
+    sel.value = 'custom';
+    $('pg-custom-year-start').value = y[0];
+    $('pg-custom-year-end').value = y[1];
+    checkCustomPeriod();
+};
+
+// «Как в классе»: диапазон 862..«дошли до» (граница потока от учителя).
+window.pgApplyClassUpto = function() {
+    haptic('light');
+    const upto = parseInt(localStorage.getItem('class_current_upto'), 10);
+    if (!(upto >= 862 && upto <= 2026)) return;
+    $('pg-filter-period').value = 'custom';
+    $('pg-custom-year-start').value = 862;
+    $('pg-custom-year-end').value = upto;
+    checkCustomPeriod();
+    showToast('🏫', `Период класса: 862–${upto} гг.`, 'bg-indigo-500', 'border-indigo-700');
+};
 window.setPgRows = function(rows) { $$('.pg-row-btn').forEach(btn => btn.className = "pg-row-btn bg-white border-gray-200 text-gray-600 dark:bg-[#2c2c2c] dark:border-[#3f3f46] dark:text-gray-400 border-2 rounded-xl py-3 font-black text-sm transition-colors"); const active = $(`btn-row-${rows}`); if (active) active.className = "pg-row-btn bg-blue-50 border-blue-500 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300 border-2 rounded-xl py-3 font-black text-sm transition-colors"; $('filter-rows').value = rows; };
 
 window.applyGlobalSettings = function() {
@@ -1436,6 +1499,18 @@ function _wpLabel(wp) {
     return (TASK_EPOCH_SHORT && TASK_EPOCH_SHORT[wp.era]) || '';
 }
 
+// Границы эпох в годах — единая точка для пресетов диапазона.
+const EPOCH_YEARS = { early: [862, 1699], '18th': [1700, 1799], '19th': [1800, 1899], '20th': [1900, 2026] };
+window.EPOCH_YEARS = EPOCH_YEARS;
+
+// Рабочий период → диапазон лет { from, to } (для свайпа и пресетов), null — нет ограничения.
+function _wpYearRange(wp) {
+    if (!wp) return null;
+    if (wp.upto) return { from: 862, to: wp.upto };
+    const y = EPOCH_YEARS[wp.era];
+    return y ? { from: y[0], to: y[1] } : null;
+}
+
 // Применить рабочий период к фильтру: граница года → кастомный диапазон 862..год.
 function _applyWpFilter(wp) {
     const sel = $('filter-period');
@@ -1490,12 +1565,15 @@ function computeMainAction() {
     }
     if (doneToday < DAILY_GOAL_LINES) {
         const lt = localStorage.getItem('ege_last_task');
+        // Период — граница потока от учителя («дошли до года» → конкретные годы 862..N),
+        // и только если её нет — последний собственный выбор ученика.
         return { ...base, kind: 'continue',
             task: (lt && TASK_CONFIG[lt]) ? lt : 'task1',
-            period: localStorage.getItem('ege_last_period') || 'all',
+            period: _workingPeriod() || { era: localStorage.getItem('ege_last_period') || 'all' },
             left: DAILY_GOAL_LINES - doneToday };
     }
-    return { ...base, kind: 'done', streak: (window.computeDayStreak && window.computeDayStreak()) || 0 };
+    return { ...base, kind: 'done', period: _workingPeriod(),
+        streak: (window.computeDayStreak && window.computeDayStreak()) || 0 };
 }
 
 window.mainActionGo = function(kind) {
@@ -1525,7 +1603,12 @@ window.mainActionGo = function(kind) {
         if ($('filter-period')) $('filter-period').value = w.era;
         return quickStartGame(w.task, 'normal');
     }
-    if (act === 'done') return window.startDuelSearch && window.startDuelSearch();
+    if (act === 'done') {
+        // Цель дня закрыта → лёгкое повторение свайпом (не дуэль): правители
+        // пройденных периодов, если учитель отметил границу «дошли до».
+        if (!window.openSwipeMode) return;
+        return window.openSwipeMode(_wpYearRange(_workingPeriod()));
+    }
     if (act === 'hwtab') return window.openHwTab && window.openHwTab();
 };
 
@@ -1555,9 +1638,13 @@ function renderMainAction() {
         if (a.due.total > shown) sub += ` · всего ${a.due.total}`;
     } else if (a.kind === 'continue') {
         const cfg = TASK_CONFIG[a.task] || TASK_CONFIG.task4;
-        sub = `${cfg.shortLabel} · ${TASK_EPOCHS.includes(a.period) ? periodName(a.period) : 'все периоды'} · ещё ${a.left} до цели дня`;
+        const pl = (typeof a.period === 'string')
+            ? (TASK_EPOCHS.includes(a.period) ? periodName(a.period) : 'все периоды')
+            : (_wpLabel(a.period) || 'все периоды');
+        sub = `${cfg.shortLabel} · ${pl} · ещё ${a.left} до цели дня`;
     } else if (a.kind === 'done') {
-        sub = `стрик ${a.streak} дн. · хочешь дуэль?`;
+        title = 'Цель дня закрыта! Свайп?';
+        sub = `стрик ${a.streak} дн. · повтори правителей${a.period ? ` (${_wpLabel(a.period)})` : ''}`;
     } else if (a.kind === 'start') {
         title = `Начать: ${_wpLabel(a.period) || 'Древность'}`;
         sub = 'первые факты за 2 минуты';

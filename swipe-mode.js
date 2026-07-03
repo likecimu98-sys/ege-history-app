@@ -230,9 +230,19 @@
 
     function _duelVerdict() {
         const d = _sw && _sw.duel; if (!d) return;
+        const my = _sw.score, opp = d.oppScore;
+        // Elo считаем ДО cancelDuelDb: он сбрасывает window.state.duel, где лежит рейтинг соперника.
+        let rate = null;
+        try {
+            const oppElo = (window.state && window.state.duel && window.state.duel.oppElo) || 1000;
+            rate = window.applyDuelResult ? window.applyDuelResult(my, opp, oppElo) : null;
+            if (rate) {
+                if (window.saveProgress) window.saveProgress();
+                if (window.syncNow) window.syncNow(); // рейтинг сразу в облако — топ дуэлей живой
+            }
+        } catch (e) { console.warn('[Duel] Elo не применён:', e); }
         try { if (window.state && window.state.duel) window.state.duel.active = false; } catch (e) {}
         try { window.cancelDuelDb && window.cancelDuelDb(); } catch (e) {}
-        const my = _sw.score, opp = d.oppScore;
         const win = my > opp, draw = my === opp;
         _h(win ? 'success' : 'error');
         _play(win);
@@ -244,18 +254,33 @@
             <div style="font-size:22px;font-weight:1000;color:${win ? '#4ade80' : draw ? '#e2e8f0' : '#f87171'}">${win ? 'ПОБЕДА!' : draw ? 'НИЧЬЯ' : 'ПОРАЖЕНИЕ'}</div>
             <div style="font-size:20px;font-weight:900">${my} <span style="opacity:.5">:</span> ${opp}</div>
             <div style="font-size:12.5px;opacity:.75">Ты: ✓${_sw.correct} из ${d.done} · ${_esc(d.oppName)}: ✓${d.oppCorrect} из ${d.oppDone}</div>
+            ${rate ? `<div style="font-size:14px;font-weight:1000;margin-top:2px;color:${rate.delta >= 0 ? '#4ade80' : '#f87171'}">🏅 Рейтинг: ${rate.elo} (${rate.delta >= 0 ? '+' : ''}${rate.delta})</div>` : ''}
             <div style="display:flex;gap:10px;margin-top:14px">
                 <button id="sw-d-rematch" style="background:#6366f1;color:#fff;border:none;border-radius:14px;padding:12px 22px;font-size:14px;font-weight:900;cursor:pointer">⚔️ Ещё раз</button>
                 <button id="sw-d-exit" style="background:rgba(255,255,255,0.12);color:#fff;border:none;border-radius:14px;padding:12px 22px;font-size:14px;font-weight:900;cursor:pointer">Выход</button>
             </div>
+            <button id="sw-d-top" style="background:none;border:none;color:#a5b4fc;font-size:12px;font-weight:900;cursor:pointer;margin-top:6px;text-decoration:underline">🏆 Топ дуэлей</button>
         </div>`;
         zone.querySelector('#sw-d-rematch').onclick = () => { window.closeSwipeMode(); if (window.startDuelSearch) window.startDuelSearch('swipe'); };
         zone.querySelector('#sw-d-exit').onclick = window.closeSwipeMode;
+        const topBtn = zone.querySelector('#sw-d-top');
+        if (topBtn) topBtn.onclick = () => { window.closeSwipeMode(); if (window.openGlobalTopModal) window.openGlobalTopModal('duel'); };
         _updateDuelBar();
     }
 
-    window.openSwipeMode = function () {
-        const pool = (window.swipeRulersData || []).slice();
+    // opts.from / opts.to — необязательный диапазон лет (граница потока «дошли до»):
+    // оставляем правителей, чьё правление началось внутри диапазона. Если после
+    // фильтра меньше двух — работаем по всем (лучше полный свайп, чем ничего).
+    window.openSwipeMode = function (opts) {
+        let pool = (window.swipeRulersData || []).slice();
+        const from = opts && parseInt(opts.from, 10), to = opts && parseInt(opts.to, 10);
+        if (to) {
+            const f = pool.filter(r => { const y = _startYear(r); return y != null && y >= (from || 0) && y <= to; });
+            if (f.length >= 2) {
+                pool = f;
+                if (typeof showToast === 'function') showToast('🗓', `Свайп по пройденному: ${from || 862}–${to} гг.`, 'bg-indigo-500', 'border-indigo-700');
+            }
+        }
         if (pool.length < 2) {
             if (typeof showToast === 'function') showToast('⚠️', 'Нет данных для свайпа', 'bg-rose-500', 'border-rose-700');
             return;
