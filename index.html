@@ -406,7 +406,9 @@
     </header>
 
     <!-- Уведомления -->
-    <div id="joke-toast" class="no-print fixed top-16 right-0 transform translate-x-full transition-transform duration-300 z-[9999]">
+    <!-- z-index 10100: тост обязан быть ВЫШЕ всех оверлеев (свайп 10050, модалки 10000–10060),
+         иначе уведомления из свайпа/модалок («Повтори то, в чём ошибся» и т.п.) невидимы -->
+    <div id="joke-toast" class="no-print fixed top-16 right-0 transform translate-x-full transition-transform duration-300 z-[10100]">
         <div id="toast-content" class="text-slate-50 font-bold text-xs sm:text-sm px-4 py-2 rounded-l-lg shadow-lg flex items-center gap-2 border-y-2 border-l-2"></div>
     </div>
     <div id="hw-alert" class="hidden no-print bg-yellow-100 border-b-2 border-yellow-500 text-yellow-900 p-2 text-center text-xs font-bold shadow-md">⚠️ РЕЖИМ ДЗ: осталось <span id="hw-remaining" class="text-rose-600">0</span></div>

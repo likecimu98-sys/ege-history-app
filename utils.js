@@ -15,6 +15,21 @@ if (!tg && typeof document !== 'undefined') {
     });
 }
 
+// ── Подтверждение действия ──
+// window.confirm в Telegram WebView на iOS ЗАБЛОКИРОВАН (молча возвращает false) —
+// кнопки с confirm() там просто «не нажимались». Используем нативный tg.showConfirm,
+// в обычном браузере — старый confirm.
+window.uiConfirm = function (message, onOk) {
+    try {
+        const t = window.tgApp || (window.Telegram && window.Telegram.WebApp);
+        if (t && t.showConfirm && t.isVersionAtLeast && t.isVersionAtLeast('6.2')) {
+            t.showConfirm(message, function (ok) { if (ok && onOk) onOk(); });
+            return;
+        }
+    } catch (e) {}
+    if (window.confirm(message) && onOk) onOk();
+};
+
 // ── Elo-рейтинг дуэлей ──
 // Классическая формула Elo: ожидание E = 1/(1+10^((R_opp−R_my)/400)), дельта = K·(S−E).
 // Старт 1000, пол 100. K=40 первые 10 матчей (быстрый разгон новичка), дальше 24.

@@ -605,7 +605,14 @@ window.resetVisualTrainer = function() {
     const message = category
         ? `Сбросить прогресс раздела «${cfg.label}»? Все памятники вернутся в пул.`
         : 'Сбросить весь прогресс визуала? Все памятники вернутся в пул.';
+    // confirm() в TG на iOS заблокирован — через uiConfirm (нативный диалог Telegram)
+    const doReset = () => window._doResetVisualTrainer(category, cfg);
+    if (window.uiConfirm) return window.uiConfirm(message, doReset);
     if (!confirm(message)) return;
+    doReset();
+};
+
+window._doResetVisualTrainer = function(category, cfg) {
     haptic('light');
     if (category) {
         window.state.stats[cfg.progressKey] = {};

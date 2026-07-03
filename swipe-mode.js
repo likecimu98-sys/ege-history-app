@@ -318,7 +318,12 @@
 
     function _onKey(e) {
         if (!_sw) return;
-        if (e.key === 'Escape') { if (_sw.picking) return _closePicker(); return window.closeSwipeMode(); }
+        if (e.key === 'Escape') {
+            if (_sw.picking) return _closePicker();
+            // Идущую дуэль Escape не бросает молча — то же подтверждение, что и у ✕
+            if (_sw.duel && !_sw.duel.over && window.uiConfirm) return window.uiConfirm('Выйти из дуэли? Это засчитается как сдача.', window.closeSwipeMode);
+            return window.closeSwipeMode();
+        }
         if (_sw.picking) return;
         if (e.key === 'ArrowLeft') { e.preventDefault(); _commit('left'); }
         else if (e.key === 'ArrowRight') { e.preventDefault(); _commit('right'); }
@@ -361,7 +366,12 @@
             ${duel ? '⚔️ одинаковые карточки у обоих — кто наберёт больше очков' : '← свайпни карточку · тап по имени — сменить правителя'}
         </div>`;
         ov.querySelector('#sw-close').onclick = () => {
-            if (_sw && _sw.duel && !_sw.duel.over && !confirm('Выйти из дуэли? Это засчитается как сдача.')) return;
+            // confirm() в TG на iOS заблокирован — uiConfirm использует нативный диалог Telegram
+            if (_sw && _sw.duel && !_sw.duel.over) {
+                if (window.uiConfirm) window.uiConfirm('Выйти из дуэли? Это засчитается как сдача.', window.closeSwipeMode);
+                else window.closeSwipeMode();
+                return;
+            }
             window.closeSwipeMode();
         };
         const mb = ov.querySelector('#sw-mute'); if (mb) mb.onclick = _toggleMute;

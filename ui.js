@@ -926,8 +926,10 @@ window.updateGamePeriodChip = function() {
         return;
     }
     const txt = document.getElementById('game-period-chip-text');
-    // До первого осознанного выбора показываем призыв «Выбрать период», после — выбранные годы.
-    const chosen = window.state.periodChosen || (() => { try { return localStorage.getItem('ege_period_chosen') === '1'; } catch (e) { return false; } })();
+    // До первого осознанного выбора — призыв «Выбрать период»; после выбора ИЛИ когда
+    // границу применило приложение (кнопка «Продолжить» по «дошли до») — реальные годы.
+    const chosen = window.state.periodChosen || window.state._wpApplied
+        || (() => { try { return localStorage.getItem('ege_period_chosen') === '1'; } catch (e) { return false; } })();
     if (txt) txt.textContent = chosen ? window.currentPeriodLabel() : 'Выбрать период';
     gear.classList.add('hidden');
     chip.classList.remove('hidden'); chip.classList.add('flex');
@@ -1522,6 +1524,9 @@ function _applyWpFilter(wp) {
     } else {
         sel.value = (wp && TASK_EPOCHS.includes(wp.era)) ? wp.era : 'all';
     }
+    // Плашка периода в игре должна показывать реально применённые годы,
+    // а не «Выбрать период», когда границу подставило приложение.
+    window.state._wpApplied = !!wp;
 }
 
 // Самая слабая пара (задание, эпоха): минимум точности при ≥10 попытках.
