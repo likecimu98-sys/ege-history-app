@@ -953,7 +953,12 @@ window.closeCram = function() {
     if (window.updateGlobalUI) window.updateGlobalUI();
     if (window.updateHwNavBadge) window.updateHwNavBadge();
     // Этап-зубрёжка выполнен → сразу запускаем следующий этап ДЗ (иначе остаёмся в меню).
-    if (window.maybeAdvanceHw) window.maybeAdvanceHw();
+    // Только если зубрёжку открывали ИЗ ДЗ: выход из «просто зубрёжки» не должен
+    // внезапно кидать ученика в застрявший этап старого ДЗ.
+    if (window._cramHwFlow) {
+        window._cramHwFlow = false;
+        if (window.maybeAdvanceHw) window.maybeAdvanceHw();
+    }
 };
 
 // Запасной канал выхода из iframe «Зубрёжки» (если прямой вызов closeCram недоступен).
@@ -1169,6 +1174,7 @@ window.startHwItem = function(id, idx) {
         const ys = it.yearStart || 862, ye = it.yearEnd || 2026;
         const rangeTxt = (it.yearStart && it.yearEnd) ? ` (${it.yearStart}–${it.yearEnd})` : '';
         showToast('⚡', `Этап ${idx + 1} из ${total}: вызубрить ${it.goal} дат${rangeTxt}`, 'bg-indigo-500', 'border-indigo-700');
+        window._cramHwFlow = true; // зубрёжка открыта ИЗ ДЗ → на выходе можно двигать этапы
         if (window.openCram) window.openCram('period:' + ys + '-' + ye);
         return;
     }

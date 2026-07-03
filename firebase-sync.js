@@ -1172,11 +1172,15 @@
         }
 
         function renderStudentCard(s, idx) {
+            // Имя/код класса/ID приходят из документа ученика, который пишет клиент —
+            // экранируем ВСЁ пользовательское, иначе имя вида <img onerror=…> исполнится у учителя.
+            const esc = t => String(t || '').replace(/[<>&"]/g, c => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;', '"': '&quot;' }[c]));
+            const dispName = esc(s.name || 'Без имени');
             const safeUid  = (s.uid  || '').replace(/'/g, "\\'");
             const safeName = (s.name || 'Без имени').replace(/'/g, "\\'").replace(/"/g, '&quot;');
             const medal    = idx === 0 ? '🥇' : idx === 1 ? '🥈' : idx === 2 ? '🥉' : '';
             // Аватар: инициал на стабильном цвете из uid — ученика легко находить глазами в списке
-            const initial  = (String(s.name || '?').trim().charAt(0) || '?').toUpperCase();
+            const initial  = esc((String(s.name || '?').trim().charAt(0) || '?').toUpperCase());
             const hue      = Array.from(String(s.uid || s.name || 'x')).reduce((h, c) => (h * 31 + c.charCodeAt(0)) >>> 0, 7) % 360;
             const timeStr  = s.timeSpentMin >= 60 ? `${Math.floor(s.timeSpentMin/60)}ч ${s.timeSpentMin%60}м` : `${s.timeSpentMin}м`;
             const accStr   = s.accuracy !== null ? `${s.accuracy}%` : '—';
@@ -1207,11 +1211,11 @@
                             ${medal ? `<span style="position:absolute;bottom:-5px;right:-6px;font-size:14px;filter:drop-shadow(0 1px 1px rgba(0,0,0,.3))">${medal}</span>` : ''}
                         </div>
                         <div style="min-width:0">
-                            <div class="dark:text-gray-200" style="font-weight:900;font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${s.name || 'Без имени'}</div>
+                            <div class="dark:text-gray-200" style="font-weight:900;font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${dispName}</div>
                             <div style="font-size:9px;color:#94a3b8;margin-top:1px;display:flex;gap:6px;flex-wrap:wrap">
                                 <span style="color:#cbd5e1;font-weight:800">#${idx + 1}</span>
-                                <span style="font-family:monospace;color:#64748b">🆔 ${s.tgId || s.knownTgId || s.canonicalId || s.uid || '—'}</span>
-                                ${s.classCode ? `<span style="color:var(--c-brand);font-weight:700">класс ${s.classCode}</span>` : ''}
+                                <span style="font-family:monospace;color:#64748b">🆔 ${esc(s.tgId || s.knownTgId || s.canonicalId || s.uid || '—')}</span>
+                                ${s.classCode ? `<span style="color:var(--c-brand);font-weight:700">класс ${esc(s.classCode)}</span>` : ''}
                             </div>
                             <div style="font-size:9px;color:#94a3b8;margin-top:1px">${s.lastActiveStr}</div>
                         </div>
@@ -2005,7 +2009,7 @@
                         ? weeklySt.map((s,idx) => `<div class="bg-white dark:bg-[#1e1e1e] rounded-2xl p-3 shadow-sm border border-gray-100 dark:border-[#2c2c2c] flex justify-between items-center mb-2">
                             <div class="flex items-center gap-3">
                               <span class="text-2xl font-black">${idx===0?'🥇':idx===1?'🥈':idx===2?'🥉':`<span class="text-gray-400 w-6 inline-block text-center text-lg">${idx+1}</span>`}</span>
-                              <span class="font-black text-sm dark:text-gray-200">${s.name||'Без имени'}</span>
+                              <span class="font-black text-sm dark:text-gray-200">${String(s.name || 'Без имени').replace(/[<>&]/g, c => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;' }[c]))}</span>
                             </div>
                             <div class="flex items-center gap-2">
                               ${s.wEgePoints > 0 ? `<span class="text-sm font-black text-yellow-600 dark:text-yellow-400 bg-yellow-50 dark:bg-yellow-900/20 px-2 py-1 rounded-lg">⭐ ${s.wEgePoints}б</span>` : ''}
@@ -2108,7 +2112,7 @@
                 let ht = top.length
                     ? top.map((s,i) => `<div class="flex items-center gap-2 bg-white dark:bg-[#1e1e1e] p-2.5 rounded-xl border border-emerald-100 dark:border-emerald-900/40 mb-1.5">
                         <span class="text-sm w-6 text-center shrink-0">${medals[i]||i+1}</span>
-                        <span class="flex-1 font-bold text-[12px] truncate dark:text-gray-200">${s.name}</span>
+                        <span class="flex-1 font-bold text-[12px] truncate dark:text-gray-200">${String(s.name || '').replace(/[<>&]/g, c => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;' }[c]))}</span>
                         <div class="flex items-center gap-1.5 shrink-0">
                           ${(s.wEge||0) > 0 ? `<span class="font-black text-[11px] text-yellow-600 dark:text-yellow-400">⭐${s.wEge}б</span>` : ''}
                           <span class="font-bold text-[10px] text-gray-400">${s.wScore}стр</span>
@@ -2152,7 +2156,7 @@
 
                 let ht = '<div class="flex flex-col gap-2">';
                 tL.forEach((s, idx) => { 
-                    ht += `<div class="bg-white dark:bg-[#1e1e1e] rounded-xl p-3 shadow-sm border border-gray-100 dark:border-[#2c2c2c] flex justify-between items-center transition-transform hover:-translate-y-0.5"><div class="flex items-center gap-3"><span class="text-xl sm:text-2xl drop-shadow-sm font-black">${idx===0?'🥇':(idx===1?'🥈':(idx===2?'🥉':`<span class="text-gray-400 w-5 inline-block text-center text-base">${idx+1}</span>`))}</span><div class="flex flex-col"><span class="font-black text-xs sm:text-sm text-gray-800 dark:text-gray-300 leading-tight">${s.name || 'Аноним'}</span>${s.username ? `<span class="text-[9px] font-bold text-blue-500 block leading-tight">@${s.username}</span>` : ''}</div></div><div class="text-right flex flex-col items-end"><span class="text-sm font-black text-examBlue dark:text-blue-400 bg-blue-50 dark:bg-blue-900/30 px-2 py-0.5 rounded-lg border border-blue-100 dark:border-blue-800/50">${s.totalSolved || 0}</span></div></div>`; 
+                    ht += `<div class="bg-white dark:bg-[#1e1e1e] rounded-xl p-3 shadow-sm border border-gray-100 dark:border-[#2c2c2c] flex justify-between items-center transition-transform hover:-translate-y-0.5"><div class="flex items-center gap-3"><span class="text-xl sm:text-2xl drop-shadow-sm font-black">${idx===0?'🥇':(idx===1?'🥈':(idx===2?'🥉':`<span class="text-gray-400 w-5 inline-block text-center text-base">${idx+1}</span>`))}</span><div class="flex flex-col"><span class="font-black text-xs sm:text-sm text-gray-800 dark:text-gray-300 leading-tight">${String(s.name || 'Аноним').replace(/[<>&]/g, c => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;' }[c]))}</span>${s.username ? `<span class="text-[9px] font-bold text-blue-500 block leading-tight">@${String(s.username).replace(/[<>&]/g, c => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;' }[c]))}</span>` : ''}</div></div><div class="text-right flex flex-col items-end"><span class="text-sm font-black text-examBlue dark:text-blue-400 bg-blue-50 dark:bg-blue-900/30 px-2 py-0.5 rounded-lg border border-blue-100 dark:border-blue-800/50">${s.totalSolved || 0}</span></div></div>`; 
                 });
                 if (fromCache) ht += `<div class="text-center text-[9px] text-gray-400 pt-1">Обновлено ${new Date(cacheUpdatedAt).toLocaleTimeString('ru-RU', {hour:'2-digit',minute:'2-digit'})}</div>`;
                 ht += '</div>'; cont.innerHTML = ht;
@@ -3094,7 +3098,8 @@
                     });
                     const canonical = docs[0];
                     const dupes = docs.slice(1);
-                    const names = docs.map(d => `${d.name||'?'}(${d.totalSolved||0})`).join(' + ');
+                    // names уходит в innerHTML лога дедупликации — имена экранируем
+                    const names = docs.map(d => `${String(d.name || '?').replace(/[<>&]/g, c => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;' }[c]))}(${d.totalSolved||0})`).join(' + ');
 
                     try {
                         const jsonStrings = docs.map(d => d.fullStateJson).filter(j => j && j.length > 10);
