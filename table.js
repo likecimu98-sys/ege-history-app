@@ -1039,6 +1039,7 @@ function generateTableOnce() {
         const mPool = window.state.mistakesPool || [];
         const now = Date.now();
         const availableTasks = [];
+        const expiredTasks = []; // задания, где есть просроченные SRS-факты
         TASK_LIST.forEach(t => {
             const cfg = TASK_CONFIG[t];
             const hasM = mPool.some(m => m.task === t);
@@ -1048,9 +1049,13 @@ function generateTableOnce() {
                 return d && d.level > 0 && d.nextReview <= now;
             });
             if (hasM || hasE) availableTasks.push(t);
+            if (hasE) expiredTasks.push(t);
         });
-        if (availableTasks.length > 0) {
-            const randomTask = availableTasks[Math.floor(Math.random() * availableTasks.length)];
+        // Фокус «Повторить N фактов»: выбираем только среди заданий с просроченными фактами,
+        // иначе случайный выбор уводил в задание с одними ошибками, и счётчик повторения стоял.
+        const pickFrom = (window.state.reviewFocus && expiredTasks.length > 0) ? expiredTasks : availableTasks;
+        if (pickFrom.length > 0) {
+            const randomTask = pickFrom[Math.floor(Math.random() * pickFrom.length)];
             window.state.currentTask = randomTask;
             $('filter-task').value = randomTask;
         }
@@ -1127,7 +1132,7 @@ function generateTwoColumnTable() {
     resetTableUI();
 
     $('table-head').innerHTML = `<tr>${cfg.tableHeaders.map((h, i) =>
-        `<th class="p-1.5 sm:p-3 text-[13px] sm:text-[14px] font-bold border-b border-gray-200 dark:border-[#2c2c2c] w-[${cfg.headerWidths[i]}] ${i === 0 ? 'text-left pl-2 sm:pl-4' : 'border-l border-gray-200 dark:border-[#2c2c2c] text-center'}">${h}</th>`
+        `<th class="p-1.5 sm:p-3 text-[12px] sm:text-[14px] font-bold border-b border-gray-200 dark:border-[#2c2c2c] w-[${cfg.headerWidths[i]}] ${i === 0 ? 'text-left pl-2 sm:pl-4' : 'border-l border-gray-200 dark:border-[#2c2c2c] text-center'}">${h}</th>`
     ).join('')}</tr>`;
 
     // Получаем пул
@@ -1248,7 +1253,7 @@ function generateTwoColumnTable() {
         missing.push(row[hiddenField]);
 
         const chipClass = task === 'task7' ? 'task7-chip' : '';
-        tr.innerHTML = `<td class="p-1.5 sm:p-3 py-1.5 align-middle text-left border-r border-gray-100 dark:border-[#2c2c2c]"><span class="text-[13px] sm:text-[14px] font-bold text-gray-800 dark:text-gray-300 leading-relaxed block">${letters[idx] || '?'}) ${row[displayField]}</span></td>` +
+        tr.innerHTML = `<td class="p-1.5 sm:p-3 py-1.5 align-middle text-left border-r border-gray-100 dark:border-[#2c2c2c]"><span class="text-[12px] sm:text-[14px] font-bold text-gray-800 dark:text-gray-300 leading-relaxed block">${letters[idx] || '?'}) ${row[displayField]}</span></td>` +
             `<td class="p-1 sm:p-3 py-1.5 align-middle text-center overflow-hidden"><div class="dnd-slot relative ${chipClass ? '' : ''}" data-expected="${String(row[hiddenField]).replace(/"/g, '&quot;')}" data-letter="?"></div></td>`;
         trFrag.appendChild(tr);
     });
@@ -1283,7 +1288,7 @@ function generateTask4Table() {
     // FIX: всегда перестраиваем голову task4. Раньше кэш _lastHeadTask не сбрасывался
     // генератором 2-колоночных таблиц → при task4→task3→task4 оставалась голова на 2 колонки,
     // и третья колонка визуально «отваливалась».
-    $('table-head').innerHTML = `<tr><th class="p-1.5 sm:p-3 text-[13px] sm:text-[14px] font-bold border-b border-gray-200 dark:border-[#2c2c2c] w-[27.5%] text-center">🗺️ Объект</th><th class="p-1.5 sm:p-3 text-[13px] sm:text-[14px] font-bold border-b border-gray-200 dark:border-[#2c2c2c] w-[45%] border-l border-gray-200 dark:border-[#2c2c2c] text-center">📜 Событие</th><th class="p-1.5 sm:p-3 text-[13px] sm:text-[14px] font-bold border-b border-gray-200 dark:border-[#2c2c2c] w-[27.5%] border-l border-gray-200 dark:border-[#2c2c2c] text-center">⏳ Дата</th></tr>`;
+    $('table-head').innerHTML = `<tr><th class="p-1.5 sm:p-3 text-[12px] sm:text-[14px] font-bold border-b border-gray-200 dark:border-[#2c2c2c] w-[27.5%] text-center">🗺️ Объект</th><th class="p-1.5 sm:p-3 text-[12px] sm:text-[14px] font-bold border-b border-gray-200 dark:border-[#2c2c2c] w-[45%] border-l border-gray-200 dark:border-[#2c2c2c] text-center">📜 Событие</th><th class="p-1.5 sm:p-3 text-[12px] sm:text-[14px] font-bold border-b border-gray-200 dark:border-[#2c2c2c] w-[27.5%] border-l border-gray-200 dark:border-[#2c2c2c] text-center">⏳ Дата</th></tr>`;
 
     let target = [];
     if (window.state.isHomeworkMode && window.state.hwTargetIndices?.length > 0) {
@@ -1339,9 +1344,9 @@ function generateTask4Table() {
                 lIdx++;
             } else {
                 const style = key === 'year' ? "font-bold text-blue-800 dark:text-blue-400" : "text-gray-700 dark:text-gray-300";
-                let cH = `<span class="text-[13px] sm:text-[14px] ${style} leading-relaxed block">${row[key]}</span>`;
+                let cH = `<span class="text-[12px] sm:text-[14px] ${style} leading-relaxed block">${row[key]}</span>`;
                 if (key === 'geo' && typeof geoDict !== 'undefined' && geoDict[row[key]]) {
-                    cH = `<span onclick="openMapModal('${row[key]}')" title="На карте" class="text-[13px] sm:text-[14px] font-bold text-blue-600 dark:text-blue-400 underline decoration-dashed cursor-pointer block">${row[key]}</span>`;
+                    cH = `<span onclick="openMapModal('${row[key]}')" title="На карте" class="text-[12px] sm:text-[14px] font-bold text-blue-600 dark:text-blue-400 underline decoration-dashed cursor-pointer block">${row[key]}</span>`;
                 }
                 td.innerHTML = cH;
             }

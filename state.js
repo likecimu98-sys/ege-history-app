@@ -185,7 +185,12 @@ function getFilteredPool(period, limit) {
             const d = window.state.stats.factStreaks[factKey(f)];
             return d && d.level > 0 && d.nextReview <= now;
         });
-        pool = [...mistakes, ...expired];
+        // Запуск с кнопки «Повторить N фактов»: если просроченных хватает на таблицу —
+        // берём только их. Иначе при большом пуле ошибок просроченные почти не выпадали,
+        // и счётчик повторения у ученика «не уменьшался».
+        pool = (window.state.reviewFocus && expired.length >= (limit || 1))
+            ? [...expired]
+            : [...mistakes, ...expired];
         const cfg = TASK_CONFIG[window.state.currentTask] || TASK_CONFIG.task4;
         const uniqueEvents = new Set();
         const uniquePool = [];
@@ -496,6 +501,9 @@ function completeAssignment(a) {
 function refreshHwState() {
     const s = window.state.stats;
     if (!Array.isArray(s.assignments)) { s.assignments = []; return; }
+    // Фантомы старой модели (id legacy_*): активные копии больше не поддерживаем —
+    // они «воскресали» из зеркала/облака и висели неудаляемым долгом. Сданные оставляем.
+    s.assignments = s.assignments.filter(a => a && !(a.status === 'active' && String(a.id || '').indexOf('legacy_') === 0));
     let anyCompleted = false;
     s.assignments.forEach(a => {
         if (a.status !== 'active') return;
@@ -506,6 +514,15 @@ function refreshHwState() {
         }
     });
     recomputeHwMirror();
+    // ДЗ не осталось (снято учителем/выполнено) → выходим из «режима ДЗ».
+    // Раньше isHomeworkMode оставался true навсегда — настройки блокировались
+    // с текстом «режим ДЗ», хотя никакого ДЗ уже не было.
+    if (window.state.isHomeworkMode
+        && !window.state.activeHw
+        && !(window.state.hwTargetIndices && window.state.hwTargetIndices.length)
+        && !s.assignments.some(a => a && a.status === 'active')) {
+        window.state.isHomeworkMode = false;
+    }
     if (anyCompleted && typeof checkAchievements === 'function') checkAchievements();
     return anyCompleted;
 }
@@ -656,29 +673,10 @@ function loadFromStorage() {
             }).filter(Boolean);
         }
 
-        // Миграция со старой модели ДЗ (единый счётчик) → отдельные задания.
-        // Чтобы текущее непогашенное ДЗ у уже существующих учеников появилось в новой вкладке.
-        if ((!window.state.stats.assignments || window.state.stats.assignments.length === 0)
-            && (window.state.stats.hwFlashcardsToSolve || 0) > 0) {
-            const dl = (() => { try { return localStorage.getItem('teacher_hw_deadline') || null; } catch (e) { return null; } })();
-            const per = {
-                task1: window.state.stats.hwTask1 || 0,
-                task3: window.state.stats.hwTask3 || 0,
-                task4: window.state.stats.hwTask4 || 0,
-                task5: window.state.stats.hwTask5 || 0,
-                task7: window.state.stats.hwTask7 || 0
-            };
-            const anyPer = per.task1 + per.task3 + per.task4 + per.task5 + per.task7;
-            const mk = (task, n) => ingestAssignment({
-                id: 'legacy_' + task + '_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5),
-                task, total: n, deadline: dl, assignedAt: Date.now()
-            });
-            if (anyPer > 0) {
-                Object.keys(per).forEach(t => { if (per[t] > 0) mk(t, per[t]); });
-            } else {
-                mk('task4', window.state.stats.hwFlashcardsToSolve);
-            }
-        }
+        // Миграция со старой модели ДЗ (единый счётчик hwFlashcardsToSolve → legacy_*-задания)
+        // УДАЛЕНА: все живые ученики давно на новой модели, а миграция пересоздавала фантомное
+        // ДЗ из устаревшего зеркала (баннер «200 строк долга» при пустой вкладке ДЗ).
+        // Зеркало теперь всегда пересчитывается из assignments в refreshHwState ниже.
         if (typeof refreshHwState === 'function') refreshHwState();
         if (!window.state.stats.solvedByTask) window.state.stats.solvedByTask = { task1: 0, task3: 0, task4: 0, task5: 0, task7: 0 };
         if (!window.state.stats.egePoints) window.state.stats.egePoints = 0;

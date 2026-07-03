@@ -560,39 +560,14 @@
                         return;
                     }
 
-                    // ── Legacy: накопительные поля → конвертируем в отдельные задания ──
-                    const t1 = data.hwAssignTask1 || 0;
-                    const t3 = data.hwAssignTask3 || 0;
-                    const t4 = data.hwAssignTask4 || 0;
-                    const t5 = data.hwAssignTask5 || 0;
-                    const t7 = data.hwAssignTask7 || 0;
-                    const totalHw = t1 + t3 + t4 + t5 + t7;
-                    const dl = data.assignedTeacherHwDeadline || null;
-                    const mkLegacy = (task, n) => n > 0 && window.ingestAssignment && window.ingestAssignment({
-                        id: 'legacy_' + task + '_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5),
-                        task, total: n, deadline: dl, assignedAt: Date.now()
-                    });
+                    // ── Legacy-поля старой раздачи (hwAssignTask*) — только чистим документ ──
+                    // Раньше они конвертировались в legacy_*-задания, но новая раздача этих полей
+                    // не пишет: остатки — древние долги, которые «нельзя было удалить». Просто
+                    // обнуляем на документе, ничего не назначая ученику.
+                    const totalHw = (data.hwAssignTask1 || 0) + (data.hwAssignTask3 || 0) + (data.hwAssignTask4 || 0)
+                                  + (data.hwAssignTask5 || 0) + (data.hwAssignTask7 || 0) + (data.assignedTeacherHw || 0);
                     if (totalHw > 0) {
-                        mkLegacy('task1', t1); mkLegacy('task3', t3); mkLegacy('task4', t4); mkLegacy('task5', t5); mkLegacy('task7', t7);
-                        if (window.recomputeHwMirror) window.recomputeHwMirror();
                         setDoc(docSnap.ref, { hwAssignTask1: 0, hwAssignTask3: 0, hwAssignTask4: 0, hwAssignTask5: 0, hwAssignTask7: 0, assignedTeacherHw: 0 }, { merge: true }).catch(console.error);
-                        const parts = [];
-                        if (t1 > 0) parts.push(`⏳№1: ${t1}`);
-                        if (t3 > 0) parts.push(`🔗№3: ${t3}`);
-                        if (t4 > 0) parts.push(`📍№4: ${t4}`);
-                        if (t5 > 0) parts.push(`👤№5: ${t5}`);
-                        if (t7 > 0) parts.push(`🎨№7: ${t7}`);
-                        const dlStr = dl ? ` · до ${new Date(dl + 'T00:00:00').toLocaleDateString('ru-RU')}` : '';
-                        showToast('🔥', `ДЗ: ${parts.join(', ')}${dlStr}`, 'bg-rose-500', 'border-rose-700');
-                        saveProgress();
-                        if(window.updateGlobalUI) window.updateGlobalUI();
-                    } else if (data.assignedTeacherHw && data.assignedTeacherHw > 0) {
-                        mkLegacy(data.assignedTeacherHwTask || 'task4', data.assignedTeacherHw);
-                        if (window.recomputeHwMirror) window.recomputeHwMirror();
-                        setDoc(docSnap.ref, { assignedTeacherHw: 0 }, { merge: true }).catch(console.error);
-                        showToast('🔥', `ДЗ: ${data.assignedTeacherHw} строк`, 'bg-rose-500', 'border-rose-700');
-                        saveProgress();
-                        if(window.updateGlobalUI) window.updateGlobalUI();
                     }
                 }
                 
@@ -2651,9 +2626,12 @@
             const merged = { stats: {}, mistakesPool: [], hideLearned: true };
             const st = merged.stats;
 
+            // ВАЖНО: hwFlashcardsToSolve/hwTaskX сюда НЕ входят — это зеркало активных ДЗ.
+            // Раньше они брались по max и «воскресали» из старой облачной копии: баннер
+            // показывал сотни строк долга при пустой вкладке ДЗ. Зеркало пересчитывается
+            // ниже из слитых assignments.
             ['totalSolvedEver','streak','bestSpeedrunScore','flashcardsSolved','totalTimeSpent',
-             'egePoints','hwFlashcardsToSolve','hwTask1','hwTask3','hwTask4','hwTask5','hwTask7',
-             'visualArchitectureSolved','visualPaintingSolved',
+             'egePoints','visualArchitectureSolved','visualPaintingSolved',
              'duelGames','duelWins','duelLosses','duelDraws'].forEach(k => {
                 const hasValue = states.some(s => s.stats?.[k] !== undefined);
                 if (hasValue) st[k] = Math.max(...states.map(s => Number(s.stats?.[k]) || 0));
@@ -2735,6 +2713,23 @@
                 });
             });
             st.assignments = [...asgById.values()];
+            // Зеркало ДЗ — строго из слитых заданий (hwItemRemaining учитывает learned-этапы).
+            {
+                const per = { task1: 0, task3: 0, task4: 0, task5: 0, task7: 0 };
+                let total = 0;
+                st.assignments.forEach(a => {
+                    if (!a || a.status !== 'active') return;
+                    (a.items || []).forEach(it => {
+                        const rem = window.hwItemRemaining ? window.hwItemRemaining(it)
+                            : Math.max(0, (Number(it.goal) || 0) - (Number(it.progress) || 0));
+                        if (rem > 0 && per[it.task] !== undefined) per[it.task] += rem;
+                        total += rem;
+                    });
+                });
+                st.hwFlashcardsToSolve = total;
+                st.hwTask1 = per.task1; st.hwTask3 = per.task3; st.hwTask4 = per.task4;
+                st.hwTask5 = per.task5; st.hwTask7 = per.task7;
+            }
             const mistakeKeys = new Set();
             states.forEach(s => {
                 (s.mistakesPool || s.stats?.mistakesPool || []).forEach(m => {

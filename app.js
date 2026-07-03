@@ -65,6 +65,8 @@ window.quickStartGame = function(task, mode) {
     window.state.currentTask = task;
     $('filter-task').value = task;
     $('filter-mode').value = mode;
+    // Ручной запуск «Ошибок» из лобби — обычный пул ошибок, без фокуса повторения
+    if (mode !== 'mistakes') window.state.reviewFocus = false;
     // Запоминаем последнее занятие для кнопки «Продолжить» (только табличные задания).
     if (TASK_LIST.includes(task)) {
         try {
@@ -105,6 +107,7 @@ window.backToLobby = function() {
     // FIX #7: сброс режима при выходе
     window.state.currentMode = 'normal';
     window.state.activeHw = null; // выход из потока ДЗ
+    window.state.reviewFocus = false; // фокус «Повторить N фактов» действует одну сессию
     $('game-container').classList.add('hidden');
     $('game-container').classList.remove('flex');
     $('lobby-area').classList.remove('hidden');

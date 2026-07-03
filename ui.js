@@ -605,8 +605,10 @@ window.refreshDetectiveCaseOptions = function() {
 };
 
 window.openGlobalSettings = function() {
-    // В режиме ДЗ параметры (период, число строк) задаёт преподаватель — не даём менять.
-    if (window.state.isHomeworkMode || window.state.activeHw) {
+    // Настройки блокируем только пока РЕШАЕШЬ ДЗ (activeHw / легаси-поток по ссылке),
+    // а не при самом факте наличия ДЗ: раньше isHomeworkMode оставался true навсегда,
+    // и настройки были заперты «режимом ДЗ» даже без единого задания.
+    if (window.state.activeHw || (window.state.isHomeworkMode && window.state.hwTargetIndices && window.state.hwTargetIndices.length > 0)) {
         if (typeof showToast === 'function') showToast('🔒', 'В режиме ДЗ настройки задаёт преподаватель', 'bg-indigo-500', 'border-indigo-700');
         return;
     }
@@ -1594,6 +1596,9 @@ window.mainActionGo = function(kind) {
         let bestTask = a.task || 'task4', bestN = -1;
         if (!a.task) { for (const t in a.due.by) if (a.due.by[t] > bestN) { bestN = a.due.by[t]; bestTask = t; } }
         if ($('filter-period')) $('filter-period').value = 'all';
+        // Кнопка обещает «Повторить N фактов» — в таблицу должны попадать именно
+        // просроченные факты, а не случайные ошибки (иначе счётчик «не уменьшался»).
+        window.state.reviewFocus = true;
         return quickStartGame(bestTask, 'mistakes');
     }
     if (act === 'continue' || act === 'start') {

@@ -203,7 +203,7 @@ html.dark body .dnd-slot.incorrect-slot > * { color: #fecaca !important; }
     border: 2px solid #cbd5e1; 
     border-radius: 0.75rem;
     font-weight: 700;
-    font-size: 0.8125rem; /* 13px — на телефоне 12px было мелко для чтения фактов */
+    font-size: 0.75rem; /* 12px — как текст ячеек таблицы, чтобы вставленный ответ не отличался */
     cursor: pointer;
     box-shadow: 0 2px 4px 0 rgba(0, 0, 0, 0.05); 
     transition: transform 0.1s ease, background-color 0.1s, border-color 0.1s; 
@@ -238,11 +238,11 @@ html.dark body .dnd-slot.incorrect-slot > * { color: #fecaca !important; }
     padding: 0.15rem; 
     width: 100%; 
     height: 100%; 
-    display: flex; 
-    align-items: center; 
-    justify-content: center; 
-    font-size: 11px; 
-    transform: none; 
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 12px; /* как текст ячеек — вставленный ответ не должен быть мельче задания */
+    transform: none;
     border-radius: 0; 
     line-height: 1.1;
 }
