@@ -212,8 +212,11 @@ function getFilteredPool(period, limit) {
         const isFresh = f => { const d = fs[factKey(f)]; return !(d && d.level > 0 && d.nextReview > now); };
         const fresh = pool.filter(isFresh);
         if (fresh.length >= (limit || 1)) {
-            const unseen = fresh.filter(f => { const d = fs[factKey(f)]; return !d || (!d.level && !(d.points > 0)); });
-            pool = unseen.length >= (limit || 1) ? unseen : fresh;
+            // «Новое» = ещё НЕ выученное (level<1): и невиданное, и начатое-но-не-освоенное.
+            // Если такого хватает на таблицу — показываем только его (просроченные-выученные
+            // пойдут в отдельную ветку «Повторить»), иначе весь свежий набор.
+            const unlearned = fresh.filter(f => { const d = fs[factKey(f)]; return !(d && d.level >= 1); });
+            pool = unlearned.length >= (limit || 1) ? unlearned : fresh;
         } else if (fresh.length > 0) {
             // Свежего мало (период почти пройден) — показываем его и добираем немного
             // выученными, чтобы таблица заполнилась. Раньше здесь перезапускался ВЕСЬ пул —

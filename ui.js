@@ -1596,6 +1596,28 @@ function _unlearnedCountsByTask(wp) {
     return { by, total, bestTask };
 }
 
+// Ротация типов заданий: ~30 строк на тип, потом следующий. task7 не первым (там
+// таблицы по 4 строки). Выбираем тип с невыученным материалом, у которого сегодня
+// решено МЕНЬШЕ всего строк (при равенстве — по порядку, task7 последним). Так после
+// 30 строк одного типа кнопка сама переходит к следующему, и цикл повторяется.
+const NEW_ROTATION = ['task4', 'task1', 'task3', 'task5', 'task7'];
+const LINES_PER_TASK = 30;
+function _dtSolvedKey(t) { return 'solved' + t.charAt(0).toUpperCase() + t.slice(1); }
+function _pickNewTask(unlearned) {
+    const today = (window.state.stats.dailyStats && window.state.stats.dailyStats[getTodayString()]) || {};
+    const cand = NEW_ROTATION.filter(t => (unlearned.by[t] || 0) > 0);
+    if (!cand.length) return null;
+    let best = cand[0], bestLines = today[_dtSolvedKey(cand[0])] || 0;
+    for (const t of cand) {
+        const lines = today[_dtSolvedKey(t)] || 0;
+        if (lines < bestLines) { best = t; bestLines = lines; } // строгое < → при равенстве раньше по порядку
+    }
+    let rem = LINES_PER_TASK - (bestLines % LINES_PER_TASK);
+    if (rem === LINES_PER_TASK && bestLines > 0) rem = LINES_PER_TASK; // ровно кратно — новый цикл
+    const left = Math.max(1, Math.min(rem, unlearned.by[best] || 1));
+    return { task: best, left };
+}
+
 // Самая слабая пара (задание, эпоха): минимум точности при ≥10 попытках.
 function _weakestSpot() {
     const es = window.state.stats.eraStats || {};
@@ -1633,12 +1655,15 @@ function computeMainAction() {
         return { ...base, kind: overdue ? 'hw-overdue' : 'hw', hwId: a.id, hwIdx: idx, deadline: a.deadline };
     }
 
-    // 1) Новый материал — главный драйвер дня (до нормы), ротация типов по запасу нового
-    if (doneToday < DAILY_GOAL_LINES && unlearned.total > 0) {
-        return { ...base, kind: 'continue',
-            task: unlearned.bestTask,
+    // 1) Новый материал — главный драйвер. Пока в периоде есть невыученное — учим новое,
+    //    ~30 строк на тип, потом ротация к следующему (task7 не первым). Дневного потолка нет:
+    //    норма 30 нужна только для стрика, а новое можно решать сколько хочешь.
+    if (unlearned.total > 0) {
+        const pick = _pickNewTask(unlearned);
+        if (pick) return { ...base, kind: 'continue',
+            task: pick.task,
             period: wp || { era: localStorage.getItem('ege_last_period') || 'all' },
-            left: Math.min(DAILY_GOAL_LINES - doneToday, unlearned.total) };
+            left: pick.left };
     }
 
     // 2) Новое на сегодня исчерпано → освежаем просроченные факты (SRS)
@@ -1727,7 +1752,7 @@ function renderMainAction() {
             ? (TASK_EPOCHS.includes(a.period) ? periodName(a.period) : 'все периоды')
             : (_wpLabel(a.period) || 'все периоды');
         title = 'Учим новое';
-        sub = `${cfg.shortLabel} · ${pl} · ещё ${a.left} нового до нормы дня`;
+        sub = `${cfg.shortLabel} · ${pl} · ещё ${a.left} до смены задания`;
     } else if (a.kind === 'weak') {
         const cfg = TASK_CONFIG[a.weak.task] || TASK_CONFIG.task4;
         title = `Слабое место: ${cfg.shortLabel}`;

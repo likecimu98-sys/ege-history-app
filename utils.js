@@ -206,6 +206,9 @@ function computeWeeklyScore(dailyStats) {
 // Дневной стрик: сколько дней ПОДРЯД решали хотя бы одну строку.
 // Если сегодня ещё не решал — серия не сгорает в ноль, считаем от вчера.
 // НЕ путать со stats.streak — это серия верных ответов подряд внутри игры.
+// День засчитывается в стрик, если решено ≥ нормы (30 строк) — из любого источника
+// (ДЗ / повторение / новое). Раньше хватало любой одной строки.
+window.STREAK_DAILY_MIN = 30;
 window.computeDayStreak = function(dailyStats) {
     const ds = dailyStats || (window.state && window.state.stats && window.state.stats.dailyStats) || {};
     const key = dt => {
@@ -213,7 +216,7 @@ window.computeDayStreak = function(dailyStats) {
         t.setMinutes(t.getMinutes() - t.getTimezoneOffset());
         return t.toISOString().split('T')[0];
     };
-    const solvedOn = d => { const x = ds[d]; return !!(x && (x.solved || 0) > 0); };
+    const solvedOn = d => { const x = ds[d]; return !!(x && (x.solved || 0) >= window.STREAK_DAILY_MIN); };
     const day = new Date();
     if (!solvedOn(key(day))) day.setDate(day.getDate() - 1);
     let streak = 0;
