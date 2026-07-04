@@ -3008,38 +3008,33 @@
                     const classEl = document.getElementById('profile-class-code');
                     if (classEl) classEl.value = bestData.classCode;
                 }
-                // Управление классом извне через поле inviteClassCode на документе ученика:
-                //   • непустой код — приглашение из бота (?start=c_КОД) ИЛИ перевод учителем;
-                //   • пустая строка "" — учитель выпустил ученика из группы (после ЕГЭ и т.п.).
-                // Поле применяется по ФАКТУ наличия (hasOwnProperty), даже пустое, и сразу
-                // стирается, чтобы не сработало повторно. Пишем и в classCode, и локально —
-                // иначе следующий syncProgressToCloud вернул бы старый код обратно.
+                // Управление классом извне через поле inviteClassCode на документе ученика
+                // (teacher-authoritative код группы): непустой = приглашение/перевод, пустая
+                // строка "" = учитель выпустил из группы. Раньше поле стиралось после первого
+                // применения — из-за этого при мульти-устройстве/повторной синхронизации
+                // syncProgressToCloud возвращал СТАРЫЙ локальный код, и ученик «выпадал» из группы.
+                // Теперь НЕ стираем: адаптируем код учителя при КАЖДОЙ загрузке (синк уже не вернёт
+                // старый), а тост/подтяжку ДЗ показываем только для НОВОГО инвайта (по inviteAt).
                 {
-                    let hasOverride = false, overrideCode = '';
+                    let hasInv = false, invCode = '', invAt = 0;
                     allFound.forEach((data) => {
-                        if (data && Object.prototype.hasOwnProperty.call(data, 'inviteClassCode')) {
-                            hasOverride = true; overrideCode = String(data.inviteClassCode || '');
+                        if (data && Object.prototype.hasOwnProperty.call(data, 'inviteClassCode') && (Number(data.inviteAt) || 0) >= invAt) {
+                            hasInv = true; invCode = String(data.inviteClassCode || ''); invAt = Number(data.inviteAt) || 0;
                         }
                     });
-                    if (hasOverride) {
+                    if (hasInv) {
                         const prevCode = localStorage.getItem('student_class_code') || '';
-                        if (overrideCode) {
-                            localStorage.setItem('student_class_code', overrideCode);
-                        } else {
-                            localStorage.removeItem('student_class_code');
-                        }
+                        if (invCode) localStorage.setItem('student_class_code', invCode);
+                        else localStorage.removeItem('student_class_code');
                         const classEl2 = document.getElementById('profile-class-code');
-                        if (classEl2) classEl2.value = overrideCode;
-                        for (const [id, data] of allFound) {
-                            if (data && Object.prototype.hasOwnProperty.call(data, 'inviteClassCode')) {
-                                try { await updateDoc(doc(studentsCol, id), { inviteClassCode: deleteField(), classCode: overrideCode }); } catch (e) {}
-                            }
-                        }
-                        if (prevCode !== overrideCode) {
-                            if (overrideCode) {
-                                showToast('🎓', `Ты в классе «${overrideCode}»!`, 'bg-emerald-500', 'border-emerald-700');
-                                if (window.pullClassAssignments) window.pullClassAssignments(overrideCode).catch(() => {});
-                            } else {
+                        if (classEl2) classEl2.value = invCode;
+                        const lastConsumed = Number(localStorage.getItem('consumed_invite_at') || 0);
+                        if (invAt > lastConsumed || prevCode !== invCode) {
+                            if (invAt > lastConsumed) localStorage.setItem('consumed_invite_at', String(invAt));
+                            if (invCode && prevCode !== invCode) {
+                                showToast('🎓', `Ты в классе «${invCode}»!`, 'bg-emerald-500', 'border-emerald-700');
+                                if (window.pullClassAssignments) window.pullClassAssignments(invCode).catch(() => {});
+                            } else if (!invCode && prevCode) {
                                 showToast('🎓', 'Курс завершён — ты больше не в группе', 'bg-blue-500', 'border-blue-700');
                             }
                         }

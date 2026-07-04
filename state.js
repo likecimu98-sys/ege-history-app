@@ -185,12 +185,17 @@ function getFilteredPool(period, limit) {
             const d = window.state.stats.factStreaks[factKey(f)];
             return d && d.level > 0 && d.nextReview <= now;
         });
-        // Запуск с кнопки «Повторить N фактов»: если просроченных хватает на таблицу —
-        // берём только их. Иначе при большом пуле ошибок просроченные почти не выпадали,
-        // и счётчик повторения у ученика «не уменьшался».
-        pool = (window.state.reviewFocus && expired.length >= (limit || 1))
-            ? [...expired]
-            : [...mistakes, ...expired];
+        // Фокус зависит от кнопки:
+        //  • «Разбор ошибок» (mistakeFocus) → только ошибки (добираем просроченными, если мало);
+        //  • «Повторить N фактов» (reviewFocus) → только просроченные, если хватает на таблицу;
+        //  • иначе — ошибки + просроченные вместе.
+        if (window.state.mistakeFocus && mistakes.length >= 1) {
+            pool = mistakes.length >= (limit || 1) ? [...mistakes] : [...mistakes, ...expired];
+        } else if (window.state.reviewFocus && expired.length >= (limit || 1)) {
+            pool = [...expired];
+        } else {
+            pool = [...mistakes, ...expired];
+        }
         const cfg = TASK_CONFIG[window.state.currentTask] || TASK_CONFIG.task4;
         const uniqueEvents = new Set();
         const uniquePool = [];

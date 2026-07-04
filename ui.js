@@ -1561,6 +1561,18 @@ function _applyWpFilter(wp) {
     window.state._wpApplied = !!wp;
 }
 
+// Сколько ошибок (mistakesPool) по каждому текстовому заданию. bestTask — где больше.
+function _mistakeCounts() {
+    const by = { task1: 0, task3: 0, task4: 0, task5: 0, task7: 0 };
+    let total = 0;
+    (window.state.mistakesPool || []).forEach(m => {
+        if (m && by[m.task] !== undefined) { by[m.task]++; total++; }
+    });
+    let bestTask = 'task4', bestN = -1;
+    for (const t in by) if (by[t] > bestN) { bestN = by[t]; bestTask = t; }
+    return { by, total, bestTask };
+}
+
 // Данные задания целиком (task7 — отдельный массив).
 function _taskDataAll(task) {
     if (task === 'task7') return window.task7Data || [];
@@ -1641,12 +1653,15 @@ function computeMainAction() {
     const doneToday = (s.dailyStats && s.dailyStats[getTodayString()] && s.dailyStats[getTodayString()].solved) || 0;
     const wp = _workingPeriod();
     const unlearned = _unlearnedCountsByTask(wp);
-    const base = { due, hwCount: active.length, hwRemaining, doneToday, unlearned };
+    const mistakes = _mistakeCounts();
+    const base = { due, hwCount: active.length, hwRemaining, doneToday, unlearned, mistakes };
 
     // Новичок — с азов
     if (!(s.totalSolvedEver > 0)) return { ...base, kind: 'start', period: wp || { era: 'early' } };
 
-    // ДЗ учителя всегда в приоритете
+    // Порядок: 1) ДЗ  2) ошибки  3) повтор выпавшего из выученного  4) новое  5) слабое  6) готово
+
+    // 1) ДЗ учителя (последовательно, ближайший дедлайн)
     if (active.length && hwRemaining > 0) {
         const sorted = active.slice().sort((a, b) => String(a.deadline || '9999') < String(b.deadline || '9999') ? -1 : 1);
         const a = sorted.find(x => (x.items || []).some(it => !window.hwItemDone(it))) || sorted[0];
@@ -1655,9 +1670,19 @@ function computeMainAction() {
         return { ...base, kind: overdue ? 'hw-overdue' : 'hw', hwId: a.id, hwIdx: idx, deadline: a.deadline };
     }
 
-    // 1) Новый материал — главный драйвер. Пока в периоде есть невыученное — учим новое,
-    //    ~30 строк на тип, потом ротация к следующему (task7 не первым). Дневного потолка нет:
-    //    норма 30 нужна только для стрика, а новое можно решать сколько хочешь.
+    // 2) Разбор ошибок — то, в чём ошибся
+    if (mistakes.total >= 1) {
+        return { ...base, kind: 'mistakes', task: mistakes.bestTask };
+    }
+
+    // 3) Повтор выпавшего из выученного (SRS: выучил, но пора освежить)
+    if (due.total >= 3) {
+        let bestTask = 'task4', bestN = -1;
+        for (const t in due.by) if (due.by[t] > bestN) { bestN = due.by[t]; bestTask = t; }
+        return { ...base, kind: 'review', task: bestTask, period: wp };
+    }
+
+    // 4) Новое — пока в периоде есть невыученное. ~30 строк на тип, потом ротация (task7 не первым).
     if (unlearned.total > 0) {
         const pick = _pickNewTask(unlearned);
         if (pick) return { ...base, kind: 'continue',
@@ -1666,18 +1691,11 @@ function computeMainAction() {
             left: pick.left };
     }
 
-    // 2) Новое на сегодня исчерпано → освежаем просроченные факты (SRS)
-    if (due.total >= 3) {
-        let bestTask = 'task4', bestN = -1;
-        for (const t in due.by) if (due.by[t] > bestN) { bestN = due.by[t]; bestTask = t; }
-        return { ...base, kind: 'review', task: bestTask, period: wp };
-    }
-
-    // 3) Ни нового, ни просрочки → добиваем слабое место
+    // 5) Слабое место
     const weak = _weakestSpot();
     if (weak) return { ...base, kind: 'weak', weak, period: { era: weak.era } };
 
-    // 4) Всё честно закрыто на сегодня
+    // 6) Всё честно закрыто на сегодня
     return { ...base, kind: 'done', period: wp,
         streak: (window.computeDayStreak && window.computeDayStreak()) || 0 };
 }
@@ -1690,6 +1708,15 @@ window.mainActionGo = function(kind) {
         if (a.hwId != null && window.startHwItem) return window.startHwItem(a.hwId, a.hwIdx);
         return window.openHwTab && window.openHwTab();
     }
+    if (act === 'mistakes') {
+        const mc = _mistakeCounts();
+        if (!mc.total) return showToast('✅', 'Ошибок нет — чисто!', 'bg-emerald-500', 'border-emerald-700');
+        if ($('filter-period')) $('filter-period').value = 'all';
+        // Фокус на ошибках: в таблицу — именно факты из пула ошибок.
+        window.state.mistakeFocus = true;
+        window.state.reviewFocus = false;
+        return quickStartGame(mc.bestTask, 'mistakes');
+    }
     if (act === 'review') {
         if (a.due.total === 0) return showToast('🎉', 'Повторять пока нечего — всё свежо!', 'bg-emerald-500', 'border-emerald-700');
         let bestTask = a.task || 'task4', bestN = -1;
@@ -1698,6 +1725,7 @@ window.mainActionGo = function(kind) {
         // Кнопка обещает «Повторить N фактов» — в таблицу должны попадать именно
         // просроченные факты, а не случайные ошибки (иначе счётчик «не уменьшался»).
         window.state.reviewFocus = true;
+        window.state.mistakeFocus = false;
         return quickStartGame(bestTask, 'mistakes');
     }
     if (act === 'continue' || act === 'start') {
@@ -1724,6 +1752,7 @@ window.mainActionGo = function(kind) {
 const _MAIN_ACTION_META = {
     'hw':         { bg: 'linear-gradient(135deg,#f43f5e,#e11d48)', icon: '📚', title: 'Продолжить ДЗ' },
     'hw-overdue': { bg: 'linear-gradient(135deg,#e11d48,#9f1239)', icon: '🔥', title: 'Догони ДЗ' },
+    'mistakes':   { bg: 'linear-gradient(135deg,#f43f5e,#e11d48)', icon: '🔧', title: 'Разбор ошибок' },
     'review':     { bg: 'linear-gradient(135deg,#6366f1,#4f46e5)', icon: '🧠', title: 'Повторить' },
     'continue':   { bg: 'linear-gradient(135deg,#3b82f6,#2563eb)', icon: '▶️', title: 'Учим новое' },
     'weak':       { bg: 'linear-gradient(135deg,#f97316,#ea580c)', icon: '🎯', title: 'Слабое место' },
@@ -1741,6 +1770,10 @@ function renderMainAction() {
     if (a.kind === 'hw' || a.kind === 'hw-overdue') {
         const dl = a.deadline ? ' · до ' + new Date(a.deadline + 'T00:00:00').toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' }) : '';
         sub = `осталось ${a.hwRemaining}${a.hwCount > 1 ? ` · заданий: ${a.hwCount}` : ''}${dl}`;
+    } else if (a.kind === 'mistakes') {
+        const cfg = TASK_CONFIG[a.task] || TASK_CONFIG.task4;
+        title = `Разбор ошибок · ${a.mistakes.total}`;
+        sub = `${cfg.shortLabel} · разберём то, в чём ошибся`;
     } else if (a.kind === 'review') {
         const shown = Math.min(a.due.total, 20);
         title = `Повторить ${shown} фактов`;
@@ -1780,10 +1813,11 @@ function renderMainAction() {
                 <div style="font-size:20px;opacity:.8;flex-shrink:0">›</div>
             </div>
         </div>
-        <div style="display:flex;gap:8px;margin-top:8px">
+        <div style="display:flex;gap:6px;margin-top:8px">
             ${chip('📚 ДЗ', a.hwCount || null, 'hwtab', !a.hwCount)}
+            ${chip('🔧 Ошибки', a.mistakes.total || null, 'mistakes', !a.mistakes.total)}
             ${chip('🧠 Повтор', a.due.total || null, 'review', !a.due.total)}
-            ${chip('🎯 Слабое место', null, 'weak', false)}
+            ${chip('🎯 Слабое', null, 'weak', false)}
         </div>`;
 }
 window.renderMainAction = renderMainAction;
