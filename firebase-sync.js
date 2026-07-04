@@ -3,7 +3,7 @@
 
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
         import { getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken, GoogleAuthProvider, signInWithPopup, signInWithRedirect, getRedirectResult, signInWithCredential } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-        import { initializeFirestore, collection, doc, setDoc, getDoc, getDocs, addDoc, updateDoc, deleteDoc, onSnapshot, query, where, orderBy, limit, runTransaction, arrayUnion, arrayRemove } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        import { initializeFirestore, collection, doc, setDoc, getDoc, getDocs, addDoc, updateDoc, deleteDoc, deleteField, onSnapshot, query, where, orderBy, limit, runTransaction, arrayUnion, arrayRemove } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
         let firebaseConfig;
         if (typeof __firebase_config !== 'undefined') {
@@ -462,6 +462,7 @@
                 // Загружаем прогресс из облака (ПЕРЕД синхронизацией — иначе затрём облако нулями)
                 // Это также подтягивает known_tg_id из найденного документа
                 await window.loadProgressFromCloud();
+                window.checkTeacherRole && window.checkTeacherRole();
                 
                 // Update UI with loaded name/class
                 const nameEl = $('profile-name-input');
@@ -2192,6 +2193,42 @@
             }
         };
 
+        // ── Очередь уведомлений для TG-бота ──
+        // Приложение пишет событие, бот на VPS доставляет сообщение и удаляет документ.
+        // Ошибки глотаем: уведомление — не критичный путь, ДЗ выдаётся независимо от него.
+        window._notifyJob = async function(payload) {
+            try {
+                if (!db) return;
+                await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'notifyJobs'),
+                    { ...payload, ts: Date.now() });
+            } catch (e) { console.warn('[notifyJob]', e && e.message); }
+        };
+        // Сводка по bundle-ДЗ для текста уведомления: task одного этапа или 'bundle', сумма строк.
+        function _jobSummary(rec) {
+            const items = Array.isArray(rec.items) ? rec.items : [];
+            if (!items.length) return { task: rec.task || 'task4', total: Number(rec.total) || 0 };
+            return {
+                task: items.length === 1 ? items[0].task : 'bundle',
+                total: items.reduce((n, it) => n + (Number(it.goal) || 0), 0)
+            };
+        }
+        // Ученик сдал ДЗ (вызывается из state.js completeAssignment)
+        window._notifyHwDone = function(a) {
+            try {
+                const code = localStorage.getItem('student_class_code') || '';
+                if (!code || !a) return;
+                const sum = _jobSummary(a);
+                window._notifyJob({
+                    type: 'hw_done',
+                    studentId: localStorage.getItem('known_tg_id') || '',
+                    studentName: localStorage.getItem('student_manual_name') || 'Ученик',
+                    classCode: code,
+                    task: sum.task, total: sum.total,
+                    onTime: a.onTime === true
+                });
+            } catch (e) {}
+        };
+
         window._assignHwDb = async function(studentId, num, task, deadline, silent) {
             if (!db) return;
             const taskLabels = { task1: '№1 (Хронология)', task3: '№3 (Процессы)', task4: '№4 (География)', task5: '№5 (Личности)', task7: '№7 (Культура)' };
@@ -2207,6 +2244,7 @@
             try {
                 const ref = doc(db, 'artifacts', appId, 'public', 'data', 'students', studentId);
                 await updateDoc(ref, { pendingAssignments: arrayUnion(rec) });
+                window._notifyJob({ type: 'hw_assigned', studentId: String(studentId), recId: rec.id, task: rec.task, total: rec.total, deadline: rec.deadline });
                 if (!silent) showToast('✅', `ДЗ: ${num} строк, задание ${taskLabels[task] || task}${deadlineStr}`, 'bg-emerald-500', 'border-emerald-700');
             } catch(e) {
                 console.error(e);
@@ -2513,6 +2551,7 @@
             try {
                 const ref = doc(db, 'artifacts', appId, 'public', 'data', 'students', studentId);
                 await updateDoc(ref, { pendingAssignments: arrayUnion(rec) });
+                { const sum = _jobSummary(rec); window._notifyJob({ type: 'hw_assigned', studentId: String(studentId), recId: rec.id, task: sum.task, total: sum.total, deadline: rec.deadline }); }
                 if (!silent) showToast('✅', `ДЗ выдано · ${rec.items.length} этап.`, 'bg-emerald-500', 'border-emerald-700');
             } catch (e) {
                 console.error(e);
@@ -2549,6 +2588,7 @@
                 try {
                     const ref = doc(db, 'artifacts', appId, 'public', 'data', 'students', s.uid);
                     await updateDoc(ref, { pendingAssignments: arrayUnion(rec) });
+                    { const sum = _jobSummary(rec); window._notifyJob({ type: 'hw_assigned', studentId: String(s.uid), recId: rec.id, task: sum.task, total: sum.total, deadline: rec.deadline }); }
                     ok++;
                 } catch (e) { fail++; }
             }
@@ -2779,6 +2819,29 @@
             return normalized;
         }
 
+        // Роль учителя: одобренные через бота (@Reshay_istoriyu_bot → /teacher) лежат в
+        // artifacts/{appId}/public/data/teachers/{tgId}. Если текущий пользователь там есть —
+        // открываем кабинет без секретных 5 тапов и подсказываем, где он.
+        window.checkTeacherRole = async function() {
+            try {
+                if (!db) return;
+                const tid = localStorage.getItem('known_tg_id') || '';
+                if (!/^\d+$/.test(tid)) return;
+                const snap = await getDoc(doc(db, 'artifacts', appId, 'public', 'data', 'teachers', tid));
+                if (!snap.exists()) return;
+                window.state.isTeacherAdmin = true;
+                window._teacherClasses = Array.isArray(snap.data().classes) ? snap.data().classes : [];
+                // код класса по умолчанию — первый из классов учителя
+                if (!localStorage.getItem('teacher_class_code') && window._teacherClasses[0]) {
+                    localStorage.setItem('teacher_class_code', window._teacherClasses[0]);
+                }
+                if (!sessionStorage.getItem('teacher_hint_shown')) {
+                    sessionStorage.setItem('teacher_hint_shown', '1');
+                    setTimeout(() => showToast('👨‍🏫', 'Кабинет учителя доступен: 5 быстрых тапов по логотипу', 'bg-purple-600', 'border-purple-800'), 2500);
+                }
+            } catch (e) { console.warn('[teacherRole]', e && e.message); }
+        };
+
         window.loadProgressFromCloud = async function() {
             if (!fbUser || !db) return;
             try {
@@ -2893,6 +2956,28 @@
                     localStorage.setItem('student_class_code', bestData.classCode);
                     const classEl = document.getElementById('profile-class-code');
                     if (classEl) classEl.value = bestData.classCode;
+                }
+                // Приглашение из бота (t.me/...?start=c_КОД): бот кладёт одноразовое поле
+                // inviteClassCode на документ ученика. Подхватываем (даже поверх старого класса —
+                // нажатие на инвайт = осознанная смена) и сразу стираем поле, чтобы не сработало повторно.
+                {
+                    let inviteCode = null;
+                    allFound.forEach((data) => { if (data && data.inviteClassCode) inviteCode = String(data.inviteClassCode); });
+                    if (inviteCode) {
+                        const prevCode = localStorage.getItem('student_class_code') || '';
+                        localStorage.setItem('student_class_code', inviteCode);
+                        const classEl2 = document.getElementById('profile-class-code');
+                        if (classEl2) classEl2.value = inviteCode;
+                        for (const [id, data] of allFound) {
+                            if (data && data.inviteClassCode) {
+                                try { await updateDoc(doc(studentsCol, id), { inviteClassCode: deleteField() }); } catch (e) {}
+                            }
+                        }
+                        if (prevCode !== inviteCode) {
+                            showToast('🎓', `Ты в классе «${inviteCode}»!`, 'bg-emerald-500', 'border-emerald-700');
+                            if (window.pullClassAssignments) window.pullClassAssignments(inviteCode).catch(() => {});
+                        }
+                    }
                 }
                 if (bestData?.tgId && /^\d+$/.test(String(bestData.tgId))) localStorage.setItem('known_tg_id', String(bestData.tgId));
                 if (bestData?.knownTgId && /^\d+$/.test(String(bestData.knownTgId))) localStorage.setItem('known_tg_id', String(bestData.knownTgId));

@@ -1900,6 +1900,29 @@ window.openTeacherModal = function() {
 };
 
 window.saveTeacherClassCode = function() { const cd = $('teacher-class-code-input').value.trim(); if(cd) localStorage.setItem('teacher_class_code', cd); if (window.loadClassProgress) window.loadClassProgress(); };
+
+// Ссылка-приглашение в класс через TG-бота: ученик нажимает → бот пишет inviteClassCode
+// в его облачный документ → приложение само подключает класс. Кириллица кодируется base64url (cb_).
+window.copyClassInvite = function() {
+    const BOT = 'Reshay_istoriyu_bot';
+    const code = ($('teacher-class-code-input').value || '').trim().replace(/[\/#?%]/g, '_');
+    if (!code) { showToast('⚠️', 'Сначала укажи код класса', 'bg-amber-500', 'border-amber-700'); return; }
+    let payload;
+    if (/^[A-Za-z0-9_-]{1,48}$/.test(code)) payload = 'c_' + code;
+    else {
+        try {
+            const bytes = new TextEncoder().encode(code);
+            let bin = ''; bytes.forEach(b => bin += String.fromCharCode(b));
+            const b64 = btoa(bin).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+            if (b64.length > 60) { showToast('⚠️', 'Код класса слишком длинный для ссылки', 'bg-amber-500', 'border-amber-700'); return; }
+            payload = 'cb_' + b64;
+        } catch (e) { showToast('❌', 'Не удалось построить ссылку', 'bg-rose-500', 'border-rose-700'); return; }
+    }
+    const link = `https://t.me/${BOT}?start=${payload}`;
+    const done = () => showToast('🔗', 'Ссылка-приглашение скопирована! Отправь её ученикам', 'bg-emerald-500', 'border-emerald-700');
+    const fallback = () => { const ta = document.createElement('textarea'); ta.value = link; ta.style.position = 'fixed'; document.body.appendChild(ta); ta.select(); document.execCommand('copy'); document.body.removeChild(ta); done(); };
+    if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(link).then(done).catch(fallback); else fallback();
+};
 window.switchTeacherTab = function(tab) { ['stats', 'weekly'].forEach(t => { $(`teacher-tab-${t}`).classList.add('hidden'); $(`teacher-tab-${t}`).classList.remove('flex'); $(`tab-btn-${t}`).className = "py-3 text-[9px] sm:text-xs font-black border-b-2 border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400 transition-colors uppercase tracking-wide leading-none truncate"; }); $(`teacher-tab-${tab}`).classList.remove('hidden'); $(`teacher-tab-${tab}`).classList.add('flex'); $(`tab-btn-${tab}`).className = "py-3 text-[9px] sm:text-xs font-black border-b-2 border-examBlue text-examBlue dark:text-blue-400 transition-colors uppercase tracking-wide leading-none truncate"; if (window.loadClassProgress) window.loadClassProgress(); };
 
 window.openGlobalTopModal = function() {

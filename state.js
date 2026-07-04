@@ -495,6 +495,8 @@ function completeAssignment(a) {
         s.achievementsData.hwStreak = 0;
         setTimeout(() => showToast('⌛', 'ДЗ сдано (с опозданием)', 'bg-amber-500', 'border-amber-700'), 1400);
     }
+    // Уведомление учителю через TG-бота (firebase-sync может ещё не загрузиться — тогда пропускаем)
+    try { window._notifyHwDone && window._notifyHwDone(a); } catch (e) {}
 }
 
 // Пересчитать статусы этапов/ДЗ (learned-этапы — живьём), обновить зеркало, проверить ачивки.
