@@ -1444,6 +1444,14 @@ window.onChipClick = function(chip, e) {
         chip.classList.remove('selected');
         if (window.state.selectedChip === chip) window.state.selectedChip = null;
         updateSlotGlow();
+        // Разовая подсказка: нетерпеливый двойной тап зачёркивает вариант, и без
+        // объяснения новичок думает, что вариант «сломался/пропал».
+        try {
+            if (!localStorage.getItem('hint_cross_seen')) {
+                localStorage.setItem('hint_cross_seen', '1');
+                if (typeof showToast === 'function') showToast('✏️', 'Двойной тап зачёркивает вариант (отсев). Тапни ещё раз — вернётся.', 'bg-gray-800', 'border-black');
+            }
+        } catch (er) {}
         e.stopPropagation();
         chip._lastClickTime = now;
         return;

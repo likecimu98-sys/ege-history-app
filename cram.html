@@ -871,8 +871,18 @@ function openStats(){
   <button class="btn" id="resetProgress" style="margin-top:6px;background:#ffe1df">Сбросить прогресс и время</button>`;
   document.getElementById('statsModal').classList.add('show');
   document.getElementById('statsModal').setAttribute('aria-hidden','false');
-  document.getElementById('resetProgress').onclick = () => {
-    if(confirm('Сбросить весь прогресс и время?')){ state={decks:{},timers:{}}; saveState(); closeStats(); renderHome(); }
+  // confirm() в Telegram WebView на iOS заблокирован (молча false) — двухтапное подтверждение
+  document.getElementById('resetProgress').onclick = (e) => {
+    const b = e.currentTarget;
+    if (b.dataset.arm !== '1') {
+      b.dataset.arm = '1';
+      b.textContent = 'Точно сбросить всё? Тапни ещё раз';
+      b.style.background = '#ff6b63';
+      b.style.color = '#fff';
+      setTimeout(() => { if (b.isConnected) { b.dataset.arm = ''; b.textContent = 'Сбросить прогресс и время'; b.style.background = '#ffe1df'; b.style.color = ''; } }, 4000);
+      return;
+    }
+    state = { decks: {}, timers: {} }; saveState(); closeStats(); renderHome();
   };
 }
 function closeStats(){
