@@ -205,13 +205,23 @@ function getFilteredPool(period, limit) {
             return null;
         }
     } else {
-        // Всегда скрываем выученные факты автоматически для всех
-        const filtered = pool.filter(f => {
-            const d = window.state.stats.factStreaks[factKey(f)];
-            return !(d && d.level > 0 && d.nextReview > now);
-        });
-        // Если всё выучено в текущем фильтре — показываем весь пул (не блокируем)
-        pool = filtered.length >= (limit || 1) ? filtered : pool;
+        // Скрываем выученные-и-не-просроченные факты. Из оставшихся («свежих» =
+        // не тронутые + в процессе + просроченные) приоритет НОВОМУ: если совсем
+        // невиданных хватает на таблицу — показываем только их, иначе весь свежий набор.
+        const fs = window.state.stats.factStreaks;
+        const isFresh = f => { const d = fs[factKey(f)]; return !(d && d.level > 0 && d.nextReview > now); };
+        const fresh = pool.filter(isFresh);
+        if (fresh.length >= (limit || 1)) {
+            const unseen = fresh.filter(f => { const d = fs[factKey(f)]; return !d || (!d.level && !(d.points > 0)); });
+            pool = unseen.length >= (limit || 1) ? unseen : fresh;
+        } else if (fresh.length > 0) {
+            // Свежего мало (период почти пройден) — показываем его и добираем немного
+            // выученными, чтобы таблица заполнилась. Раньше здесь перезапускался ВЕСЬ пул —
+            // из-за этого выученные факты крутились по кругу («одни и те же задания»).
+            const learned = pool.filter(f => !isFresh(f));
+            pool = fresh.concat(learned.slice(0, Math.max((limit || 1), 6)));
+        }
+        // else: совсем ничего свежего — оставляем полный пул (умная кнопка сюда уже не ведёт)
     }
     return pool;
 }

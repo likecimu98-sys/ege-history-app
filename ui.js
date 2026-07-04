@@ -1485,7 +1485,7 @@ window.openEGEModal = function() {
 // ДЗ (ближайший дедлайн) → повторение SRS (≥5 фактов) → цель дня (продолжить
 // последний режим) → всё сделано (награда). Новичок — отдельная ветка «Начать».
 
-const DAILY_GOAL_LINES = 15;
+const DAILY_GOAL_LINES = 30; // дневная норма нового материала (≈10 заданий)
 
 // Сколько фактов «к повтору» (SRS: level>0, nextReview прошёл) по заданиям таблицы.
 // Зубрёжка (cram:) и визуальные (vp_/va_/vm_) сюда не входят — у них свои тренажёры.
@@ -1561,6 +1561,41 @@ function _applyWpFilter(wp) {
     window.state._wpApplied = !!wp;
 }
 
+// Данные задания целиком (task7 — отдельный массив).
+function _taskDataAll(task) {
+    if (task === 'task7') return window.task7Data || [];
+    return ((TASK_CONFIG[task] || TASK_CONFIG.task4).data)() || [];
+}
+// Факты в рамках рабочего периода (эпоха / диапазон 862..upto / всё).
+function _factsInPeriod(data, wp) {
+    if (!wp) return data;
+    if (wp.upto) return data.filter(d => { const y = getYearFromFact(d); return y >= 862 && y <= wp.upto; });
+    if (wp.era && TASK_EPOCHS.includes(wp.era)) return data.filter(d => d.c === wp.era);
+    return data;
+}
+// Сколько НЕвыученного (level 0 / не тронуто) по каждому заданию в периоде — это «новый
+// материал», который кнопка выдаёт до дневной нормы. bestTask — тип с наибольшим запасом
+// нового (естественная ротация типов: исчерпал один — кнопка сама переходит к следующему).
+function _unlearnedCountsByTask(wp) {
+    const fs = window.state.stats.factStreaks || {};
+    const by = { task1: 0, task3: 0, task4: 0, task5: 0, task7: 0 };
+    let total = 0;
+    for (const task of ['task1', 'task3', 'task4', 'task5', 'task7']) {
+        const facts = _factsInPeriod(_taskDataAll(task), wp);
+        const seen = new Set();
+        for (const f of facts) {
+            const k = factKey(f, task);
+            if (seen.has(k)) continue;
+            seen.add(k);
+            const d = fs[k];
+            if (!(d && d.level >= 1)) { by[task]++; total++; }
+        }
+    }
+    let bestTask = 'task1', bestN = -1;
+    for (const t in by) if (by[t] > bestN) { bestN = by[t]; bestTask = t; }
+    return { by, total, bestTask };
+}
+
 // Самая слабая пара (задание, эпоха): минимум точности при ≥10 попытках.
 function _weakestSpot() {
     const es = window.state.stats.eraStats || {};
@@ -1582,12 +1617,14 @@ function computeMainAction() {
     const active = (s.assignments || []).filter(a => a.status === 'active');
     const hwRemaining = active.reduce((n, a) => n + (a.items || []).reduce((m, it) => m + window.hwItemRemaining(it), 0), 0);
     const doneToday = (s.dailyStats && s.dailyStats[getTodayString()] && s.dailyStats[getTodayString()].solved) || 0;
-    const base = { due, hwCount: active.length, hwRemaining, doneToday };
+    const wp = _workingPeriod();
+    const unlearned = _unlearnedCountsByTask(wp);
+    const base = { due, hwCount: active.length, hwRemaining, doneToday, unlearned };
 
-    if (!(s.totalSolvedEver > 0)) {
-        const p = _workingPeriod() || { era: 'early' };
-        return { ...base, kind: 'start', period: p };
-    }
+    // Новичок — с азов
+    if (!(s.totalSolvedEver > 0)) return { ...base, kind: 'start', period: wp || { era: 'early' } };
+
+    // ДЗ учителя всегда в приоритете
     if (active.length && hwRemaining > 0) {
         const sorted = active.slice().sort((a, b) => String(a.deadline || '9999') < String(b.deadline || '9999') ? -1 : 1);
         const a = sorted.find(x => (x.items || []).some(it => !window.hwItemDone(it))) || sorted[0];
@@ -1595,21 +1632,28 @@ function computeMainAction() {
         const overdue = !!(a.deadline && a.deadline < getTodayString());
         return { ...base, kind: overdue ? 'hw-overdue' : 'hw', hwId: a.id, hwIdx: idx, deadline: a.deadline };
     }
-    if (due.total >= 5) {
+
+    // 1) Новый материал — главный драйвер дня (до нормы), ротация типов по запасу нового
+    if (doneToday < DAILY_GOAL_LINES && unlearned.total > 0) {
+        return { ...base, kind: 'continue',
+            task: unlearned.bestTask,
+            period: wp || { era: localStorage.getItem('ege_last_period') || 'all' },
+            left: Math.min(DAILY_GOAL_LINES - doneToday, unlearned.total) };
+    }
+
+    // 2) Новое на сегодня исчерпано → освежаем просроченные факты (SRS)
+    if (due.total >= 3) {
         let bestTask = 'task4', bestN = -1;
         for (const t in due.by) if (due.by[t] > bestN) { bestN = due.by[t]; bestTask = t; }
-        return { ...base, kind: 'review', task: bestTask, period: _workingPeriod() };
+        return { ...base, kind: 'review', task: bestTask, period: wp };
     }
-    if (doneToday < DAILY_GOAL_LINES) {
-        const lt = localStorage.getItem('ege_last_task');
-        // Период — граница потока от учителя («дошли до года» → конкретные годы 862..N),
-        // и только если её нет — последний собственный выбор ученика.
-        return { ...base, kind: 'continue',
-            task: (lt && TASK_CONFIG[lt]) ? lt : 'task1',
-            period: _workingPeriod() || { era: localStorage.getItem('ege_last_period') || 'all' },
-            left: DAILY_GOAL_LINES - doneToday };
-    }
-    return { ...base, kind: 'done', period: _workingPeriod(),
+
+    // 3) Ни нового, ни просрочки → добиваем слабое место
+    const weak = _weakestSpot();
+    if (weak) return { ...base, kind: 'weak', weak, period: { era: weak.era } };
+
+    // 4) Всё честно закрыто на сегодня
+    return { ...base, kind: 'done', period: wp,
         streak: (window.computeDayStreak && window.computeDayStreak()) || 0 };
 }
 
@@ -1656,8 +1700,9 @@ const _MAIN_ACTION_META = {
     'hw':         { bg: 'linear-gradient(135deg,#f43f5e,#e11d48)', icon: '📚', title: 'Продолжить ДЗ' },
     'hw-overdue': { bg: 'linear-gradient(135deg,#e11d48,#9f1239)', icon: '🔥', title: 'Догони ДЗ' },
     'review':     { bg: 'linear-gradient(135deg,#6366f1,#4f46e5)', icon: '🧠', title: 'Повторить' },
-    'continue':   { bg: 'linear-gradient(135deg,#3b82f6,#2563eb)', icon: '▶️', title: 'Продолжить занятие' },
-    'done':       { bg: 'linear-gradient(135deg,#10b981,#059669)', icon: '🏆', title: 'Цель дня закрыта!' },
+    'continue':   { bg: 'linear-gradient(135deg,#3b82f6,#2563eb)', icon: '▶️', title: 'Учим новое' },
+    'weak':       { bg: 'linear-gradient(135deg,#f97316,#ea580c)', icon: '🎯', title: 'Слабое место' },
+    'done':       { bg: 'linear-gradient(135deg,#10b981,#059669)', icon: '🏆', title: 'На сегодня всё!' },
     'start':      { bg: 'linear-gradient(135deg,#f59e0b,#d97706)', icon: '🚀', title: 'Начать обучение' }
 };
 
@@ -1681,10 +1726,18 @@ function renderMainAction() {
         const pl = (typeof a.period === 'string')
             ? (TASK_EPOCHS.includes(a.period) ? periodName(a.period) : 'все периоды')
             : (_wpLabel(a.period) || 'все периоды');
-        sub = `${cfg.shortLabel} · ${pl} · ещё ${a.left} до цели дня`;
+        title = 'Учим новое';
+        sub = `${cfg.shortLabel} · ${pl} · ещё ${a.left} нового до нормы дня`;
+    } else if (a.kind === 'weak') {
+        const cfg = TASK_CONFIG[a.weak.task] || TASK_CONFIG.task4;
+        title = `Слабое место: ${cfg.shortLabel}`;
+        sub = `точность ${Math.round((a.weak.acc || 0) * 100)}%${a.weak.era ? ` · ${periodName(a.weak.era)}` : ''} · подтянем`;
     } else if (a.kind === 'done') {
-        title = 'Цель дня закрыта! Свайп?';
-        sub = `стрик ${a.streak} дн. · повтори правителей${a.period ? ` (${_wpLabel(a.period)})` : ''}`;
+        const moreNew = a.unlearned && a.unlearned.total > 0;
+        title = moreNew ? 'Норма дня выполнена! 🎉' : 'Всё в периоде выучено! 🎉';
+        sub = moreNew
+            ? `стрик ${a.streak} дн. · новое продолжим завтра · можно закрепить свайпом`
+            : `стрик ${a.streak} дн. · закрепи свайпом или повтори (кнопки ниже)`;
     } else if (a.kind === 'start') {
         title = `Начать: ${_wpLabel(a.period) || 'Древность'}`;
         sub = 'первые факты за 2 минуты';
