@@ -186,9 +186,15 @@ function _hwlPaint() {
               </div>
               <div style="font-size:9.5px;color:#9ca3af;font-weight:700;margin-top:4px;line-height:1.35">Новые ДЗ (после даты) остаются. Снимает и «невидимые» старые долги с карточек учеников — в т.ч. у тех, кто давно не заходил.</div>`;
         } else {
-            actions.innerHTML = n > 1
+            const cancelBtn = n > 1
                 ? `<button onclick="window._hwlAskCancelAll()" style="width:100%;background:rgba(244,63,94,0.08);color:var(--c-danger,#e11d48);border:1px solid rgba(244,63,94,0.35);border-radius:10px;padding:9px;font-size:11px;font-weight:900;cursor:pointer">🗑 Отменить все (${n}) — с чистого листа</button>`
                 : '';
+            // «Выпустить из группы» — для окончивших ЕГЭ / ушедших. Прогресс сохраняется,
+            // уходит только принадлежность к группе (учитель перестаёт его видеть).
+            const releaseBtn = `<div id="hwl-release-slot" style="margin-top:${cancelBtn ? '6px' : '0'}">
+                <button onclick="window._hwlAskRelease()" style="width:100%;background:rgba(59,130,246,0.08);color:#2563eb;border:1px solid rgba(59,130,246,0.3);border-radius:10px;padding:9px;font-size:11px;font-weight:900;cursor:pointer">🎓 Выпустить из группы (после ЕГЭ)</button>
+            </div>`;
+            actions.innerHTML = cancelBtn + releaseBtn;
         }
     }
     if (!_hwListCache.length) {
@@ -227,6 +233,30 @@ window._hwlAskCancel = function(id) {
       <button onclick="window._hwlRepaint()" style="background:#eee;color:#444;border:none;border-radius:9px;padding:6px 10px;font-size:11px;font-weight:900;cursor:pointer">Нет</button>`;
 };
 window._hwlRepaint = function() { _hwlPaint(); };
+window._hwlAskRelease = function() {
+    const slot = document.getElementById('hwl-release-slot');
+    if (!slot) return;
+    slot.innerHTML = `<div style="display:flex;gap:6px;align-items:center;background:rgba(59,130,246,0.06);border:1px solid rgba(59,130,246,0.3);border-radius:10px;padding:8px">
+        <span style="font-size:11px;font-weight:800;color:#334155;flex:1">Выпустить «${_hwlEsc(_hwlCtx.name || 'ученика')}»? Прогресс сохранится, из группы уйдёт.</span>
+        <button onclick="window._hwlDoRelease()" style="background:#2563eb;color:#fff;border:none;border-radius:9px;padding:7px 11px;font-size:11px;font-weight:900;cursor:pointer">Да</button>
+        <button onclick="window._hwlPaint&&window._hwlPaint()" style="background:#e5e7eb;color:#444;border:none;border-radius:9px;padding:7px 11px;font-size:11px;font-weight:900;cursor:pointer">Нет</button>
+    </div>`;
+};
+window._hwlDoRelease = async function() {
+    const uid = _hwlCtx.uid;
+    if (!uid || !window.removeStudentFromClass) return;
+    const slot = document.getElementById('hwl-release-slot');
+    if (slot) slot.innerHTML = '<div style="text-align:center;font-size:11px;color:#9ca3af;font-weight:800;padding:8px">Выпускаю…</div>';
+    const ok = await window.removeStudentFromClass(uid);
+    if (ok) {
+        showToast('🎓', 'Ученик выпущен из группы', 'bg-blue-500', 'border-blue-700');
+        const ov = document.getElementById('hw-list-overlay'); if (ov) ov.remove();
+        if (window.loadClassProgress) window.loadClassProgress();
+    } else {
+        showToast('❌', 'Не удалось выпустить', 'bg-rose-500', 'border-rose-700');
+        _hwlPaint();
+    }
+};
 window._hwlDoCancel = async function(id) {
     const cell = document.querySelector(`#hw-list-body [data-row="${id}"] .hwl-actions`);
     if (cell) cell.innerHTML = '<span style="font-size:10px;color:#9ca3af;font-weight:800">Отменяю…</span>';

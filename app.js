@@ -7,16 +7,29 @@ window.openGlobalTopModal = function() { showToast('⏳', 'Подключени�
 // === LOGO / SECRET ADMIN ===
 window.secretClicks = 0;
 window.secretTimer = null;
-window.handleLogoClick = function() {
+window.handleLogoClick = async function() {
     window.secretClicks++;
     clearTimeout(window.secretTimer);
     window.secretTimer = setTimeout(() => window.secretClicks = 0, 1000);
     if (window.secretClicks === 5) {
         window.secretClicks = 0;
-        window.state.isTeacherAdmin = true;
-        showToast('👨‍🏫', 'Кабинет учителя открыт!', 'bg-purple-600', 'border-purple-800');
-        if (window.loadClassProgress) window.loadClassProgress();
-        window.openTeacherModal();
+        // Кабинет учителя — ТОЛЬКО для одобренных учителей и админа. Роль выставляет
+        // checkTeacherRole по документу teachers/{tgId}; раньше 5 тапов открывали кабинет
+        // кому угодно, и ученик видел одноклассников (фильтр падал на ЕГО код класса) и
+        // мог им выдавать/снимать ДЗ. Теперь без роли — обычное обновление лобби.
+        let authorized = window.state.isTeacherAdmin === true;
+        if (!authorized && window.checkTeacherRole) {
+            try { await window.checkTeacherRole(); } catch (e) {}
+            authorized = window.state.isTeacherAdmin === true;
+        }
+        if (authorized) {
+            showToast('👨‍🏫', 'Кабинет учителя открыт!', 'bg-purple-600', 'border-purple-800');
+            if (window.loadClassProgress) window.loadClassProgress();
+            window.openTeacherModal();
+        } else {
+            updateGlobalUI();
+            showToast('🔄', 'Лобби обновлено', 'bg-blue-500', 'border-blue-700');
+        }
         return;
     }
     haptic('light');

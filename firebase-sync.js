@@ -2529,6 +2529,26 @@
             } catch (e) { console.error('cancelAllStudentAssignments error:', e); return 0; }
         };
 
+        // Выпустить ученика из группы (закончил ЕГЭ / ушёл). Пишем ТОЛЬКО верхнеуровневые
+        // поля документа ученика (никогда fullStateJson): classCode='' убирает его из выборок
+        // учителя сразу; inviteClassCode='' — «оверрайд», который на следующем входе ученика
+        // очистит его локальный код (иначе syncProgressToCloud вернул бы старый код обратно).
+        // Прогресс/ачивки ученика полностью сохраняются — уходит только принадлежность к группе.
+        window.removeStudentFromClass = async function(uid) {
+            if (!db || !uid) return false;
+            try {
+                const ref = doc(db, 'artifacts', appId, 'public', 'data', 'students', uid);
+                await updateDoc(ref, { classCode: '', inviteClassCode: '', leftClassAt: Date.now() });
+                // убираем из локального кэша кабинета, чтобы карточка исчезла без перезагрузки
+                if (Array.isArray(window._cachedStudents)) {
+                    window._cachedStudents = window._cachedStudents.filter(s => s.uid !== uid);
+                    if (window.renderTeacherHwControl) window.renderTeacherHwControl(window._cachedStudents);
+                    if (window.sortAndRenderStudents) window.sortAndRenderStudents();
+                }
+                return true;
+            } catch (e) { console.error('removeStudentFromClass error:', e); return false; }
+        };
+
         // ── Новый формат: ДЗ как набор подзаданий (items) ──
         // items[i] = {task, period, metric:'lines'|'points'|'learned', goal[, yearStart, yearEnd]}
         // yearStart/yearEnd передаются ТОЛЬКО для period==='custom' (диапазон лет), иначе теряются.
@@ -2988,25 +3008,40 @@
                     const classEl = document.getElementById('profile-class-code');
                     if (classEl) classEl.value = bestData.classCode;
                 }
-                // Приглашение из бота (t.me/...?start=c_КОД): бот кладёт одноразовое поле
-                // inviteClassCode на документ ученика. Подхватываем (даже поверх старого класса —
-                // нажатие на инвайт = осознанная смена) и сразу стираем поле, чтобы не сработало повторно.
+                // Управление классом извне через поле inviteClassCode на документе ученика:
+                //   • непустой код — приглашение из бота (?start=c_КОД) ИЛИ перевод учителем;
+                //   • пустая строка "" — учитель выпустил ученика из группы (после ЕГЭ и т.п.).
+                // Поле применяется по ФАКТУ наличия (hasOwnProperty), даже пустое, и сразу
+                // стирается, чтобы не сработало повторно. Пишем и в classCode, и локально —
+                // иначе следующий syncProgressToCloud вернул бы старый код обратно.
                 {
-                    let inviteCode = null;
-                    allFound.forEach((data) => { if (data && data.inviteClassCode) inviteCode = String(data.inviteClassCode); });
-                    if (inviteCode) {
+                    let hasOverride = false, overrideCode = '';
+                    allFound.forEach((data) => {
+                        if (data && Object.prototype.hasOwnProperty.call(data, 'inviteClassCode')) {
+                            hasOverride = true; overrideCode = String(data.inviteClassCode || '');
+                        }
+                    });
+                    if (hasOverride) {
                         const prevCode = localStorage.getItem('student_class_code') || '';
-                        localStorage.setItem('student_class_code', inviteCode);
+                        if (overrideCode) {
+                            localStorage.setItem('student_class_code', overrideCode);
+                        } else {
+                            localStorage.removeItem('student_class_code');
+                        }
                         const classEl2 = document.getElementById('profile-class-code');
-                        if (classEl2) classEl2.value = inviteCode;
+                        if (classEl2) classEl2.value = overrideCode;
                         for (const [id, data] of allFound) {
-                            if (data && data.inviteClassCode) {
-                                try { await updateDoc(doc(studentsCol, id), { inviteClassCode: deleteField() }); } catch (e) {}
+                            if (data && Object.prototype.hasOwnProperty.call(data, 'inviteClassCode')) {
+                                try { await updateDoc(doc(studentsCol, id), { inviteClassCode: deleteField(), classCode: overrideCode }); } catch (e) {}
                             }
                         }
-                        if (prevCode !== inviteCode) {
-                            showToast('🎓', `Ты в классе «${inviteCode}»!`, 'bg-emerald-500', 'border-emerald-700');
-                            if (window.pullClassAssignments) window.pullClassAssignments(inviteCode).catch(() => {});
+                        if (prevCode !== overrideCode) {
+                            if (overrideCode) {
+                                showToast('🎓', `Ты в классе «${overrideCode}»!`, 'bg-emerald-500', 'border-emerald-700');
+                                if (window.pullClassAssignments) window.pullClassAssignments(overrideCode).catch(() => {});
+                            } else {
+                                showToast('🎓', 'Курс завершён — ты больше не в группе', 'bg-blue-500', 'border-blue-700');
+                            }
                         }
                     }
                 }
