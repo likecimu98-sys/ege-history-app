@@ -1067,6 +1067,10 @@ video {
   max-width: 64rem;
 }
 
+.max-w-\[140px\] {
+  max-width: 140px;
+}
+
 .max-w-\[55\%\] {
   max-width: 55%;
 }
@@ -4116,4 +4120,9 @@ video {
     --tw-bg-opacity: 1;
     background-color: rgb(30 30 30 / var(--tw-bg-opacity, 1));
   }
+}
+
+.\[\&\>option\]\:text-black>option {
+  --tw-text-opacity: 1;
+  color: rgb(0 0 0 / var(--tw-text-opacity, 1));
 }

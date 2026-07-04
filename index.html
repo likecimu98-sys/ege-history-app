@@ -868,7 +868,12 @@
                 <!-- Панель потока: код класса · «дошли до года» · фильтр -->
                 <div class="mb-3 shrink-0 rounded-2xl p-3 shadow-md" style="background:linear-gradient(135deg,#4f46e5,#2563eb)">
                     <div class="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
-                        <label class="flex items-center gap-2 bg-white/15 rounded-xl px-3 py-2 justify-center">
+                        <!-- Дропдаун групп учителя (заполняется populateTeacherGroups). Появляется, когда есть группы. -->
+                        <label id="teacher-group-wrap" class="hidden items-center gap-2 bg-white/15 rounded-xl px-3 py-2 justify-center">
+                            <span class="text-[10px] font-black text-white/70 uppercase tracking-widest shrink-0">Группа</span>
+                            <select id="teacher-group-select" onchange="window.onTeacherGroupChange&&window.onTeacherGroupChange(this.value)" class="max-w-[140px] font-black text-white text-sm bg-transparent outline-none cursor-pointer [&>option]:text-black"></select>
+                        </label>
+                        <label id="teacher-code-wrap" class="flex items-center gap-2 bg-white/15 rounded-xl px-3 py-2 justify-center">
                             <span class="text-[10px] font-black text-white/70 uppercase tracking-widest shrink-0">Класс</span>
                             <input type="text" id="teacher-class-code-input" placeholder="код" onchange="saveTeacherClassCode()" class="w-20 text-center font-mono font-black text-white text-base bg-transparent outline-none placeholder-white/40">
                         </label>

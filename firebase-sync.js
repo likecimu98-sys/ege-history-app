@@ -1905,7 +1905,10 @@
                 // Галочка «только мой класс» переживает переоткрытие кабинета
                 const fcb = document.getElementById('teacher-filter-class');
                 if (fcb && !fcb.dataset.init) { fcb.dataset.init = '1'; fcb.checked = localStorage.getItem('teacher_filter_class') === '1'; }
-                const filterClass = fcb?.checked;
+                // Не-админ видит ТОЛЬКО свою группу — фильтр по классу форсирован (изоляция учителей).
+                // Общий обзор всей базы доступен только глобальному админу (Саше).
+                const isGlobalAdmin = !!window._isGlobalAdmin;
+                const filterClass = isGlobalAdmin ? fcb?.checked : true;
                 try { localStorage.setItem('teacher_filter_class', filterClass ? '1' : '0'); } catch (e) {}
                 
                 // При фильтре по классу показываем ВЕСЬ класс — включая только что зарегистрированных,
@@ -2822,19 +2825,47 @@
         // Роль учителя: одобренные через бота (@Reshay_istoriyu_bot → /teacher) лежат в
         // artifacts/{appId}/public/data/teachers/{tgId}. Если текущий пользователь там есть —
         // открываем кабинет без секретных 5 тапов и подсказываем, где он.
+        // Глобальный админ (Саша) — единственный, кто видит всю базу учеников без фильтра.
+        // Это не секрет (обычный Telegram ID) и управляет только объёмом обзора в кабинете.
+        const GLOBAL_ADMIN_TG = '352253483';
         window.checkTeacherRole = async function() {
             try {
                 if (!db) return;
                 const tid = localStorage.getItem('known_tg_id') || '';
                 if (!/^\d+$/.test(tid)) return;
+                window._isGlobalAdmin = (tid === GLOBAL_ADMIN_TG);
                 const snap = await getDoc(doc(db, 'artifacts', appId, 'public', 'data', 'teachers', tid));
-                if (!snap.exists()) return;
+                if (!snap.exists() && !window._isGlobalAdmin) return;
                 window.state.isTeacherAdmin = true;
-                window._teacherClasses = Array.isArray(snap.data().classes) ? snap.data().classes : [];
-                // код класса по умолчанию — первый из классов учителя
-                if (!localStorage.getItem('teacher_class_code') && window._teacherClasses[0]) {
-                    localStorage.setItem('teacher_class_code', window._teacherClasses[0]);
+
+                const data = snap.exists() ? snap.data() : {};
+                window._teacherRole = data.role || (window._isGlobalAdmin ? 'admin' : 'solo');
+                window._teacherOrgId = data.orgId || null;
+
+                // Группы учителя: [{code,name}]. Старый формат (массив строк) тоже переварим.
+                const norm = (arr) => (Array.isArray(arr) ? arr : []).map(c =>
+                    typeof c === 'string' ? { code: c, name: c } : { code: c.code, name: c.name || c.code })
+                    .filter(c => c && c.code);
+                let groups = norm(data.classes);
+
+                // Владелец школы видит группы ВСЕХ преподавателей своей организации.
+                if (window._teacherRole === 'org_owner' && window._teacherOrgId) {
+                    try {
+                        const tCol = collection(db, 'artifacts', appId, 'public', 'data', 'teachers');
+                        const orgTeachers = await getDocs(query(tCol, where('orgId', '==', window._teacherOrgId), limit(200)));
+                        const seen = new Set(groups.map(g => g.code));
+                        orgTeachers.forEach(td => norm(td.data().classes).forEach(g => {
+                            if (!seen.has(g.code)) { seen.add(g.code); groups.push(g); }
+                        }));
+                    } catch (e) { console.warn('[teacherRole] org classes:', e && e.message); }
                 }
+                window._teacherGroups = groups;
+
+                // Код класса по умолчанию — первая группа (объект → .code)
+                if (!localStorage.getItem('teacher_class_code') && groups[0]) {
+                    localStorage.setItem('teacher_class_code', groups[0].code);
+                }
+                if (window.populateTeacherGroups) window.populateTeacherGroups();
                 if (!sessionStorage.getItem('teacher_hint_shown')) {
                     sessionStorage.setItem('teacher_hint_shown', '1');
                     setTimeout(() => showToast('👨‍🏫', 'Кабинет учителя доступен: 5 быстрых тапов по логотипу', 'bg-purple-600', 'border-purple-800'), 2500);
@@ -3035,6 +3066,8 @@
                         }
                     } catch(e) { console.warn('[Sync] Canonical migration error:', e); }
                 }
+                // Проверяем роль учителя во всех путях загрузки (не только вход через Google)
+                window.checkTeacherRole && window.checkTeacherRole();
             } catch(e) { console.error('[Sync] loadProgressFromCloud error:', e); }
         };
 

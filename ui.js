@@ -1896,7 +1896,53 @@ window.openAchievementsModal = function() {
 
 window.openTeacherModal = function() {
     let tc = localStorage.getItem('teacher_class_code'); if(!tc) { tc = Math.floor(1000 + Math.random() * 9000).toString(); localStorage.setItem('teacher_class_code', tc); } $('teacher-class-code-input').value = tc;
+    if (window.populateTeacherGroups) window.populateTeacherGroups();
     switchTeacherTab('stats'); showModal('teacher-modal');
+};
+
+// Заполнить дропдаун группами учителя (window._teacherGroups = [{code,name}]).
+// Не-админ: показываем только дропдаун (свои группы), ручной ввод кода прячем и
+// прячем галочку «только мой класс» (для него фильтр всегда включён).
+window.populateTeacherGroups = function() {
+    const sel = $('teacher-group-select'); if (!sel) return;
+    const wrap = $('teacher-group-wrap'), codeWrap = $('teacher-code-wrap');
+    const filterLabel = $('teacher-filter-class') ? $('teacher-filter-class').closest('label') : null;
+    const groups = Array.isArray(window._teacherGroups) ? window._teacherGroups : [];
+    const isAdmin = !!window._isGlobalAdmin;
+
+    if (groups.length) {
+        const cur = localStorage.getItem('teacher_class_code') || groups[0].code;
+        sel.innerHTML = groups.map(g => `<option value="${(g.code||'').replace(/"/g,'&quot;')}">${(g.name||g.code)}</option>`).join('');
+        const chosen = groups.some(g => g.code === cur) ? cur : groups[0].code;
+        sel.value = chosen;
+        // Сохранённый код мог устареть (не входит в группы) — синхронизируем на выбранную группу,
+        // иначе loadClassProgress запросил бы пустой старый код.
+        if (chosen !== cur) {
+            localStorage.setItem('teacher_class_code', chosen);
+            const inp2 = $('teacher-class-code-input'); if (inp2) inp2.value = chosen;
+        }
+        if (wrap) { wrap.classList.remove('hidden'); wrap.classList.add('flex'); }
+        // не-админ управляет только своими группами → ручной код и общий фильтр прячем
+        if (!isAdmin) {
+            if (codeWrap) codeWrap.classList.add('hidden');
+            if (filterLabel) filterLabel.classList.add('hidden');
+        } else {
+            if (codeWrap) codeWrap.classList.remove('hidden');
+            if (filterLabel) filterLabel.classList.remove('hidden');
+        }
+    } else {
+        // групп нет: дропдаун прячем, оставляем ручной код (для админа/старых учителей)
+        if (wrap) { wrap.classList.add('hidden'); wrap.classList.remove('flex'); }
+        if (codeWrap) codeWrap.classList.remove('hidden');
+        if (filterLabel) filterLabel.classList.remove('hidden');
+    }
+};
+
+window.onTeacherGroupChange = function(code) {
+    if (!code) return;
+    localStorage.setItem('teacher_class_code', code);
+    const inp = $('teacher-class-code-input'); if (inp) inp.value = code;
+    if (window.loadClassProgress) window.loadClassProgress();
 };
 
 window.saveTeacherClassCode = function() { const cd = $('teacher-class-code-input').value.trim(); if(cd) localStorage.setItem('teacher_class_code', cd); if (window.loadClassProgress) window.loadClassProgress(); };
