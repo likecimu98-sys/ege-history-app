@@ -225,16 +225,25 @@
                 <div style="font-size:17px;font-weight:1000;margin-top:6px">Время!</div>
                 <div style="font-size:12.5px;opacity:.75;margin-top:4px">Считаем очки…</div>
             </div>`;
-        setTimeout(_duelVerdict, 1200);
+        // Короткая пауза «Считаем очки…», дальше finalizeDuelScores сам ждёт финал соперника.
+        setTimeout(_duelVerdict, 400);
     }
 
-    function _duelVerdict() {
+    async function _duelVerdict() {
         const d = _sw && _sw.duel; if (!d) return;
-        const my = _sw.score, opp = d.oppScore;
+        // Авторитетный финал: дописываем свой счёт и читаем оба из документа матча —
+        // обе стороны получают ОДНИ И ТЕ ЖЕ числа, вердикт совпадает (не «победа vs ничья»).
+        let my = _sw.score, opp = d.oppScore, oppEloDoc = null;
+        try {
+            const fin = window.finalizeDuelScores
+                ? await window.finalizeDuelScores(_sw.score, _sw.streak, { done: d.done, correct: _sw.correct })
+                : null;
+            if (fin) { my = fin.mine; opp = fin.opp; oppEloDoc = fin.oppElo; d.oppScore = opp; }
+        } catch (e) { console.warn('[Duel] finalize:', e); }
         // Elo считаем ДО cancelDuelDb: он сбрасывает window.state.duel, где лежит рейтинг соперника.
         let rate = null;
         try {
-            const oppElo = (window.state && window.state.duel && window.state.duel.oppElo) || 1000;
+            const oppElo = oppEloDoc || (window.state && window.state.duel && window.state.duel.oppElo) || 1000;
             rate = window.applyDuelResult ? window.applyDuelResult(my, opp, oppElo) : null;
             if (rate) {
                 if (window.saveProgress) window.saveProgress();
@@ -272,6 +281,11 @@
     // оставляем правителей, чьё правление началось внутри диапазона. Если после
     // фильтра меньше двух — работаем по всем (лучше полный свайп, чем ничего).
     window.openSwipeMode = function (opts) {
+        // Период не передан (кнопка «Свайп» в лобби) → берём годы, отмеченные учителем,
+        // чтобы тренировать пройденное. getWorkingSwipeRange живёт в ui.js.
+        if ((!opts || (!opts.from && !opts.to)) && typeof window.getWorkingSwipeRange === 'function') {
+            opts = window.getWorkingSwipeRange() || opts;
+        }
         let pool = (window.swipeRulersData || []).slice();
         const from = opts && parseInt(opts.from, 10), to = opts && parseInt(opts.to, 10);
         if (to) {
@@ -287,6 +301,10 @@
         }
         _h('light');
         _preload();
+        // Перемешиваем пул → каждый вход стартует с разных правителей (а не всегда
+        // с первых двух по порядку данных). Шафл сохраняется в _sw.pool, поэтому и
+        // следующие пары (_advancePair берёт из неиспользованных) тоже разнообразны.
+        _shuffle(pool);
         _sw = {
             pool, used: new Set(), left: null, right: null,
             deck: [], i: 0, lapses: [], reviewStart: null, reviewAdded: false,
@@ -298,7 +316,12 @@
         ov.className = 'no-print';
         ov.style.cssText = 'position:fixed;inset:0;z-index:10050;display:flex;flex-direction:column;background:radial-gradient(circle at 50% 0%,#1e293b,#0b1120);overscroll-behavior:contain;touch-action:none;overflow:hidden';
         _renderShell();
-        _setPair(pool[0], pool[1]);
+        // Стартовая пара — по возможности современники (разница правлений ≤100 лет):
+        // свайпать «кто из двух рядом стоявших» интереснее, чем Рюрик против Путина.
+        let a = pool[0], b = pool[1];
+        const mate = pool.slice(1).find(o => _pairCompatible(a, o));
+        if (mate) b = mate;
+        _setPair(a, b);
         document.addEventListener('keydown', _onKey);
     };
 

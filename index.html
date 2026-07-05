@@ -818,6 +818,31 @@
         </div>
     </div>
 
+    <!-- Приветствие для ПК (не Telegram): «есть ли аккаунт?» → QR-вход или новый профиль -->
+    <div id="pc-welcome-overlay" class="fixed inset-0 bg-black/80 z-[10011] hidden items-center justify-center backdrop-blur-sm no-print p-4">
+        <div class="bg-white dark:bg-[#1e1e1e] rounded-3xl p-6 w-full max-w-sm text-center shadow-2xl">
+            <!-- Состояние: выбор -->
+            <div id="pcw-choice">
+                <div class="text-5xl mb-3">🏛️</div>
+                <h2 class="text-xl font-black text-gray-800 dark:text-gray-200 mb-2">У тебя уже есть аккаунт?</h2>
+                <p class="text-sm text-gray-500 dark:text-gray-400 mb-5 leading-relaxed">Если ты занимался в Telegram — подхватим весь твой прогресс. Если ты впервые — просто представься.</p>
+                <button data-action="pcwHasAccount" class="w-full bg-blue-600 hover:bg-blue-700 text-white py-3.5 rounded-xl font-black uppercase tracking-wider active:scale-95 transition-transform text-sm shadow-md mb-2">✅ Да, я занимался в Telegram</button>
+                <button data-action="pcwNewUser" class="w-full bg-gray-100 dark:bg-[#2c2c2c] text-gray-700 dark:text-gray-300 py-3.5 rounded-xl font-black uppercase tracking-wider active:scale-95 transition-transform text-sm">🆕 Нет, я впервые</button>
+            </div>
+            <!-- Состояние: QR-вход -->
+            <div id="pcw-qr" class="hidden">
+                <h2 class="text-lg font-black text-gray-800 dark:text-gray-200 mb-2">Вход по QR-коду</h2>
+                <p class="text-xs text-gray-500 dark:text-gray-400 mb-3 leading-relaxed">Открой Telegram на телефоне и наведи камеру на код 👇</p>
+                <div id="pcw-qr-img" class="flex items-center justify-center min-h-[200px] mb-3">
+                    <div class="text-xs text-gray-400 font-bold">Генерирую код…</div>
+                </div>
+                <p class="text-[11px] text-gray-400 dark:text-gray-500 mb-2 leading-snug">Не сканируется? В боте команда <b>/pc</b> → открой присланную ссылку в этом браузере.</p>
+                <div id="pcw-qr-status" class="text-xs font-black text-amber-600 dark:text-amber-400 mb-3">⏳ Жду подтверждения из Telegram…</div>
+                <button data-action="pcwBack" class="w-full text-gray-400 dark:text-gray-600 py-2 text-xs font-bold">← Назад</button>
+            </div>
+        </div>
+    </div>
+
     <!-- СКРЫТЫЕ СИСТЕМНЫЕ СЕЛЕКТЫ -->
     <div id="hidden-controls" style="display: none;">
         <select id="filter-task"><option value="task1">task1</option><option value="task3">task3</option><option value="task4" selected>task4</option><option value="task5">task5</option><option value="task7">task7</option><option value="visualPainting">visualPainting</option><option value="visualArchitecture">visualArchitecture</option><option value="visualMaps">visualMaps</option></select>

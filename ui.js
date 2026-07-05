@@ -531,12 +531,92 @@ function _renderHwComposer() {
     _hwcAvail();
 }
 
-function checkOnboarding() {
-    if (!localStorage.getItem('ege_onboarding_done')) {
-        $('onboarding-overlay').classList.remove('hidden');
-        $('onboarding-overlay').classList.add('flex');
-    }
+// Свежий заход на ПК (не из Telegram, без личности и прогресса). Считаем ЛОКАЛЬНО,
+// не через window.isPcWebFresh — тот живёт в ES-модуле и может ещё не загрузиться к
+// моменту checkOnboarding (классический скрипт выполняется раньше модуля).
+function _isPcWebFreshLocal() {
+    try {
+        // Строго «реально в Telegram»: непустой initData ИЛИ наличие user. НЕ проверяем
+        // was_telegram_device — SDK-стаб выставляет его '1' в любом браузере (ложно-«телеграмный»).
+        const tg = window.Telegram && window.Telegram.WebApp;
+        const inTg = !!(tg && ((tg.initData && String(tg.initData).length > 0) || (tg.initDataUnsafe && tg.initDataUnsafe.user)));
+        if (inTg) return false;
+        if (localStorage.getItem('known_tg_id') || localStorage.getItem('google_uid')) return false;
+        const solved = (window.state && window.state.stats && window.state.stats.totalSolvedEver) || 0;
+        return solved === 0;
+    } catch (e) { return false; }
 }
+function checkOnboarding() {
+    if (localStorage.getItem('ege_onboarding_done')) return;
+    // Свежий заход на ПК (не из Telegram) — сначала спросим, есть ли уже аккаунт.
+    if (_isPcWebFreshLocal()) { showPcWelcome(); return; }
+    $('onboarding-overlay').classList.remove('hidden');
+    $('onboarding-overlay').classList.add('flex');
+}
+
+function showPcWelcome() {
+    const ov = $('pc-welcome-overlay'); if (!ov) return;
+    if ($('pcw-choice')) $('pcw-choice').classList.remove('hidden');
+    if ($('pcw-qr')) $('pcw-qr').classList.add('hidden');
+    ov.classList.remove('hidden'); ov.classList.add('flex');
+}
+function hidePcWelcome() {
+    const ov = $('pc-welcome-overlay'); if (!ov) return;
+    ov.classList.add('hidden'); ov.classList.remove('flex');
+    if (window.cancelPcLoginSession) window.cancelPcLoginSession();
+}
+window.pcwHasAccount = async function() {
+    haptic('light');
+    $('pcw-choice').classList.add('hidden');
+    $('pcw-qr').classList.remove('hidden');
+    const img = $('pcw-qr-img'), status = $('pcw-qr-status');
+    if (img) img.innerHTML = '<div class="text-xs text-gray-400 font-bold">Генерирую код…</div>';
+    if (status) { status.textContent = '⏳ Жду подтверждения из Telegram…'; status.className = 'text-xs font-black text-amber-600 dark:text-amber-400 mb-3'; }
+    let link = null;
+    if (window.startPcLoginSession) {
+        link = await window.startPcLoginSession(() => {
+            localStorage.setItem('ege_onboarding_done', '1');
+            const st = $('pcw-qr-status');
+            if (st) { st.textContent = '✅ Есть! Прогресс загружен'; st.className = 'text-xs font-black text-emerald-600 dark:text-emerald-400 mb-3'; }
+            setTimeout(() => { hidePcWelcome(); if (window.showToast) showToast('✅', 'С возвращением! Прогресс из Telegram загружен', 'bg-emerald-500', 'border-emerald-700'); }, 900);
+        });
+    }
+    if (!link) {
+        if (img) img.innerHTML = '<div class="text-xs text-rose-500 font-bold px-4">Не удалось создать код — проверь интернет и нажми «Назад», потом снова.</div>';
+        return;
+    }
+    if (img) {
+        const qrSrc = 'https://api.qrserver.com/v1/create-qr-code/?size=240x240&margin=10&data=' + encodeURIComponent(link);
+        img.innerHTML = '';
+        const el = document.createElement('img');
+        el.width = 210; el.height = 210; el.alt = 'QR';
+        el.style.cssText = 'border-radius:12px;background:#fff;padding:8px';
+        el.src = qrSrc;
+        el.onerror = () => {
+            // QR-сервис недоступен — показываем ссылку кликом (открыть в этом же браузере нельзя,
+            // т.к. это t.me; но можно скопировать). Правильнее — воспользоваться /pc из подсказки ниже.
+            const a = document.createElement('a');
+            a.href = link; a.target = '_blank'; a.textContent = link;
+            a.style.cssText = 'font-size:11px;word-break:break-all;color:#2563eb';
+            img.innerHTML = ''; img.appendChild(a);
+        };
+        img.appendChild(el);
+    }
+};
+window.pcwNewUser = function() {
+    haptic('light');
+    if (window.cancelPcLoginSession) window.cancelPcLoginSession();
+    const ov = $('pc-welcome-overlay'); if (ov) { ov.classList.add('hidden'); ov.classList.remove('flex'); }
+    // Обычный онбординг: слайд с именем.
+    $('onboarding-overlay').classList.remove('hidden');
+    $('onboarding-overlay').classList.add('flex');
+};
+window.pcwBack = function() {
+    haptic('light');
+    if (window.cancelPcLoginSession) window.cancelPcLoginSession();
+    $('pcw-qr').classList.add('hidden');
+    $('pcw-choice').classList.remove('hidden');
+};
 window.nextOnbStep = function(step) {
     haptic('light');
     for (let i = 1; i <= 6; i++) {
@@ -1544,6 +1624,11 @@ function _wpYearRange(wp) {
     const y = EPOCH_YEARS[wp.era];
     return y ? { from: y[0], to: y[1] } : null;
 }
+
+// Диапазон лет рабочего периода для свайпа — чтобы кнопка «Свайп» в лобби по
+// умолчанию тренировала годы, отмеченные учителем. Глобальна, т.к. swipe-mode.js
+// не видит внутренние хелперы ui.js. null — нет ограничения (полный пул).
+window.getWorkingSwipeRange = function () { return _wpYearRange(_workingPeriod()); };
 
 // Применить рабочий период к фильтру: граница года → кастомный диапазон 862..год.
 function _applyWpFilter(wp) {
