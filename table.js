@@ -1034,30 +1034,34 @@ function generateTableOnce() {
 
     const task = window.state.currentTask;
 
-    // Автовыбор задания в режиме ошибок
+    // Режим ошибок: УВАЖАЕМ выбранное/текущее задание (из пикера или главной кнопки).
+    // Раньше здесь каждый раз выбиралось СЛУЧАЙНОЕ задание среди всех, где есть что решать —
+    // из-за этого «выбрал задание 1, показывает 4». Переключаемся на другое задание ТОЛЬКО
+    // когда в текущем уже нечего решать (ошибки/просроченные разобраны).
     if (window.state.currentMode === 'mistakes') {
         const mPool = window.state.mistakesPool || [];
         const now = Date.now();
-        const availableTasks = [];
-        const expiredTasks = []; // задания, где есть просроченные SRS-факты
-        TASK_LIST.forEach(t => {
+        const contentOf = (t) => {
             const cfg = TASK_CONFIG[t];
             const hasM = mPool.some(m => m.task === t);
-            const p = cfg.data();
-            const hasE = p.some(f => {
+            const hasE = cfg.data().some(f => {
                 const d = window.state.stats.factStreaks[cfg.keyFn(f)];
                 return d && d.level > 0 && d.nextReview <= now;
             });
-            if (hasM || hasE) availableTasks.push(t);
-            if (hasE) expiredTasks.push(t);
-        });
-        // Фокус «Повторить N фактов»: выбираем только среди заданий с просроченными фактами,
-        // иначе случайный выбор уводил в задание с одними ошибками, и счётчик повторения стоял.
-        const pickFrom = (window.state.reviewFocus && expiredTasks.length > 0) ? expiredTasks : availableTasks;
-        if (pickFrom.length > 0) {
-            const randomTask = pickFrom[Math.floor(Math.random() * pickFrom.length)];
-            window.state.currentTask = randomTask;
-            $('filter-task').value = randomTask;
+            return { hasM, hasE };
+        };
+        const cur = contentOf(window.state.currentTask);
+        // Фокус «Повторить» смотрит на просроченные; обычные ошибки — на любое содержимое.
+        const curOk = window.state.reviewFocus ? cur.hasE : (cur.hasM || cur.hasE);
+        if (!curOk) {
+            const availableTasks = [], expiredTasks = [];
+            TASK_LIST.forEach(t => { const c = contentOf(t); if (c.hasM || c.hasE) availableTasks.push(t); if (c.hasE) expiredTasks.push(t); });
+            const pickFrom = (window.state.reviewFocus && expiredTasks.length > 0) ? expiredTasks : availableTasks;
+            if (pickFrom.length > 0) {
+                const randomTask = pickFrom[Math.floor(Math.random() * pickFrom.length)];
+                window.state.currentTask = randomTask;
+                $('filter-task').value = randomTask;
+            }
         }
     }
 
