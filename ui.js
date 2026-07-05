@@ -1648,6 +1648,9 @@ function _applyWpFilter(wp) {
 
 // Сколько ошибок (mistakesPool) по каждому текстовому заданию. bestTask — где больше.
 function _mistakeCounts() {
+    // Держим пул честным: убираем уже выученные факты (level≥1) — иначе счётчик ошибок
+    // «не уменьшался» бы, а кнопка предлагала бы разбор того, что уже освоено.
+    if (window.pruneLearnedMistakes) window.pruneLearnedMistakes();
     const by = { task1: 0, task3: 0, task4: 0, task5: 0, task7: 0 };
     let total = 0;
     (window.state.mistakesPool || []).forEach(m => {
@@ -1755,25 +1758,37 @@ function computeMainAction() {
         return { ...base, kind: overdue ? 'hw-overdue' : 'hw', hwId: a.id, hwIdx: idx, deadline: a.deadline };
     }
 
-    // 2) Разбор ошибок — то, в чём ошибся
-    if (mistakes.total >= 1) {
-        return { ...base, kind: 'mistakes', task: mistakes.bestTask };
-    }
-
-    // 3) Повтор выпавшего из выученного (SRS: выучил, но пора освежить)
-    if (due.total >= 3) {
-        let bestTask = 'task4', bestN = -1;
-        for (const t in due.by) if (due.by[t] > bestN) { bestN = due.by[t]; bestTask = t; }
-        return { ...base, kind: 'review', task: bestTask, period: wp };
-    }
-
-    // 4) Новое — пока в периоде есть невыученное. ~30 строк на тип, потом ротация (task7 не первым).
-    if (unlearned.total > 0) {
+    // 2–4) Ошибки / Повтор / Новое — ВЗВЕШЕННАЯ РОТАЦИЯ, а не строгий приоритет.
+    // Раньше «ошибки при total≥1» полностью блокировали новое → застревание на одних и
+    // тех же ошибках/повторах, новое не училось. Теперь строим цикл, где новое встречается
+    // чаще (≈половина), но ошибки и повтор тоже регулярно разбираются. Цикл прокручивается
+    // счётчиком _ladderTick (растёт в mainActionGo при каждом нажатии главной кнопки).
+    const cycle = [];
+    if (unlearned.total > 0) cycle.push('continue');      // новое — обязательно в цикле…
+    if (mistakes.total >= 1) cycle.push('mistakes');
+    if (unlearned.total > 0) cycle.push('continue');      // …и чаще остального
+    if (due.total >= 3) cycle.push('review');
+    if (cycle.length) {
+        const pickKind = cycle[(window.state._ladderTick || 0) % cycle.length];
+        if (pickKind === 'mistakes') return { ...base, kind: 'mistakes', task: mistakes.bestTask };
+        if (pickKind === 'review') {
+            let bestTask = 'task4', bestN = -1;
+            for (const t in due.by) if (due.by[t] > bestN) { bestN = due.by[t]; bestTask = t; }
+            return { ...base, kind: 'review', task: bestTask, period: wp };
+        }
+        // continue (новое)
         const pick = _pickNewTask(unlearned);
         if (pick) return { ...base, kind: 'continue',
             task: pick.task,
             period: wp || { era: localStorage.getItem('ege_last_period') || 'all' },
             left: pick.left };
+        // новое не выбралось (краевой случай) — отдаём ошибки/повтор, если есть
+        if (mistakes.total >= 1) return { ...base, kind: 'mistakes', task: mistakes.bestTask };
+        if (due.total >= 3) {
+            let bestTask = 'task4', bestN = -1;
+            for (const t in due.by) if (due.by[t] > bestN) { bestN = due.by[t]; bestTask = t; }
+            return { ...base, kind: 'review', task: bestTask, period: wp };
+        }
     }
 
     // 5) Слабое место
@@ -1788,6 +1803,12 @@ function computeMainAction() {
 window.mainActionGo = function(kind) {
     const a = computeMainAction();
     const act = kind || a.kind;
+    // Прокрутка ротации лестницы: следующий раз главная кнопка предложит другой пункт
+    // цикла (новое↔ошибки↔повтор), чтобы не застревать на одном. Только для нажатий самой
+    // кнопки (без явного kind от чипов) и только для ротируемых пунктов.
+    if (!kind && (act === 'mistakes' || act === 'review' || act === 'continue')) {
+        window.state._ladderTick = ((window.state._ladderTick || 0) + 1) % 1000000;
+    }
     haptic('medium');
     if (act === 'hw' || act === 'hw-overdue') {
         if (a.hwId != null && window.startHwItem) return window.startHwItem(a.hwId, a.hwIdx);

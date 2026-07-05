@@ -2952,6 +2952,15 @@
                     if (!mistakeKeys.has(key)) { mistakeKeys.add(key); merged.mistakesPool.push(m); }
                 });
             });
+            // Союз mistakesPool воскрешал ошибки из устаревших копий даже после того,
+            // как факт был выучен. factStreaks здесь уже слит по ЛУЧШЕМУ уровню, поэтому
+            // отсекаем ошибки, чей факт уже выучен (level≥1) — единый источник правды.
+            if (typeof factKey === 'function' && typeof window.isFactLearned === 'function') {
+                merged.mistakesPool = merged.mistakesPool.filter(m => {
+                    if (!m || !m.fact) return false;
+                    return !window.isFactLearned(st.factStreaks[factKey(m.fact, m.task)]);
+                });
+            }
             merged.hideLearned = states.some(s => s.hideLearned === false) ? false : true;
             return merged;
         }
