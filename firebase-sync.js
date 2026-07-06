@@ -41,6 +41,17 @@
             return !!(app && (app.initData || app.initDataUnsafe));
         }
 
+        // СТРОГО «реально открыто из Telegram»: официальный telegram-web-app.js создаёт
+        // window.Telegram.WebApp и в обычном браузере (с пустым initDataUnsafe={}), поэтому
+        // isTelegramMiniAppContext() там тоже true. Для решений «это ПК-браузер или Telegram»
+        // (магик-линк, welcome-экран) нужен признак настоящего запуска: непустой подписанный
+        // initData ЛИБО наличие initDataUnsafe.user.
+        function isRealTelegram() {
+            const app = getTelegramWebApp();
+            return !!(app && ((app.initData && String(app.initData).length > 0) || (app.initDataUnsafe && app.initDataUnsafe.user)));
+        }
+        window.isRealTelegram = isRealTelegram;
+
         function rememberTelegramUser() {
             // Метим устройство как «телеграмное» — чтобы при сбое загрузки SDK в следующий раз
             // не свалиться в случайный анонимный id (см. resolveUserId).
@@ -435,10 +446,109 @@
             }
         };
 
+        // ─── Магик-линк «Открыть на компьютере»: ?login=<token> ──────────────────
+        // Бот пишет одноразовый loginTokens/{token} = { tgId, name, exp }. На ПК (пустой
+        // браузер без Telegram) читаем токен → ставим known_tg_id → loadProgressFromCloud
+        // грузит ТОТ ЖЕ аккаунт, что и в TG → токен удаляем и чистим URL. Секрет
+        // одноразовый и короткоживущий, поэтому чужой tgId подставить нельзя.
+        function _stripLoginParam() {
+            try {
+                const url = new URL(location.href);
+                if (url.searchParams.has('login')) {
+                    url.searchParams.delete('login');
+                    history.replaceState(null, '', url.pathname + url.search + url.hash);
+                }
+            } catch (e) {}
+        }
+        async function _redeemLoginToken() {
+            let token = '';
+            try { token = (new URLSearchParams(location.search).get('login') || '').trim(); } catch (e) {}
+            if (!token || !db) return;
+            // В самом Telegram или на уже-привязанном устройстве редим не нужен.
+            // ВАЖНО: isRealTelegram (строго), а не isTelegramMiniAppContext — иначе на ПК
+            // (где SDK-стаб делает контекст «телеграмным») редим бы не срабатывал.
+            if (isRealTelegram() || localStorage.getItem('known_tg_id')) { _stripLoginParam(); return; }
+            try {
+                const ref = doc(db, 'artifacts', appId, 'public', 'data', 'loginTokens', token);
+                const snap = await getDoc(ref);
+                if (!snap.exists()) {
+                    showToast('⚠️', 'Ссылка входа недействительна или уже использована', 'bg-amber-500', 'border-amber-700');
+                    _stripLoginParam(); return;
+                }
+                const d = snap.data() || {};
+                const tgId = String(d.tgId || '').trim();
+                const exp = Number(d.exp) || 0;
+                if (!/^\d+$/.test(tgId) || (exp && Date.now() > exp)) {
+                    showToast('⚠️', 'Ссылка входа истекла — сгенерируй новую в боте', 'bg-amber-500', 'border-amber-700');
+                    try { await deleteDoc(ref); } catch (e) {}
+                    _stripLoginParam(); return;
+                }
+                // Принимаем личность ученика: с этого момента ПК = его TG-аккаунт.
+                localStorage.setItem('known_tg_id', tgId);
+                if (d.name && !localStorage.getItem('student_manual_name')) localStorage.setItem('student_manual_name', String(d.name));
+                try { await deleteDoc(ref); } catch (e) {}   // одноразовость
+                showToast('✅', 'Вход выполнен — подгружаю прогресс из Telegram', 'bg-emerald-500', 'border-emerald-700');
+            } catch (e) {
+                console.error('[Login] redeem error:', e);
+            }
+            _stripLoginParam();
+        }
+
+        // ─── QR-вход на ПК: «сканируй, чтобы войти» (как Telegram Web) ────────────
+        // ПК пишет loginSessions/{token}=pending и слушает его; ученик сканит QR
+        // (t.me/бот?start=pc_<token>) телефоном → бот проставляет tgId+status:confirmed →
+        // ПК подхватывает личность и грузит прогресс. Секрет виден только на экране ПК.
+        let _pcSessUnsub = null, _pcSessToken = '';
+        function _randHex(n) {
+            const a = new Uint8Array(n);
+            (self.crypto || window.crypto).getRandomValues(a);
+            return Array.from(a).map(b => b.toString(16).padStart(2, '0')).join('');
+        }
+        // Свежий заход на ПК (не Telegram, без личности и без прогресса) — можно предложить вход.
+        window.isPcWebFresh = function () {
+            try {
+                if (isRealTelegram()) return false;   // was_telegram_device НЕ используем — он '1' в любом браузере
+                if (localStorage.getItem('known_tg_id') || localStorage.getItem('google_uid')) return false;
+                const solved = (window.state && window.state.stats && window.state.stats.totalSolvedEver) || 0;
+                return solved === 0;
+            } catch (e) { return false; }
+        };
+        window.startPcLoginSession = async function (onConfirmed) {
+            if (!db || !fbUser) return null;
+            window.cancelPcLoginSession();
+            const token = _randHex(18);
+            _pcSessToken = token;
+            const ref = doc(db, 'artifacts', appId, 'public', 'data', 'loginSessions', token);
+            try {
+                await setDoc(ref, { status: 'pending', createdAt: Date.now(), exp: Date.now() + 15 * 60 * 1000 });
+            } catch (e) { console.error('[PcLogin] create session:', e); return null; }
+            _pcSessUnsub = onSnapshot(ref, async (snap) => {
+                if (!snap.exists()) return;
+                const d = snap.data() || {};
+                if (d.status === 'confirmed' && /^\d+$/.test(String(d.tgId || ''))) {
+                    window.cancelPcLoginSession();
+                    localStorage.setItem('known_tg_id', String(d.tgId));
+                    if (d.name && !localStorage.getItem('student_manual_name')) localStorage.setItem('student_manual_name', String(d.name));
+                    try { await deleteDoc(ref); } catch (e) {}
+                    try { await window.loadProgressFromCloud(); } catch (e) {}
+                    try { window.syncProgressToCloud(); } catch (e) {}
+                    if (window.updateGlobalUI) window.updateGlobalUI();
+                    if (window.updateProgressBars) window.updateProgressBars();
+                    if (typeof onConfirmed === 'function') onConfirmed({ name: d.name || '' });
+                }
+            }, (e) => console.warn('[PcLogin] listen:', e && e.message));
+            return `https://t.me/Reshay_istoriyu_bot?start=pc_${token}`;
+        };
+        window.cancelPcLoginSession = function () {
+            if (_pcSessUnsub) { try { _pcSessUnsub(); } catch (e) {} _pcSessUnsub = null; }
+            if (_pcSessToken && db) { try { deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'loginSessions', _pcSessToken)); } catch (e) {} }
+            _pcSessToken = '';
+        };
+
         // Хранилище для отписок от HW-слушателей
         let _hwUnsubscribers = [];
-        
-        onAuthStateChanged(auth, async (u) => { 
+
+        onAuthStateChanged(auth, async (u) => {
             fbUser = u;
             if (u) {
                 // Слушатель вызовов на дуэль — запускаем СРАЗУ после авторизации,
@@ -458,6 +568,10 @@
                         localStorage.setItem('student_manual_name', gName);
                     _applyGoogleUser(u);
                 }
+
+                // Магик-линк с ПК: редим ДО загрузки прогресса — тогда loadProgressFromCloud
+                // возьмёт tgId и подтянет тот же аккаунт, что и в Telegram.
+                await _redeemLoginToken();
 
                 // Загружаем прогресс из облака (ПЕРЕД синхронизацией — иначе затрём облако нулями)
                 // Это также подтягивает known_tg_id из найденного документа
@@ -858,6 +972,44 @@
                     }
                 });
             } catch(e) { console.error('[Duel] updateDuelScoreDb error:', e); }
+        };
+
+        // ─── Авторитетный финал матча ───────────────────────────────────────────
+        // Раньше каждая сторона судила матч по СВОЕМУ локальному oppScore, который на
+        // финише мог быть заниженным/нулевым (соперник не успел дослать последний тайл,
+        // либо status:'finished' у первого финишировавшего отписывал слушателя второго).
+        // Итог: у одного «победа», у другого «ничья».
+        // Теперь: дописываем свой финальный счёт с флагом final, затем читаем документ
+        // и ждём (до ~2.4с) финал соперника — обе стороны сходятся на ОДНИХ И ТЕХ ЖЕ
+        // числах. { mine, opp, oppElo } — единый источник истины для вердикта и Elo.
+        window.finalizeDuelScores = async function(myFinalScore, myCombo, extra) {
+            const d = window.state.duel;
+            const fallback = { mine: myFinalScore, opp: Number(d && d.oppScore) || 0, oppElo: Number(d && d.oppElo) || 1000 };
+            if (!db || !d || !d.matchId || !fbUser) return fallback;
+            const matchesRef = collection(db, 'artifacts', appId, 'public', 'data', 'matches');
+            const ref = doc(matchesRef, d.matchId);
+            const meKey  = d.isPlayer1 ? 'player1' : 'player2';
+            const oppKey = d.isPlayer1 ? 'player2' : 'player1';
+            try {
+                await updateDoc(ref, { [meKey]: {
+                    uid: resolveUserId(fbUser),
+                    name: localStorage.getItem('student_manual_name') || 'Игрок',
+                    score: myFinalScore, combo: myCombo || 0, elo: _myDuelElo(), final: true,
+                    ...(extra || {})
+                }});
+            } catch(e) { console.error('[Duel] finalize write:', e); }
+            // Ждём, пока соперник тоже финализирует (op.final) — тогда числа авторитетны.
+            for (let i = 0; i < 6; i++) {
+                let data = null;
+                try { const snap = await getDoc(ref); data = snap.exists() ? snap.data() : null; } catch(e) {}
+                if (data) {
+                    const op = data[oppKey] || {};
+                    const res = { mine: myFinalScore, opp: Number(op.score) || 0, oppElo: Number(op.elo) || fallback.oppElo };
+                    if (op.final || data.status === 'finished' || i === 5) return res;
+                }
+                await new Promise(r => setTimeout(r, 400));
+            }
+            return fallback;
         };
 
         window.cancelDuelDb = async function() {
@@ -2800,6 +2952,15 @@
                     if (!mistakeKeys.has(key)) { mistakeKeys.add(key); merged.mistakesPool.push(m); }
                 });
             });
+            // Союз mistakesPool воскрешал ошибки из устаревших копий даже после того,
+            // как факт был выучен. factStreaks здесь уже слит по ЛУЧШЕМУ уровню, поэтому
+            // отсекаем ошибки, чей факт уже выучен (level≥1) — единый источник правды.
+            if (typeof factKey === 'function' && typeof window.isFactLearned === 'function') {
+                merged.mistakesPool = merged.mistakesPool.filter(m => {
+                    if (!m || !m.fact) return false;
+                    return !window.isFactLearned(st.factStreaks[factKey(m.fact, m.task)]);
+                });
+            }
             merged.hideLearned = states.some(s => s.hideLearned === false) ? false : true;
             return merged;
         }

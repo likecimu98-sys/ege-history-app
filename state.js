@@ -308,10 +308,31 @@ const SAVE_FIELDS = [
 
 const MAX_MISTAKES_POOL = 200;
 
+// Убираем из пула ошибок факты, которые уже ВЫУЧЕНЫ (SRS level≥1). Ошибка = то, что
+// ещё не освоено; как только факт выучен, он больше не «ошибка». Это единая точка
+// правды с factStreaks и лекарство от «воскрешения»: облачный merge объединяет
+// mistakesPool союзом (см. mergeCloudStates), и выученные ошибки возвращались из
+// устаревших копий — теперь их отсекает эта чистка. Возвращает, сколько удалено.
+window.pruneLearnedMistakes = function() {
+    const fs = (window.state.stats && window.state.stats.factStreaks) || {};
+    const pool = window.state.mistakesPool;
+    if (!Array.isArray(pool) || !pool.length) return 0;
+    const before = pool.length;
+    window.state.mistakesPool = pool.filter(m => {
+        if (!m || !m.fact) return false;
+        const d = fs[factKey(m.fact, m.task)];
+        return !window.isFactLearned(d);   // держим только НЕ выученные ошибки
+    });
+    return before - window.state.mistakesPool.length;
+};
+
 function buildSavePayload() {
     const s = window.state.stats;
     const payload = {};
     SAVE_FIELDS.forEach(k => { payload[k] = s[k]; });
+    // Чистим выученные ошибки перед сохранением — чтобы и локально, и в облаке
+    // пул ошибок не тащил уже освоенные факты.
+    window.pruneLearnedMistakes();
     // FIX #5: обрезаем пул ошибок — оставляем последние
     if (window.state.mistakesPool.length > MAX_MISTAKES_POOL) {
         window.state.mistakesPool = window.state.mistakesPool.slice(-MAX_MISTAKES_POOL);
