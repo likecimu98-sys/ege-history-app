@@ -3073,7 +3073,7 @@
                 if (window.populateTeacherGroups) window.populateTeacherGroups();
                 if (!sessionStorage.getItem('teacher_hint_shown')) {
                     sessionStorage.setItem('teacher_hint_shown', '1');
-                    setTimeout(() => showToast('👨‍🏫', 'Кабинет учителя доступен: 5 быстрых тапов по логотипу', 'bg-purple-600', 'border-purple-800'), 2500);
+                    setTimeout(() => showToast('👨‍🏫', 'Кабинет учителя доступен: двойной клик по логотипу', 'bg-purple-600', 'border-purple-800'), 2500);
                 }
             } catch (e) { console.warn('[teacherRole]', e && e.message); }
         };

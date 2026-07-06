@@ -10,13 +10,15 @@ window.secretTimer = null;
 window.handleLogoClick = async function() {
     window.secretClicks++;
     clearTimeout(window.secretTimer);
-    window.secretTimer = setTimeout(() => window.secretClicks = 0, 1000);
-    if (window.secretClicks === 5) {
+    window.secretTimer = setTimeout(() => window.secretClicks = 0, 450);
+    // Двойной клик по логотипу открывает кабинет учителя. Раньше требовалось 5 тапов —
+    // это была защита от учеников, но теперь кабинет и так строго под ролью (checkTeacherRole),
+    // а вход учеников убран, так что 5 тапов — лишняя возня. Двойной клик достаточно.
+    if (window.secretClicks >= 2) {
         window.secretClicks = 0;
         // Кабинет учителя — ТОЛЬКО для одобренных учителей и админа. Роль выставляет
-        // checkTeacherRole по документу teachers/{tgId}; раньше 5 тапов открывали кабинет
-        // кому угодно, и ученик видел одноклассников (фильтр падал на ЕГО код класса) и
-        // мог им выдавать/снимать ДЗ. Теперь без роли — обычное обновление лобби.
+        // checkTeacherRole по документу teachers/{tgId}; без роли — обычное обновление лобби
+        // (ученик увидит просто «Лобби обновлено», кабинет не откроется).
         let authorized = window.state.isTeacherAdmin === true;
         if (!authorized && window.checkTeacherRole) {
             try { await window.checkTeacherRole(); } catch (e) {}
