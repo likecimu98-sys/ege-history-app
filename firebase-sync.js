@@ -2080,7 +2080,12 @@
                 let st = [];
                 const seenIds = new Set();
                 qS.forEach(docSnap => {
-                    const d = docSnap.data(); d.uid = docSnap.id;
+                    const d = docSnap.data();
+                    // Документ, «влитый» в другой (_mergedInto) — мёртвый дубль одного человека.
+                    // Не показываем его как отдельного ученика: иначе один человек висит несколькими
+                    // строками (ирэн/Сыр/сыр), а «выпустить» чистит лишь одну, и он «возвращается».
+                    if (d._mergedInto) return;
+                    d.uid = docSnap.id;
                     seenIds.add(docSnap.id);
                     st.push(d);
                 });
@@ -2093,7 +2098,9 @@
                         if (mySeq !== _loadSeq) return;
                         extraSnap.forEach(docSnap => {
                             if (seenIds.has(docSnap.id)) return;
-                            const d = docSnap.data(); d.uid = docSnap.id;
+                            const d = docSnap.data();
+                            if (d._mergedInto) return;   // мёртвый дубль — не показываем
+                            d.uid = docSnap.id;
                             seenIds.add(docSnap.id);
                             st.push(d);
                         });
@@ -2689,11 +2696,28 @@
         window.removeStudentFromClass = async function(uid) {
             if (!db || !uid) return false;
             try {
-                const ref = doc(db, 'artifacts', appId, 'public', 'data', 'students', uid);
-                await updateDoc(ref, { classCode: '', inviteClassCode: '', leftClassAt: Date.now() });
-                // убираем из локального кэша кабинета, чтобы карточка исчезла без перезагрузки
+                const studentsCol = collection(db, 'artifacts', appId, 'public', 'data', 'students');
+                const ref = doc(studentsCol, uid);
+                const snap = await getDoc(ref);
+                const d = snap.exists() ? snap.data() : {};
+                const clear = { classCode: '', inviteClassCode: '', leftClassAt: Date.now() };
+                // Собираем ВСЕ документы этого человека (дубли по email/tgId/google-id):
+                // у одного ученика бывает несколько доков (Google + Telegram + аноним). Раньше
+                // «выпустить» чистил только один, и оставшийся возвращал ученика в группу при входе.
+                const ids = new Set([uid]);
+                const email = String(d.googleEmail || '').trim();
+                const tgid  = String(d.tgId || d.knownTgId || '').trim();
+                const gid   = String(d.knownGoogleId || '').trim();
+                const qs = [];
+                if (email) qs.push(query(studentsCol, where('googleEmail', '==', email), limit(10)));
+                if (tgid)  qs.push(query(studentsCol, where('tgId', '==', tgid), limit(10)));
+                if (gid)   qs.push(query(studentsCol, where('knownGoogleId', '==', gid), limit(10)));
+                for (const q of qs) { try { (await getDocs(q)).forEach(ds => ids.add(ds.id)); } catch (e) {} }
+                // Чистим ТОЛЬКО верхнеуровневые поля принадлежности (никогда fullStateJson).
+                for (const id of ids) { try { await updateDoc(doc(studentsCol, id), clear); } catch (e) {} }
+                // убираем из локального кэша кабинета, чтобы карточки исчезли без перезагрузки
                 if (Array.isArray(window._cachedStudents)) {
-                    window._cachedStudents = window._cachedStudents.filter(s => s.uid !== uid);
+                    window._cachedStudents = window._cachedStudents.filter(s => !ids.has(s.uid));
                     if (window.renderTeacherHwControl) window.renderTeacherHwControl(window._cachedStudents);
                     if (window.sortAndRenderStudents) window.sortAndRenderStudents();
                 }
