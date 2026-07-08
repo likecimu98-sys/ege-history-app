@@ -2130,6 +2130,15 @@ window.openProfileModal = function() {
         $('profile-google-status').textContent = gEmail ? '✅ ' + gEmail : 'Не привязан';
         $('profile-google-status').className = gEmail ? 'text-[11px] font-bold text-emerald-600 mt-1' : 'text-[11px] font-bold text-gray-400 mt-1';
     }
+    // «Сменить аккаунт» — только вне реального Telegram (там личность из initData,
+    // выход бессмыслен) и только если устройство к кому-то привязано.
+    const logoutBtn = $('profile-logout-btn');
+    if (logoutBtn) {
+        const tg = window.Telegram && window.Telegram.WebApp;
+        const inTg = !!(tg && ((tg.initData && String(tg.initData).length > 0) || (tg.initDataUnsafe && tg.initDataUnsafe.user)));
+        const bound = !!(localStorage.getItem('known_tg_id') || localStorage.getItem('google_uid'));
+        logoutBtn.classList.toggle('hidden', inTg || !bound);
+    }
     // Refresh skin picker active state
     const currentSkin = localStorage.getItem('ege_skin') || DEFAULT_SKIN;
     updateSkinPicker(currentSkin);

@@ -690,6 +690,7 @@ const ACTION_HANDLERS = {
     shareTelegram:          () => window.shareTelegram?.(),
     closeGameOverModal:     () => window.closeGameOverModal?.(),
     signInWithGoogle:       () => window.signInWithGoogle?.(),
+    logoutAccount:          () => window.logoutAccount?.(),
     saveProfileName:        () => window.saveProfileName?.(),
     saveTeacherClassCode:   () => window.saveTeacherClassCode?.(),
     switchTeacherTab:       (a) => window.switchTeacherTab?.(a),

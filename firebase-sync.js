@@ -2,7 +2,7 @@
 // Загружается как ES Module (type="module")
 
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-        import { getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken, GoogleAuthProvider, signInWithPopup, signInWithRedirect, getRedirectResult, signInWithCredential } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken, GoogleAuthProvider, signInWithPopup, signInWithRedirect, getRedirectResult, signInWithCredential, signOut } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
         import { initializeFirestore, collection, doc, setDoc, getDoc, getDocs, addDoc, updateDoc, deleteDoc, deleteField, onSnapshot, query, where, orderBy, limit, runTransaction, arrayUnion, arrayRemove } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
         let firebaseConfig;
@@ -157,6 +157,51 @@
             return [...ids].filter(id => id && id.length > 0);
         }
 
+        // ─── Смена аккаунта на общем устройстве ─────────────────────────────────
+        // uiConfirm из utils.js умеет только onOk (отмена — молча). Для async-потоков
+        // входа нужен ответ в ОБЕ стороны, иначе await повиснет навсегда.
+        function _uiConfirm2(message) {
+            return new Promise(resolve => {
+                try {
+                    const t = window.tgApp || (window.Telegram && window.Telegram.WebApp);
+                    if (t && t.showConfirm && t.isVersionAtLeast && t.isVersionAtLeast('6.2')) {
+                        t.showConfirm(message, ok => resolve(!!ok));
+                        return;
+                    }
+                } catch (e) {}
+                resolve(window.confirm(message));
+            });
+        }
+        // Все аккаунт-зависимые ключи. НЕ трогаем настройки устройства (тема, скин, звук).
+        // Критично для общего ПК: без полной зачистки старые id уезжают в legacy_student_ids,
+        // и syncProgressToCloud помечает документ ПРЕЖНЕГО человека как _mergedInto нового,
+        // а loadProgressFromCloud сливает прогресс двух разных людей в один документ.
+        const IDENTITY_WIPE_KEYS = [
+            'known_tg_id', 'google_uid', 'google_email',
+            'stable_student_id', 'previous_stable_student_id', 'legacy_student_ids',
+            'student_manual_name', 'student_class_code',
+            'teacher_class_code', 'teacher_filter_class', 'teacher_hw_deadline',
+            'class_current_upto', 'class_current_period',
+            'consumed_invite_at', 'seenHwIds',
+            'ege_final_storage_v4', 'ege_pending_cloud_sync', 'ege_last_cloud_sync',
+            'ege_sync_identity_warning', 'was_telegram_device', '_lbCacheUpdatedAt',
+            'ege_last_task', 'ege_last_period', 'ege_period_chosen'
+        ];
+        function _wipeDeviceIdentity() {
+            IDENTITY_WIPE_KEYS.forEach(k => { try { localStorage.removeItem(k); } catch (e) {} });
+        }
+        // Явный выход (кнопка в профиле): финальный синк → зачистка → signOut → reload.
+        window.logoutAccount = async function () {
+            const ok = await _uiConfirm2('Выйти из аккаунта на этом устройстве? Прогресс сохранён в облаке — вернуться можно по QR-коду из Telegram или через Google. Локальные данные будут очищены.');
+            if (!ok) return;
+            try { await Promise.race([window.syncProgressToCloud(), new Promise(r => setTimeout(r, 4000))]); } catch (e) {}
+            window._identitySwitching = true; // блокируем фоновые load/sync до перезагрузки
+            _wipeDeviceIdentity();
+            try { localStorage.removeItem('ege_onboarding_done'); } catch (e) {}
+            try { await signOut(auth); } catch (e) {}
+            location.reload();
+        };
+
         // Normalize name for comparison: lowercase, collapse spaces, remove punctuation
         function normalizeName(n) {
             return (n || '').trim().toLowerCase().replace(/[^а-яёa-z0-9\s]/gi, '').replace(/\s+/g,' ');
@@ -290,6 +335,22 @@
         };
         // ─── Google auth helper ──────────────────────────────────────────────────
         function _applyGoogleUser(user) {
+            // ── Вход в ДРУГОЙ Google-аккаунт на этом устройстве = смена человека.
+            // Без полной зачистки старый google_<uid> уехал бы в legacy_student_ids,
+            // и прогресс двух людей слился бы в один документ (общий ПК/семья).
+            const prevGoogleUid = localStorage.getItem('google_uid') || '';
+            if (prevGoogleUid && prevGoogleUid !== user.uid) {
+                if (window._identitySwitching) return;
+                window._identitySwitching = true;
+                _wipeDeviceIdentity();
+                localStorage.setItem('google_uid', user.uid);
+                localStorage.setItem('google_email', user.email || '');
+                if (user.displayName) localStorage.setItem('student_manual_name', user.displayName);
+                localStorage.setItem('ege_onboarding_done', '1');
+                try { sessionStorage.setItem('ege_switch_done', '1'); } catch (e) {}
+                location.reload(); // чистый старт: загрузится ТОЛЬКО новый аккаунт
+                return;
+            }
             const gName  = user.displayName || '';
             const gEmail = user.email       || '';
             // Set Google name as fallback only if no manual name is set
@@ -367,6 +428,14 @@
         // signInWithPopup works in most environments including WebViews.
         // If popup is blocked, falls back to signInWithRedirect.
         window.signInWithGoogle = async function() {
+            // На ПК с уже привязанным TG-аккаунтом Google ПРИВЯЖЕТСЯ к текущему профилю.
+            // Предупреждаем: если за компьютером другой человек — сначала «Сменить аккаунт».
+            const boundTg = localStorage.getItem('known_tg_id') || '';
+            if (boundTg && !isRealTelegram()) {
+                const nm = localStorage.getItem('student_manual_name') || '';
+                const ok = await _uiConfirm2('Google привяжется к текущему профилю' + (nm ? ' «' + nm + '»' : '') + '. Если это НЕ твой профиль — нажми «Отмена» и выйди из аккаунта в профиле.');
+                if (!ok) return;
+            }
             const provider = new GoogleAuthProvider();
             provider.setCustomParameters({ prompt: 'select_account' });
             // Remember old ID and local data before switching
@@ -464,15 +533,19 @@
             let token = '';
             try { token = (new URLSearchParams(location.search).get('login') || '').trim(); } catch (e) {}
             if (!token || !db) return;
-            // В самом Telegram или на уже-привязанном устройстве редим не нужен.
+            // В самом Telegram редим не нужен (личность и так из initData).
             // ВАЖНО: isRealTelegram (строго), а не isTelegramMiniAppContext — иначе на ПК
             // (где SDK-стаб делает контекст «телеграмным») редим бы не срабатывал.
-            if (isRealTelegram() || localStorage.getItem('known_tg_id')) { _stripLoginParam(); return; }
+            if (isRealTelegram()) { _stripLoginParam(); return; }
+            // Раньше при уже-привязанном ПК ссылка МОЛЧА игнорировалась — второй ученик
+            // думал, что вошёл, а решал в чужой аккаунт. Теперь читаем токен и предлагаем
+            // честную смену аккаунта.
+            const prevTg = localStorage.getItem('known_tg_id') || '';
             try {
                 const ref = doc(db, 'artifacts', appId, 'public', 'data', 'loginTokens', token);
                 const snap = await getDoc(ref);
                 if (!snap.exists()) {
-                    showToast('⚠️', 'Ссылка входа недействительна или уже использована', 'bg-amber-500', 'border-amber-700');
+                    if (!prevTg) showToast('⚠️', 'Ссылка входа недействительна или уже использована', 'bg-amber-500', 'border-amber-700');
                     _stripLoginParam(); return;
                 }
                 const d = snap.data() || {};
@@ -482,6 +555,30 @@
                     showToast('⚠️', 'Ссылка входа истекла — сгенерируй новую в боте', 'bg-amber-500', 'border-amber-700');
                     try { await deleteDoc(ref); } catch (e) {}
                     _stripLoginParam(); return;
+                }
+                if (prevTg === tgId) {
+                    // Тот же аккаунт уже подключён — токен не тратим зря, просто чистим URL.
+                    try { await deleteDoc(ref); } catch (e) {}
+                    showToast('✅', 'Этот аккаунт уже подключён на компьютере', 'bg-emerald-500', 'border-emerald-700');
+                    _stripLoginParam(); return;
+                }
+                const hasOtherIdentity = !!(prevTg || localStorage.getItem('google_uid'));
+                if (hasOtherIdentity) {
+                    const oldName = localStorage.getItem('student_manual_name') || '';
+                    const ok = await _uiConfirm2('На этом компьютере открыт другой аккаунт' + (oldName ? ' («' + oldName + '»)' : '') + '. Войти в новый? Прогресс текущего уже сохранён в облаке.');
+                    if (!ok) { _stripLoginParam(); return; } // токен не удаляем — пригодится на другом устройстве
+                    // Финальный синк ПРЕЖНЕГО аккаунта (не дольше 4с), затем полная зачистка.
+                    try { await Promise.race([window.syncProgressToCloud(), new Promise(r => setTimeout(r, 4000))]); } catch (e) {}
+                    window._identitySwitching = true;
+                    _wipeDeviceIdentity();
+                    localStorage.setItem('known_tg_id', tgId);
+                    if (d.name) localStorage.setItem('student_manual_name', String(d.name));
+                    localStorage.setItem('ege_onboarding_done', '1');
+                    try { sessionStorage.setItem('ege_switch_done', '1'); } catch (e) {}
+                    try { await deleteDoc(ref); } catch (e) {}   // одноразовость
+                    _stripLoginParam();
+                    location.reload(); // чистый старт под новой личностью
+                    return;
                 }
                 // Принимаем личность ученика: с этого момента ПК = его TG-аккаунт.
                 localStorage.setItem('known_tg_id', tgId);
@@ -527,6 +624,22 @@
                 const d = snap.data() || {};
                 if (d.status === 'confirmed' && /^\d+$/.test(String(d.tgId || ''))) {
                     window.cancelPcLoginSession();
+                    // Защита от «грязного» устройства: QR предлагается только на свежем ПК,
+                    // но если личность всё же есть и НЕ совпадает — полная зачистка + reload,
+                    // иначе прогресс двух людей сольётся через legacy_student_ids.
+                    const prevTgQr = localStorage.getItem('known_tg_id') || '';
+                    const conflict = (prevTgQr && prevTgQr !== String(d.tgId)) || (!prevTgQr && localStorage.getItem('google_uid'));
+                    if (conflict) {
+                        window._identitySwitching = true;
+                        _wipeDeviceIdentity();
+                        localStorage.setItem('known_tg_id', String(d.tgId));
+                        if (d.name) localStorage.setItem('student_manual_name', String(d.name));
+                        localStorage.setItem('ege_onboarding_done', '1');
+                        try { sessionStorage.setItem('ege_switch_done', '1'); } catch (e) {}
+                        try { await deleteDoc(ref); } catch (e) {}
+                        location.reload();
+                        return;
+                    }
                     localStorage.setItem('known_tg_id', String(d.tgId));
                     if (d.name && !localStorage.getItem('student_manual_name')) localStorage.setItem('student_manual_name', String(d.name));
                     try { await deleteDoc(ref); } catch (e) {}
@@ -556,17 +669,14 @@
                 // онлайн-игроков уведомлений о дуэли.
                 try { startChallengeListener(); } catch (e) {}
                 await waitForTelegramIdentity();
-                // ── Сохраняем Google-данные если вход через Google
+                // ── Сохраняем Google-данные если вход через Google.
+                // ВАЖНО: google_uid/google_email пишет ТОЛЬКО _applyGoogleUser — в нём
+                // guard «другой Google-аккаунт = смена человека». Прямая запись здесь
+                // затирала бы старый uid ДО проверки и ломала защиту от слияния людей.
                 const googleProvider = (u.providerData || []).find(p => p.providerId === 'google.com');
                 if (googleProvider) {
-                    const gEmail = googleProvider.email || u.email || '';
-                    const gName  = googleProvider.displayName || u.displayName || '';
-                    localStorage.setItem('google_email', gEmail);
-                    localStorage.setItem('google_uid',   u.uid);
-                    // НЕ перезаписываем stable_student_id напрямую — resolveUserId разберётся
-                    if (gName && !localStorage.getItem('student_manual_name'))
-                        localStorage.setItem('student_manual_name', gName);
                     _applyGoogleUser(u);
+                    if (window._identitySwitching) return; // guard сработал → идёт reload
                 }
 
                 // Магик-линк с ПК: редим ДО загрузки прогресса — тогда loadProgressFromCloud
@@ -577,6 +687,15 @@
                 // Это также подтягивает known_tg_id из найденного документа
                 await window.loadProgressFromCloud();
                 window.checkTeacherRole && window.checkTeacherRole();
+
+                // После чистой смены аккаунта (reload) — подтверждаем вход
+                try {
+                    if (sessionStorage.getItem('ege_switch_done')) {
+                        sessionStorage.removeItem('ege_switch_done');
+                        const nm = localStorage.getItem('student_manual_name') || '';
+                        showToast('✅', 'Вход выполнен' + (nm ? ': ' + nm : '') + ' — прогресс загружен', 'bg-emerald-500', 'border-emerald-700');
+                    }
+                } catch (e) {}
                 
                 // Update UI with loaded name/class
                 const nameEl = $('profile-name-input');
@@ -3080,6 +3199,7 @@
 
         window.loadProgressFromCloud = async function() {
             if (!fbUser || !db) return;
+            if (window._identitySwitching) return; // идёт смена аккаунта — не мешаем
             try {
                 await waitForTelegramIdentity();
                 const studentsCol = collection(db, 'artifacts', appId, 'public', 'data', 'students');
@@ -3289,6 +3409,7 @@
         window.syncProgressToCloud = async function() {
             if (!fbUser || !db) return;
             if (!window.state?.stats) return;
+            if (window._identitySwitching) return; // идёт смена аккаунта — старое состояние писать нельзя
             await waitForTelegramIdentity(800);
             const canonicalId = resolveUserId(fbUser);
             if (!canonicalId) {

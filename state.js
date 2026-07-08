@@ -343,6 +343,9 @@ function buildSavePayload() {
 }
 
 function saveLocal() {
+    // Во время смены аккаунта (см. firebase-sync.js) localStorage уже зачищен —
+    // запись старого состояния воскресила бы прогресс прежнего человека в новом аккаунте.
+    if (window._identitySwitching) return;
     localStorage.setItem(STORAGE_KEY, JSON.stringify(buildSavePayload()));
     localStorage.setItem('ege_pending_cloud_sync', '1');
 }
