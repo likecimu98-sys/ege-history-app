@@ -3226,10 +3226,23 @@
                 if (googleUid) knownIds.add('google_' + googleUid);
                 for (const id of knownIds) {
                     try {
-                        const snap = await getDoc(doc(studentsCol, id));
-                        if (snap.exists() && !snap.data()._mergedInto) {
-                            allFound.set(id, snap.data());
-                            console.log(`[Sync] ID ${id}: ${snap.data().totalSolved||0} задач`);
+                        let snap = await getDoc(doc(studentsCol, id));
+                        // Документ мог быть слит в другой (_mergedInto) — идём по ссылке
+                        // к живому документу, а не пропускаем: иначе прогресс «прячется»
+                        // (вход по почте находил google-док, слитый в tg-док, и бросал его).
+                        // Следуем только для доверенных ID (tg-числовой / google_*) —
+                        // анонимные цепочки не раскручиваем, чтобы не подцепить чужую свалку.
+                        const canFollow = /^\d+$/.test(id) || id.startsWith('google_');
+                        let docId = id, hops = 0;
+                        while (canFollow && snap.exists() && snap.data()._mergedInto && hops < 2) {
+                            const target = String(snap.data()._mergedInto);
+                            const targetSnap = await getDoc(doc(studentsCol, target));
+                            if (!targetSnap.exists()) break;
+                            snap = targetSnap; docId = target; hops++;
+                        }
+                        if (snap.exists() && !snap.data()._mergedInto && !allFound.has(docId)) {
+                            allFound.set(docId, snap.data());
+                            console.log(`[Sync] ID ${id}${hops ? ' → ' + docId : ''}: ${snap.data().totalSolved||0} задач`);
                         }
                     } catch(e) { console.warn(`[Sync] Ошибка чтения ${id}:`, e); }
                 }
@@ -3252,6 +3265,21 @@
                 // Имя используется только в ручной дедупликации с дополнительными проверками
 
                 if (allFound.size === 0) return;
+
+                // ── Восстанавливаем tg-личность ДО выбора цели слияния.
+                // Кейс «Поли»: вход через Google в браузере находил её tg-док по почте,
+                // но canonical был google_<uid> — и tg-док хоронился в google-док.
+                // Канонический документ ВСЕГДА телеграмный, если он есть среди найденных.
+                if (!localStorage.getItem('known_tg_id')) {
+                    for (const [fid, fdata] of allFound) {
+                        const t = /^\d+$/.test(fid) ? fid : String(fdata.knownTgId || fdata.tgId || '');
+                        if (/^\d+$/.test(t)) { localStorage.setItem('known_tg_id', t); break; }
+                    }
+                }
+                // Пересчитываем canonical с учётом восстановленной личности
+                const mergeTarget = resolveUserId(fbUser) || canonicalId;
+                // Телеграмный документ нельзя помечать слитым в НЕтелеграмный
+                const buryOk = (srcId, dstId) => !(/^\d+$/.test(String(srcId)) && !/^\d+$/.test(String(dstId)));
 
                 // 2. Несколько документов → сливаем, помечаем дубли
                 let bestData = null, bestSolved = 0, bestDocId = null;
@@ -3282,23 +3310,24 @@
                         const knownTgForDoc = localStorage.getItem('known_tg_id') || '';
                         localStorage.setItem('ege_final_storage_v4', mergedJson);
                         try {
-                            await setDoc(doc(studentsCol, canonicalId), {
+                            await setDoc(doc(studentsCol, mergeTarget), {
                                 fullStateJson: mergedJson,
                                 totalSolved: window.state.stats.totalSolvedEver || 0,
                                 egePoints: window.state.stats.egePoints || 0,
-                                tgId: knownTgForDoc || (/^\d+$/.test(canonicalId) ? canonicalId : ''),
+                                tgId: knownTgForDoc || (/^\d+$/.test(mergeTarget) ? mergeTarget : ''),
                                 knownTgId: knownTgForDoc,
-                                canonicalId: canonicalId,
-                                identitySource: getIdentitySource(canonicalId),
+                                canonicalId: mergeTarget,
+                                identitySource: getIdentitySource(mergeTarget),
                                 googleEmail: localStorage.getItem('google_email') || '',
                                 knownGoogleId: localStorage.getItem('google_uid') ? 'google_' + localStorage.getItem('google_uid') : '',
-                                _mergedFrom: [...allFound.keys()].filter(id => id !== canonicalId),
+                                _mergedFrom: [...allFound.keys()].filter(id => id !== mergeTarget),
                                 _mergedAt: Date.now()
                             }, { merge: true });
                         } catch(e) { console.error('[Sync] Merge write error:', e); }
                         for (const [id] of allFound) {
-                            if (id === canonicalId) continue;
-                            try { await setDoc(doc(studentsCol, id), { _mergedInto: canonicalId, _mergedAt: Date.now() }, { merge: true }); }
+                            if (id === mergeTarget) continue;
+                            if (!buryOk(id, mergeTarget)) continue; // tg-док не хороним в анонимный/google
+                            try { await setDoc(doc(studentsCol, id), { _mergedInto: mergeTarget, _mergedAt: Date.now() }, { merge: true }); }
                             catch(e) {}
                         }
                         if (window.updateGlobalUI) window.updateGlobalUI();
@@ -3368,15 +3397,15 @@
                                 fullStateJson: mergedJson,
                                 totalSolved: window.state.stats.totalSolvedEver || 0,
                                 egePoints: window.state.stats.egePoints || 0,
-                                tgId: knownTgForDoc || (/^\d+$/.test(canonicalId) ? canonicalId : ''),
+                                tgId: knownTgForDoc || (/^\d+$/.test(mergeTarget) ? mergeTarget : ''),
                                 knownTgId: knownTgForDoc,
-                                canonicalId: canonicalId,
-                                identitySource: getIdentitySource(canonicalId),
+                                canonicalId: mergeTarget,
+                                identitySource: getIdentitySource(mergeTarget),
                                 googleEmail: localStorage.getItem('google_email') || bestData.googleEmail || '',
                                 knownGoogleId: localStorage.getItem('google_uid') ? 'google_' + localStorage.getItem('google_uid') : (bestData.knownGoogleId || '')
                             };
                             if (bestData.syncPin) mergedUpdate.syncPin = bestData.syncPin;
-                            await setDoc(doc(studentsCol, canonicalId), mergedUpdate, { merge: true });
+                            await setDoc(doc(studentsCol, mergeTarget), mergedUpdate, { merge: true });
                         } catch(writeErr) { console.warn('[Sync] Merged load write skipped:', writeErr); }
                         console.log(`[Sync] Загружено и объединено ${window.state.stats.totalSolvedEver || bestSolved} задач из ${bestDocId}`);
                     }
@@ -3401,7 +3430,7 @@
                                 canonicalId: newCanonical,
                                 identitySource: getIdentitySource(newCanonical)
                             }, { merge: true });
-                            if (bestDocId !== newCanonical) {
+                            if (bestDocId !== newCanonical && buryOk(bestDocId, newCanonical)) {
                                 await setDoc(doc(studentsCol, bestDocId), { _mergedInto: newCanonical, _mergedAt: Date.now() }, { merge: true });
                             }
                             console.log(`[Sync] Canonical ID changed ${canonicalId} → ${newCanonical}, migrated`);

@@ -2127,8 +2127,26 @@ window.openProfileModal = function() {
     $('profile-class-code').value = localStorage.getItem('student_class_code') || '';
     const gEmail = localStorage.getItem('google_email');
     if ($('profile-google-status')) {
-        $('profile-google-status').textContent = gEmail ? '✅ ' + gEmail : 'Не привязан';
+        $('profile-google-status').textContent = gEmail ? '✅ Привязан: ' + gEmail : 'Не привязан';
         $('profile-google-status').className = gEmail ? 'text-[11px] font-bold text-emerald-600 mt-1' : 'text-[11px] font-bold text-gray-400 mt-1';
+    }
+    // Кнопка Google: внутри Telegram попап-вход не работает — прячем и подсказываем.
+    // Вне Telegram: если уже есть tg-личность — кнопка «привязать» (email станет вторым
+    // входом в ТОТ ЖЕ аккаунт), если личности нет — обычный вход.
+    {
+        const gBtn = $('profile-google-btn'), gHint = $('profile-google-hint'), gLbl = $('profile-google-btn-label');
+        const tgw = window.Telegram && window.Telegram.WebApp;
+        const inTgApp = !!(tgw && ((tgw.initData && String(tgw.initData).length > 0) || (tgw.initDataUnsafe && tgw.initDataUnsafe.user)));
+        const hasTgIdentity = !!localStorage.getItem('known_tg_id');
+        if (gBtn) gBtn.classList.toggle('hidden', inTgApp || !!gEmail);
+        if (gLbl) gLbl.textContent = hasTgIdentity ? '🔗 Привязать Google к аккаунту' : 'Войти через Google';
+        if (gHint) {
+            let hint = '';
+            if (inTgApp && !gEmail) hint = 'Чтобы входить и с компьютера по почте: открой сайт на ПК, войди по QR, затем нажми «Привязать Google» в профиле.';
+            else if (!inTgApp && hasTgIdentity && !gEmail) hint = 'Привяжи Google — сможешь входить по почте на любом устройстве, прогресс и роль общие с Telegram.';
+            gHint.textContent = hint;
+            gHint.classList.toggle('hidden', !hint);
+        }
     }
     // «Сменить аккаунт» — только вне реального Telegram (там личность из initData,
     // выход бессмыслен) и только если устройство к кому-то привязано.
