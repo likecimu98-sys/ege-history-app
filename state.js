@@ -26,6 +26,7 @@ window.state = {
         hwTask1: 0, hwTask3: 0, hwTask4: 0, hwTask5: 0, hwTask7: 0,
         assignments: [],
         duelElo: 1000, duelGames: 0, duelWins: 0, duelLosses: 0, duelDraws: 0,
+        matchBestMs: 0, matchGames: 0,   // режим «Подбор» (Quizlet Match): рекорд-время и число раундов
         visualArchitectureProgress: {},
         visualArchitectureSolved: 0,
         visualPaintingProgress: {},
@@ -303,7 +304,8 @@ const SAVE_FIELDS = [
     'visualArchitectureProgress', 'visualArchitectureSolved',
     'visualPaintingProgress', 'visualPaintingSolved',
     'bestSpeedrunScore', 'dailyStats', 'achievements', 'achievementsData',
-    'duelElo', 'duelGames', 'duelWins', 'duelLosses', 'duelDraws'
+    'duelElo', 'duelGames', 'duelWins', 'duelLosses', 'duelDraws',
+    'matchBestMs', 'matchGames'
 ];
 
 const MAX_MISTAKES_POOL = 200;

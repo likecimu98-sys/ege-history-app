@@ -656,6 +656,7 @@ const ACTION_HANDLERS = {
     openHwTab:              () => window.openHwTab?.(),
     openCram:               (a) => window.openCram?.(a),
     openSwipeMode:          () => window.openSwipeMode?.(),
+    openMatchMode:          () => window.openMatchMode?.(),
     backToLobby:            () => window.backToLobby?.(),
     quickStartGame:         (a, a2) => window.quickStartGame?.(a, a2 || 'normal'),
     startVisualTrainer:     () => window.startVisualTrainer?.(),

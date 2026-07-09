@@ -1,6 +1,6 @@
 'use strict';
 
-const APP_VERSION = '2026-07-08-1';
+const APP_VERSION = '2026-07-09-1';
 const STATIC_CACHE = `ege-history-static-${APP_VERSION}`;
 const ASSET_CACHE = `ege-history-assets-${APP_VERSION}`;
 const CACHE_NAMES = [STATIC_CACHE, ASSET_CACHE];
@@ -20,6 +20,7 @@ const CORE_URLS = [
     './modes.js',
     './swipe-data.js',
     './swipe-mode.js',
+    './match-mode.js',
     './visual-trainer.js',
     './app.js',
     './firebase-sync.js',

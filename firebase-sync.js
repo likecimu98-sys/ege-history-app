@@ -2990,10 +2990,16 @@
             // ниже из слитых assignments.
             ['totalSolvedEver','streak','bestSpeedrunScore','flashcardsSolved','totalTimeSpent',
              'egePoints','visualArchitectureSolved','visualPaintingSolved',
-             'duelGames','duelWins','duelLosses','duelDraws'].forEach(k => {
+             'duelGames','duelWins','duelLosses','duelDraws','matchGames'].forEach(k => {
                 const hasValue = states.some(s => s.stats?.[k] !== undefined);
                 if (hasValue) st[k] = Math.max(...states.map(s => Number(s.stats?.[k]) || 0));
             });
+            // Рекорд «Подбора» — это ВРЕМЯ: меньше = лучше, поэтому min (max стёр бы рекорд).
+            {
+                let bestMs = 0;
+                states.forEach(s => { const v = Number(s.stats?.matchBestMs) || 0; if (v > 0 && (bestMs === 0 || v < bestMs)) bestMs = v; });
+                if (bestMs > 0) st.matchBestMs = bestMs;
+            }
             // Elo дуэлей: не max (иначе поражения «откатывались» бы при слиянии устройств),
             // а рейтинг той копии, где сыграно больше матчей — она самая свежая по дуэлям.
             {
@@ -3113,7 +3119,8 @@
             'hwFlashcardsToSolve','hwTask1','hwTask3','hwTask4','hwTask5','hwTask7','totalTimeSpent',
             'bestSpeedrunScore','dailyStats','achievements','achievementsData','egePoints',
             'visualArchitectureProgress','visualArchitectureSolved','visualPaintingProgress','visualPaintingSolved',
-            'duelElo','duelGames','duelWins','duelLosses','duelDraws'
+            'duelElo','duelGames','duelWins','duelLosses','duelDraws',
+            'matchBestMs','matchGames'
         ];
 
         function applyMergedState(merged) {
