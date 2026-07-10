@@ -634,7 +634,7 @@ window.finishOnboarding = function() {
     // Save name/class from onboarding slide 6 if provided
     const onbName = $('onb-name-input') ? $('onb-name-input').value.trim() : '';
     const onbClass = $('onb-class-input') ? $('onb-class-input').value.trim() : '';
-    if (onbName) localStorage.setItem('student_manual_name', onbName);
+    if (onbName) { localStorage.setItem('student_manual_name', onbName); localStorage.setItem('student_manual_name_at', String(Date.now())); }
     if (onbClass) localStorage.setItem('student_class_code', onbClass);
     localStorage.setItem('ege_onboarding_done', '1');
     $('onboarding-overlay').classList.add('hidden');
@@ -2162,7 +2162,7 @@ window.openProfileModal = function() {
     updateSkinPicker(currentSkin);
     showModal('profile-modal');
 };
-window.saveProfileName = function() { const nm = $('profile-name-input').value.trim(), cd = $('profile-class-code').value.trim(); const prevCd = localStorage.getItem('student_class_code') || ''; if (nm) localStorage.setItem('student_manual_name', nm); if (cd !== undefined) localStorage.setItem('student_class_code', cd); showToast('✅', 'Профиль сохранен!', 'bg-emerald-500', 'border-emerald-700'); hideModal('profile-modal'); if (window.syncProgressToCloud) window.syncProgressToCloud(); if (cd && cd !== prevCd && window.pullClassAssignments) window.pullClassAssignments(cd); };
+window.saveProfileName = function() { const nm = $('profile-name-input').value.trim(), cd = $('profile-class-code').value.trim(); const prevCd = localStorage.getItem('student_class_code') || ''; const prevNm = localStorage.getItem('student_manual_name') || ''; if (nm) { localStorage.setItem('student_manual_name', nm); if (nm !== prevNm) localStorage.setItem('student_manual_name_at', String(Date.now())); } if (cd !== undefined) localStorage.setItem('student_class_code', cd); showToast('✅', 'Профиль сохранен!', 'bg-emerald-500', 'border-emerald-700'); hideModal('profile-modal'); if (window.syncProgressToCloud) window.syncProgressToCloud(); if (cd && cd !== prevCd && window.pullClassAssignments) window.pullClassAssignments(cd); };
 
 window.openAchievementsModal = function() {
     const gr = $('achievements-grid'); if (gr && typeof achievementsList !== 'undefined') { let ht = ''; achievementsList.forEach(a => { const isU = window.state.stats.achievements.includes(a.id); ht += `<div class="achievement-card bg-white dark:bg-[#1e1e1e] border ${isU ? 'border-yellow-400 shadow-[0_4px_15px_rgba(250,204,21,0.2)]' : 'border-gray-100 dark:border-[#2c2c2c]'} rounded-2xl p-4 flex flex-col items-center text-center relative ${isU ? '' : 'achievement-locked'}"><div class="text-4xl mb-3 drop-shadow-sm">${a.icon}</div><h4 class="font-black text-[10px] sm:text-xs text-gray-800 dark:text-gray-300 mb-1 leading-tight uppercase tracking-wide">${a.name}</h4><p class="text-[9px] font-bold text-gray-400 leading-tight mt-1">${a.desc}</p></div>`; }); gr.innerHTML = ht; }

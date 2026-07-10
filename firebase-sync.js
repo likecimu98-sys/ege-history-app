@@ -179,7 +179,7 @@
         const IDENTITY_WIPE_KEYS = [
             'known_tg_id', 'google_uid', 'google_email',
             'stable_student_id', 'previous_stable_student_id', 'legacy_student_ids',
-            'student_manual_name', 'student_class_code',
+            'student_manual_name', 'student_manual_name_at', 'student_class_code',
             'teacher_class_code', 'teacher_filter_class', 'teacher_hw_deadline',
             'class_current_upto', 'class_current_period',
             'consumed_invite_at', 'seenHwIds',
@@ -3339,10 +3339,19 @@
                 } // end if (allFound.size > 1)
 
                 // 3. Один документ — стандартная загрузка
-                if (bestData?.name && bestData.name !== 'Ученик' && !localStorage.getItem('student_manual_name')) {
-                    localStorage.setItem('student_manual_name', bestData.name);
-                    const nameEl = document.getElementById('profile-name-input');
-                    if (nameEl) nameEl.value = bestData.name;
+                // Имя: «последнее изменение побеждает». Автоимена (Google displayName,
+                // имя из TG) имеют метку 0 — их перебивает любое имя, введённое вручную
+                // на любом устройстве. Иначе «Вася» на ПК и «Петя» в TG жили бы вечно.
+                {
+                    const localNameAt = Number(localStorage.getItem('student_manual_name_at')) || 0;
+                    const cloudNameAt = Number(bestData?.nameUpdatedAt) || 0;
+                    const noLocalName = !localStorage.getItem('student_manual_name');
+                    if (bestData?.name && bestData.name !== 'Ученик' && (noLocalName || cloudNameAt > localNameAt)) {
+                        localStorage.setItem('student_manual_name', bestData.name);
+                        if (cloudNameAt) localStorage.setItem('student_manual_name_at', String(cloudNameAt));
+                        const nameEl = document.getElementById('profile-name-input');
+                        if (nameEl) nameEl.value = bestData.name;
+                    }
                 }
                 if (bestData?.classCode && !localStorage.getItem('student_class_code')) {
                     localStorage.setItem('student_class_code', bestData.classCode);
@@ -3497,6 +3506,7 @@
             
             const payload = {
                 name: localStorage.getItem('student_manual_name') || 'Ученик',
+                nameUpdatedAt: Number(localStorage.getItem('student_manual_name_at')) || 0,
                 classCode: localStorage.getItem('student_class_code') || '',
                 googleEmail: gEmail,
                 knownTgId: knownTg,
