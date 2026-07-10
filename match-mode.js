@@ -78,7 +78,7 @@
         ov.className = 'fixed inset-0 flex flex-col bg-gray-50 dark:bg-[#121212]';
         ov.style.cssText = `z-index:${Z};padding:calc(10px + env(safe-area-inset-top)) 10px calc(10px + env(safe-area-inset-bottom))`;
         ov.innerHTML = `
-            <div style="width:100%;max-width:760px;margin:0 auto;display:flex;flex-direction:column;flex-grow:1;min-height:0">
+            <div style="width:100%;max-width:840px;margin:0 auto;display:flex;flex-direction:column;flex-grow:1;min-height:0">
             <div class="flex items-center justify-between shrink-0 mb-2" style="gap:8px">
                 <div class="text-left" style="min-width:86px">
                     <div class="text-[9px] font-black uppercase tracking-widest text-gray-400">🧩 Подбор · №1</div>
@@ -90,8 +90,9 @@
                 </div>
                 <button id="mm-exit" class="font-black text-xs bg-white dark:bg-[#2c2c2c] text-gray-600 dark:text-gray-300 rounded-xl border border-gray-200 dark:border-[#3f3f46] shadow-sm active:scale-95 transition-transform" style="padding:8px 12px">✕ Выйти</button>
             </div>
-            <!-- max-высота карточек + align-content:center: на ПК плитки не раздуваются во весь экран -->
-            <div id="mm-grid" class="flex-grow" style="display:grid;grid-template-columns:repeat(${cols},1fr);grid-auto-rows:minmax(76px,128px);align-content:center;gap:8px;overflow-y:auto"></div>
+            <!-- max-высота карточек + align-content:center: на ПК плитки не раздуваются во весь экран.
+                 padding у грида — чтобы scale(1.04) выбранной карточки не обрезался краем overflow -->
+            <div id="mm-grid" class="flex-grow" style="display:grid;grid-template-columns:repeat(${cols},1fr);grid-auto-rows:minmax(84px,156px);align-content:center;gap:9px;overflow-y:auto;padding:6px"></div>
             </div>`;
         document.body.appendChild(ov);
         ov.querySelector('#mm-exit').onclick = () => { _h('light'); window.closeMatchMode(); };
@@ -100,8 +101,10 @@
             const b = document.createElement('button');
             b.dataset.idx = String(i);
             b.className = 'mm-card bg-white dark:bg-[#1e1e1e] border-2 border-gray-200 dark:border-[#3f3f46] rounded-2xl shadow-sm text-gray-800 dark:text-gray-200 active:scale-95';
-            b.style.cssText = 'display:flex;align-items:center;justify-content:center;text-align:center;padding:8px;min-height:76px;cursor:pointer;transition:transform .12s,border-color .12s,opacity .25s;line-height:1.25;' +
-                (c.kind === 'y' ? 'font-weight:900;font-size:17px;font-variant-numeric:tabular-nums' : `font-weight:700;font-size:${c.text.length > 70 ? 10 : 11.5}px`);
+            const big = (window.innerWidth || 360) >= 640; // на ПК шрифты крупнее
+            b.style.cssText = 'display:flex;align-items:center;justify-content:center;text-align:center;padding:8px;min-height:84px;cursor:pointer;transition:transform .12s,border-color .12s,opacity .25s;line-height:1.25;' +
+                (c.kind === 'y' ? `font-weight:900;font-size:${big ? 21 : 17}px;font-variant-numeric:tabular-nums`
+                    : `font-weight:700;font-size:${c.text.length > 70 ? (big ? 12 : 10) : (big ? 13.5 : 11.5)}px`);
             b.textContent = c.text; // textContent — экранирование не нужно
             b.onclick = () => _pick(i);
             grid.appendChild(b);
