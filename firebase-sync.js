@@ -3204,6 +3204,37 @@
             } catch (e) { console.warn('[teacherRole]', e && e.message); }
         };
 
+        // ─── Дневной лимит строк ─────────────────────────────────────────────
+        // Настройки в config/limits: { freeDaily, premiumDaily, clubUrl, message }, 0 = безлимит.
+        // Категории: обычный → freeDaily; подписчик клуба (premium на документе ученика,
+        // ставит бот/админ) → premiumDaily; ученик безлимитной группы (unlimited на
+        // документе класса, тумблер в /admin) и сам учитель → всегда безлимит.
+        window._dailyLimitInfo = { limit: 0 };
+        window.refreshDailyLimit = async function() {
+            try {
+                if (!db) return;
+                const cfgSnap = await getDoc(doc(db, 'artifacts', appId, 'public', 'data', 'config', 'limits'));
+                if (!cfgSnap.exists()) { window._dailyLimitInfo = { limit: 0 }; return; }
+                const cfg = cfgSnap.data() || {};
+                const free = Math.max(0, Number(cfg.freeDaily) || 0);
+                const prem = Math.max(0, Number(cfg.premiumDaily) || 0);
+                let classUnlimited = false;
+                const code = localStorage.getItem('student_class_code') || '';
+                if (code) {
+                    try {
+                        const cs = await getDoc(doc(db, 'artifacts', appId, 'public', 'data', 'classes', _classDocId(code)));
+                        classUnlimited = !!(cs.exists() && cs.data().unlimited);
+                    } catch (e) {}
+                }
+                const premium = !!window._studentPremium;
+                const limit = (classUnlimited || window.state?.isTeacherAdmin) ? 0 : (premium ? prem : free);
+                window._dailyLimitInfo = {
+                    limit, premium, classUnlimited,
+                    clubUrl: String(cfg.clubUrl || ''), message: String(cfg.message || '')
+                };
+            } catch (e) { console.warn('[limits]', e && e.message); }
+        };
+
         window.loadProgressFromCloud = async function() {
             if (!fbUser || !db) return;
             if (window._identitySwitching) return; // идёт смена аккаунта — не мешаем
@@ -3264,7 +3295,7 @@
                 // 1в. По имени — ОТКЛЮЧЕНО: слишком рискованно (все "Ученик" сольются)
                 // Имя используется только в ручной дедупликации с дополнительными проверками
 
-                if (allFound.size === 0) return;
+                if (allFound.size === 0) { window.refreshDailyLimit && window.refreshDailyLimit(); return; }
 
                 // ── Восстанавливаем tg-личность ДО выбора цели слияния.
                 // Кейс «Поли»: вход через Google в браузере находил её tg-док по почте,
@@ -3447,7 +3478,10 @@
                     } catch(e) { console.warn('[Sync] Canonical migration error:', e); }
                 }
                 // Проверяем роль учителя во всех путях загрузки (не только вход через Google)
-                window.checkTeacherRole && window.checkTeacherRole();
+                if (window.checkTeacherRole) await window.checkTeacherRole().catch(() => {});
+                // premium с документа + пересчёт дневного лимита (после роли: учитель безлимитен)
+                window._studentPremium = !!(bestData && bestData.premium);
+                window.refreshDailyLimit && window.refreshDailyLimit();
             } catch(e) { console.error('[Sync] loadProgressFromCloud error:', e); }
         };
 

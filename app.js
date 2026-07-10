@@ -316,6 +316,12 @@ window.maybeAutoSubmit = function() {
 // === ПРОВЕРКА ОТВЕТОВ ===
 function checkAnswers(isSure, auto) {
     isSure = isSure !== false;
+    // Дневной лимит строк: обычная тренировка блокируется по достижении лимита.
+    // Дуэли (нельзя бросать соперника на середине) и домашка от репетитора — без лимита.
+    if (window.canSolveMore && window.state.currentMode !== 'duel' && !window.state.isHomeworkMode && !window.state.activeHw) {
+        const lim = window.canSolveMore();
+        if (!lim.ok) { if (window.showDailyLimitModal) window.showDailyLimitModal(); return; }
+    }
     const rows = $$('#task-table-body tr');
     let allCorrect = true, filled = 0, total = $$('#task-table-body .dnd-slot').length, newlyCorrect = 0;
 

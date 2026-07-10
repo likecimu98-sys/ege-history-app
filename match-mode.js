@@ -78,6 +78,7 @@
         ov.className = 'fixed inset-0 flex flex-col bg-gray-50 dark:bg-[#121212]';
         ov.style.cssText = `z-index:${Z};padding:calc(10px + env(safe-area-inset-top)) 10px calc(10px + env(safe-area-inset-bottom))`;
         ov.innerHTML = `
+            <div style="width:100%;max-width:760px;margin:0 auto;display:flex;flex-direction:column;flex-grow:1;min-height:0">
             <div class="flex items-center justify-between shrink-0 mb-2" style="gap:8px">
                 <div class="text-left" style="min-width:86px">
                     <div class="text-[9px] font-black uppercase tracking-widest text-gray-400">🧩 Подбор · №1</div>
@@ -89,7 +90,9 @@
                 </div>
                 <button id="mm-exit" class="font-black text-xs bg-white dark:bg-[#2c2c2c] text-gray-600 dark:text-gray-300 rounded-xl border border-gray-200 dark:border-[#3f3f46] shadow-sm active:scale-95 transition-transform" style="padding:8px 12px">✕ Выйти</button>
             </div>
-            <div id="mm-grid" class="flex-grow" style="display:grid;grid-template-columns:repeat(${cols},1fr);grid-auto-rows:1fr;gap:8px;overflow-y:auto"></div>`;
+            <!-- max-высота карточек + align-content:center: на ПК плитки не раздуваются во весь экран -->
+            <div id="mm-grid" class="flex-grow" style="display:grid;grid-template-columns:repeat(${cols},1fr);grid-auto-rows:minmax(76px,128px);align-content:center;gap:8px;overflow-y:auto"></div>
+            </div>`;
         document.body.appendChild(ov);
         ov.querySelector('#mm-exit').onclick = () => { _h('light'); window.closeMatchMode(); };
         const grid = ov.querySelector('#mm-grid');

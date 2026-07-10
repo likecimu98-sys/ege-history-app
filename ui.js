@@ -2122,6 +2122,32 @@ window.openMistakesListModal = function() {
     showModal('mistakes-list-modal');
 };
 
+// ─── Модалка «лимит на сегодня исчерпан» (пейволл клуба) ─────────────────
+window.showDailyLimitModal = function() {
+    if (document.getElementById('limit-overlay')) return;
+    const info = window._dailyLimitInfo || {};
+    const esc = (s) => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+    const msg = info.message || `Ты решил сегодня максимум — ${info.limit} строк. Мозгу нужен отдых, возвращайся завтра!`;
+    // Кнопку клуба показываем только с безопасной ссылкой (https или t.me)
+    const url = String(info.clubUrl || '');
+    const safeUrl = /^https:\/\//.test(url) ? url : '';
+    const clubBtn = safeUrl ? `<a href="${esc(safeUrl)}" target="_blank" rel="noopener" class="block w-full bg-blue-600 text-white rounded-2xl font-black uppercase tracking-wider active:scale-95 transition-transform" style="padding:13px;margin-top:14px;font-size:13px">🚀 Хочу безлимит</a>` : '';
+    const ov = document.createElement('div');
+    ov.id = 'limit-overlay';
+    ov.className = 'fixed inset-0 flex items-center justify-center';
+    ov.style.cssText = 'z-index:10008;background:rgba(0,0,0,0.6);backdrop-filter:blur(3px)';
+    ov.innerHTML = `
+        <div class="bg-white dark:bg-[#1e1e1e] rounded-3xl shadow-2xl text-center" style="padding:26px 22px;width:88%;max-width:340px">
+            <div style="font-size:52px;line-height:1">⏳</div>
+            <div class="font-black text-gray-800 dark:text-gray-200 uppercase tracking-widest" style="font-size:15px;margin-top:8px">Лимит на сегодня</div>
+            <div class="text-[13px] font-bold text-gray-500 dark:text-gray-400" style="margin-top:8px;line-height:1.45">${esc(msg)}</div>
+            ${clubBtn}
+            <button id="limit-close" class="w-full bg-gray-100 dark:bg-[#2c2c2c] text-gray-600 dark:text-gray-300 rounded-2xl font-black uppercase tracking-wider active:scale-95 transition-transform" style="padding:11px;margin-top:8px;font-size:12px">Понятно</button>
+        </div>`;
+    document.body.appendChild(ov);
+    ov.querySelector('#limit-close').onclick = () => ov.remove();
+};
+
 window.openProfileModal = function() {
     $('profile-name-input').value = localStorage.getItem('student_manual_name') || '';
     $('profile-class-code').value = localStorage.getItem('student_class_code') || '';

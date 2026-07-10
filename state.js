@@ -373,6 +373,18 @@ function saveProgress() {
     scheduleSyncToCloud();
 }
 
+// ─── Дневной лимит строк (настройки грузит refreshDailyLimit в firebase-sync.js) ───
+// 0/отсутствие лимита = безлимит. Считаем по dailyStats[today].solved — тому же
+// счётчику, что и вся статистика, поэтому лимит един для таблиц и карточек.
+window.canSolveMore = function() {
+    const info = window._dailyLimitInfo || { limit: 0 };
+    const limit = Number(info.limit) || 0;
+    if (limit <= 0) return { ok: true, left: Infinity, limit: 0 };
+    const today = getTodayString();
+    const solved = (window.state.stats.dailyStats[today] || {}).solved || 0;
+    return { ok: solved < limit, left: Math.max(0, limit - solved), limit };
+};
+
 // --- Статистика ---
 function updateScoreAndStats(linesCount, isPerfectHw, egePointsToAdd) {
     isPerfectHw = isPerfectHw || false;
