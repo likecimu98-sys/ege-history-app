@@ -6,6 +6,12 @@
       "runtimeExecutable": "python",
       "runtimeArgs": ["-m", "http.server", "8123"],
       "port": 8123
+    },
+    {
+      "name": "fipi-parser",
+      "runtimeExecutable": "node",
+      "runtimeArgs": ["tools/fipi-parser/server.js"],
+      "port": 3777
     }
   ]
 }
