@@ -83,6 +83,76 @@ function pickTargetTask4(allowed, rowsCount) {
     return picked.length === 4 ? shuffleArray(picked) : null;
 }
 
+// ── Защита task3 от пересекающихся процессов в одном раунде ──
+// «Активный диапазон» процесса = min..max годов его фактов в базе.
+// Если факт строки А попадает в диапазон процесса строки Б (±2 года),
+// ответ строки А почти наверняка валиден и для Б («Смута в России» +
+// «правление Семибоярщины», «Северная война» + «итоги Северной войны»).
+let _t3ProcRanges = null;
+function _task3ProcRanges() {
+    if (_t3ProcRanges) return _t3ProcRanges;
+    const pr = {};
+    (window.task3Data || []).forEach(d => {
+        if (typeof d.year !== 'number') return;
+        const r = pr[d.process] || (pr[d.process] = { min: d.year, max: d.year });
+        if (d.year < r.min) r.min = d.year;
+        if (d.year > r.max) r.max = d.year;
+    });
+    return (_t3ProcRanges = pr);
+}
+// Эпоха из ТЕКСТА процесса: «преобразования Петра I» покрывают 1682–1725,
+// даже если в базе у этого процесса один факт. Дополняет диапазон по базе.
+const _T3_ERAS = [
+    [/перв[ыо]х русских князей/i, 862, 980], [/ярослава мудрого/i, 1019, 1054],
+    [/владимира мономаха/i, 1113, 1125], [/ивана калиты/i, 1325, 1340],
+    [/дмитрия донского/i, 1359, 1389], [/ивана iii/i, 1462, 1505], [/василия iii/i, 1505, 1533],
+    [/елены глинской/i, 1533, 1538], [/ивана iv|ивана грозного/i, 1533, 1584],
+    [/избранной рады/i, 1549, 1560], [/опричн/i, 1565, 1572], [/ливонск\w+ войн/i, 1558, 1583],
+    [/бориса годунова/i, 1598, 1605], [/смут/i, 1604, 1618],
+    [/михаила ф[её]доровича/i, 1613, 1645], [/алексея михайловича/i, 1645, 1676],
+    [/разин/i, 1667, 1671], [/болотников/i, 1606, 1607],
+    [/церковн\w+ раскол|реформ\w+ патриарха никона/i, 1653, 1667],
+    [/городск\w+ восстани\w+ середины xvii/i, 1648, 1662],
+    [/петра i(?!i)|петровск/i, 1682, 1725], [/северн\w+ войн/i, 1700, 1721],
+    [/дворцовых переворотов/i, 1725, 1762], [/анны иоанновны/i, 1730, 1740],
+    [/елизаветы петровны/i, 1741, 1761], [/петра iii/i, 1761, 1762],
+    [/семилетн\w+ войн/i, 1756, 1763], [/екатерины ii/i, 1762, 1796],
+    [/пугач[её]в/i, 1773, 1775], [/павла i(?!i)/i, 1796, 1801],
+    [/александра i(?![iv])/i, 1801, 1825], [/отечественн\w+ войн\w+ 1812|войн\w+ с наполеоном/i, 1812, 1814],
+    [/декабрист/i, 1816, 1826], [/николая i(?!i)/i, 1825, 1855],
+    [/крымск\w+ войн/i, 1853, 1856], [/александра ii(?!i)/i, 1855, 1881],
+    [/велики[ех] реформ|1860\s*[–-]\s*18?70/i, 1860, 1874], [/народнич|народовол/i, 1874, 1884],
+    [/александра iii/i, 1881, 1894], [/контрреформ/i, 1881, 1894],
+    [/николая ii/i, 1894, 1917], [/русско-японск/i, 1904, 1905],
+    [/перв\w+ российск\w+ революц/i, 1905, 1907], [/столыпин/i, 1906, 1911],
+    [/перв\w+ миров\w+ войн/i, 1914, 1918], [/революционн\w+ событи\w+ 1917|двоевласти/i, 1917, 1918],
+    [/большевик/i, 1917, 1922], [/гражданск\w+ войн/i, 1917, 1922],
+    [/военного коммунизма/i, 1918, 1921], [/нэп/i, 1921, 1928],
+    [/коллективизац/i, 1928, 1937], [/индустриализац/i, 1928, 1941],
+    [/советско-финляндск/i, 1939, 1940], [/велик\w+ отечественн\w+ войн/i, 1941, 1945],
+    [/сталинизм|сталинск\w+ репресс/i, 1945, 1953], [/оттепел|хрущ[её]в/i, 1953, 1964],
+    [/застой|брежнев/i, 1964, 1985], [/разрядк/i, 1969, 1979],
+    [/перестройк|горбач[её]в/i, 1985, 1991], [/холодн\w+ войн/i, 1946, 1991],
+];
+const _t3RangeCache = {};
+function _task3RangesFor(process) {
+    if (_t3RangeCache[process]) return _t3RangeCache[process];
+    const out = [];
+    const db = _task3ProcRanges()[process];
+    if (db) out.push([db.min, db.max]);
+    for (const [re, min, max] of _T3_ERAS) if (re.test(process)) out.push([min, max]);
+    return (_t3RangeCache[process] = out);
+}
+function _task3YearInProcess(year, process) {
+    if (typeof year !== 'number') return false;
+    const PAD = 2;
+    return _task3RangesFor(process).some(([min, max]) => year >= min - PAD && year <= max + PAD);
+}
+function _task3Conflicts(a, b) {
+    if (!a || !b) return false;
+    return _task3YearInProcess(a.year, b.process) || _task3YearInProcess(b.year, a.process);
+}
+
 // Task3: строго по одному из каждой эпохи
 function pickTargetTask3(allowed, rowsCount) {
     if (rowsCount !== 4) return null;
@@ -93,6 +163,7 @@ function pickTargetTask3(allowed, rowsCount) {
     TASK_EPOCHS.forEach(e => {
         for (const f of ep[e]) {
             if (uP.has(f.process) || uF.has(f.fact)) continue;
+            if (target.some(t => _task3Conflicts(f, t))) continue;
             target.push(f); uP.add(f.process); uF.add(f.fact); break;
         }
     });
@@ -433,6 +504,11 @@ function _task7AddTextKeys(keys, text) {
 
     aliases.forEach(([key, re]) => { if (re.test(text)) _task7AddKey(keys, key); });
 
+    // Персоналия-художник/композитор тоже принадлежит своей группе: если показан
+    // «И.Е. Репин», характеристика «участник Товарищества передвижников» — валидна.
+    if (keys.has('creator:repin') || keys.has('creator:surikov')) _task7AddKey(keys, 'group:peredvizhniki');
+    if (keys.has('creator:musorgsky')) _task7AddKey(keys, 'group:moguchaya_kuchka');
+
     const centuryRe = /(xi|xii|xiii|xiv|xv|xvi|xvii|xviii|xix|xx)\s*в/i;
     const roman = { xi: 11, xii: 12, xiii: 13, xiv: 14, xv: 15, xvi: 16, xvii: 17, xviii: 18, xix: 19, xx: 20 };
     const m = text.match(centuryRe);
@@ -626,7 +702,10 @@ function generateDistractors(task, target, missing) {
     const task7TargetDisplayKeys = task === 'task7'
         ? new Set(target.map(t => _task7CultureKey(t[displayField])))
         : null;
-    const task7TargetSemanticKeys = task === 'task7' && !task7UsesAudit
+    // Семантический слой работает ВМЕСТЕ с appliesToIds-аудитом: одинаковый текст
+    // век-генерика («создан в 16 в.») живёт в нескольких строках с разными
+    // appliesToIds, и проверка только своей строки пропускает двойные ответы.
+    const task7TargetSemanticKeys = task === 'task7'
         ? target.reduce((keys, t) => {
             _task7FactSemanticKeys(t).forEach(k => keys.add(k));
             return keys;
@@ -667,10 +746,8 @@ function generateDistractors(task, target, missing) {
             if (task === 'task7') {
                 if (!fieldToDisplayKeys[v]) fieldToDisplayKeys[v] = new Set();
                 fieldToDisplayKeys[v].add(_task7CultureKey(d[displayField]));
-                if (!task7UsesAudit) {
-                    if (!fieldToSemanticKeys[v]) fieldToSemanticKeys[v] = new Set();
-                    _task7FactSemanticKeys(d).forEach(k => fieldToSemanticKeys[v].add(k));
-                }
+                if (!fieldToSemanticKeys[v]) fieldToSemanticKeys[v] = new Set();
+                _task7FactSemanticKeys(d).forEach(k => fieldToSemanticKeys[v].add(k));
             }
         });
     });
@@ -698,6 +775,14 @@ function generateDistractors(task, target, missing) {
     //   не пересекаются, и блокировать их друг от друга вредно.
     //   Но правило сохраняется для остальных target-лет того же задания.
     const wwExempt = (ty) => (task === 'task5' && ty >= 1941 && ty <= 1945);
+
+    // ── task3: «активный диапазон» показанных процессов ──
+    // Факт, чей год попадает в диапазон показанного процесса (по базе И по эпохе
+    // из текста процесса, ±2), почти наверняка валиден для него семантически
+    // (Смута → «Совет всея земли», Северная война → Ништадтский мир,
+    // преобразования Петра I → Синод). Бан ЖЁСТКИЙ — fallback его не ослабляет.
+    const t3Procs = task === 'task3' ? target.map(t => t.process) : null;
+
     function collectCandidates(yearDist) {
         const scored = [];
         const seen = new Set();
@@ -705,10 +790,21 @@ function generateDistractors(task, target, missing) {
             const val = task === 'task7' ? _task7PickTrait(d, usedVals) : d[field];
             if (seen.has(val) || usedVals.has(val)) return;
             if (task7UsesAudit && !_task7IsSafeDistractor(d, target)) return;
+            // текст-двойники: та же формулировка может принадлежать ДРУГОЙ строке
+            // с иным appliesToIds — баним по объединению всех строк-владельцев текста
+            // (сравнение нормализованное: «А. И.» и «А.И.» — один текст)
+            if (task === 'task7') {
+                const vkey = _task7NormalizeText(val).replace(/\.\s+/g, '.');
+                const ownersUnsafe = dataSource.some(o =>
+                    _task7TraitVariants(o).some(t => _task7NormalizeText(t).replace(/\.\s+/g, '.') === vkey) &&
+                    !_task7IsSafeDistractor(o, target));
+                if (ownersUnsafe) return;
+            }
             // ── Слой 3: правитель эпохи не может быть дистрактором для события
             //    своего правления (он сам — защитимый ответ). Только task5 (val = личность).
             if (task === 'task5' && typeof isReigningAuthority === 'function' &&
                 targetYears.some(ty => isReigningAuthority(val, ty))) return;
+            if (t3Procs && t3Procs.some(p => _task3YearInProcess(d.year, p))) return;
             // Обратная проверка: кандидат подходит как ответ для какого-то target.display?
             const myDisplays = fieldToDisplays[val] || new Set();
             for (const tdv of targetDisplayVals) {
@@ -746,17 +842,41 @@ function generateDistractors(task, target, missing) {
     // Основной проход
     let scored = collectCandidates(initMinDist);
 
-    // FALLBACK: если не хватает — поэтапно снижаем порог
+    // FALLBACK: если не хватает — поэтапно снижаем порог.
+    // task5 — не ниже 12 лет: дистрактор-«современник» показанного события
+    // (Меншиков при «Северной войне») почти всегда валиден семантически.
+    // Лучше меньше фейков, чем двойной ответ.
     if (poolItems.length + scored.length < needed) {
-        for (const step of [20, 10, 5, 0]) {
+        for (const step of (task === 'task5' ? [20, 12] : [20, 10, 5, 0])) {
             if (step >= initMinDist) continue;
             scored = collectCandidates(step);
             if (poolItems.length + scored.length >= needed) break;
         }
     }
 
+    // ── task5: «парные» личности не встречаются в одном пуле вариантов ──
+    // Если у двух личностей в базе есть ОБЩЕЕ событие (Минин/Пожарский,
+    // Пётр I/Меншиков, Ленин/Троцкий), их совместное появление в пуле — маркер,
+    // который выдаёт эпоху/событие и легко запоминается. Дистрактор, «парный»
+    // любому уже лежащему в пуле (включая правильные ответы), пропускаем.
+    let t5PersonEvents = null;
+    if (task === 'task5') {
+        t5PersonEvents = {};
+        dataSource.forEach(d => {
+            (t5PersonEvents[d.person] = t5PersonEvents[d.person] || new Set()).add(d.event);
+        });
+    }
+    const t5Paired = (a, b) => {
+        if (a === b) return false;
+        const ea = t5PersonEvents[a], eb = t5PersonEvents[b];
+        if (!ea || !eb) return false;
+        for (const e of ea) if (eb.has(e)) return true;
+        return false;
+    };
+
     for (const s of scored) {
         if (poolItems.length >= needed) break;
+        if (t5PersonEvents && poolItems.some(p => t5Paired(String(p), s.val))) continue;
         poolItems.push(s.val);
     }
 
@@ -1096,6 +1216,57 @@ function validateTable() {
     return true;
 }
 
+// ── Гейт неоднозначности task5 ──
+// (1) пары: две личности пула (ответы или дистракторы) с ОБЩИМ событием в базе
+//     (Кутузов+Багратион ← Бородино) — маркер и потенциальный двойной ответ;
+// (2) взаимозаменяемые строки: события двух строк покрываются активными
+//     периодами обеих личностей (Суворов/Ушаков ← 1799);
+// (3) правитель: личность-ответ одной строки правила страной в год события
+//     другой строки (Пётр I + Гангут, Екатерина II + Пугачёв).
+// При нарушении раунд пересобирается (см. generateTable).
+let _t5PairMap = null;
+function _task5PersonEventsMap() {
+    if (_t5PairMap) return _t5PairMap;
+    const m = {};
+    (window.task5Data || []).forEach(d => {
+        (m[d.person] = m[d.person] || new Set()).add(d.event);
+    });
+    return (_t5PairMap = m);
+}
+function _task5PoolPaired() {
+    const chips = Array.from(document.querySelectorAll('#pool-container .dnd-chip')).map(c => c.dataset.pureText);
+    const m = _task5PersonEventsMap();
+    for (let i = 0; i < chips.length; i++) {
+        const ea = m[chips[i]];
+        if (!ea) continue;
+        for (let j = i + 1; j < chips.length; j++) {
+            const eb = m[chips[j]];
+            if (!eb) continue;
+            for (const e of ea) if (eb.has(e)) return true;
+        }
+    }
+    return false;
+}
+function _task5GateOk() {
+    if (window.state.currentTask !== 'task5') return true;
+    const t = window.state.currentTargetData || [];
+    for (let i = 0; i < t.length; i++) {
+        for (let j = i + 1; j < t.length; j++) {
+            if (_task5Interchangeable(t[i], t[j])) return false;
+        }
+    }
+    if (typeof isReigningAuthority === 'function') {
+        for (const a of t) for (const b of t) {
+            // ВОВ-строки (слот 3) исключены: иначе Сталин-строки (образование СССР,
+            // Ялта) не могли бы соседствовать с обязательным ВОВ-слотом вовсе.
+            if (a !== b && typeof b.year === 'number' &&
+                !(b.year >= 1941 && b.year <= 1945) &&
+                isReigningAuthority(a.person, b.year)) return false;
+        }
+    }
+    return !_task5PoolPaired();
+}
+
 // Обёртка-гейт: генерирует и при нарушении инварианта перегенерирует.
 // Детектив и режим ДЗ (фиксированные индексы) не валидируются/не ретраятся.
 function generateTable() {
@@ -1105,7 +1276,7 @@ function generateTable() {
 
     for (let attempt = 0; attempt < 15; attempt++) {
         generateTableOnce();
-        if (skipValidation() || validateTable()) return;
+        if (skipValidation() || (validateTable() && _task5GateOk())) return;
     }
     // Фолбэк: умный подбор по всем эпохам обычно даёт корректную таблицу.
     const periodEl = $('filter-period');
@@ -1200,6 +1371,9 @@ function generateTwoColumnTable() {
                     // событие не должно подходить сразу двум личностям с уже выбранной строкой
                     if (target.some(t => _task5Interchangeable(f, t))) { t5Deferred.push(f); continue; }
                 }
+                // Task3: факт кандидата не должен попадать в диапазон лет уже выбранного
+                // процесса (и наоборот) — иначе ответы строк взаимозаменяемы
+                if (task === 'task3' && target.some(t => _task3Conflicts(f, t))) { t5Deferred.push(f); continue; }
                 target.push(f);
                 if (task === 'task1') _task1EventVariants(f).forEach(v => used1.add(v));
                 else used1.add(f[dedupeKey]);
@@ -1209,13 +1383,13 @@ function generateTwoColumnTable() {
             }
             // Если защита от неоднозначности не дала набрать строки (узкий период) —
             // добираем из отложенных, чтобы задание не оказалось неполным.
-            if (task === 'task5' && target.length < rowsCount && t5Deferred.length) {
+            if ((task === 'task5' || task === 'task3') && target.length < rowsCount && t5Deferred.length) {
                 for (const f of t5Deferred) {
                     if (target.length >= rowsCount) break;
                     if (used1.has(f[dedupeKey]) || (dedupeKey2 && used2.has(f[dedupeKey2]))) continue;
                     target.push(f);
                     used1.add(f[dedupeKey]); if (dedupeKey2) used2.add(f[dedupeKey2]);
-                    selectedPersons5.add(f.person); selectedEvents5.add(f.event);
+                    if (task === 'task5') { selectedPersons5.add(f.person); selectedEvents5.add(f.event); }
                 }
             }
         }

@@ -98,6 +98,57 @@ function normalizeCultureCenturyLabels(value, seen) {
     return value;
 }
 
+// ── Согласование appliesToIds задания 7 (защита от двойных ответов) ──
+// 1) Один и тот же (нормализованный) текст характеристики может принадлежать
+//    нескольким строкам с РАЗНЫМИ appliesToIds (век-генерики, «Автор — …»
+//    с разным набором пробелов) — движок проверяет только свою строку.
+//    Объединяем appliesToIds всех владельцев текста.
+// 2) Тематические группы: авторские трейты и «посвящено Гражданской войне»
+//    применимы ко всем культурам группы (база не знает о новых строках ФИПИ).
+function unifyTask7Applies(rows) {
+    if (!Array.isArray(rows) || !rows.length) return;
+    const tnorm = s => String(s || '').toLowerCase().replace(/ё/g, 'е')
+        .replace(/[«»„“”"']/g, '').replace(/[—–]/g, '-')
+        .replace(/\.\s+/g, '.').replace(/\s+/g, ' ').trim();
+    const variantsOf = r => (Array.isArray(r.traitVariants) && r.traitVariants.length ? r.traitVariants : [r.trait]).filter(Boolean);
+    const addAll = (r, ids) => {
+        const cur = new Set((Array.isArray(r.appliesToIds) ? r.appliesToIds : [r.id])
+            .map(x => parseInt(x, 10)).filter(Number.isFinite));
+        ids.forEach(i => cur.add(i));
+        r.appliesToIds = [...cur].sort((a, b) => a - b);
+    };
+    // (1) текст-двойники
+    const byText = {};
+    rows.forEach(r => variantsOf(r).forEach(v => (byText[tnorm(v)] = byText[tnorm(v)] || []).push(r)));
+    for (const owners of Object.values(byText)) {
+        if (owners.length < 2) continue;
+        const uni = new Set();
+        owners.forEach(r => (Array.isArray(r.appliesToIds) ? r.appliesToIds : [r.id])
+            .forEach(i => { const n = parseInt(i, 10); if (Number.isFinite(n)) uni.add(n); }));
+        owners.forEach(r => addAll(r, uni));
+    }
+    // (2) тематические группы
+    const GROUPS = [
+        [/солженицын/i, [130, 157]],
+        [/нобелевск\w+ преми/i, [104, 106, 130, 133, 157]],
+        [/м\.\s*а\.\s*булгаков/i, [110, 177, 178]],
+        [/п\.\s*и\.\s*чайковский/i, [70, 169]],
+        [/римский-корсаков/i, [97, 154]],
+        [/э\.\s*а\.\s*рязанов/i, [129, 164]],
+        [/ф\.\s*м\.\s*достоевский/i, [149, 150, 151]],
+        [/л\.\s*н\.\s*толстой/i, [155, 156]],
+        [/(посвящен\w+|речь ид[её]т|повествует)[^.]*гражданск\w+ войн/i, [104, 106, 108, 110, 163, 178]],
+    ];
+    const idSet = new Set(rows.map(r => parseInt(r.id, 10)));
+    rows.forEach(r => {
+        variantsOf(r).forEach(v => {
+            for (const [re, ids] of GROUPS) {
+                if (re.test(v)) addAll(r, ids.filter(i => idSet.has(i)));
+            }
+        });
+    });
+}
+
 // Нормализация подписей в визуальных данных (архитектура/живопись/культура).
 // Эти данные грузятся в ФОНЕ уже после открытия приложения (см. index.html),
 // поэтому нормализуем их отдельно — сразу после загрузки, а не на старте.
@@ -114,6 +165,7 @@ function initPrecomputed() {
     window.task5Data = typeof task5Data !== 'undefined' ? task5Data : (window.task5Data || []);
     window.task7Data = typeof task7Data !== 'undefined' ? task7Data : (window.task7Data || []);
     normalizeCultureCenturyLabels(window.task7Data);
+    unifyTask7Applies(window.task7Data);
     // window.visualArchitectureData / visualPaintingData / visualStudyData нормализуются
     // в window.normalizeVisualData() — они грузятся в фоне после открытия приложения.
 
