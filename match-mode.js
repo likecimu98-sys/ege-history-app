@@ -20,18 +20,42 @@
     function _play(ok) { try { if (window.Sfx) window.Sfx.play(ok ? 'wow' : 'fah'); } catch (e) {} }
     function _fmt(ms) { const s = ms / 1000; return s >= 60 ? `${Math.floor(s / 60)}:${String(Math.floor(s) % 60).padStart(2, '0')},${Math.floor(ms % 1000 / 100)}` : `${s.toFixed(1)} сек`; }
 
-    // 6 случайных строк задания №1 с УНИКАЛЬНЫМИ датами: если в раунде два события
-    // одного года, «неправильная» пара выглядела бы правильной — так нельзя.
-    function _pickRows() {
-        const all = _shuffle(((window.task1Data || []).filter(r => r && r.event && r.year)).slice());
+    // Период применяем как в основных режимах: читаем глобальный селектор
+    // #filter-period (+ #custom-year-start/end). «Дошли до N» ученика приходит сюда
+    // как custom 862–N (см. ui.js pgApplyClassUpto → #custom-year-end).
+    function _periodFilterTask1(rows) {
+        const g = id => document.getElementById(id);
+        const sel = g('filter-period');
+        const period = (sel && sel.value) || 'all';
+        if (period === 'all') return rows;
+        if (period === 'custom') {
+            const a = parseInt(g('custom-year-start') && g('custom-year-start').value, 10) || 0;
+            const b = parseInt(g('custom-year-end') && g('custom-year-end').value, 10) || 3000;
+            return rows.filter(r => { const m = String(r.year).match(/\d+/); const y = m ? parseInt(m[0], 10) : NaN; return y >= a && y <= b; });
+        }
+        return rows.filter(r => r.c === period); // эпоха: early/18th/19th/20th
+    }
+
+    // 6 строк с УНИКАЛЬНЫМИ датами: если в раунде два события одного года,
+    // «неправильная» пара выглядела бы правильной — так нельзя.
+    function _sixUniqueDates(rows) {
         const out = [], seen = new Set();
-        for (const r of all) {
+        for (const r of _shuffle(rows.slice())) {
             const y = String(r.year).trim();
             if (seen.has(y)) continue;
             seen.add(y);
             out.push(r);
             if (out.length === PAIRS) break;
         }
+        return out;
+    }
+
+    function _pickRows() {
+        const base = (window.task1Data || []).filter(r => r && r.event && r.year);
+        let out = _sixUniqueDates(_periodFilterTask1(base));
+        // Узкий период не набрал 6 уникальных дат — тихо расширяемся до всей базы,
+        // чтобы раунд всегда собирался (лучше сыграть по всей истории, чем показать ошибку).
+        if (out.length < PAIRS) out = _sixUniqueDates(base);
         return out;
     }
 
