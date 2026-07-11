@@ -148,9 +148,43 @@ function _task3YearInProcess(year, process) {
     const PAD = 2;
     return _task3RangesFor(process).some(([min, max]) => year >= min - PAD && year <= max + PAD);
 }
+// ── Семантический (таксономический) конфликт task3 ──
+// Диапазоны лет ловят пересечение по времени, но НЕ ловят «матрёшку» из процессов
+// разной общности: обобщающий процесс «расширение территории Московского княжества»
+// и его частный случай «присоединение Твери»/«взятие Смоленска (борьба с ВКЛ)» —
+// факт частного процесса дословно верен и для обобщающего → в одной таблице двойной
+// ответ. Также «Любечский съезд» — канонический маркер И «обороны против половцев»,
+// И «распада Древнерусского государства»: если оба процесса в таблице, факт подходит
+// к обоим. Такие пары запрещаем соседствовать (проявляется в узких средневековых
+// периодах; в обычном режиме умный подбор разносит эпохи и до этого не доходит).
+const _T3_GROWTH_UMBRELLA = [
+    /расширение территории московск/i,
+    /формирование единого русск/i,
+    /образование единого русск/i,
+    /объединение русских земель вокруг москв/i,
+];
+const _T3_GROWTH_SPECIFIC = [
+    /присоединение твер/i,
+    /(включение|присоединение) новгород/i,
+    /ликвидаци\w+ независимост\w+.*(новгород|псков|вечев)/i,
+    /борьба за русские земли между вкл/i,
+    /включение .* в состав русского государ/i,
+];
+function _task3SemanticConflict(a, b) {
+    const pa = a.process || '', pb = b.process || '';
+    const ua = _T3_GROWTH_UMBRELLA.some(r => r.test(pa)), ub = _T3_GROWTH_UMBRELLA.some(r => r.test(pb));
+    const sa = _T3_GROWTH_SPECIFIC.some(r => r.test(pa)), sb = _T3_GROWTH_SPECIFIC.some(r => r.test(pb));
+    // обобщающий ↔ обобщающий, либо обобщающий ↔ частный (частный ↔ частный не конфликтует:
+    // разные города, факты не взаимозаменяемы — напр. Новгород ≠ Тверь)
+    if ((ua && ub) || (ua && sb) || (ub && sa)) return true;
+    const lyu = /любечск/i, raspad = /распад древнерусск|раздроблен/i;
+    if ((lyu.test(a.fact || '') && raspad.test(pb)) || (lyu.test(b.fact || '') && raspad.test(pa))) return true;
+    return false;
+}
 function _task3Conflicts(a, b) {
     if (!a || !b) return false;
-    return _task3YearInProcess(a.year, b.process) || _task3YearInProcess(b.year, a.process);
+    return _task3YearInProcess(a.year, b.process) || _task3YearInProcess(b.year, a.process) ||
+        _task3SemanticConflict(a, b);
 }
 
 // Task3: строго по одному из каждой эпохи
