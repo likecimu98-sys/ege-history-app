@@ -27,8 +27,13 @@
         _dataPromise = new Promise((resolve) => {
             const s = document.createElement('script');
             s.src = DATA_URL;
-            s.onload = () => resolve(window.task8Data || []);
-            s.onerror = () => resolve(null);
+            // При успехе — данные; при любой осечке ОБНУЛЯЕМ _dataPromise, чтобы «Повторить»
+            // мог перезапросить (иначе закэшированный null навсегда ломал бы режим).
+            s.onload = () => {
+                if (window.task8Data && window.task8Data.length) resolve(window.task8Data);
+                else { _dataPromise = null; resolve(null); }
+            };
+            s.onerror = () => { _dataPromise = null; resolve(null); };
             document.body.appendChild(s);
         });
         return _dataPromise;
@@ -49,14 +54,20 @@
     window.openVovMode = async function () {
         if (_v) return;
         try { if (window.Sfx) window.Sfx.unlock(); } catch (e) {}
-        const data = await _loadData();
-        if (!data || !data.length) {
-            if (typeof showToast === 'function') showToast('⚠️', 'Данные режима ВОВ не загрузились — попробуй ещё раз', 'bg-amber-500', 'border-amber-700');
-            return;
-        }
-        _v = { task: null, opts: [], slot: [null, null, null], used: new Set(), sel: -1, checked: false };
-        _next(true);
+        // Оверлей открываем СРАЗУ (мгновенный отклик) — на холодной загрузке task8Data.js
+        // может тянуться по сети пару секунд, и без этого кнопка казалась «мёртвой».
+        _v = { task: null, opts: [], slot: [], used: new Set(), sel: -1, checked: false, loading: true };
+        _ensureData();
     };
+
+    async function _ensureData() {
+        _renderLoading();
+        const data = await _loadData();
+        if (!_v) return;                 // закрыли, пока грузилось
+        if (!data || !data.length) { _renderError(); return; }
+        _v.loading = false;
+        _next(true);
+    }
 
     window.closeVovMode = function () {
         const ov = document.getElementById('vov-overlay');
@@ -124,6 +135,26 @@
             _h('medium');
             _next(true);
         };
+    }
+
+    function _renderLoading() {
+        _shell(`
+            <div class="flex flex-col items-center justify-center text-center h-full" style="gap:14px;padding:24px 10px">
+                <div class="vv-spinner"></div>
+                <div class="text-xs font-bold text-gray-400">Загрузка заданий ВОВ…</div>
+            </div>`);
+    }
+
+    function _renderError() {
+        const ov = _shell(`
+            <div class="flex flex-col items-center justify-center text-center h-full" style="gap:14px;padding:24px 10px">
+                <div style="font-size:44px;line-height:1">📡</div>
+                <div class="font-black text-gray-800 dark:text-gray-200" style="font-size:14px">Не удалось загрузить задания</div>
+                <div class="text-xs font-bold text-gray-400" style="max-width:300px">Проверь интернет и попробуй ещё раз.</div>
+                <button id="vv-retry" class="vv-btn vv-btn-green" style="max-width:220px">Повторить</button>
+            </div>`);
+        const rb = ov.querySelector('#vv-retry');
+        if (rb) rb.onclick = () => { _h('light'); _ensureData(); };
     }
 
     function _render() {
@@ -252,7 +283,15 @@
         #vov-overlay .vv-btn-ghost{background:transparent;color:#9ca3af;font-size:11px;padding:8px}
         #vov-overlay .vv-result{text-align:center;font-weight:800;font-size:13px;padding:4px}
         #vov-overlay .vv-win{color:#4d7c0f}
-        #vov-overlay .vv-lose{color:#f43f5e}`;
+        #vov-overlay .vv-lose{color:#f43f5e}
+        #vov-overlay .vv-spinner{width:34px;height:34px;border-radius:50%;border:4px solid rgba(77,124,15,0.2);border-top-color:#4d7c0f;animation:vvspin .8s linear infinite}
+        @keyframes vvspin{to{transform:rotate(360deg)}}`;
         document.head.appendChild(st);
     } catch (e) {}
+
+    // Фоновый предзагруз данных на простое: чтобы к моменту тапа по «ВОВ» они уже были
+    // готовы и оверлей открывался мгновенно. Не конкурирует со стартом (idle/тайм-аут).
+    function _preload() { if (!(window.task8Data && window.task8Data.length)) _loadData(); }
+    if ('requestIdleCallback' in window) requestIdleCallback(_preload, { timeout: 4000 });
+    else setTimeout(_preload, 2500);
 })();
