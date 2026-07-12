@@ -3046,6 +3046,9 @@
             });
             st.visualArchitectureProgress = mergeVisualProgress(states, 'visualArchitectureProgress');
             st.visualPaintingProgress = mergeVisualProgress(states, 'visualPaintingProgress');
+            // «ВОВ» (задание 8): выученные задания — союз (выучил на любом устройстве → выучено).
+            st.vovLearned = {};
+            states.forEach(s => Object.entries(s.stats?.vovLearned || {}).forEach(([id, v]) => { if (v) st.vovLearned[id] = true; }));
             const achSet = new Set();
             states.forEach(s => (s.stats?.achievements || []).forEach(a => achSet.add(a)));
             st.achievements = [...achSet];
@@ -3120,7 +3123,7 @@
             'bestSpeedrunScore','dailyStats','achievements','achievementsData','egePoints',
             'visualArchitectureProgress','visualArchitectureSolved','visualPaintingProgress','visualPaintingSolved',
             'duelElo','duelGames','duelWins','duelLosses','duelDraws',
-            'matchBestMs','matchGames'
+            'matchBestMs','matchGames','vovLearned'
         ];
 
         function applyMergedState(merged) {

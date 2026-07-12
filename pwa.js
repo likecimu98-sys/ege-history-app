@@ -12,6 +12,20 @@
         return 'serviceWorker' in navigator && location.protocol !== 'file:';
     }
 
+    // Откладываем прогрев офлайн-ассетов до простоя браузера — чтобы канал в первые
+    // секунды доставался ядру приложения, а не фоновой закачке сотен картинок.
+    let _warmScheduled = false;
+    function scheduleOfflineWarmup(worker) {
+        if (_warmScheduled) return;
+        _warmScheduled = true;
+        const fire = () => {
+            const target = worker || (navigator.serviceWorker && navigator.serviceWorker.controller);
+            if (target) target.postMessage(OFFLINE_CACHE_MESSAGE);
+        };
+        if ('requestIdleCallback' in window) requestIdleCallback(fire, { timeout: 6000 });
+        else setTimeout(fire, 5000);
+    }
+
     function setOfflineFlag() {
         document.documentElement.toggleAttribute('data-offline', navigator.onLine === false);
     }
@@ -80,10 +94,10 @@
             const readyRegistration = await navigator.serviceWorker.ready;
             const activeWorker = readyRegistration.active || registration.active || navigator.serviceWorker.controller;
 
-            if (activeWorker) activeWorker.postMessage(OFFLINE_CACHE_MESSAGE);
-            if (navigator.serviceWorker.controller && navigator.serviceWorker.controller !== activeWorker) {
-                navigator.serviceWorker.controller.postMessage(OFFLINE_CACHE_MESSAGE);
-            }
+            // Прогрев офлайн-кэша (~300 картинок) НЕ должен конкурировать за канал в
+            // первые секунды первой загрузки. Ждём простоя (requestIdleCallback) или
+            // тайм-аут, чтобы сначала отрисовалось и стало интерактивным приложение.
+            scheduleOfflineWarmup(activeWorker);
         } catch (error) {
             console.warn('[PWA] Service worker registration failed:', error);
         }

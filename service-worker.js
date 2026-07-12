@@ -1,6 +1,6 @@
 'use strict';
 
-const APP_VERSION = '2026-07-12-2';
+const APP_VERSION = '2026-07-12-3';
 const STATIC_CACHE = `ege-history-static-${APP_VERSION}`;
 const ASSET_CACHE = `ege-history-assets-${APP_VERSION}`;
 const CACHE_NAMES = [STATIC_CACHE, ASSET_CACHE];
@@ -21,13 +21,14 @@ const CORE_URLS = [
     './swipe-data.js',
     './swipe-mode.js',
     './match-mode.js',
+    './vov-mode.js',
     './visual-trainer.js',
     './app.js',
     './firebase-sync.js',
-    './visualArchitectureData.generated.js',
-    './visualPaintingData.generated.js',
-    './mapLegendData.generated.js',
-    './visualStudyData.generated.js',
+    // Тяжёлые visual*.generated.js (~765 КБ) НЕ прекэшируем на install: они грузятся
+    // лениво в фоне (см. index.html loadVisualData) и кэшируются fetch-handler'ом по
+    // требованию (staleWhileRevalidate). Держать их в install-прекэше = тянуть 0.7 МБ
+    // сетью ровно в окно первой загрузки, конкурируя с ядром приложения.
     './data.js',
     './tokens.css',
     './output.css',
