@@ -1,0 +1,105 @@
+rules_version = '2';
+
+// ════════════════════════════════════════════════════════════════════════════
+//  КАНДИДАТ строгого ruleset — НЕ ДЕПЛОИТЬ, пока не выполнены предпосылки.
+//  Это ЦЕЛЕВОЕ состояние. Против него прогнан security/rules-sim.mjs, который
+//  показывает, какие места ТЕКУЩЕГО клиента он ломает (это и есть список
+//  рефакторинга). Боевой файл — по-прежнему /firestore.rules (baseline).
+//
+//  Предпосылки (без них правила залочат людей — см. security/write-surface.md):
+//   1. Бот выпускает custom-token: uid = канонический docId (TG → uid=tgId),
+//      claim teacher:true у учителей. Сейчас минтинга НЕТ (все анонимны).
+//   2. Учительские мутации (выдача/отмена ДЗ, выпуск) уезжают в бота (Admin SDK)
+//      — из браузера в чужой students/{uid} больше не пишем.
+//   3. Слияние личностей / tombstone _mergedInto уезжает в бота — клиент пишет
+//      ТОЛЬКО свой канонический документ.
+//   4. Приватный fullStateJson вынесен из public/students в private/state.
+// ════════════════════════════════════════════════════════════════════════════
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function authed()   { return request.auth != null; }
+    // TG: docId == auth.uid. Google: docId == 'google_' + auth.uid.
+    function isOwner(id) {
+      return authed() && (request.auth.uid == id || ('google_' + request.auth.uid) == id);
+    }
+    function isTeacher() { return authed() && request.auth.token.teacher == true; }
+    function blobOk() {
+      return !('fullStateJson' in request.resource.data)
+          || request.resource.data.fullStateJson.size() < 950000; // backstop < 1 МБ
+    }
+
+    // ── ПУБЛИЧНЫЙ профиль ученика: имя, класс, поля лидерборда (БЕЗ fullStateJson).
+    //    Читают все авторизованные (нужно учителю и топу). Пишет только владелец,
+    //    и приватный блоб сюда класть нельзя.
+    match /artifacts/{appId}/public/data/students/{studentId} {
+      allow read:  if authed();
+      allow write: if isOwner(studentId)
+                   && !('fullStateJson' in request.resource.data);
+    }
+
+    // ── ПРИВАТНЫЙ прогресс (fullStateJson и прочее личное).
+    //    Читает владелец ИЛИ учитель; пишет только владелец.
+    match /artifacts/{appId}/private/data/state/{studentId} {
+      allow read:  if isOwner(studentId) || isTeacher();
+      allow write: if isOwner(studentId) && blobOk();
+    }
+
+    // ── Классы/журнал ДЗ. Пишет только учитель (claim). Читают авторизованные
+    //    (ученик подтягивает журнал класса). Бот пишет через Admin SDK (мимо правил).
+    match /artifacts/{appId}/public/data/classes/{classCode} {
+      allow read:  if authed();
+      allow write: if isTeacher();
+    }
+
+    // ── Дуэли: читают/пишут авторизованные (оба игрока правят документ матча).
+    match /artifacts/{appId}/public/data/matches/{matchId} {
+      allow read, write: if authed();
+    }
+
+    // ── Кэш лидерборда: читают авторизованные; пишет бот (Admin SDK). Клиенту — нет.
+    match /artifacts/{appId}/public/data/leaderboards/{doc} {
+      allow read:  if authed();
+      allow write: if false;
+    }
+
+    // ── Магик-линк вход: можно ЗАБРАТЬ свой по прямому id, но НЕ перечислять
+    //    (иначе можно вычитать чужой tgId — известная дыра loginTokens).
+    match /artifacts/{appId}/public/data/loginTokens/{token} {
+      allow get:   if authed();
+      allow list:  if false;
+      allow write: if false; // выпускает бот
+    }
+    match /artifacts/{appId}/public/data/loginSessions/{token} {
+      allow get, create, update: if authed();
+      allow list, delete:        if false;
+    }
+
+    // ── notifyJobs: клиент кладёт задачу, читает/удаляет её бот (Admin SDK).
+    match /artifacts/{appId}/public/data/notifyJobs/{job} {
+      allow create: if authed();
+      allow read, update, delete: if false;
+    }
+
+    // ── config (лимиты и т.п.): читают все авторизованные, пишет бот.
+    match /artifacts/{appId}/public/data/config/{doc} {
+      allow read:  if authed();
+      allow write: if false;
+    }
+
+    // ── teachers/orgs: читают авторизованные (checkTeacherRole), пишет бот.
+    match /artifacts/{appId}/public/data/teachers/{tid} {
+      allow read:  if authed();
+      allow write: if false;
+    }
+    match /artifacts/{appId}/public/data/orgs/{oid} {
+      allow read:  if authed();
+      allow write: if false;
+    }
+
+    // Всё остальное — запрет по умолчанию (НЕТ catch-all `if authed()`, который
+    //  перебивал бы isOwner на студентах).
+    match /{document=**} { allow read, write: if false; }
+  }
+}
