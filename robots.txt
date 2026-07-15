@@ -1,0 +1,6 @@
+User-agent: *
+Allow: /
+Disallow: /tools/
+Disallow: /vendor/
+
+Sitemap: https://reshay-istoriyu.ru/sitemap.xml

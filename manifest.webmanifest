@@ -1,7 +1,7 @@
 {
-  "name": "EGE History Trainer",
-  "short_name": "EGE History",
-  "description": "Offline-ready history trainer with cloud progress sync.",
+  "name": "Решай Историю — тренажёр ЕГЭ по истории",
+  "short_name": "Решай Историю",
+  "description": "Тренажёр для подготовки к ЕГЭ по истории: даты, личности, культура, карты, зубрёжка и дуэли. Работает офлайн.",
   "lang": "ru",
   "start_url": "./",
   "scope": "./",

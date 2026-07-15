@@ -2279,7 +2279,7 @@ window.openGlobalTopModal = function() {
 
 window.copyTextReport = function() {
     const s = window.state.stats;
-    let t = `🏛 Тренажер ЕГЭ: История\n\n`;
+    let t = `🏛 Решай Историю — тренажёр ЕГЭ\n\n`;
     t += `📊 Всего решено: ${s.totalSolvedEver || 0}\n`;
     t += `🔥 Текущий стрик: ${s.streak || 0}\n`;
     
@@ -2328,5 +2328,5 @@ window.copyTextReport = function() {
 
 window.handleLogoClick = function() {
     if (typeof haptic === 'function') haptic('light');
-    showToast('🏛️', 'Тренажер ЕГЭ: История (ULTIMATE)', 'bg-blue-500', 'border-blue-700');
+    showToast('🏛️', 'Решай Историю', 'bg-blue-500', 'border-blue-700');
 };
