@@ -12,3 +12,6 @@
 *.woff2 binary
 *.ttf   binary
 *.pdf   binary
+
+# Не попадает в git archive → не выкладывается на прод (deploy-vps.ps1)
+tools/ export-ignore
