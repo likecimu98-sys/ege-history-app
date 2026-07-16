@@ -313,7 +313,43 @@
          *     });
          */
         
+        // Берём Firebase custom-token (uid = tgId) из бэкенда бота по Telegram initData.
+        // Возвращает строку токена или null (любая осечка = null, вызывающий откатится на аноним).
+        async function _fetchTgCustomToken() {
+            const app = getTelegramWebApp();
+            const initData = app && app.initData;
+            if (!initData) return null;
+            const ctrl = new AbortController();
+            const timer = setTimeout(() => ctrl.abort(), 6000);
+            try {
+                const resp = await fetch('/auth/telegram', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ initData }),
+                    signal: ctrl.signal,
+                });
+                if (!resp.ok) return null;
+                const j = await resp.json();
+                return (j && j.token) || null;
+            } catch (e) {
+                return null;
+            } finally {
+                clearTimeout(timer);
+            }
+        }
+
         const initAuth = async () => {
+            // Новый путь (за флагом localStorage.ege_tg_token_auth='1'): в реальном Telegram
+            // логинимся кастом-токеном с uid=tgId. Любой сбой (нет эндпоинта/сети/подписи) →
+            // проваливаемся в существующий анонимный вход — поведение как раньше.
+            if (localStorage.getItem('ege_tg_token_auth') === '1' && isRealTelegram()) {
+                try {
+                    const tk = await _fetchTgCustomToken();
+                    if (tk) { await signInWithCustomToken(auth, tk); return; }
+                } catch (e) {
+                    console.warn('TG custom-token вход не удался, откат на анонимный:', e && e.message);
+                }
+            }
             if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
                 try {
                     await signInWithCustomToken(auth, __initial_auth_token);
