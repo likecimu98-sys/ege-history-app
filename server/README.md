@@ -19,33 +19,32 @@
 
 Тесты (ничего живого): `node server/initdata.selftest.js && node server/endpoint.selftest.js`.
 
-## Как это подключается к боту (на VPS)
+## Выкат на VPS — ОТДЕЛЬНЫЙ процесс (bot.js НЕ трогаем)
 
-Бот уже держит `firebase-admin` (`admin.credential.cert(serviceAccount.json)`, bot.js:83)
-и токен бота в `/root/bot/.env`. Эндпоинт переиспользует их же.
+`vps-main.js` — самодостаточный запускатель: сам читает `serviceAccount.json` и
+`/root/bot/.env` (токен бота), поднимает эндпоинт на `127.0.0.1:8791`. Работающего
+бота не трогает вообще — это отдельное pm2-приложение рядом.
 
-Вставить в `bot.js` (в блоке «Старт», после инициализации `admin`):
+Из корня репозитория (с машины, где есть SSH-ключ к VPS):
 
-```js
-const { createTokenServer } = require('./token-endpoint');
-// isTeacher: читаем teachers/{tgId} через тот же admin (или из users.db)
-async function isTeacher(tgId) {
-  const snap = await admin.firestore()
-    .doc(`artifacts/ege-history-bot/public/data/teachers/${tgId}`).get();
-  if (!snap.exists) return { teacher: false };
-  const d = snap.data() || {};
-  const classes = (d.classes || []).map(c => (typeof c === 'string' ? c : c.code)).filter(Boolean);
-  return { teacher: true, classes };
-}
-const tokenServer = createTokenServer({
-  admin, botToken: process.env.BOT_TOKEN, isTeacher,
-  origin: 'https://reshay-istoriyu.ru', log: console,
-});
-tokenServer.listen(8791, '127.0.0.1', () => console.log('[token] :8791'));
+```bash
+# 1. Залить 3 файла рядом с ботом
+scp server/initdata.js server/token-endpoint.js server/vps-main.js root@185.198.152.200:/root/bot/
+
+# 2. Запустить как отдельный pm2-процесс + автозапуск
+ssh root@185.198.152.200 'cd /root/bot && pm2 start vps-main.js --name hist-token && pm2 save'
+
+# 3. Локальная проверка НА сервере (должен ответить 401 {"error":"empty"}, не упасть)
+ssh root@185.198.152.200 'curl -sS -X POST http://127.0.0.1:8791/auth/telegram -H "Content-Type: application/json" -d "{}"'
 ```
 
-Скопировать `initdata.js` и `token-endpoint.js` в `/root/bot/`, затем
-`pm2 restart hist-bot`.
+Если шаг 3 вернул `{"error":"empty"}` — процесс жив и Firebase-admin инициализировался.
+Если `BOT_TOKEN не найден` — глянуть имя ключа в `/root/bot/.env` и либо переименовать
+в `BOT_TOKEN`, либо запустить с `TOKEN_ENV`… (проще: `pm2 delete hist-token`, поправить,
+снова `pm2 start`). Бот при этом не затронут.
+
+Легаси-вариант «вписать прямо в bot.js» (НЕ рекомендуется, трогает живого бота) —
+см. историю git этого файла.
 
 ## Nginx (тот же домен, отдельный путь) — на VPS
 
