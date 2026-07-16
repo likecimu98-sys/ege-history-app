@@ -31,7 +31,7 @@ function decide(path, op, req) {
   let m = path.match(/^artifacts\/[^/]+\/public\/data\/students\/([^/]+)$/);
   if (m) {
     if (isRead) return authed(req);
-    return isOwner(req, m[1]) && !hasBlob(req);
+    return (isOwner(req, m[1]) || isTeacher(req)) && !hasBlob(req);
   }
   // private/data/state/{id}
   m = path.match(/^artifacts\/[^/]+\/private\/data\/state\/([^/]+)$/);
@@ -128,6 +128,15 @@ const S = [
   ['НЕ-учитель пишет журнал класса — блок',
     `artifacts/${APP}/public/data/classes/0377`, 'update',
     withData(tg, { assignments: [] }), false],
+  ['Учитель пишет ДЗ в публичный профиль ученика (top-level, без блоба) — ок',
+    `artifacts/${APP}/public/data/students/7009819968`, 'update',
+    withData(teacher, { pendingAssignments: [], revokedAssignments: [] }), true],
+  ['Учитель НЕ может класть fullStateJson в ученика (блоб только владелец в private) — блок',
+    `artifacts/${APP}/public/data/students/7009819968`, 'update',
+    withData(teacher, { fullStateJson: '{}' }), false],
+  ['Ученик пишет в ЧУЖОЙ публичный профиль (не владелец, не учитель) — блок',
+    `artifacts/${APP}/public/data/students/7009819968`, 'update',
+    withData(tg, { pendingAssignments: [] }), false],
 
   // --- ДУЭЛИ / ЛИДЕРБОРД ---
   ['Игрок правит документ матча — ок',
@@ -164,21 +173,16 @@ console.log(`\n  Итог замысла: ${pass} ok, ${fail} расхожден
 
 // ── что строгие правила ЛОМАЮТ в ТЕКУЩЕМ клиенте (список рефакторинга) ───────
 // Эти вызовы есть в firebase-sync.js СЕЙЧАС и после строгих правил упадут.
+// После claim-упрощения P2 учительские записи РАЗРЕШЕНЫ (см. сценарии выше) —
+// переносить их в бота НЕ нужно. Осталось два реальных изменения клиента:
 const BREAKS = [
-  ['Учитель из браузера пишет pendingAssignments в чужой students/{uid}',
-    'firebase-sync.js:2871 _assignBundleToStudentDb → перенести в бота (Admin SDK)',
-    `artifacts/${APP}/public/data/students/7009819968`, 'update',
-    withData(teacher, { pendingAssignments: [] })],
-  ['Учитель из браузера отменяет ДЗ ученику (updateDoc чужого students)',
-    'firebase-sync.js:2786 cancelStudentAssignment → в бота',
-    `artifacts/${APP}/public/data/students/7009819968`, 'update',
-    withData(teacher, { pendingAssignments: [], revokedAssignments: [] })],
   ['Владелец пишет tombstone _mergedInto в ЧУЖОЙ legacy-док',
-    'firebase-sync.js:3583 syncProgressToCloud → слияние личностей в бота',
+    'firebase-sync.js:3583 — при uid=tgId новая фрагментация не возникает; старую чистит '
+    + '/root/bot/_repair-merged.js (Admin SDK). Провал tombstone у клиента ловится и безвреден.',
     `artifacts/${APP}/public/data/students/google_PVx8abc`, 'update',
     withData(tg, { _mergedInto: '352253483' })],
   ['Старый путь: fullStateJson лежит в public/students (утечка при read:authed)',
-    'firebase-sync.js:3570 payload с fullStateJson → писать в private/state',
+    'firebase-sync.js:3570 payload с fullStateJson → писать в private/state/{id} (предпосылка 4)',
     `artifacts/${APP}/public/data/students/352253483`, 'update',
     withData(tg, { fullStateJson: '{"stats":{}}', name: 'Саша' })],
 ];

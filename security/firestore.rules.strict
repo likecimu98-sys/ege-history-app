@@ -31,11 +31,13 @@ service cloud.firestore {
     }
 
     // ── ПУБЛИЧНЫЙ профиль ученика: имя, класс, поля лидерборда (БЕЗ fullStateJson).
-    //    Читают все авторизованные (нужно учителю и топу). Пишет только владелец,
-    //    и приватный блоб сюда класть нельзя.
+    //    Читают все авторизованные (нужно учителю и топу). Пишет владелец ИЛИ учитель
+    //    (claim teacher — выдаёт бот при выпуске токена; ученик подделать не может).
+    //    Учительские операции (выдача/отмена ДЗ, выпуск) остаются в браузере — переносить
+    //    в бота не нужно. Приватный блоб сюда класть нельзя в любом случае.
     match /artifacts/{appId}/public/data/students/{studentId} {
       allow read:  if authed();
-      allow write: if isOwner(studentId)
+      allow write: if (isOwner(studentId) || isTeacher())
                    && !('fullStateJson' in request.resource.data);
     }
 
