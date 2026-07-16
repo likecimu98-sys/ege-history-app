@@ -339,10 +339,13 @@
         }
 
         const initAuth = async () => {
-            // Новый путь (за флагом localStorage.ege_tg_token_auth='1'): в реальном Telegram
-            // логинимся кастом-токеном с uid=tgId. Любой сбой (нет эндпоинта/сети/подписи) →
-            // проваливаемся в существующий анонимный вход — поведение как раньше.
-            if (localStorage.getItem('ege_tg_token_auth') === '1' && isRealTelegram()) {
+            // Новый путь (за флагом localStorage.ege_tg_token_auth='1' ИЛИ у админа — поэтапный
+            // выкат «сначала на себе»): в реальном Telegram логинимся кастом-токеном с uid=tgId.
+            // Любой сбой (нет эндпоинта/сети/подписи) → проваливаемся в существующий анонимный
+            // вход — поведение как раньше.
+            const _tgUid = (getTelegramUser() && String(getTelegramUser().id)) || localStorage.getItem('known_tg_id') || '';
+            const _tokenAuthOn = localStorage.getItem('ege_tg_token_auth') === '1' || _tgUid === '352253483';
+            if (_tokenAuthOn && isRealTelegram()) {
                 try {
                     const tk = await _fetchTgCustomToken();
                     if (tk) { await signInWithCustomToken(auth, tk); return; }
