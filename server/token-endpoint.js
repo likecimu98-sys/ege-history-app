@@ -9,6 +9,8 @@
 //   admin,            // инициализированный firebase-admin
 //   botToken,         // токен бота (для проверки подписи initData)
 //   isTeacher,        // async (tgId) => { teacher:bool, classes?:[] }  (из Firestore/SQLite бота)
+//   onAuth,           // async (tgId) => void — fire-and-forget ПОСЛЕ выдачи токена
+//                     //   (авто-premium по подписке на группы клуба и т.п.)
 //   origin,           // CORS-origin, по умолчанию https://reshay-istoriyu.ru
 //   maxAgeSec,        // срок годности initData, по умолчанию 24ч
 //   log               // console-подобный
@@ -22,6 +24,7 @@ function createTokenServer(deps) {
     admin,
     botToken,
     isTeacher = async () => ({ teacher: false }),
+    onAuth = null,
     origin = 'https://reshay-istoriyu.ru',
     maxAgeSec = 86400,
     log = console,
@@ -67,6 +70,12 @@ function createTokenServer(deps) {
         const token = await admin.auth().createCustomToken(v.tgId, claims);
         res.writeHead(200, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify({ token }));
+
+        // Не задерживаем логин: авто-premium по подписке идёт после ответа.
+        if (onAuth) {
+          Promise.resolve(onAuth(v.tgId))
+            .catch((e) => log.warn && log.warn('[token] onAuth fail:', e && e.message));
+        }
       } catch (e) {
         log.error && log.error('[token] endpoint error:', e && e.message);
         res.writeHead(500, { 'Content-Type': 'application/json' });

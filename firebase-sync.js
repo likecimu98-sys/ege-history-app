@@ -3519,8 +3519,10 @@
                 }
                 // Проверяем роль учителя во всех путях загрузки (не только вход через Google)
                 if (window.checkTeacherRole) await window.checkTeacherRole().catch(() => {});
-                // premium с документа + пересчёт дневного лимита (после роли: учитель безлимитен)
-                window._studentPremium = !!(bestData && bestData.premium);
+                // premium с документа + пересчёт дневного лимита (после роли: учитель безлимитен).
+                // premium — ручной тумблер /premium в боте; premiumAuto ставит токен-эндпоинт
+                // по подписке на группы клуба (config/limits.premiumChats). Подписчик = OR.
+                window._studentPremium = !!(bestData && (bestData.premium || bestData.premiumAuto));
                 window.refreshDailyLimit && window.refreshDailyLimit();
             } catch(e) { console.error('[Sync] loadProgressFromCloud error:', e); }
         };

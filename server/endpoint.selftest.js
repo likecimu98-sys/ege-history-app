@@ -32,8 +32,10 @@ const adminMock = {
 const teacherIds = new Set(['352253483']);
 const isTeacher = async (tgId) => ({ teacher: teacherIds.has(tgId), classes: teacherIds.has(tgId) ? ['0377'] : [] });
 
+const authed = [];   // кого передали в onAuth (авто-premium)
 const server = createTokenServer({
   admin: adminMock, botToken: TOKEN, isTeacher,
+  onAuth: async (tgId) => { authed.push(tgId); if (tgId === '352253483') throw new Error('boom'); },
   log: { warn() {}, error() {} },
 });
 
@@ -67,6 +69,10 @@ function post(port, path, bodyObj) {
   j = JSON.parse(r.body || '{}');
   check('учитель → claim teacher:true', j.token && j.token.includes('"teacher":true'));
   check('учитель → claim classes', j.token && j.token.includes('0377'));
+
+  // onAuth: дёрнулся для обоих успешных входов; исключение в нём (учитель) не сломало ответ
+  await new Promise(res => setTimeout(res, 50));
+  check('onAuth вызван после каждого успешного входа', authed.join(',') === '7009819968,352253483');
 
   // подделка → 401
   r = await post(port, '/auth/telegram', { initData: init.replace(/hash=[0-9a-f]+/i, 'hash=' + 'a'.repeat(64)) });
