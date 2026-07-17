@@ -819,51 +819,18 @@ window.applyGlobalSettings = function() {
 function toggleTheme() { localStorage.setItem('ege_theme', document.documentElement.classList.toggle('dark') ? 'dark' : 'light'); }
 
 /* ──────────────────────────────────────────────────────────
-   SKIN SYSTEM — 7 лобби-тем
+   ТЕМА — только классика (2026-07-18). Класс skin-classic задан прямо на <body>
+   в index.html и не зависит от загрузки JS: раньше его вешал этот файл, и пока
+   скрипты качались (или один оборвался), лобби стояло «авророй» с мёртвыми
+   кнопками. Пикер тем удалён из профиля; чужой сохранённый выбор игнорируем.
    ────────────────────────────────────────────────────────── */
-const SKINS = ['aurora','classic','constructivism','coffee','sakura','forest','scholar'];
-
-window.applySkin = function(skin) {
-    if (!SKINS.includes(skin)) skin = 'aurora';
-    // Remove all previous skin classes
-    SKINS.forEach(s => document.body.classList.remove('skin-' + s));
-    // Aurora is the default (no extra class needed)
-    if (skin !== 'aurora') document.body.classList.add('skin-' + skin);
-    localStorage.setItem('ege_skin', skin);
-    updateSkinPicker(skin);
-};
-
-function updateSkinPicker(activeSkin) {
-    const picker = document.getElementById('skin-picker');
-    if (!picker) return;
-    picker.querySelectorAll('.skin-btn').forEach(btn => {
-        const s = btn.dataset.skin;
-        const isActive = s === activeSkin || (activeSkin === 'aurora' && s === 'aurora');
-        // Style the button border to show active state
-        btn.style.borderColor = isActive ? '#60a5fa' : 'transparent';
-        btn.style.background  = isActive ? 'rgba(59,130,246,.12)' : '';
-        btn.style.borderRadius = '12px';
-    });
-}
-
-// Apply skin on page load — тема по умолчанию: классика (светлая)
-const DEFAULT_SKIN = 'classic';
 (function() {
-    let saved = localStorage.getItem('ege_skin') || DEFAULT_SKIN;
-    // Легаси/удалённые скины (старая система beresta/cyberpunk/… больше не существует) → дефолт.
-    if (!SKINS.includes(saved)) { saved = DEFAULT_SKIN; localStorage.setItem('ege_skin', saved); }
-    SKINS.forEach(s => document.body.classList.remove('skin-' + s));
-    if (saved !== 'aurora') document.body.classList.add('skin-' + saved);
+    // У старых пользователей мог остаться выбранный скин — принудительно классика.
+    document.body.classList.add('skin-classic');
+    ['aurora','constructivism','coffee','sakura','forest','scholar']
+        .forEach(s => document.body.classList.remove('skin-' + s));
+    localStorage.setItem('ege_skin', 'classic');
 })();
-
-// Delegate click on skin-picker
-document.addEventListener('click', function(e) {
-    const btn = e.target.closest('.skin-btn[data-skin]');
-    if (btn) {
-        if (typeof haptic === 'function') haptic('light');
-        window.applySkin(btn.dataset.skin);
-    }
-});
 
 
 window.toggleFocusMode = function() {
@@ -2182,9 +2149,6 @@ window.openProfileModal = function() {
         const bound = !!(localStorage.getItem('known_tg_id') || localStorage.getItem('google_uid'));
         logoutBtn.classList.toggle('hidden', inTg || !bound);
     }
-    // Refresh skin picker active state
-    const currentSkin = localStorage.getItem('ege_skin') || DEFAULT_SKIN;
-    updateSkinPicker(currentSkin);
     showModal('profile-modal');
 };
 window.saveProfileName = function() { const nm = $('profile-name-input').value.trim(), cd = $('profile-class-code').value.trim(); const prevCd = localStorage.getItem('student_class_code') || ''; const prevNm = localStorage.getItem('student_manual_name') || ''; if (nm) { localStorage.setItem('student_manual_name', nm); if (nm !== prevNm) localStorage.setItem('student_manual_name_at', String(Date.now())); } if (cd !== undefined) localStorage.setItem('student_class_code', cd); showToast('✅', 'Профиль сохранен!', 'bg-emerald-500', 'border-emerald-700'); hideModal('profile-modal'); if (window.syncProgressToCloud) window.syncProgressToCloud(); if (cd && cd !== prevCd && window.pullClassAssignments) window.pullClassAssignments(cd); };

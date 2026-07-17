@@ -147,7 +147,9 @@
         /* ─────────────────────────────────────────────────────────── */
     </style>
 </head>
-<body class="bg-gray-50 dark:bg-[#121212] text-slate-800 dark:text-gray-300 font-sans antialiased min-h-screen flex flex-col relative">
+<!-- skin-classic прямо на body: единственная тема (2026-07-18), не зависит от загрузки JS —
+     раньше класс вешал ui.js, и до его выполнения (или при обрыве скрипта) лобби стояло «авророй» -->
+<body class="skin-classic bg-gray-50 dark:bg-[#121212] text-slate-800 dark:text-gray-300 font-sans antialiased min-h-screen flex flex-col relative">
 
     <!-- ═══════════════════════════════════════════════════════════
          SKELETON SCREEN — виден мгновенно, пока data.js грузится
@@ -1067,40 +1069,7 @@
             </div>
             <div class="shrink-0"><label class="block text-[10px] font-black text-gray-500 uppercase tracking-widest mb-1.5 px-1">Имя и Фамилия</label><input type="text" id="profile-name-input" placeholder="Иванов Иван, 11 'А'" class="w-full p-3.5 border border-gray-200 rounded-2xl dark:bg-[#181818] dark:border-[#2c2c2c] dark:text-gray-300 outline-none font-bold shadow-inner text-sm"></div>
             <div class="shrink-0"><label class="block text-[10px] font-black text-gray-500 uppercase tracking-widest mb-1.5 px-1">Код класса (от учителя)</label><input type="text" id="profile-class-code" placeholder="Например: 4921" class="w-full p-3.5 font-mono border border-gray-200 rounded-2xl dark:bg-[#181818] dark:border-[#2c2c2c] dark:text-gray-300 outline-none text-center font-black text-base text-blue-600 dark:text-blue-400 shadow-inner"></div>
-            <!-- ВЫБОР ТЕМЫ -->
-            <div class="shrink-0">
-                <label class="block text-[10px] font-black text-gray-500 uppercase tracking-widest mb-2 px-1">🎨 Тема интерфейса</label>
-                <div class="grid grid-cols-4 gap-2" id="skin-picker">
-                    <button data-skin="aurora"          class="skin-btn flex flex-col items-center gap-1.5 p-2 rounded-xl border-2 border-transparent transition-all active:scale-95" title="Аврора Неон">
-                        <span class="w-8 h-8 rounded-full flex items-center justify-center text-base" style="background:linear-gradient(135deg,#070b14,#0d1527);border:2px solid #3b82f6;">🌌</span>
-                        <span class="text-[8px] font-black uppercase leading-none text-center text-gray-500">Аврора</span>
-                    </button>
-                    <button data-skin="classic"         class="skin-btn flex flex-col items-center gap-1.5 p-2 rounded-xl border-2 border-transparent transition-all active:scale-95" title="Классика">
-                        <span class="w-8 h-8 rounded-full flex items-center justify-center text-base" style="background:linear-gradient(135deg,#f8fafc,#e2e8f0);border:2px solid #2563eb;">☀️</span>
-                        <span class="text-[8px] font-black uppercase leading-none text-center text-gray-500">Классика</span>
-                    </button>
-                    <button data-skin="constructivism" class="skin-btn flex flex-col items-center gap-1.5 p-2 rounded-xl border-2 border-transparent transition-all active:scale-95" title="Конструктивизм">
-                        <span class="w-8 h-8 rounded-full flex items-center justify-center text-base" style="background:linear-gradient(135deg,#f2ece0,#fffdf7);border:2px solid #cc0000;">🚩</span>
-                        <span class="text-[8px] font-black uppercase leading-none text-center text-gray-500">Конструк.</span>
-                    </button>
-                    <button data-skin="coffee"         class="skin-btn flex flex-col items-center gap-1.5 p-2 rounded-xl border-2 border-transparent transition-all active:scale-95" title="Кофе">
-                        <span class="w-8 h-8 rounded-full flex items-center justify-center text-base" style="background:linear-gradient(135deg,#f4eee4,#fffaf2);border:2px solid #b5651d;">☕</span>
-                        <span class="text-[8px] font-black uppercase leading-none text-center text-gray-500">Кофе</span>
-                    </button>
-                    <button data-skin="sakura"         class="skin-btn flex flex-col items-center gap-1.5 p-2 rounded-xl border-2 border-transparent transition-all active:scale-95" title="Сакура">
-                        <span class="w-8 h-8 rounded-full flex items-center justify-center text-base" style="background:linear-gradient(135deg,#fdf5f7,#fff0f4);border:2px solid #e879a0;">🌺</span>
-                        <span class="text-[8px] font-black uppercase leading-none text-center text-gray-500">Сакура</span>
-                    </button>
-                    <button data-skin="forest"         class="skin-btn flex flex-col items-center gap-1.5 p-2 rounded-xl border-2 border-transparent transition-all active:scale-95" title="Лес">
-                        <span class="w-8 h-8 rounded-full flex items-center justify-center text-base" style="background:linear-gradient(135deg,#eff5ee,#ffffff);border:2px solid #2f7d4f;">🌲</span>
-                        <span class="text-[8px] font-black uppercase leading-none text-center text-gray-500">Лес</span>
-                    </button>
-                    <button data-skin="scholar"        class="skin-btn flex flex-col items-center gap-1.5 p-2 rounded-xl border-2 border-transparent transition-all active:scale-95" title="Учёная академия">
-                        <span class="w-8 h-8 rounded-full flex items-center justify-center text-base" style="background:linear-gradient(135deg,#fafaf8,#f5f2ee);border:2px solid #4a7c59;">📖</span>
-                        <span class="text-[8px] font-black uppercase leading-none text-center text-gray-500">Учёная</span>
-                    </button>
-                </div>
-            </div>
+            <!-- Выбор темы удалён (2026-07-18): единственная тема — классика (skin-classic на body) -->
             <!-- PIN -->
             <div class="shrink-0 bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-200 dark:border-indigo-800/40 rounded-2xl p-3 flex flex-col gap-2">
                 <div class="flex items-center justify-between">
@@ -1171,7 +1140,10 @@
     <!-- Ядро (факты, ~659 КБ): нужно для лобби и заданий. Приложение ОТКРЫВАЕТСЯ сразу
          после него — defer парсит HTML параллельно, порядок выполнения гарантирован. -->
     <script src="data.js" defer></script>
-    <script defer>document.dispatchEvent(new Event('app:ready'));</script>
+    <!-- app:ready + самолечение недокачки. Именно ФАЙЛ с defer, не инлайн:
+         defer у инлайн-скриптов игнорируется, и раньше app:ready стрелял во время
+         парсинга HTML — заставка снималась при ещё мёртвых кнопках. -->
+    <script src="boot-ready.js" defer></script>
 
     <!-- Тяжёлые визуальные данные (~765 КБ: архитектура/живопись/карты/культура) нужны ТОЛЬКО
          в Задании 7 / тренажёре / картах, а не в лобби. Раньше они грузились ДО app:ready и
@@ -1201,9 +1173,8 @@
           });
         }
         // Триггерим после готовности DOM (приложение уже инициализируется), дав лобби
-        // отрисоваться. DOMContentLoaded надёжнее app:ready: тот диспатчится inline-скриптом,
-        // у которого `defer` игнорируется браузером, поэтому событие летит во время парсинга —
-        // раньше, чем этот листенер успевает повеситься.
+        // отрисоваться. (app:ready с 2026-07-18 тоже честный — диспатчится из boot-ready.js
+        // в конце defer-цепочки; DOMContentLoaded оставлен, чтобы не медлить с фоном.)
         if (document.readyState === 'loading') {
           document.addEventListener('DOMContentLoaded', function () { setTimeout(loadVisualData, 200); }, { once: true });
         } else {
