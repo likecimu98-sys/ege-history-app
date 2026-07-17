@@ -275,6 +275,40 @@
         }
         document.addEventListener('app:ready', dismissSkeleton);
         window.addEventListener('load', function() { setTimeout(dismissSkeleton, 300); });
+
+        // ── ГОТОВНОСТЬ ПРИЛОЖЕНИЯ: инлайн-вотчер, никакой сети и никаких гонок ──
+        // Заставка снимается, когда ЯДРО РЕАЛЬНО ИСПОЛНИЛОСЬ: quickStartGame определяет
+        // app.js — последний скрипт defer-цепочки. Поллинг вместо внешнего файла/событий
+        // сознательно: (1) инлайн-defer игнорируется браузером (app:ready стрелял во время
+        // парсинга — «мёртвые кнопки» на холодном кэше); (2) отдельный boot-ready.js после
+        // обновления не лежал в старом SW-кэше и на моргнувшей сети ВИС — заставка не
+        // снималась вовсе. Этот вотчер живёт в самом index.html: одна версия со скелетоном,
+        // работает даже если ни одно событие не долетело и любой файл завис.
+        var bootT0 = Date.now();
+        (function watchBoot() {
+          if (typeof window.quickStartGame === 'function' && document.readyState !== 'loading') {
+            try { sessionStorage.removeItem('ege_boot_retry'); } catch (e) {}
+            document.dispatchEvent(new Event('app:ready'));
+            dismissSkeleton();
+            return;
+          }
+          if (Date.now() - bootT0 > 20000) {
+            // 20с — ядро не доехало (обрыв сети/прокси). Один раз тихо перезагружаемся:
+            // повтор добирает файлы из кэша. Если и после перезапуска пусто — открываем
+            // страницу как есть, чтобы человек не смотрел на вечную заставку.
+            var retried = null;
+            try { retried = sessionStorage.getItem('ege_boot_retry'); } catch (e) {}
+            if (!retried) {
+              try { sessionStorage.setItem('ege_boot_retry', '1'); } catch (e) {}
+              location.reload();
+              return;
+            }
+            document.dispatchEvent(new Event('app:ready'));
+            dismissSkeleton();
+            return;
+          }
+          setTimeout(watchBoot, 100);
+        })();
         // Легковесный скрипт для нативного pinch-to-zoom только для картинок (без библиотек и окон)
         let activeImg = null;
         let startDist = 0, scale = 1;
@@ -1126,7 +1160,7 @@
     <div id="game-over-modal" class="fixed inset-0 bg-black/90 z-[10000] hidden flex-col items-center justify-center backdrop-blur-md opacity-0 transition-opacity no-print">
         <div class="bg-white dark:bg-[#1e1e1e] rounded-3xl p-8 w-[85%] max-w-xs text-center shadow-[0_10px_50px_rgba(0,0,0,0.5)]">
             <div class="text-6xl mb-4 drop-shadow-lg" id="modal-emoji">🏆</div><h2 class="text-sm font-black mb-1 text-gray-400 uppercase tracking-widest" id="modal-main-title">Результат</h2><p class="text-5xl font-black text-blue-600 dark:text-blue-400 mb-6 drop-shadow-sm flex items-center justify-center gap-3" id="modal-score">0</p>
-            <button data-action="shareTelegram" class="w-full bg-[#0088cc] hover:bg-[#0077b3] text-white py-4 rounded-2xl font-black uppercase tracking-wider mb-3 flex items-center justify-center gap-2 transition-transform active:scale-95 shadow-md"><svg class="w-5 h-5" fill="currentColor" viewBox="0 0 24 24"><path d="M12 0C5.373 0 0 5.373 0 12s5.373 12 12 12-5.373 12-12S18.627 0 12 0zm5.894 8.221l-1.97 9.28c-.145.658-.537.818-1.084.508l-3-2.21-1.446 1.394c-.14.18-.357.295-.6.295-.002 0-.003 0-.005 0l.213-3.054 5.56-5.022c.24-.213-.054-.334-.373-.121l-6.869 4.326-2.96-.924c-.64-.203-.658-.64.135-.954l11.566-4.458c.538-.196 1.006.128.832.94z"/></svg>Поделиться</button>
+            <button data-action="shareTelegram" class="w-full bg-[#0088cc] hover:bg-[#0077b3] text-white py-4 rounded-2xl font-black uppercase tracking-wider mb-3 flex items-center justify-center gap-2 transition-transform active:scale-95 shadow-md"><svg class="w-5 h-5" fill="currentColor" viewBox="0 0 24 24"><path d="M12 0C5.373 0 0 5.373 0 12s5.373 12 12 12 12-5.373 12-12S18.627 0 12 0zm5.894 8.221l-1.97 9.28c-.145.658-.537.818-1.084.508l-3-2.21-1.446 1.394c-.14.18-.357.295-.6.295-.002 0-.003 0-.005 0l.213-3.054 5.56-5.022c.24-.213-.054-.334-.373-.121l-6.869 4.326-2.96-.924c-.64-.203-.658-.64.135-.954l11.566-4.458c.538-.196 1.006.128.832.94z"/></svg>Поделиться</button>
             <button data-action="closeGameOverModal" class="w-full bg-gray-100 dark:bg-[#181818] hover:bg-gray-200 text-gray-600 dark:text-gray-400 py-4 rounded-2xl font-black uppercase tracking-wider transition-colors active:scale-95">В меню</button>
         </div>
     </div>
@@ -1140,10 +1174,9 @@
     <!-- Ядро (факты, ~659 КБ): нужно для лобби и заданий. Приложение ОТКРЫВАЕТСЯ сразу
          после него — defer парсит HTML параллельно, порядок выполнения гарантирован. -->
     <script src="data.js" defer></script>
-    <!-- app:ready + самолечение недокачки. Именно ФАЙЛ с defer, не инлайн:
-         defer у инлайн-скриптов игнорируется, и раньше app:ready стрелял во время
-         парсинга HTML — заставка снималась при ещё мёртвых кнопках. -->
-    <script src="boot-ready.js" defer></script>
+    <!-- app:ready диспатчит инлайн-вотчер готовности в начале <body> (см. watchBoot):
+         отдельный boot-ready.js убран — свежий файл не лежал в старом SW-кэше и на
+         моргнувшей сети вис, не давая снять заставку. -->
 
     <!-- Тяжёлые визуальные данные (~765 КБ: архитектура/живопись/карты/культура) нужны ТОЛЬКО
          в Задании 7 / тренажёре / картах, а не в лобби. Раньше они грузились ДО app:ready и

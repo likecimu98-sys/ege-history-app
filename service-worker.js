@@ -1,6 +1,6 @@
 'use strict';
 
-const APP_VERSION = '2026-07-18-2';
+const APP_VERSION = '2026-07-18-3';
 const STATIC_CACHE = `ege-history-static-${APP_VERSION}`;
 const ASSET_CACHE = `ege-history-assets-${APP_VERSION}`;
 const CACHE_NAMES = [STATIC_CACHE, ASSET_CACHE];
@@ -24,7 +24,6 @@ const CORE_URLS = [
     './vov-mode.js',
     './visual-trainer.js',
     './app.js',
-    './boot-ready.js',
     './firebase-sync.js',
     // Тяжёлые visual*.generated.js (~765 КБ) НЕ прекэшируем на install: они грузятся
     // лениво в фоне (см. index.html loadVisualData) и кэшируются fetch-handler'ом по
