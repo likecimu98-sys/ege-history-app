@@ -1,0 +1,320 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Конструктор заданий ФИПИ</title>
+<style>
+:root{--bg:#f4f5f7;--card:#fff;--ink:#1c2430;--muted:#6b7685;--accent:#2563eb;--ok:#16a34a;--line:#e3e7ee}
+*{box-sizing:border-box}
+body{margin:0;font:16px/1.5 "Segoe UI",system-ui,sans-serif;background:var(--bg);color:var(--ink)}
+header{background:#1e293b;color:#fff;padding:14px 22px;display:flex;align-items:baseline;gap:14px;flex-wrap:wrap}
+header h1{font-size:20px;margin:0}
+header a{color:#93c5fd;font-size:14px;text-decoration:none;margin-left:auto}
+main{max-width:1100px;margin:0 auto;padding:18px 16px 60px;display:grid;grid-template-columns:1fr 1fr;gap:16px}
+@media(max-width:820px){main{grid-template-columns:1fr}}
+.step{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:16px 20px}
+.full{grid-column:1 / -1}
+.step h2{font-size:17px;margin:0 0 10px;display:flex;align-items:center;gap:10px}
+.step h2 .n{background:var(--accent);color:#fff;border-radius:50%;width:26px;height:26px;display:inline-flex;align-items:center;justify-content:center;font-size:14px;flex:none}
+select,input[type=text]{font:inherit;padding:8px 10px;border:1px solid var(--line);border-radius:8px;background:#fff;max-width:100%}
+button{font:inherit;font-weight:600;padding:10px 18px;border:none;border-radius:9px;cursor:pointer;background:var(--accent);color:#fff}
+button.secondary{background:#e2e8f0;color:var(--ink)}
+button:disabled{opacity:.45;cursor:default}
+.sub{color:var(--muted);font-size:14px}
+.chips{display:flex;flex-wrap:wrap;gap:8px;margin:8px 0}
+.chip{border:1px solid var(--line);background:#fff;border-radius:999px;padding:5px 12px;cursor:pointer;font-size:14px;user-select:none}
+.chip.on{background:var(--accent);border-color:var(--accent);color:#fff}
+.chip.part2{border-color:#c7b3f0;background:#f6f1ff}
+.chip.part2.on{background:#7c3aed;border-color:#7c3aed;color:#fff}
+.chip .cnt{opacity:.6;font-size:12px;margin-left:4px}
+.part-label{width:100%;font-size:12px;font-weight:600;color:var(--muted,#666);margin:6px 0 0}
+.exam-toggle{display:inline-flex;border:1px solid var(--line);border-radius:9px;overflow:hidden}
+.exam-btn{background:#fff;color:var(--ink);border:none;border-radius:0;padding:8px 18px;font-weight:700;cursor:pointer}
+.exam-btn.on{background:var(--accent);color:#fff}
+.row{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin:8px 0}
+.count-banner{font-size:18px;font-weight:600;margin:6px 0}
+.errbox{background:#fef2f2;border:1px solid #fca5a5;color:#991b1b;border-radius:9px;padding:10px 14px;margin:10px 0;display:none}
+.hint2{background:#eff6ff;border:1px solid #bfdbfe;color:#1e40af;border-radius:9px;padding:8px 12px;font-size:14px;margin:8px 0}
+#previewFrame{width:100%;height:520px;border:1px solid var(--line);border-radius:10px;background:#fff}
+.spin{display:inline-block;width:16px;height:16px;border:3px solid #cbd5e1;border-top-color:var(--accent);border-radius:50%;animation:sp 1s linear infinite;vertical-align:-3px}
+@keyframes sp{to{transform:rotate(360deg)}}
+label.opt{display:inline-flex;align-items:center;gap:6px;font-size:14px;margin-right:14px}
+#buildResult{margin-top:10px;display:none;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:9px;padding:12px 14px;font-size:14px}
+code{background:#eef2ff;padding:1px 6px;border-radius:4px;font-size:13px;word-break:break-all}
+footer{grid-column:1/-1;color:var(--muted);font-size:13px;text-align:center;margin-top:10px}
+</style>
+</head>
+<body>
+<header>
+  <h1>🧩 Конструктор заданий ФИПИ</h1>
+  <span class="sub" style="color:#94a3b8">из скачанного банка → готовый файл</span>
+  <a href="/">← к парсеру</a>
+</header>
+
+<main>
+<div class="errbox full" id="errbox"></div>
+
+<div class="step full">
+  <h2><span class="n">1</span> Экзамен и предмет</h2>
+  <div class="row">
+    <div class="exam-toggle" id="examToggle">
+      <button type="button" class="exam-btn on" data-exam="ege">ЕГЭ</button>
+      <button type="button" class="exam-btn" data-exam="oge">ОГЭ</button>
+    </div>
+    <select id="subject"></select>
+    <span id="libInfo" class="sub"></span>
+    <button class="secondary" id="btnRefresh" title="Пересканировать папку output">⟳ Обновить библиотеку</button>
+  </div>
+  <div class="row">
+    <label class="opt"><input type="checkbox" id="showOutdated"> 🗄️ показать <b id="outdatedCnt">устаревшие</b> задания (старого формата)</label>
+    <span class="sub" id="outdatedNote"></span>
+  </div>
+  <div class="row">
+    <button class="secondary" id="btnRepairMaterials" disabled>Проверяю карты и тексты…</button>
+    <button class="secondary" id="btnStopRepair" style="display:none">Остановить</button>
+    <span class="sub" id="repairStatus"></span>
+  </div>
+</div>
+
+<div class="step">
+  <h2><span class="n">2</span> Номера заданий</h2>
+  <div class="sub">Кликните нужные номера КИМ (в скобках — сколько есть). Ничего не выбрано = задания любого номера.</div>
+  <div class="chips" id="kims"></div>
+  <div class="hint2" id="kimsHint" style="display:none"></div>
+</div>
+
+<div class="step">
+  <h2><span class="n">3</span> Темы / периоды и тип</h2>
+  <div class="sub">Раздел кодификатора (период истории / блок обществознания):</div>
+  <div class="chips" id="periods"></div>
+  <div class="sub" style="margin-top:8px">Тип ответа (необязательно):</div>
+  <div class="chips" id="types"></div>
+</div>
+
+<div class="step full">
+  <h2><span class="n">4</span> Файл</h2>
+  <div class="row">
+    <input type="text" id="title" placeholder="Название (например: История ЕГЭ №1–7, XVIII век)" style="flex:1;min-width:260px">
+  </div>
+  <div class="row">
+    <span class="sub">Ответы:</span>
+    <label class="opt"><input type="radio" name="answers" value="end" checked> ключ в конце</label>
+    <label class="opt"><input type="radio" name="answers" value="inline"> под каждым</label>
+    <label class="opt"><input type="radio" name="answers" value="none"> без ответов</label>
+    <span class="sub">|</span>
+    <label class="opt"><input type="text" id="limit" placeholder="лимит" style="width:70px"> макс. заданий (пусто = все)</label>
+  </div>
+  <div class="count-banner" id="countBanner">Загружаю библиотеку…</div>
+  <div class="row">
+    <button id="btnPreview">👁️ Предпросмотр</button>
+    <button id="btnBuild">📄 Создать файлы (PDF-печать + Word)</button>
+  </div>
+  <div id="buildResult"></div>
+</div>
+
+<div class="step full">
+  <h2><span class="n">5</span> Предпросмотр</h2>
+  <div class="sub" id="previewNote">Нажмите «Предпросмотр» — покажу первые 20 заданий в том виде, как они попадут в файл.</div>
+  <iframe id="previewFrame" style="display:none"></iframe>
+</div>
+
+<footer>Задания принадлежат ФГБНУ «ФИПИ». Инструмент для личной подготовки и работы с учениками.</footer>
+</main>
+
+<script>
+'use strict';
+const $=(id)=>document.getElementById(id);
+const state={exam:'ege',subject:null,index:null,combo:null,outdated:'hide',kims:new Set(),periods:new Set(),types:new Set(),materials:[],repairing:false,stopRepair:false,materialRequest:0};
+
+function showErr(m){const b=$('errbox');b.textContent='⚠️ '+m;b.style.display='block';setTimeout(()=>b.style.display='none',12000);}
+async function api(url,body){const r=await fetch(url,body?{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)}:undefined);const d=await r.json();if(d&&d.error)throw new Error(d.error);return d;}
+
+const KIM_LABELS={
+  ege:{История:{
+    1:'событие↔год',2:'хронология',3:'процесс↔факт',4:'таблица',5:'событие↔участник',
+    6:'источник+суждения',7:'культура',8:'изображение',9:'карта: вопрос 1',10:'карта: вопрос 2',11:'карта: вопрос 3',12:'карта+суждения',
+    13:'источник: атрибуция',14:'источник: анализ',15:'изображение+обоснование',16:'изображение: выбор',
+    17:'два источника',18:'причины/последствия',19:'смысл понятия',20:'тезис о различиях',21:'аргументация'
+  }}
+};
+// граница частей КИМ: часть 2 (развёрнутый ответ) начинается с задания 13
+const PART2_FROM={ege:{История:13}};
+
+async function loadLibrary(refresh){
+  try{
+    $('countBanner').textContent='Загружаю библиотеку…';
+    const q=[];if(refresh)q.push('refresh=1');if(state.outdated==='all')q.push('outdated=1');
+    state.index=await api('/api/library'+(q.length?'?'+q.join('&'):''));
+    const total=state.index.combos.reduce((s,c)=>s+c.count,0);
+    $('libInfo').textContent=`в библиотеке ${total} заданий из ${state.index.sources.length} выгрузок`;
+    fillSubjects();
+  }catch(e){showErr('Не удалось прочитать библиотеку: '+e.message);}
+}
+
+function combosFor(exam){return state.index.combos.filter(c=>c.exam===exam);}
+function fillSubjects(){
+  const cs=combosFor(state.exam);
+  const sel=$('subject');
+  sel.innerHTML=cs.length?cs.map(c=>`<option value="${c.subject}">${c.subject} (${c.count})</option>`).join(''):'<option value="">— нет данных для этого экзамена —</option>';
+  state.subject=cs.length?cs[0].subject:null;
+  onComboChange();
+}
+$('subject').onchange=()=>{state.subject=$('subject').value;onComboChange();};
+
+$('examToggle').addEventListener('click',e=>{const b=e.target.closest('.exam-btn');if(!b)return;state.exam=b.dataset.exam;[...document.querySelectorAll('.exam-btn')].forEach(x=>x.classList.toggle('on',x===b));fillSubjects();});
+$('btnRefresh').onclick=()=>loadLibrary(true);
+$('showOutdated').onchange=()=>{state.outdated=$('showOutdated').checked?'all':'hide';loadLibrary(false);};
+
+function onComboChange(){
+  state.kims.clear();state.periods.clear();state.types.clear();
+  state.combo=state.index.combos.find(c=>c.exam===state.exam&&c.subject===state.subject)||null;
+  const oc=state.combo?state.combo.outdatedCount||0:0;
+  $('outdatedNote').textContent=state.outdated==='all'?'(показаны, включая устаревшие)':(oc?`скрыто устаревших: ${oc}`:'');
+  renderFilters();updateCount();loadMaterialStatus();
+}
+
+async function loadMaterialStatus(){
+  const request=++state.materialRequest;
+  const btn=$('btnRepairMaterials');
+  if(!state.subject){state.materials=[];btn.disabled=true;btn.textContent='Нет предмета';return;}
+  btn.disabled=true;
+  btn.textContent='Проверяю карты и тексты…';
+  try{
+    const q=`?exam=${encodeURIComponent(state.exam)}&subject=${encodeURIComponent(state.subject)}`;
+    const r=await api('/api/library/materials'+q);
+    if(request!==state.materialRequest)return;
+    state.materials=r.groups||[];
+    btn.textContent=r.total?`Повторить загрузку карт и текстов (${r.total})`:'Карты и тексты загружены';
+    btn.disabled=!r.total||state.repairing;
+    $('repairStatus').textContent=r.total?`карт: ${r.maps}, текстов: ${r.texts}, изображений: ${r.images}`:'';
+  }catch(e){
+    if(request!==state.materialRequest)return;
+    state.materials=[];btn.textContent='Повторить проверку материалов';btn.disabled=false;
+    $('repairStatus').textContent='Не удалось проверить библиотеку';
+  }
+}
+
+async function repairMaterials(){
+  if(state.repairing||!state.materials.length)return;
+  const groups=[...state.materials];
+  state.repairing=true;state.stopRepair=false;
+  $('btnRepairMaterials').disabled=true;
+  $('btnStopRepair').style.display='inline-block';
+  let loaded=0,missing=0,errors=0,stopReason='';
+  for(let i=0;i<groups.length&&!state.stopRepair;i++){
+    const g=groups[i];
+    $('repairStatus').textContent=`Проверено ${i}/${groups.length}, загружено ${loaded}. Сейчас: ${g.kind==='map'?'карта':g.kind==='text'?'текст':'изображение'} ${g.groupId}`;
+    try{
+      const r=await api('/api/library/material',g);
+      if(r.status==='loaded')loaded++;else missing++;
+    }catch(e){
+      errors++;
+      if(/нет связи с сайтом фипи|превышено время ожидания|failed to fetch/i.test(e.message)){
+        stopReason='ФИПИ сейчас не отвечает. Уже загруженные материалы сохранены; повторите загрузку позже.';
+        state.stopRepair=true;
+        showErr(stopReason);
+      }else showErr(`Группа ${g.groupId}: ${e.message}`);
+    }
+  }
+  state.repairing=false;
+  $('btnStopRepair').style.display='none';
+  $('repairStatus').textContent=stopReason || (state.stopRepair
+    ? `Остановлено. Загружено ${loaded}, прогресс сохранён.`
+    : `Готово. Загружено ${loaded}, не получено ${missing}, ошибок ${errors}.`);
+  await loadLibrary(true);
+}
+$('btnRepairMaterials').onclick=()=>state.materials.length?repairMaterials():loadMaterialStatus();
+$('btnStopRepair').onclick=()=>{state.stopRepair=true;};
+
+function renderFilters(){
+  const c=state.combo;
+  if(!c){$('kims').innerHTML='';$('periods').innerHTML='';$('types').innerHTML='';$('kimsHint').style.display='none';return;}
+  const labels=(KIM_LABELS[c.exam]&&KIM_LABELS[c.exam][c.subject])||{};
+  const part2From=(PART2_FROM[c.exam]&&PART2_FROM[c.exam][c.subject])||99;
+  const kimNums=Object.keys(c.kims).map(Number).sort((a,b)=>a-b);
+  if(kimNums.length){
+    const chip=n=>`<span class="chip${n>=part2From?' part2':''}" data-kim="${n}">№${n}${labels[n]?' '+labels[n]:''}<span class="cnt">${c.kims[n]}</span></span>`;
+    const p1=kimNums.filter(n=>n<part2From),p2=kimNums.filter(n=>n>=part2From);
+    let html='';
+    if(p1.length)html+=(p2.length?'<div class="part-label">Часть 1 — краткий ответ</div>':'')+p1.map(chip).join('');
+    if(p2.length)html+='<div class="part-label">Часть 2 — развёрнутый ответ</div>'+p2.map(chip).join('');
+    $('kims').innerHTML=html;
+    $('kimsHint').style.display='none';
+  }else{
+    $('kims').innerHTML='<span class="sub">Для этого предмета номера пока не распознаются — отбирайте по теме и типу ниже.</span>';
+    $('kimsHint').style.display='none';
+  }
+  const periods=Object.keys(c.periods).map(Number).sort((a,b)=>a-b);
+  $('periods').innerHTML=periods.map(p=>`<span class="chip" data-period="${p}">Раздел ${p}<span class="cnt">${c.periods[p]}</span></span>`).join('');
+  const types=Object.keys(c.types).sort();
+  $('types').innerHTML=types.map(t=>`<span class="chip" data-type="${t}">${t}<span class="cnt">${c.types[t]}</span></span>`).join('');
+  bindChips();
+}
+function bindChips(){
+  $('kims').querySelectorAll('.chip[data-kim]').forEach(ch=>ch.onclick=()=>{toggle(state.kims,+ch.dataset.kim,ch);updateCount();});
+  $('periods').querySelectorAll('.chip[data-period]').forEach(ch=>ch.onclick=()=>{toggle(state.periods,+ch.dataset.period,ch);updateCount();});
+  $('types').querySelectorAll('.chip[data-type]').forEach(ch=>ch.onclick=()=>{toggle(state.types,ch.dataset.type,ch);updateCount();});
+}
+function toggle(set,val,el){if(set.has(val))set.delete(val);else set.add(val);el.classList.toggle('on');}
+
+function currentFilter(){
+  return {exam:state.exam,subject:state.subject,kims:[...state.kims],periods:[...state.periods],types:[...state.types],outdated:state.outdated,limit:+$('limit').value||0};
+}
+function currentOpts(){
+  const answers=[...document.querySelectorAll('input[name=answers]')].find(r=>r.checked).value;
+  const parts=[state.exam.toUpperCase(),state.subject];
+  if(state.kims.size)parts.push('№'+[...state.kims].sort((a,b)=>a-b).join(','));
+  return {title:$('title').value.trim()||parts.join(' '),subtitle:'Источник: открытый банк заданий ФИПИ',answers};
+}
+
+// приблизительная оценка количества — считаем на сервере через предпросмотр было бы дорого,
+// поэтому грубо оцениваем по индексу (пересечение фильтров неизвестно точно → показываем «до N»).
+function updateCount(){
+  const c=state.combo;
+  if(!c){$('countBanner').textContent='Нет данных';return;}
+  // точное число даёт сервер при предпросмотре; здесь — ориентир
+  let hint='Выбрано фильтров: ';
+  const f=[];
+  if(state.kims.size)f.push('номера '+[...state.kims].sort((a,b)=>a-b).join(','));
+  if(state.periods.size)f.push('разделы '+[...state.periods].sort((a,b)=>a-b).join(','));
+  if(state.types.size)f.push(state.types.size+' тип(ов)');
+  $('countBanner').textContent=f.length?('Фильтр: '+f.join('; ')+' — нажмите «Предпросмотр» для точного числа'):'Без фильтра — попадут все задания предмета. Нажмите «Предпросмотр».';
+}
+
+$('btnPreview').onclick=async()=>{
+  $('btnPreview').disabled=true;$('previewNote').innerHTML='<span class="spin"></span> Собираю…';
+  try{
+    const r=await api('/api/preview',{filter:currentFilter(),opts:currentOpts()});
+    $('countBanner').textContent=`Найдено заданий: ${r.count}`+(r.count>r.shown?` (показаны первые ${r.shown})`:'');
+    const f=$('previewFrame');f.style.display='block';f.srcdoc=r.html;
+    $('previewNote').textContent=r.count?`Предпросмотр первых ${r.shown} из ${r.count}. Так задания будут выглядеть в файле.`:'Ничего не найдено — измените фильтр.';
+  }catch(e){showErr(e.message);$('previewNote').textContent='Ошибка предпросмотра.';}
+  $('btnPreview').disabled=false;
+};
+
+$('btnBuild').onclick=async()=>{
+  $('btnBuild').disabled=true;
+  const res=$('buildResult');res.style.display='block';res.innerHTML='<span class="spin"></span> Создаю файлы…';
+  try{
+    const r=await api('/api/build',{filter:currentFilter(),opts:currentOpts()});
+    res.innerHTML=`✅ Готово: <b>${r.total}</b> заданий (с ответами: ${r.withAnswers}).<br>
+      Папка: <code>${r.folder}</code><br>
+      <div class="row" style="margin-top:8px">
+        <button id="resultOpenPrint">🖨️ Открыть для печати / PDF</button>
+        <button class="secondary" id="resultOpenWord">📝 Открыть в Word</button>
+        <button class="secondary" id="resultOpenFolder">📂 Папка</button>
+      </div>`;
+    $('resultOpenPrint').onclick=()=>openFile(r.htmlPath);
+    $('resultOpenWord').onclick=()=>openFile(r.docPath);
+    $('resultOpenFolder').onclick=()=>openFolder(r.folder);
+  }catch(e){res.innerHTML='';showErr(e.message);}
+  $('btnBuild').disabled=false;
+};
+window.openFile=(f)=>api('/api/open-file',{file:f}).catch(e=>showErr(e.message));
+window.openFolder=(f)=>api('/api/open-folder',{folder:f}).catch(e=>showErr(e.message));
+
+loadLibrary(false);
+</script>
+</body>
+</html>

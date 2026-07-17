@@ -14,4 +14,6 @@
 *.pdf   binary
 
 # Не попадает в git archive → не выкладывается на прод (deploy-vps.ps1)
-tools/ export-ignore
+tools-and-docs/ export-ignore
+server/ export-ignore
+security/ export-ignore

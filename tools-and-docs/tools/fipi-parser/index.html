@@ -26,6 +26,9 @@ button:disabled{opacity:.45;cursor:default}
 .chip{border:1px solid var(--line);background:#fff;border-radius:999px;padding:5px 12px;cursor:pointer;font-size:14px;user-select:none}
 .chip.on{background:var(--accent);border-color:var(--accent);color:#fff}
 .sub{color:var(--muted);font-size:14px}
+.exam-toggle{display:inline-flex;gap:0;margin-right:12px;border:1px solid var(--line);border-radius:9px;overflow:hidden;vertical-align:middle}
+.exam-btn{background:#fff;color:var(--ink);border:none;border-radius:0;padding:8px 18px;font-weight:700;cursor:pointer}
+.exam-btn.on{background:var(--accent);color:#fff}
 details{margin:8px 0}
 details summary{cursor:pointer;color:var(--accent);font-weight:600}
 .topics{columns:2;gap:20px;margin-top:8px}
@@ -44,6 +47,8 @@ details summary{cursor:pointer;color:var(--accent);font-weight:600}
 .kes-chip{background:#eef2ff;border-radius:6px;padding:1px 7px;font-size:12px}
 .answer{margin-top:10px;padding:8px 12px;background:#eefbf0;border-left:3px solid var(--ok);border-radius:4px;font-size:15px}
 .answer code{background:#dcfce7;padding:1px 6px;border-radius:4px;font-weight:600}
+.stimulus{margin:8px 0 12px;padding:10px 12px;background:#f8fbff;border-left:3px solid var(--accent);overflow-x:auto}
+.stimulus img{max-width:100%;height:auto}
 .copybtn{float:right;font-size:13px;padding:5px 10px;background:#e2e8f0;color:var(--ink)}
 .hiddenstep{display:none}
 .errbox{background:#fef2f2;border:1px solid #fca5a5;color:#991b1b;border-radius:9px;padding:10px 14px;margin:10px 0;display:none}
@@ -57,13 +62,27 @@ footer{color:var(--muted);font-size:13px;text-align:center;margin-top:30px}
 <header>
   <h1>📚 Парсер банка заданий ФИПИ</h1>
   <small>ege.fipi.ru → в файл на вашем компьютере</small>
+  <a href="/constructor" style="margin-left:auto;color:#93c5fd;font-weight:600;text-decoration:none">🧩 Конструктор заданий →</a>
 </header>
 <main>
 
 <div class="errbox" id="errbox"></div>
 
+<div class="step hiddenstep" id="resumeBox">
+  <h2><span class="n">↻</span> Незавершённая выгрузка</h2>
+  <div class="sub" id="resumeText"></div>
+  <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:12px">
+    <button id="btnResume">Продолжить с места остановки</button>
+    <button class="secondary" id="btnClearResume">Удалить сохранённый прогресс</button>
+  </div>
+</div>
+
 <div class="step" id="step1">
-  <h2><span class="n">1</span> Предмет</h2>
+  <h2><span class="n">1</span> Экзамен и предмет</h2>
+  <div class="exam-toggle" id="examToggle">
+    <button type="button" class="exam-btn on" data-exam="ege">ЕГЭ</button>
+    <button type="button" class="exam-btn" data-exam="oge">ОГЭ</button>
+  </div>
   <select id="subject"><option>Загружаю список…</option></select>
   <span id="metaSpin"></span>
 </div>
@@ -99,6 +118,7 @@ footer{color:var(--muted);font-size:13px;text-align:center;margin-top:30px}
   <div class="sub">Будут сохранены: <b>задания.json</b> и <b>банк.json</b> (для программ), <b>задания.html</b> (открыть/распечатать) и папка <b>images</b> с картинками. Если подбирали ответы — они попадут во все файлы.</div>
   <div style="margin-top:12px">
     <button id="btnSave">💾 Сохранить на компьютер</button>
+    <button id="btnRetryMaps" class="secondary" style="display:none">Повторить загрузку карт</button>
   </div>
   <div id="saveResult"></div>
 </div>
@@ -111,7 +131,10 @@ footer{color:var(--muted);font-size:13px;text-align:center;margin-top:30px}
 <script>
 'use strict';
 const $ = (id) => document.getElementById(id);
-const state = { subjects: [], meta: null, tasks: [], count: 0, stop: false, fetching: false };
+const state = {
+  exam: 'ege', subjects: [], meta: null, tasks: [], count: 0, stop: false, fetching: false,
+  activeFilter: null, nextPage: 0, checkpoint: null, checkpointAt: 0, restoring: false,
+};
 
 function showErr(msg) {
   const b = $('errbox');
@@ -124,14 +147,118 @@ async function api(url, body) {
     method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body)
   } : undefined);
   const data = await res.json();
-  if (data && data.error) throw new Error(data.error);
+  if (!res.ok || (data && data.error)) throw new Error(data.error || res.statusText);
   return data;
 }
+
+async function loadCheckpointOffer() {
+  try {
+    const r = await api('/api/checkpoint');
+    if (!r.exists || !r.checkpoint || !Array.isArray(r.checkpoint.tasks)) return;
+    state.checkpoint = r.checkpoint;
+    const cp = r.checkpoint;
+    const solved = cp.tasks.filter(t => t.answer).length;
+    $('resumeText').textContent = `${cp.subjectName || 'Предмет'}: сохранено ${cp.tasks.length} из ${cp.count || '?'} заданий` +
+      (cp.withAnswers ? `, ответов найдено ${solved}` : '') + `. Последнее сохранение: ${new Date(cp.updatedAt).toLocaleString()}.`;
+    $('resumeBox').classList.remove('hiddenstep');
+  } catch { /* чекпойнта ещё нет или сервер старой версии */ }
+}
+
+async function saveProgress(phase, extra = {}, force = false) {
+  if (!state.tasks.length && phase !== 'searched') return;
+  const now = Date.now();
+  if (!force && now - state.checkpointAt < 8000) return;
+  state.checkpointAt = now;
+  let labels = [];
+  try { labels = filterLabels(); } catch { labels = []; }
+  await api('/api/checkpoint', {
+    phase,
+    exam: state.exam,
+    proj: $('subject').value,
+    subjectName: $('subject').selectedOptions[0]?.textContent || '',
+    filter: state.activeFilter || collectFilter(),
+    filterLabels: labels,
+    count: state.count,
+    pagesize: PAGESIZE,
+    nextPage: state.nextPage,
+    withAnswers: $('withAnswers').checked,
+    tasks: state.tasks,
+    ...extra,
+  });
+}
+
+function applyFilter(filter) {
+  const f = filter || {};
+  const themes = new Set(f.themes || []);
+  const qkinds = new Set(f.qkinds || []);
+  document.querySelectorAll('#sections .chip').forEach(c => c.classList.toggle('on', themes.has(c.dataset.code)));
+  document.querySelectorAll('#topics input').forEach(i => { i.checked = themes.has(i.value); });
+  document.querySelectorAll('#qkinds .chip').forEach(c => c.classList.toggle('on', qkinds.has(c.dataset.code)));
+  $('qid').value = f.qid || '';
+}
+
+async function resumeCheckpoint() {
+  const cp = state.checkpoint;
+  if (!cp || state.fetching) return;
+  $('btnResume').disabled = true;
+  state.restoring = true;
+  try {
+    state.exam = cp.exam === 'oge' ? 'oge' : 'ege';
+    document.querySelectorAll('.exam-btn').forEach(b => b.classList.toggle('on', b.dataset.exam === state.exam));
+    await loadSubjects();
+    if (cp.proj && [...$('subject').options].some(o => o.value === cp.proj)) {
+      $('subject').value = cp.proj;
+      await loadMeta();
+    }
+    applyFilter(cp.filter);
+    $('withAnswers').checked = !!cp.withAnswers;
+    state.activeFilter = cp.filter || collectFilter();
+    state.tasks = cp.tasks || [];
+    state.count = +cp.count || state.tasks.length;
+    state.nextPage = Math.max(0, +cp.nextPage || 0);
+    state.checkpointAt = 0;
+    $('countBanner').textContent = `Восстановлено ${state.tasks.length} из ${state.count} заданий.`;
+    $('step3').classList.remove('hiddenstep');
+    if (state.tasks.length) {
+      $('step4').classList.remove('hiddenstep');
+      $('preview').innerHTML = renderPreview('Восстановленные задания:', state.tasks);
+      updateMapRetryButton();
+    }
+    $('resumeBox').classList.add('hiddenstep');
+    const pages = Math.ceil(state.count / PAGESIZE);
+    if (state.nextPage < pages) await fetchAll();
+    else if (cp.withAnswers && state.tasks.some(t => t.answerForm?.kind !== 'text' && !t.answer)) await solveAll();
+  } catch (e) {
+    showErr('Не удалось продолжить выгрузку: ' + e.message);
+  } finally {
+    state.restoring = false;
+    $('btnResume').disabled = false;
+  }
+}
+
+$('btnResume').onclick = resumeCheckpoint;
+$('btnClearResume').onclick = async () => {
+  await api('/api/checkpoint/clear', {});
+  state.checkpoint = null;
+  $('resumeBox').classList.add('hiddenstep');
+};
+
+/* --- переключатель ЕГЭ / ОГЭ --- */
+$('examToggle').addEventListener('click', (e) => {
+  const btn = e.target.closest('.exam-btn');
+  if (!btn || state.fetching) return;
+  const exam = btn.dataset.exam;
+  if (exam === state.exam) return;
+  state.exam = exam;
+  [...document.querySelectorAll('.exam-btn')].forEach(b => b.classList.toggle('on', b === btn));
+  loadSubjects();
+});
 
 /* --- шаг 1: предметы --- */
 async function loadSubjects() {
   try {
-    state.subjects = await api('/api/subjects');
+    $('subject').innerHTML = '<option>Загружаю список…</option>';
+    state.subjects = await api('/api/subjects?exam=' + state.exam);
     const sel = $('subject');
     sel.innerHTML = state.subjects.map(s => `<option value="${s.guid}">${s.name}</option>`).join('');
     const hist = state.subjects.find(s => /истори/i.test(s.name));
@@ -151,7 +278,7 @@ async function loadMeta() {
   $('step4').classList.add('hiddenstep');
   $('preview').innerHTML = '';
   try {
-    state.meta = await api('/api/meta?proj=' + $('subject').value);
+    state.meta = await api('/api/meta?exam=' + state.exam + '&proj=' + $('subject').value);
     $('sections').innerHTML = state.meta.themes.filter(t => t.isSection)
       .map(t => `<span class="chip" data-code="${t.code}" onclick="this.classList.toggle('on')" title="${t.title}">${t.code}. ${t.title.length > 46 ? t.title.slice(0, 45) + '…' : t.title}</span>`).join('');
     $('topics').innerHTML = state.meta.themes.filter(t => !t.isSection)
@@ -196,76 +323,185 @@ function renderPreview(title, tasks, limit = PREVIEW_LIMIT) {
     : '';
   return `<h3>${title}</h3>${note}${shown.map(renderCard).join('')}`;
 }
+
+function missingMapGroups() {
+  const groups = new Map();
+  for (const t of state.tasks) {
+    if (!t.groupId) continue;
+    if (!groups.has(t.groupId)) groups.set(t.groupId, []);
+    groups.get(t.groupId).push(t);
+  }
+  const result = [];
+  for (const [groupId, items] of groups) {
+    const byOrder = new Map(items.map(t => [+t.groupOrder, t]));
+    const exactShape = items.length === 4 && byOrder.size === 4 &&
+      [1, 2, 3].every(n => byOrder.get(n)?.answerType === 'Краткий ответ') &&
+      byOrder.get(4)?.answerType === 'Выбор ответов из предложенных вариантов';
+    const text = items.map(t => t.questionText || '').join(' ').toLowerCase();
+    const isMap = exactShape && /(схем[аеуы]|схемой|схему|легенд[аеы]\s+схем|карт[аеуы](?![а-яё])|картосхем)/.test(text);
+    const hasMap = items.some(t => (t.stimulusImages || []).length > 0);
+    if (isMap && !hasMap) result.push({ groupId, items });
+  }
+  return result;
+}
+
+function updateMapRetryButton() {
+  const count = missingMapGroups().length;
+  $('btnRetryMaps').style.display = count ? 'inline-block' : 'none';
+  $('btnRetryMaps').textContent = count ? `Повторить загрузку карт (${count})` : 'Карты загружены';
+}
 $('btnSearch').onclick = async () => {
   $('btnSearch').disabled = true;
   try {
-    const { count, tasks } = await api('/api/page', { proj: $('subject').value, filter: collectFilter(), page: 0, pagesize: PAGESIZE });
+    state.activeFilter = collectFilter();
+    const { count, tasks } = await api('/api/page', { exam: state.exam, proj: $('subject').value, filter: state.activeFilter, page: 0, pagesize: PAGESIZE });
     state.count = count;
     state.tasks = tasks;
+    state.nextPage = count > 0 ? 1 : 0;
+    state.checkpointAt = 0;
     $('countBanner').textContent = count === 0 ? 'Ничего не найдено — попробуйте изменить фильтр.'
       : `Найдено заданий: ${count} (страниц: ${Math.ceil(count / PAGESIZE)})`;
     $('step3').classList.remove('hiddenstep');
     $('step4').classList.add('hiddenstep');
     $('btnFetchAll').disabled = count === 0;
     $('preview').innerHTML = count ? renderPreview('Первые задания (образец):', tasks, 3) : '';
+    updateMapRetryButton();
+    if (count) await saveProgress('searched', {}, true);
   } catch (e) {
     showErr('Ошибка поиска: ' + e.message);
   }
   $('btnSearch').disabled = false;
 };
 
-$('btnFetchAll').onclick = async () => {
+async function fetchAll() {
   if (state.fetching) return;
-  state.fetching = true; state.stop = false; state.tasks = [];
+  state.fetching = true; state.stop = false;
+  state.activeFilter = state.activeFilter || collectFilter();
   const pages = Math.ceil(state.count / PAGESIZE);
   $('progressWrap').style.display = 'block';
   $('btnStop').style.display = 'inline-block';
   $('btnFetchAll').disabled = true;
-  const seen = new Set();
+  const seen = new Set(state.tasks.map(t => t.number));
   try {
-    for (let p = 0; p < pages && !state.stop; p++) {
-      const { tasks } = await api('/api/page', { proj: $('subject').value, filter: collectFilter(), page: p, pagesize: PAGESIZE });
+    for (let p = state.nextPage; p < pages && !state.stop; p++) {
+      const { tasks } = await api('/api/page', { exam: state.exam, proj: $('subject').value, filter: state.activeFilter, page: p, pagesize: PAGESIZE });
       for (const t of tasks) if (!seen.has(t.number)) { seen.add(t.number); state.tasks.push(t); }
+      state.nextPage = p + 1;
       $('progressBar').style.width = Math.round(((p + 1) / pages) * 100) + '%';
       $('progressText').textContent = `Скачано ${state.tasks.length} из ${state.count}… (страница ${p + 1}/${pages})`;
+      await saveProgress('fetching');
       await new Promise(r => setTimeout(r, 350)); // не дёргаем сервер ФИПИ слишком часто
     }
     $('progressText').textContent = state.stop
       ? `Остановлено. Скачано ${state.tasks.length} заданий.`
       : `Скачано ${state.tasks.length} заданий.`;
+    await saveProgress(state.stop ? 'paused' : 'downloaded', {}, true);
     if (state.tasks.length && !state.stop && $('withAnswers').checked) await solveAll();
     if (state.tasks.length) {
       $('step4').classList.remove('hiddenstep');
       $('preview').innerHTML = renderPreview('Скачанные задания:', state.tasks);
+      updateMapRetryButton();
     }
   } catch (e) {
+    try { await saveProgress('fetch-error', { lastError: e.message }, true); } catch {}
     showErr('Ошибка при скачивании: ' + e.message + '. Уже скачанные задания можно сохранить.');
-    if (state.tasks.length) $('step4').classList.remove('hiddenstep');
+    if (state.tasks.length) {
+      $('step4').classList.remove('hiddenstep');
+      updateMapRetryButton();
+    }
   }
   state.fetching = false;
   $('btnStop').style.display = 'none';
   $('btnFetchAll').disabled = false;
-};
+}
+$('btnFetchAll').onclick = fetchAll;
 $('btnStop').onclick = () => { state.stop = true; };
+
+async function retryMissingMaps() {
+  if (state.fetching) return;
+  const groups = missingMapGroups();
+  if (!groups.length) { updateMapRetryButton(); return; }
+  state.fetching = true;
+  state.stop = false;
+  $('btnRetryMaps').disabled = true;
+  $('btnStop').style.display = 'inline-block';
+  $('progressWrap').style.display = 'block';
+  $('progressBar').style.width = '0%';
+  let loaded = 0;
+  let failed = 0;
+  for (let i = 0; i < groups.length && !state.stop; i++) {
+    const { groupId, items } = groups[i];
+    try {
+      const r = await api('/api/group-material', {
+        exam: state.exam,
+        proj: $('subject').value,
+        groupId,
+      });
+      if (r.stimulusHtml && (r.stimulusImages || []).length) {
+        for (const t of items) {
+          t.groupUrl = r.groupUrl;
+          t.stimulusStatus = 'loaded';
+          t.stimulusHtml = r.stimulusHtml;
+          t.stimulusText = r.stimulusText;
+          t.stimulusImages = r.stimulusImages;
+          t.images = [...new Set([...(t.images || []), ...r.stimulusImages])];
+        }
+        loaded++;
+      } else {
+        for (const t of items) t.stimulusStatus = 'missing';
+        failed++;
+      }
+    } catch {
+      for (const t of items) t.stimulusStatus = 'error';
+      failed++;
+    }
+    $('progressBar').style.width = Math.round(((i + 1) / groups.length) * 100) + '%';
+    $('progressText').textContent = `Карты: проверено ${i + 1}/${groups.length}, загружено ${loaded}.`;
+    await saveProgress('maps', { mapsChecked: i + 1, mapsLoaded: loaded });
+    await new Promise(r => setTimeout(r, 300));
+  }
+  await saveProgress(state.stop ? 'paused' : 'maps', { mapsLoaded: loaded, mapsFailed: failed }, true);
+  $('progressText').textContent = state.stop
+    ? `Загрузка карт остановлена. Загружено ${loaded}. Прогресс сохранён.`
+    : `Карты проверены: загружено ${loaded}, пока недоступно ${failed}.`;
+  $('preview').innerHTML = renderPreview('Скачанные задания:', state.tasks);
+  state.fetching = false;
+  $('btnStop').style.display = 'none';
+  $('btnRetryMaps').disabled = false;
+  updateMapRetryButton();
+}
+$('btnRetryMaps').onclick = retryMissingMaps;
 
 /* --- подбор ответов --- */
 async function solveAll() {
   const solvable = state.tasks.filter(t => t.answerForm && t.answerForm.kind !== 'text');
-  let done = 0, ok = 0;
+  let done = 0, ok = state.tasks.filter(t => t.answer).length;
   $('progressBar').style.width = '0%';
   for (const t of state.tasks) {
     if (state.stop) break;
+    if (t.answer) { done++; continue; }
     if (!t.answerForm || t.answerForm.kind === 'text') { done++; continue; }
     try {
-      const r = await api('/api/solve', { proj: $('subject').value, guid: t.guid, form: t.answerForm, elements: t.elements });
+      const r = await api('/api/solve', { exam: state.exam, proj: $('subject').value, guid: t.guid, form: t.answerForm, elements: t.elements });
       if (r.answer) { t.answer = r.answer; t.answerText = r.answerText; ok++; }
       if (r.reason && /сессия/.test(r.reason)) { showErr(r.reason); break; }
-    } catch (e) { /* пропускаем одно задание */ }
+    } catch (e) {
+      try { await saveProgress('solve-error', { lastError: e.message, failedNumber: t.number }, true); } catch {}
+      showErr(`Подбор ответов остановлен на задании ${t.number}: ${e.message}. Прогресс сохранён.`);
+      $('step4').classList.remove('hiddenstep');
+      return false;
+    }
     done++;
     $('progressBar').style.width = Math.round((done / state.tasks.length) * 100) + '%';
     $('progressText').textContent = `🔑 Подбор ответов: обработано ${done}/${state.tasks.length}, найдено ${ok} (перебираемых всего ~${solvable.length})…`;
+    await saveProgress('solving');
   }
-  $('progressText').textContent = `Готово! Скачано ${state.tasks.length} заданий, подобрано ответов: ${ok}.`;
+  const stopped = state.stop;
+  await saveProgress(stopped ? 'paused' : 'solved', {}, true);
+  $('progressText').textContent = stopped
+    ? `Остановлено. Скачано ${state.tasks.length} заданий, подобрано ответов: ${ok}.`
+    : `Готово! Скачано ${state.tasks.length} заданий, подобрано ответов: ${ok}.`;
+  return !stopped;
 }
 
 /* --- шаг 4: сохранение --- */
@@ -276,7 +512,8 @@ $('btnSave').onclick = async () => {
   try {
     const subjName = state.subjects.find(s => s.guid === $('subject').value)?.name || '';
     const r = await api('/api/save', {
-      title: subjName + ' ' + filterLabels()[0].slice(0, 40),
+      exam: state.exam,
+      title: state.exam.toUpperCase() + ' ' + subjName + ' ' + filterLabels()[0].slice(0, 40),
       subject: subjName,
       filters: filterLabels(),
       tasks: state.tasks,
@@ -285,6 +522,9 @@ $('btnSave').onclick = async () => {
       `✅ Сохранено ${r.total} заданий в папку:<br><code>${r.folder}</code>` +
       (r.imgErrors ? `<br>⚠️ Не скачалось картинок: ${r.imgErrors}` : '') +
       `<br><button class="secondary" style="margin-top:8px" onclick="openFolder('${r.folder.replace(/\\/g, '\\\\')}')">📂 Открыть папку</button>`;
+    await api('/api/checkpoint/clear', {});
+    state.checkpoint = null;
+    $('resumeBox').classList.add('hiddenstep');
   } catch (e) {
     $('saveResult').innerHTML = '';
     showErr('Ошибка сохранения: ' + e.message);
@@ -301,6 +541,7 @@ function renderCard(t, i) {
     <div class="meta"><b>№ ${i + 1}</b><span>Номер ФИПИ: ${t.number}</span><span>${esc(t.answerType)}</span></div>
     <div class="meta">${t.kes.map(k => `<span class="kes-chip">${esc(k)}</span>`).join('')}</div>
     <div class="hint">${esc(t.hint)}</div>
+    ${t.stimulusHtml && (!t.groupId || t.groupOrder === 1) ? `<div class="stimulus">${t.stimulusHtml}</div>` : ''}
     <div class="body">${t.questionHtml}</div>
     ${t.variantsHtml ? `<div class="body">${t.variantsHtml}</div>` : ''}
     ${t.answer ? `<div class="answer"><b>Ответ:</b> <code>${esc(t.answer)}</code>${t.answerText && t.answerText !== t.answer ? ' — ' + esc(t.answerText) : ''}</div>` : ''}
@@ -309,12 +550,13 @@ function renderCard(t, i) {
 window.copyTask = (num, btn) => {
   const t = state.tasks.find(x => x.number === num);
   if (!t) return;
-  navigator.clipboard.writeText(t.questionText).then(() => {
+  navigator.clipboard.writeText([t.stimulusText, t.questionText].filter(Boolean).join('\n\n')).then(() => {
     btn.textContent = '✅ Скопировано';
     setTimeout(() => { btn.textContent = '📋 Копировать текст'; }, 1500);
   });
 };
 
+loadCheckpointOffer();
 loadSubjects();
 </script>
 </body>

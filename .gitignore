@@ -9,3 +9,5 @@ output.css.pre-rebuild
 *.log
 .DS_Store
 .claude/settings.local.json
+tools-and-docs/tmp/
+tools-and-docs/outputs/
