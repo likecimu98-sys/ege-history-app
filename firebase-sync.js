@@ -2279,6 +2279,15 @@
                     } catch (e) { console.warn('[Teacher] класс-док не прочитан:', e); }
                 }
 
+                // P4: блоб прогресса теперь в private/state (в публичном он остаётся лишь
+                // у ещё не обновившихся клиентов). Подставляем приватный блоб в объекты
+                // учеников — весь код кабинета ниже (computeStudentData, PDF) работает как раньше.
+                await Promise.all(st.map(async (s) => {
+                    const j = await _readPrivateBlob(s.uid);
+                    if (j) s.fullStateJson = j;
+                }));
+                if (mySeq !== _loadSeq) return;
+
                 const enriched = st.map(s => computeStudentData(s, monStr, monday));
                 enriched.sort((a,b) => (b.totalSolved||0) - (a.totalSolved||0));
                 window._cachedStudents = enriched;
@@ -2796,7 +2805,7 @@
                 const data = snap.data();
                 const revoked = new Set(Array.isArray(data.revokedAssignments) ? data.revokedAssignments : []);
                 let ingested = [];
-                try { const st = JSON.parse(data.fullStateJson || '{}'); ingested = (st.stats || st || {}).assignments || []; } catch (e) {}
+                try { const st = JSON.parse((await _readPrivateBlob(uid)) || data.fullStateJson || '{}'); ingested = (st.stats || st || {}).assignments || []; } catch (e) {}
                 const byId = new Map();
                 (Array.isArray(ingested) ? ingested : []).forEach(a => {
                     if (a && a.id) byId.set(a.id, { id: a.id, title: a.title, deadline: a.deadline, assignedAt: a.assignedAt, items: a.items, state: a.status === 'done' ? 'done' : 'active', revoked: revoked.has(a.id) });
@@ -2834,7 +2843,7 @@
                 if (!snap.exists()) return 0;
                 const data = snap.data();
                 let ingested = [];
-                try { const st = JSON.parse(data.fullStateJson || '{}'); ingested = (st.stats || st || {}).assignments || []; } catch (e) {}
+                try { const st = JSON.parse((await _readPrivateBlob(uid)) || data.fullStateJson || '{}'); ingested = (st.stats || st || {}).assignments || []; } catch (e) {}
                 const activeIds = (Array.isArray(ingested) ? ingested : []).filter(a => a && a.id && a.status !== 'done').map(a => a.id);
                 const pendingIds = (Array.isArray(data.pendingAssignments) ? data.pendingAssignments : []).map(a => a && a.id).filter(Boolean);
                 const revoked = Array.isArray(data.revokedAssignments) ? data.revokedAssignments.slice() : [];
@@ -3244,6 +3253,21 @@
             } catch (e) { console.warn('[teacherRole]', e && e.message); }
         };
 
+        // ─── P4: приватный блоб прогресса ────────────────────────────────────
+        // fullStateJson переезжает из ПУБЛИЧНОГО students/{id} (его читает любой
+        // авторизованный) в artifacts/{appId}/private/data/state/{id} — под строгими
+        // правилами он виден только владельцу и учителю. Публичный док остаётся
+        // профилем/лидербордом. Пока не все клиенты обновились, блоб может лежать
+        // в любом из двух мест — читаем оба.
+        const _privStateRef = (id) => doc(db, 'artifacts', appId, 'private', 'data', 'state', String(id));
+        async function _readPrivateBlob(id) {
+            try {
+                const s = await getDoc(_privStateRef(id));
+                const j = s.exists() ? String(s.data().fullStateJson || '') : '';
+                return j.length > 10 ? j : '';
+            } catch (e) { return ''; }
+        }
+
         // ─── Дневной лимит строк ─────────────────────────────────────────────
         // Настройки в config/limits: { freeDaily, premiumDaily, clubUrl, message }, 0 = безлимит.
         // Категории: обычный → freeDaily; подписчик клуба (premium на документе ученика,
@@ -3337,6 +3361,15 @@
 
                 if (allFound.size === 0) { window.refreshDailyLimit && window.refreshDailyLimit(); return; }
 
+                // P4: свежий блоб может лежать в private/state (новые клиенты), а у старых
+                // доков — ещё в public. Собираем приватные и подмешиваем во ВСЕ слияния ниже:
+                // deepMergeStates сам разрулит, где данные новее.
+                const privBlobs = [];
+                await Promise.all([...allFound.keys()].map(async (id) => {
+                    const j = await _readPrivateBlob(id);
+                    if (j) privBlobs.push(j);
+                }));
+
                 // ── Восстанавливаем tg-личность ДО выбора цели слияния.
                 // Кейс «Поли»: вход через Google в браузере находил её tg-док по почте,
                 // но canonical был google_<uid> — и tg-док хоронился в google-док.
@@ -3374,15 +3407,20 @@
                         });
                     } else {
                     const localJson = localStorage.getItem('ege_final_storage_v4') || '';
-                    const merged = deepMergeStates([...allFound.values()].map(d => d.fullStateJson).concat(localJson).filter(j => j && j.length > 10));
+                    const merged = deepMergeStates([...allFound.values()].map(d => d.fullStateJson).concat(privBlobs).concat(localJson).filter(j => j && j.length > 10));
                     if (merged) {
                         applyMergedState(merged);
                         const mergedJson = JSON.stringify(merged);
                         const knownTgForDoc = localStorage.getItem('known_tg_id') || '';
                         localStorage.setItem('ege_final_storage_v4', mergedJson);
+                        let privMergeOk = false;
+                        try {
+                            await setDoc(_privStateRef(mergeTarget), { fullStateJson: mergedJson, updatedAt: Date.now() }, { merge: true });
+                            privMergeOk = true;
+                        } catch (e) { console.warn('[Sync] private merge write fail:', e && e.message); }
                         try {
                             await setDoc(doc(studentsCol, mergeTarget), {
-                                fullStateJson: mergedJson,
+                                fullStateJson: privMergeOk ? deleteField() : mergedJson,
                                 totalSolved: window.state.stats.totalSolvedEver || 0,
                                 egePoints: window.state.stats.egePoints || 0,
                                 tgId: knownTgForDoc || (/^\d+$/.test(mergeTarget) ? mergeTarget : ''),
@@ -3465,16 +3503,21 @@
                 if (bestData?.knownTgId && /^\d+$/.test(String(bestData.knownTgId))) localStorage.setItem('known_tg_id', String(bestData.knownTgId));
                 if (bestData?.googleEmail && !localStorage.getItem('google_email')) localStorage.setItem('google_email', bestData.googleEmail);
 
-                if (bestData?.fullStateJson) {
+                if (bestData?.fullStateJson || privBlobs.length) {
                     const localJson = localStorage.getItem('ege_final_storage_v4') || '';
-                    const merged = deepMergeStates([bestData.fullStateJson, localJson].filter(j => j && j.length > 10));
+                    const merged = deepMergeStates([bestData?.fullStateJson, ...privBlobs, localJson].filter(j => j && j.length > 10));
                     if (merged) {
                         applyMergedState(merged);
                         const mergedJson = JSON.stringify(merged);
                         const knownTgForDoc = localStorage.getItem('known_tg_id') || '';
+                        let privLoadOk = false;
+                        try {
+                            await setDoc(_privStateRef(mergeTarget), { fullStateJson: mergedJson, updatedAt: Date.now() }, { merge: true });
+                            privLoadOk = true;
+                        } catch (e) { console.warn('[Sync] private load-merge write fail:', e && e.message); }
                         try {
                             const mergedUpdate = {
-                                fullStateJson: mergedJson,
+                                fullStateJson: privLoadOk ? deleteField() : mergedJson,
                                 totalSolved: window.state.stats.totalSolvedEver || 0,
                                 egePoints: window.state.stats.egePoints || 0,
                                 tgId: knownTgForDoc || (/^\d+$/.test(mergeTarget) ? mergeTarget : ''),
@@ -3503,8 +3546,11 @@
                         const bestPayload = allFound.get(bestDocId) || bestData;
                         if (bestPayload) {
                             const knownTgForDoc = localStorage.getItem('known_tg_id') || '';
+                            // P4: блоб в публичный док не копируем — его запишет в private/state
+                            // ближайший saveProgressToCloud (локальное состояние уже слито).
+                            const { fullStateJson: _skipBlob, ...bestPublic } = bestPayload;
                             await setDoc(doc(studentsCol, newCanonical), {
-                                ...bestPayload,
+                                ...bestPublic,
                                 tgId: knownTgForDoc || (/^\d+$/.test(newCanonical) ? newCanonical : ''),
                                 knownTgId: knownTgForDoc,
                                 canonicalId: newCanonical,
@@ -3580,6 +3626,17 @@
                 }
             }
             
+            // P4: блоб — в private/state (приватная запись ПЕРВОЙ). Если она прошла,
+            // из публичного дока блоб вычищаем (deleteField). Если НЕ прошла (старые
+            // правила ещё без private-пути / офлайн) — кладём блоб в публичный док,
+            // как раньше: сохранность данных важнее приватности одного сейва.
+            const blobJson = localStorage.getItem('ege_final_storage_v4') || '{}';
+            let privOk = false;
+            try {
+                await setDoc(_privStateRef(canonicalId), { fullStateJson: blobJson, updatedAt: nw }, { merge: true });
+                privOk = true;
+            } catch (e) { console.warn('[Sync] private blob write fail:', e && e.message); }
+
             const payload = {
                 name: localStorage.getItem('student_manual_name') || 'Ученик',
                 nameUpdatedAt: Number(localStorage.getItem('student_manual_name_at')) || 0,
@@ -3592,7 +3649,7 @@
                 weeklyScore: weeklyScore,
                 weeklyEgePoints: weeklyEgePoints,     // ЕГЭ-баллы за неделю
                 weekStartStr: monStr2,
-                fullStateJson: localStorage.getItem('ege_final_storage_v4') || '{}',
+                fullStateJson: privOk ? deleteField() : blobJson,
                 lastActive: nw,
                 // Рейтинг дуэлей — верхнеуровнево для orderBy в топе. Пишем только
                 // сыгравшим: иначе топ забился бы стартовой тысячей у всех подряд.

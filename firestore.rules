@@ -33,6 +33,14 @@ service cloud.firestore {
       allow read, write: if authed();
     }
 
+    // P4 (2026-07-17): приватный прогресс ученика (fullStateJson) переезжает в
+    // private/data/state/{id}. В baseline доступ как у public — авторизованным;
+    // строгий ruleset (tools-and-docs/security/firestore.rules.strict) сузит его
+    // до «владелец пишет, владелец+учитель читают».
+    match /artifacts/{appId}/private/data/{document=**} {
+      allow read, write: if authed();
+    }
+
     // Всё, что вне этого пути — запрет по умолчанию.
     match /{document=**} {
       allow read, write: if false;
