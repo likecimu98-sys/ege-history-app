@@ -281,6 +281,12 @@
     // оставляем правителей, чьё правление началось внутри диапазона. Если после
     // фильтра меньше двух — работаем по всем (лучше полный свайп, чем ничего).
     window.openSwipeMode = function (opts) {
+        // Норма/лимит (Q2): свайп считается как обычные строки → и упирается в дневной
+        // лимит бесплатных. Дуэли/ДЗ не сюда (у них свой вход). isHomeworkMode тут не бывает.
+        if (window.canSolveMore) {
+            const lim = window.canSolveMore();
+            if (!lim.ok) { if (window.showDailyLimitModal) window.showDailyLimitModal(); return; }
+        }
         // Период не передан (кнопка «Свайп» в лобби) → берём годы, отмеченные учителем,
         // чтобы тренировать пройденное. getWorkingSwipeRange живёт в ui.js.
         if ((!opts || (!opts.from && !opts.to)) && typeof window.getWorkingSwipeRange === 'function') {
@@ -582,7 +588,7 @@
         const isReview = _sw.reviewStart != null && _sw.i >= _sw.reviewStart;
         if (ok) {
             _sw.streak++; _sw.best = Math.max(_sw.best, _sw.streak); _sw.score += 10 + Math.min(20, (_sw.streak - 1) * 2);
-            if (!isReview) { _sw.correct++; _sw.seen++; }
+            if (!isReview) { _sw.correct++; _sw.seen++; if (!_sw.duel && window.creditNorm) window.creditNorm(1); }
         } else {
             _sw.streak = 0;
             // Дуэль: ошибка снимает очки — наугад свайпать невыгодно

@@ -1758,44 +1758,43 @@ function computeMainAction() {
         return { ...base, kind: overdue ? 'hw-overdue' : 'hw', hwId: a.id, hwIdx: idx, deadline: a.deadline };
     }
 
-    // 2–4) Ошибки / Повтор / Новое — ВЗВЕШЕННАЯ РОТАЦИЯ, а не строгий приоритет.
-    // Раньше «ошибки при total≥1» полностью блокировали новое → застревание на одних и
-    // тех же ошибках/повторах, новое не училось. Теперь строим цикл, где новое встречается
-    // чаще (≈половина), но ошибки и повтор тоже регулярно разбираются. Цикл прокручивается
-    // счётчиком _ladderTick (растёт в mainActionGo при каждом нажатии главной кнопки).
-    const cycle = [];
-    if (unlearned.total > 0) cycle.push('continue');      // новое — обязательно в цикле…
-    if (mistakes.total >= 1) cycle.push('mistakes');
-    if (unlearned.total > 0) cycle.push('continue');      // …и чаще остального
-    if (due.total >= 3) cycle.push('review');
-    if (cycle.length) {
-        const pickKind = cycle[(window.state._ladderTick || 0) % cycle.length];
-        if (pickKind === 'mistakes') return { ...base, kind: 'mistakes', task: mistakes.bestTask };
-        if (pickKind === 'review') {
-            let bestTask = 'task4', bestN = -1;
-            for (const t in due.by) if (due.by[t] > bestN) { bestN = due.by[t]; bestTask = t; }
-            return { ...base, kind: 'review', task: bestTask, period: wp };
-        }
-        // continue (новое)
-        const pick = _pickNewTask(unlearned);
-        if (pick) return { ...base, kind: 'continue',
-            task: pick.task,
-            period: wp || { era: localStorage.getItem('ege_last_period') || 'all' },
-            left: pick.left };
-        // новое не выбралось (краевой случай) — отдаём ошибки/повтор, если есть
-        if (mistakes.total >= 1) return { ...base, kind: 'mistakes', task: mistakes.bestTask };
-        if (due.total >= 3) {
-            let bestTask = 'task4', bestN = -1;
-            for (const t in due.by) if (due.by[t] > bestN) { bestN = due.by[t]; bestTask = t; }
-            return { ...base, kind: 'review', task: bestTask, period: wp };
-        }
-    }
+    // 2) ДНЕВНОЙ ПЛАН (Q1). Раньше кнопка тасовала новое/ошибки/повтор на КАЖДЫЙ тап
+    // (_ladderTick) — режимы прыгали, смысл терялся. Теперь просто:
+    //   • обычный день → ведём НОВОЕ (повтор и ошибки подмешиваются блендингом ВНУТРИ
+    //     сессии — каждая 3-я таблица, см. getFilteredPool в state.js);
+    //   • каждый 4-й АКТИВНЫЙ день → «День повторения»: чистый разбор ошибок и забытого.
+    // Индекс дня — по числу ПРОШЛЫХ активных дней (стабилен в течение суток, не гуляет от тапа).
+    const today = getTodayString();
+    const pastActiveDays = Object.keys(s.dailyStats || {})
+        .filter(d => d < today && ((s.dailyStats[d] || {}).solved || 0) > 0).length;
+    const isRepeatDay = (pastActiveDays % 4) === 3;
+    const hasBacklog = mistakes.total >= 1 || due.total >= 3;
 
-    // 5) Слабое место
+    const pickReview = (rep) => {
+        if (mistakes.total >= 1) return { ...base, kind: 'mistakes', task: mistakes.bestTask, repeatDay: !!rep };
+        let bestTask = 'task4', bestN = -1;
+        for (const t in due.by) if (due.by[t] > bestN) { bestN = due.by[t]; bestTask = t; }
+        return { ...base, kind: 'review', task: bestTask, period: wp, repeatDay: !!rep };
+    };
+
+    // «День повторения» — если есть что разбирать
+    if (isRepeatDay && hasBacklog) return pickReview(true);
+
+    // Обычный день → новое
+    const pick = _pickNewTask(unlearned);
+    if (pick) return { ...base, kind: 'continue',
+        task: pick.task,
+        period: wp || { era: localStorage.getItem('ege_last_period') || 'all' },
+        left: pick.left };
+
+    // Нового в периоде не осталось → разбираем ошибки/повтор
+    if (hasBacklog) return pickReview(false);
+
+    // 3) Слабое место
     const weak = _weakestSpot();
     if (weak) return { ...base, kind: 'weak', weak, period: { era: weak.era } };
 
-    // 6) Всё честно закрыто на сегодня
+    // 4) Всё честно закрыто на сегодня
     return { ...base, kind: 'done', period: wp,
         streak: (window.computeDayStreak && window.computeDayStreak()) || 0 };
 }
@@ -1878,13 +1877,13 @@ function renderMainAction() {
         sub = `осталось ${a.hwRemaining}${a.hwCount > 1 ? ` · заданий: ${a.hwCount}` : ''}${dl}`;
     } else if (a.kind === 'mistakes') {
         const cfg = TASK_CONFIG[a.task] || TASK_CONFIG.task4;
-        title = `Разбор ошибок · ${a.mistakes.total}`;
-        sub = `${cfg.shortLabel} · разберём то, в чём ошибся`;
+        title = a.repeatDay ? `🧠 День повторения` : `Разбор ошибок · ${a.mistakes.total}`;
+        sub = a.repeatDay ? `сегодня закрепляем · ошибок: ${a.mistakes.total}` : `${cfg.shortLabel} · разберём то, в чём ошибся`;
     } else if (a.kind === 'review') {
         const shown = Math.min(a.due.total, 20);
-        title = `Повторить ${shown} фактов`;
-        sub = a.period ? `твой материал: ${_wpLabel(a.period)}` : 'память просит освежить';
-        if (a.due.total > shown) sub += ` · всего ${a.due.total}`;
+        title = a.repeatDay ? `🧠 День повторения` : `Повторить ${shown} фактов`;
+        sub = a.repeatDay ? `сегодня закрепляем · ${shown} фактов к повтору` : (a.period ? `твой материал: ${_wpLabel(a.period)}` : 'память просит освежить');
+        if (!a.repeatDay && a.due.total > shown) sub += ` · всего ${a.due.total}`;
     } else if (a.kind === 'continue') {
         const cfg = TASK_CONFIG[a.task] || TASK_CONFIG.task4;
         const pl = (typeof a.period === 'string')

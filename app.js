@@ -77,6 +77,7 @@ window.quickStartGame = function(task, mode) {
     if (isMediaTaskChoice(task) && mode !== 'flashcards' && mode !== 'study') {
         mode = 'study';
     }
+    window.state._normalTableTick = 0; // блендинг повтора считаем от начала сессии
     window.state.currentTask = task;
     $('filter-task').value = task;
     $('filter-mode').value = mode;

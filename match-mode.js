@@ -63,6 +63,11 @@
 
     window.openMatchMode = function () {
         if (_m) return;
+        // Норма/лимит (Q2): подбор считается как обычные строки → упирается в дневной лимит.
+        if (window.canSolveMore) {
+            const lim = window.canSolveMore();
+            if (!lim.ok) { if (window.showDailyLimitModal) window.showDailyLimitModal(); return; }
+        }
         const rows = _pickRows();
         if (rows.length < PAIRS) { if (typeof showToast === 'function') showToast('⚠️', 'Данные задания №1 ещё загружаются — попробуй через секунду', 'bg-amber-500', 'border-amber-700'); return; }
         try { if (window.Sfx) window.Sfx.unlock(); } catch (e) {}
@@ -157,6 +162,7 @@
             // ── пара! обе исчезают ──
             a.gone = c.gone = true;
             _m.done++;
+            if (window.creditNorm) window.creditNorm(1, 'task1'); // Q2: подбор идёт в норму дня
             [j, i].forEach(k => { const el = _cardEl(k); if (el) { el.style.opacity = '0'; el.style.pointerEvents = 'none'; el.style.transform = 'scale(0.8)'; } });
             _play(true); _h('medium');
             if (_m.done === PAIRS) _finish();

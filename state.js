@@ -233,6 +233,19 @@ function getBasePool(period) {
         (period === 'all' ? [...baseData] : baseData.filter(d => d.c === period));
 }
 
+// Засчитать норму дня от свайпа/подбора (решение Q2: считаются как обычные строки —
+// и в дневную норму, и в лимит). Лёгкая функция без побочек ДЗ/ЕГЭ-баллов; сохранение
+// и обновление UI делают вызывающие при закрытии режима.
+window.creditNorm = function (n, task) {
+    n = Number(n) || 0; if (n <= 0) return;
+    const s = window.state.stats;
+    const today = getTodayString();
+    if (!s.dailyStats[today]) s.dailyStats[today] = { timeSpent: 0, solved: 0 };
+    s.dailyStats[today].solved += n;
+    s.totalSolvedEver = (s.totalSolvedEver || 0) + n;
+    if (task && s.solvedByTask) s.solvedByTask[task] = (s.solvedByTask[task] || 0) + n;
+};
+
 function getFilteredPool(period, limit) {
     limit = limit || 0;
     const now = Date.now();
@@ -275,6 +288,26 @@ function getFilteredPool(period, limit) {
         // не тронутые + в процессе + просроченные) приоритет НОВОМУ: если совсем
         // невиданных хватает на таблицу — показываем только их, иначе весь свежий набор.
         const fs = window.state.stats.factStreaks;
+
+        // БЛЕНДИНГ (Q1): каждая 3-я таблица обычного потока — целиком повтор/ошибки того
+        // же задания, если их хватает на таблицу. Так «новое» естественно перемежается
+        // разбором, а таблица остаётся внутренне корректной (проходит валидатор и гейты
+        // анти-двойных-ответов, как любая другая). Не трогает ДЗ и явные режимы ошибок/повтора.
+        if (window.state.currentMode === 'normal' && !window.state.isHomeworkMode
+            && !window.state.mistakeFocus && !window.state.reviewFocus) {
+            window.state._normalTableTick = (window.state._normalTableTick || 0) + 1;
+            if (window.state._normalTableTick % 3 === 0) {
+                const task = window.state.currentTask;
+                const cfg = TASK_CONFIG[task] || TASK_CONFIG.task4;
+                const mist = (window.state.mistakesPool || []).filter(m => m.task === task).map(m => m.fact);
+                const exp = pool.filter(f => { const d = fs[factKey(f)]; return d && d.level > 0 && d.nextReview <= now; });
+                const seen = new Set(); const blend = [];
+                for (const f of [...mist, ...exp]) { const k = cfg.dedupeKey(f); if (!seen.has(k)) { seen.add(k); blend.push(f); } }
+                if (blend.length >= (limit || 1)) { window.state._blendTable = true; return blend; }
+            }
+            window.state._blendTable = false;
+        }
+
         const isFresh = f => { const d = fs[factKey(f)]; return !(d && d.level > 0 && d.nextReview > now); };
         const fresh = pool.filter(isFresh);
         if (fresh.length >= (limit || 1)) {
