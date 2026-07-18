@@ -1873,7 +1873,7 @@ function renderMainAction() {
         sub = 'первые факты за 2 минуты';
     }
     const chip = (label, val, act, dim) => `
-        <button onclick="window.mainActionGo('${act}')" style="flex:1;min-width:0;background:${dim ? 'rgba(255,255,255,0.6)' : '#fff'};border:1px solid rgba(0,0,0,0.08);border-radius:999px;padding:7px 6px;font-size:10px;font-weight:900;color:#475569;cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" class="dark:!bg-[#1e1e1e] dark:!text-gray-300 active:scale-95 transition-transform">${label}${val != null ? ` · ${val}` : ''}</button>`;
+        <button onclick="window.mainActionGo('${act}')" style="flex:1;min-width:0;background:${dim ? 'rgba(255,255,255,0.6)' : '#fff'};border:1px solid rgba(0,0,0,0.08);border-radius:999px;padding:10px 8px;font-size:11px;font-weight:900;color:#475569;cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" class="dark:!bg-[#1e1e1e] dark:!text-gray-300 active:scale-95 transition-transform">${label}${val != null ? ` · ${val}` : ''}</button>`;
     box.innerHTML = `
         <div onclick="window.mainActionGo()" style="background:${m.bg};border-radius:18px;padding:16px 18px;cursor:pointer;color:#fff;box-shadow:0 8px 24px rgba(0,0,0,0.18)" class="active:scale-[0.98] transition-transform">
             <div style="display:flex;align-items:center;gap:14px">

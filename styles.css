@@ -1333,3 +1333,114 @@ body.zen-mode-active main { padding-bottom: 20px !important; }
         letter-spacing: 0;
     }
 }
+
+/* ═══════ ПОЛИРОВКА ВИЗУАЛА (июль 2026, по инструментальному аудиту) ═══════
+   Аудит всех режимов/модалок на 1280px и 375px нашёл четыре класса проблем:
+   (1) тач-цели меньше 36px, (2) бисер 8–11px на десктопе в модалках,
+   (3) свайп на десктопе — «мобильная колонка на пустой странице»,
+   (4) профиль-столбик/узкая статистика/нет намёка на скролл чипов учителя.
+   Мобильная вёрстка сознательно не тронута, кроме увеличения зон нажатия. */
+
+/* ── (1) Тач-цели ── */
+/* Крестик закрытия модалок: глиф прежний, зона нажатия 44×44.
+   Селектор сужен классами text-3xl/2xl, чтобы не зацепить кнопку «Отмена»,
+   которая тоже ходит через data-action="hideModal". */
+button[data-action="hideModal"].text-3xl,
+button[data-action="hideModal"].text-2xl {
+    min-width: 44px; min-height: 44px;
+    display: flex; align-items: center; justify-content: center;
+    margin: -8px -12px -8px 0; border-radius: 14px;
+}
+button[data-action="hideModal"].text-3xl:hover,
+button[data-action="hideModal"].text-2xl:hover { background: rgba(0,0,0,0.06); }
+.dark button[data-action="hideModal"].text-3xl:hover,
+.dark button[data-action="hideModal"].text-2xl:hover { background: rgba(255,255,255,0.08); }
+
+/* «Назад» и чип периода в шапке игры (на телефоне были 32×24) */
+#game-container button[data-action="backToLobby"] { min-height: 40px; min-width: 44px; justify-content: center; }
+#game-period-chip { min-height: 40px; }
+
+/* Кнопки профиля («Мой PIN» / «Привязать» были 31px) */
+#profile-modal button { min-height: 40px; }
+
+/* Чипы-сегменты кабинета учителя (были 28px) */
+#teacher-segments button { min-height: 36px; }
+
+/* Кнопки выхода из «Подбора» и ВОВ (были ~33px) */
+#mm-exit, #vv-exit { min-height: 40px; }
+
+/* ── (2) Шрифтовой пол в модалках на десктопе ──
+   8–11px подписи на мониторе нечитаемы. Поднимаем только внутри модалок и только
+   с 700px. :not(.sm\:text-sm) — у кнопок с responsive-вариантом Tailwind сам
+   даёт 14px, их не трогаем, чтобы не уменьшить. */
+@media (min-width: 700px) {
+    :is(#stats-modal, #profile-modal, #achievements-modal, #task-picker-modal,
+        #teacher-modal, #global-top-modal, #mistakes-list-modal)
+        :is(.text-\[8px\], .text-\[9px\]) { font-size: 11px; }
+    :is(#stats-modal, #profile-modal, #achievements-modal, #task-picker-modal,
+        #teacher-modal, #global-top-modal, #mistakes-list-modal)
+        .text-\[10px\] { font-size: 12px; }
+    :is(#stats-modal, #profile-modal, #achievements-modal, #task-picker-modal,
+        #teacher-modal, #global-top-modal, #mistakes-list-modal)
+        .text-\[11px\]:not(.sm\:text-sm) { font-size: 13px; }
+    :is(#stats-modal, #profile-modal, #achievements-modal, #task-picker-modal,
+        #teacher-modal, #global-top-modal, #mistakes-list-modal)
+        .text-xs:not(.sm\:text-sm) { font-size: 13px; }
+
+    /* Статистике тесно в 448px — цифрам нужен воздух */
+    #stats-modal > div { max-width: 560px; }
+
+    /* Выбор задания: центрированная карточка вместо листа, приклеенного к низу */
+    #task-picker-modal { justify-content: center; align-items: center; padding: 24px; }
+    #tp-sheet { border-radius: 24px; max-width: 640px; max-height: calc(100vh - 48px); overflow-y: auto; }
+}
+
+/* ── (3) Свайп: на десктопе панель-карточка, как у ВОВ ── */
+#swipe-overlay .sw-col { display: flex; flex-direction: column; flex: 1 1 auto; min-height: 0; width: 100%; }
+.sw-tiny { font-size: 9px; }
+@media (min-width: 700px) {
+    /* фон оверлея задан инлайном в JS — глушим только его, каркас не трогаем */
+    #swipe-overlay {
+        background: rgba(8, 13, 26, 0.6) !important;
+        -webkit-backdrop-filter: blur(4px); backdrop-filter: blur(4px);
+        align-items: center; justify-content: center; padding: 26px;
+    }
+    #swipe-overlay .sw-col {
+        flex: 0 1 auto; max-width: 620px; height: min(86vh, 780px);
+        background: radial-gradient(circle at 50% 0%, #1e293b, #0b1120);
+        border-radius: 26px; border: 1px solid rgba(148, 163, 184, 0.16);
+        box-shadow: 0 24px 64px rgba(0, 0, 0, 0.5);
+        overflow: hidden; padding: 6px 0;
+    }
+    .sw-tiny { font-size: 11px; }
+}
+
+/* ── (4) Полировка ── */
+/* Профиль на десктопе: 2 колонки (Google-блок слева, имя+код справа, PIN и
+   кнопки на всю ширину) вместо мобильного столбика 384px посреди пустоты */
+@media (min-width: 700px) {
+    #profile-modal > div {
+        max-width: 640px;
+        display: grid; grid-template-columns: 1fr 1fr; gap: 14px 18px;
+        grid-template-areas: "ph ph" "pg pn" "pg pc" "pp pp" "pb pb";
+    }
+    #profile-modal > div > :nth-child(1) { grid-area: ph; }
+    #profile-modal > div > :nth-child(2) { grid-area: pg; }
+    #profile-modal > div > :nth-child(3) { grid-area: pn; }
+    #profile-modal > div > :nth-child(4) { grid-area: pc; }
+    #profile-modal > div > :nth-child(5) { grid-area: pp; }
+    #profile-modal > div > :nth-child(6) { grid-area: pb; }
+
+    /* Пикер визуального тренажёра: заголовок и карточки крупнее */
+    .visual-category-picker h2 { font-size: 2rem; }
+    .visual-cat-btn { padding: 1.4rem 1.5rem; }
+}
+
+/* Чипы кабинета учителя на телефоне: фейд справа — намёк «строка скроллится» */
+@media (max-width: 639px) {
+    #teacher-segments {
+        -webkit-mask-image: linear-gradient(90deg, #000 84%, rgba(0,0,0,0));
+        mask-image: linear-gradient(90deg, #000 84%, rgba(0,0,0,0));
+        padding-right: 14px;
+    }
+}

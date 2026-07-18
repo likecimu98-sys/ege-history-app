@@ -361,16 +361,19 @@
     function _renderShell() {
         const ov = document.getElementById('swipe-overlay'); if (!ov) return;
         const duel = _sw && _sw.duel;
+        // .sw-col: на телефоне прозрачная колонка во весь экран, на десктопе (styles.css,
+        // min-width:700px) — центрированная панель-карточка, как у ВОВ.
         ov.innerHTML = `
+        <div class="sw-col">
         <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 14px;color:#e2e8f0;flex-shrink:0">
-            <button id="sw-close" style="background:rgba(255,255,255,0.1);border:none;color:#fff;width:34px;height:34px;border-radius:11px;font-size:17px;cursor:pointer">✕</button>
+            <button id="sw-close" style="background:rgba(255,255,255,0.1);border:none;color:#fff;width:40px;height:40px;border-radius:12px;font-size:18px;cursor:pointer">✕</button>
             <div style="display:flex;gap:11px;align-items:center;font-weight:900">
                 <span style="font-size:12.5px">Счёт: <span id="sw-score" style="color:#fbbf24">0</span></span>
                 <span style="font-size:12.5px">🔥 <span id="sw-streak">0</span></span>
                 ${duel
                     ? '<span style="font-size:12.5px;color:#f87171">⏱ <span id="sw-timer">0:45</span></span>'
                     : '<span style="font-size:12.5px;opacity:.7">осталось: <span id="sw-left">0</span></span>'}
-                <button id="sw-mute" title="Звук вкл/выкл" style="background:rgba(255,255,255,0.1);border:none;width:30px;height:30px;border-radius:9px;font-size:14px;cursor:pointer;opacity:${_muted ? '0.55' : '1'}">${_muteIcon()}</button>
+                <button id="sw-mute" title="Звук вкл/выкл" style="background:rgba(255,255,255,0.1);border:none;width:38px;height:38px;border-radius:11px;font-size:15px;cursor:pointer;opacity:${_muted ? '0.55' : '1'}">${_muteIcon()}</button>
             </div>
         </div>
         ${duel ? `
@@ -393,6 +396,7 @@
         </div>
         <div style="text-align:center;color:#94a3b8;font-size:11.5px;font-weight:800;padding:6px 0 14px;flex-shrink:0">
             ${duel ? '⚔️ одинаковые карточки у обоих — кто наберёт больше очков' : '← свайпни карточку · тап по имени — сменить правителя'}
+        </div>
         </div>`;
         ov.querySelector('#sw-close').onclick = () => {
             // confirm() в TG на iOS заблокирован — uiConfirm использует нативный диалог Telegram
@@ -421,8 +425,8 @@
         return `<button id="sw-panel-${side}" data-side="${side}" title="Сменить правителя" style="flex:1;min-width:0;background:${tint};border:2px solid ${accent}55;border-radius:16px;padding:8px 6px;color:#e2e8f0;cursor:pointer;transition:transform .12s,box-shadow .12s;display:flex;flex-direction:column;align-items:center;gap:1px;text-align:center">
             <div style="font-size:22px;line-height:1">${ruler.emoji || '👑'}</div>
             <div style="font-size:13px;font-weight:900;line-height:1.05">${_esc(ruler.name)}</div>
-            <div style="font-size:9px;opacity:.7;font-weight:700">${_esc(ruler.years || '')}</div>
-            ${_sw && _sw.duel ? '' : '<div style="font-size:9px;opacity:.55;font-weight:800;margin-top:1px">▾ сменить</div>'}
+            <div class="sw-tiny" style="opacity:.7;font-weight:700">${_esc(ruler.years || '')}</div>
+            ${_sw && _sw.duel ? '' : '<div class="sw-tiny" style="opacity:.55;font-weight:800;margin-top:1px">▾ сменить</div>'}
         </button>`;
     }
 
