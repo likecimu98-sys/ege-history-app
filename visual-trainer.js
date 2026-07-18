@@ -329,8 +329,19 @@ window.backToVisualCategoryPicker = function() {
 };
 
 
-window.startVisualTrainer = function() {
+window.startVisualTrainer = async function() {
     haptic('medium');
+    if (typeof window.ensureVisualDataLoaded === 'function' &&
+        !(typeof window.isVisualDataLoaded === 'function' && window.isVisualDataLoaded())) {
+        showToast('⏳', 'Загружаем визуальный тренажёр...', 'bg-blue-500', 'border-blue-700');
+        try {
+            await window.ensureVisualDataLoaded();
+        } catch (error) {
+            console.error('[Visual] Failed to start visual trainer:', error);
+            showToast('⚠️', 'Не удалось загрузить визуальный тренажёр. Проверь интернет и попробуй ещё раз.', 'bg-rose-500', 'border-rose-700');
+            return;
+        }
+    }
     window.state.currentMode = 'visual';
     window.state.currentVisualCategory = null;
     window.state.currentVisualId = null;

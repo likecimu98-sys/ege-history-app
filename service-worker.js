@@ -1,9 +1,10 @@
 'use strict';
 
-const APP_VERSION = '2026-07-18-3';
+const APP_VERSION = '2026-07-18-4';
 const STATIC_CACHE = `ege-history-static-${APP_VERSION}`;
 const ASSET_CACHE = `ege-history-assets-${APP_VERSION}`;
 const CACHE_NAMES = [STATIC_CACHE, ASSET_CACHE];
+const ASSET_WARMUP_PAUSE_MS = 300;
 
 const CORE_URLS = [
     './',
@@ -25,10 +26,8 @@ const CORE_URLS = [
     './visual-trainer.js',
     './app.js',
     './firebase-sync.js',
-    // Тяжёлые visual*.generated.js (~765 КБ) НЕ прекэшируем на install: они грузятся
-    // лениво в фоне (см. index.html loadVisualData) и кэшируются fetch-handler'ом по
-    // требованию (staleWhileRevalidate). Держать их в install-прекэше = тянуть 0.7 МБ
-    // сетью ровно в окно первой загрузки, конкурируя с ядром приложения.
+    // Тяжёлые visual*.generated.js НЕ прекэшируем на install: они загружаются только
+    // при открытии визуальных режимов и затем кэшируются fetch-handler'ом.
     './data.js',
     './tokens.css',
     './output.css',
@@ -57,13 +56,26 @@ function scopedUrl(path) {
     return new URL(path, self.registration.scope).toString();
 }
 
-function scopedRequest(path) {
-    return new Request(scopedUrl(path), { cache: 'reload' });
+function scopedRequest(path, cacheMode = 'reload') {
+    return new Request(scopedUrl(path), { cache: cacheMode });
 }
 
 async function addCoreFiles() {
     const cache = await caches.open(STATIC_CACHE);
-    await cache.addAll(CORE_URLS.map(scopedRequest));
+    for (const path of CORE_URLS) {
+        const request = scopedRequest(path);
+        try {
+            const response = await fetch(request);
+            if (!response.ok) {
+                console.warn('[SW] Core file is not available:', path, response.status);
+                continue;
+            }
+            await cache.put(request, response.clone());
+        } catch (error) {
+            // Один недоступный файл не должен отменять установку всего Service Worker.
+            console.warn('[SW] Failed to cache core file:', path, error);
+        }
+    }
 }
 
 async function putIfOk(cache, request, response) {
@@ -89,28 +101,33 @@ async function cacheOfflineAssets() {
         if (!manifestResponse) return;
 
         const manifestClone = manifestResponse.clone();
-        const assetUrls = await manifestResponse.json();
+        const manifestData = await manifestResponse.json();
+        const assetUrls = Array.isArray(manifestData)
+            ? [...new Set(manifestData.filter(path => typeof path === 'string' && path.length > 0))]
+            : [];
         await putIfOk(manifestCache, manifestRequest, manifestClone);
 
         const cache = await caches.open(ASSET_CACHE);
-        let cursor = 0;
-        const workers = Array.from({ length: 6 }, async () => {
-            while (cursor < assetUrls.length) {
-                const assetPath = assetUrls[cursor++];
-                const request = scopedRequest(assetPath);
-                const cached = await cache.match(request);
-                if (cached) continue;
+        for (const assetPath of assetUrls) {
+            const request = scopedRequest(assetPath, 'default');
+            const cached = await cache.match(request);
+            if (cached) continue;
 
-                try {
-                    const response = await fetch(request);
-                    await putIfOk(cache, request, response);
-                } catch (error) {
-                    console.warn('[SW] Failed to cache asset:', assetPath, error);
+            try {
+                const response = await fetch(request);
+                if (!response.ok) {
+                    console.warn('[SW] Asset is not available:', assetPath, response.status);
+                } else {
+                    await cache.put(request, response.clone());
                 }
+            } catch (error) {
+                console.warn('[SW] Failed to cache asset:', assetPath, error);
             }
-        });
 
-        await Promise.all(workers);
+            // Один запрос за раз и короткая пауза: прогрев идёт постепенно и не
+            // отбирает канал у интерфейса, Firebase и других открытых устройств.
+            await new Promise(resolve => setTimeout(resolve, ASSET_WARMUP_PAUSE_MS));
+        }
     })().finally(() => {
         warmAssetsPromise = null;
     });

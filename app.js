@@ -72,8 +72,25 @@ function supportsYearSort(task) {
     return task === 'task1' || task === 'task3' || task === 'task7' || isMediaTaskChoice(task);
 }
 
-window.quickStartGame = function(task, mode) {
+async function ensureVisualDataForMode(task, mode) {
+    if (!isMediaTaskChoice(task) && mode !== 'visual') return true;
+    if (typeof window.ensureVisualDataLoaded !== 'function') return true;
+    if (typeof window.isVisualDataLoaded === 'function' && window.isVisualDataLoaded()) return true;
+
+    showToast('⏳', 'Загружаем визуальные материалы...', 'bg-blue-500', 'border-blue-700');
+    try {
+        await window.ensureVisualDataLoaded();
+        return true;
+    } catch (error) {
+        console.error('[Visual] Failed to load visual data:', error);
+        showToast('⚠️', 'Не удалось загрузить визуальные материалы. Проверь интернет и попробуй ещё раз.', 'bg-rose-500', 'border-rose-700');
+        return false;
+    }
+}
+
+window.quickStartGame = async function(task, mode) {
     haptic('medium');
+    if (!(await ensureVisualDataForMode(task, mode))) return;
     if (isMediaTaskChoice(task) && mode !== 'flashcards' && mode !== 'study') {
         mode = 'study';
     }

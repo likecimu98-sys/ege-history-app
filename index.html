@@ -1178,41 +1178,56 @@
          отдельный boot-ready.js убран — свежий файл не лежал в старом SW-кэше и на
          моргнувшей сети вис, не давая снять заставку. -->
 
-    <!-- Тяжёлые визуальные данные (~765 КБ: архитектура/живопись/карты/культура) нужны ТОЛЬКО
-         в Задании 7 / тренажёре / картах, а не в лобби. Раньше они грузились ДО app:ready и
-         держали заставку, пока не докачаются. Теперь грузим их в ФОНЕ, уже ПОСЛЕ открытия
-         приложения, чтобы не задерживать старт и не конкурировать за канал с ядром.
-         Все потребители этих данных защищены (`… || []`), поэтому ранний доступ безопасен;
-         после загрузки нормализуем подписи (window.normalizeVisualData в state.js). -->
+    <!-- Тяжёлые визуальные данные (~765 КБ: архитектура/живопись/карты/культура)
+         не участвуют в запуске приложения. Они загружаются по запросу при первом открытии
+         визуального задания, тренажёра или карты, а затем остаются в кэше браузера. -->
     <script>
       (function () {
         var FILES = [
-          'visualArchitectureData.generated.js',
-          'visualPaintingData.generated.js',
-          'mapLegendData.generated.js',
-          'visualStudyData.generated.js'
+          { src: 'visualArchitectureData.generated.js', ready: function () { return Array.isArray(window.visualArchitectureData); } },
+          { src: 'visualPaintingData.generated.js', ready: function () { return Array.isArray(window.visualPaintingData); } },
+          { src: 'mapLegendData.generated.js', ready: function () { return !!window.mapLegendData; } },
+          { src: 'visualStudyData.generated.js', ready: function () { return !!window.visualStudyData; } }
         ];
-        function loadVisualData() {
-          var remaining = FILES.length;
-          FILES.forEach(function (src) {
+        var loadingPromise = null;
+
+        function loadFile(file) {
+          if (file.ready()) return Promise.resolve();
+          return new Promise(function (resolve, reject) {
+            var previous = document.querySelector('script[data-visual-data-src="' + file.src + '"]');
+            if (previous) previous.remove();
             var s = document.createElement('script');
-            s.src = src;
-            s.onload = s.onerror = function () {
-              if (--remaining === 0 && typeof window.normalizeVisualData === 'function') {
-                window.normalizeVisualData();
-              }
+            s.src = file.src;
+            s.dataset.visualDataSrc = file.src;
+            s.onload = function () { resolve(); };
+            s.onerror = function () {
+              s.remove();
+              reject(new Error('Failed to load ' + file.src));
             };
             document.body.appendChild(s);
           });
         }
-        // Триггерим после готовности DOM (приложение уже инициализируется), дав лобби
-        // отрисоваться. (app:ready с 2026-07-18 тоже честный — диспатчится из boot-ready.js
-        // в конце defer-цепочки; DOMContentLoaded оставлен, чтобы не медлить с фоном.)
-        if (document.readyState === 'loading') {
-          document.addEventListener('DOMContentLoaded', function () { setTimeout(loadVisualData, 200); }, { once: true });
-        } else {
-          setTimeout(loadVisualData, 200);
-        }
+
+        window.isVisualDataLoaded = function () {
+          return FILES.every(function (file) { return file.ready(); });
+        };
+
+        window.ensureVisualDataLoaded = function () {
+          if (window.isVisualDataLoaded()) {
+            if (typeof window.normalizeVisualData === 'function') window.normalizeVisualData();
+            return Promise.resolve();
+          }
+          if (loadingPromise) return loadingPromise;
+
+          loadingPromise = Promise.all(FILES.map(loadFile)).then(function () {
+            if (typeof window.normalizeVisualData === 'function') window.normalizeVisualData();
+            document.dispatchEvent(new Event('visual:data-ready'));
+          }).catch(function (error) {
+            loadingPromise = null;
+            throw error;
+          });
+          return loadingPromise;
+        };
       })();
     </script>
 </body>

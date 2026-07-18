@@ -3,6 +3,8 @@
 
     const FIREBASE_SYNC_MODULE = './firebase-sync.js';
     const OFFLINE_CACHE_MESSAGE = { type: 'CACHE_OFFLINE_ASSETS' };
+    const OFFLINE_WARMUP_DELAY_MS = 12000;
+    const OFFLINE_WARMUP_IDLE_TIMEOUT_MS = 8000;
 
     let firebaseSyncPromise = null;
     let storageReadyPromise = null;
@@ -12,18 +14,32 @@
         return 'serviceWorker' in navigator && location.protocol !== 'file:';
     }
 
-    // Откладываем прогрев офлайн-ассетов до простоя браузера — чтобы канал в первые
-    // секунды доставался ядру приложения, а не фоновой закачке сотен картинок.
+    // Откладываем прогрев офлайн-ассетов минимум на 12 секунд, а затем ждём простоя.
+    // Так он не конкурирует с холодным запуском приложения и всё равно постепенно
+    // наполняет офлайн-кэш, пока ученик работает.
     let _warmScheduled = false;
     function scheduleOfflineWarmup(worker) {
         if (_warmScheduled) return;
         _warmScheduled = true;
         const fire = () => {
+            if (document.visibilityState === 'hidden' || navigator.onLine === false) {
+                _warmScheduled = false;
+                return;
+            }
             const target = worker || (navigator.serviceWorker && navigator.serviceWorker.controller);
-            if (target) target.postMessage(OFFLINE_CACHE_MESSAGE);
+            if (target) {
+                target.postMessage(OFFLINE_CACHE_MESSAGE);
+            } else {
+                _warmScheduled = false;
+            }
         };
-        if ('requestIdleCallback' in window) requestIdleCallback(fire, { timeout: 6000 });
-        else setTimeout(fire, 5000);
+        setTimeout(() => {
+            if ('requestIdleCallback' in window) {
+                requestIdleCallback(fire, { timeout: OFFLINE_WARMUP_IDLE_TIMEOUT_MS });
+            } else {
+                fire();
+            }
+        }, OFFLINE_WARMUP_DELAY_MS);
     }
 
     function setOfflineFlag() {
@@ -106,9 +122,8 @@
     window.addEventListener('online', () => {
         setOfflineFlag();
         syncAfterReconnect();
-        if (navigator.serviceWorker && navigator.serviceWorker.controller) {
-            navigator.serviceWorker.controller.postMessage(OFFLINE_CACHE_MESSAGE);
-        }
+        _warmScheduled = false;
+        scheduleOfflineWarmup(navigator.serviceWorker && navigator.serviceWorker.controller);
     });
     window.addEventListener('offline', setOfflineFlag);
 
@@ -131,7 +146,11 @@
     }
 
     document.addEventListener('visibilitychange', () => {
-        if (document.visibilityState === 'hidden') flushBeforePause();
+        if (document.visibilityState === 'hidden') {
+            flushBeforePause();
+        } else if (navigator.onLine !== false) {
+            scheduleOfflineWarmup(navigator.serviceWorker && navigator.serviceWorker.controller);
+        }
     });
     window.addEventListener('pagehide', flushBeforePause);
 

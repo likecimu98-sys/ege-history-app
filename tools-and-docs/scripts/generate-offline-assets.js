@@ -3,7 +3,7 @@
 const fs = require('fs');
 const path = require('path');
 
-const rootDir = path.resolve(__dirname, '..');
+const rootDir = path.resolve(__dirname, '..', '..');
 const assetsDir = path.join(rootDir, 'assets');
 const outputFile = path.join(rootDir, 'offline-assets.json');
 
