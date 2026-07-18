@@ -1228,6 +1228,28 @@
           });
           return loadingPromise;
         };
+
+        // Тихая фоновая догрузка на простое. Цель — убрать «огромную задержку» при первом
+        // открытии визуала: к моменту тапа по Заданию 7 / тренажёру / карте данные уже лежат
+        // и ensureVisualDataLoaded вернёт готовый результат без тоста и ожидания.
+        // ВАЖНО — стартуем только ПОСЛЕ app:ready (приложение уже открылось) и на простое:
+        //   • не конкурируем за канал в окно холодного старта (фон по DOMContentLoaded раньше
+        //     подозревался в том, что сайт «не открывался» на части устройств);
+        //   • on-demand путь остаётся гарантией — если ученик успел нажать раньше, он получит
+        //     ТОТ ЖЕ loadingPromise, дубля загрузки не будет.
+        (function schedulePrefetch() {
+          var started = false;
+          function go() {
+            if (started) return;
+            started = true;
+            var run = function () { try { window.ensureVisualDataLoaded(); } catch (e) {} };
+            if ('requestIdleCallback' in window) requestIdleCallback(run, { timeout: 6000 });
+            else setTimeout(run, 2500);
+          }
+          document.addEventListener('app:ready', go, { once: true });
+          // Страховка: если app:ready по какой-то причине не долетел — визуал всё равно догрузится.
+          setTimeout(go, 15000);
+        })();
       })();
     </script>
 </body>

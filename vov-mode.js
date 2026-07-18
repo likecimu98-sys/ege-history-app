@@ -106,7 +106,7 @@
         ov.className = 'fixed inset-0 flex flex-col bg-gray-50 dark:bg-[#121212]';
         ov.style.cssText = `z-index:${Z};padding:calc(10px + env(safe-area-inset-top)) 10px calc(10px + env(safe-area-inset-bottom))`;
         ov.innerHTML = `
-            <div style="width:100%;max-width:640px;margin:0 auto;display:flex;flex-direction:column;flex-grow:1;min-height:0">
+            <div class="vv-col" style="width:100%;max-width:640px;margin:0 auto;display:flex;flex-direction:column;flex-grow:1;min-height:0">
                 <div class="flex items-center justify-between shrink-0 mb-2" style="gap:8px">
                     <div class="text-left" style="min-width:96px">
                         <div class="text-[9px] font-black uppercase tracking-widest" style="color:#4d7c0f">🎖️ ВОВ · практика</div>
@@ -285,7 +285,24 @@
         #vov-overlay .vv-win{color:#4d7c0f}
         #vov-overlay .vv-lose{color:#f43f5e}
         #vov-overlay .vv-spinner{width:34px;height:34px;border-radius:50%;border:4px solid rgba(77,124,15,0.2);border-top-color:#4d7c0f;animation:vvspin .8s linear infinite}
-        @keyframes vvspin{to{transform:rotate(360deg)}}`;
+        @keyframes vvspin{to{transform:rotate(360deg)}}
+        /* Десктоп: не «пустая страница на весь экран», а центрированная панель-модалка
+           поверх затемнённого фона; крупнее шрифты — мелкий мобильный текст на мониторе
+           смотрелся отвратительно. Мобильную (full-bleed) раскладку не трогаем. */
+        @media (min-width:700px){
+          #vov-overlay{justify-content:center;background:rgba(17,24,39,0.55)!important;-webkit-backdrop-filter:blur(4px);backdrop-filter:blur(4px);padding:28px!important}
+          .dark #vov-overlay,html.dark #vov-overlay{background:rgba(0,0,0,0.62)!important}
+          #vov-overlay .vv-col{flex-grow:0!important;max-width:680px;max-height:88vh;background:#fff;border-radius:24px;box-shadow:0 24px 64px rgba(0,0,0,0.30);padding:26px 30px 24px}
+          .dark #vov-overlay .vv-col,html.dark #vov-overlay .vv-col{background:#1a1a1a;box-shadow:0 24px 64px rgba(0,0,0,0.6)}
+          #vov-overlay .vv-card{background:#f9fafb;border-radius:18px;padding:20px 22px 12px}
+          .dark #vov-overlay .vv-card,html.dark #vov-overlay .vv-card{background:#232323}
+          #vov-overlay .vv-sentence{font-size:16px;line-height:1.85;margin-bottom:14px}
+          #vov-overlay .vv-slot{font-size:15px;min-width:76px;padding:2px 11px}
+          #vov-overlay .vv-chip{font-size:15px;padding:11px 16px}
+          #vov-overlay .vv-chips{gap:10px}
+          #vov-overlay .vv-btn{font-size:14px;padding:15px}
+          #vov-overlay .vv-result{font-size:14px}
+        }`;
         document.head.appendChild(st);
     } catch (e) {}
 
