@@ -1009,7 +1009,7 @@ window.updateGamePeriodChip = function() {
     // границу применило приложение (кнопка «Продолжить» по «дошли до») — реальные годы.
     const chosen = window.state.periodChosen || window.state._wpApplied
         || (() => { try { return localStorage.getItem('ege_period_chosen') === '1'; } catch (e) { return false; } })();
-    if (txt) txt.textContent = chosen ? window.currentPeriodLabel() : 'Выбрать период';
+    if (txt) txt.textContent = chosen ? window.currentPeriodLabel() : 'Период';
     gear.classList.add('hidden');
     chip.classList.remove('hidden'); chip.classList.add('flex');
 };

@@ -556,11 +556,11 @@
 
         <!-- ИГРОВОЙ ЭКРАН -->
         <div id="game-container" class="hidden flex-col w-full flex-grow relative">
-            <div id="game-header" class="flex justify-between items-center mb-2 sm:mb-3 bg-white/60 dark:bg-[#1e1e1e]/80 backdrop-blur-md p-1.5 sm:p-2 rounded-xl shadow-sm border border-gray-100 dark:border-[#2c2c2c] shrink-0">
-                <button data-action="backToLobby" class="flex items-center gap-1.5 text-gray-500 hover:text-examBlue dark:text-gray-400 dark:hover:text-blue-400 font-bold transition-colors text-xs sm:text-sm px-2 py-1 rounded-lg hover:bg-white dark:hover:bg-[#2c2c2c]"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path></svg><span class="hidden sm:inline">Назад</span></button>
-                <div class="flex flex-col items-center"><h2 id="game-title-display" class="font-black text-gray-800 dark:text-gray-300 uppercase tracking-widest text-xs sm:text-sm">Режим</h2><div id="game-timer-display" class="hidden text-rose-500 font-black text-xs animate-pulse">03:00</div></div>
-                <button id="game-settings-btn" data-action="openGlobalSettings" class="text-gray-400 hover:text-gray-700 dark:text-gray-500 dark:hover:text-gray-300 text-base p-1.5 bg-white dark:bg-[#2c2c2c] rounded-lg transition-colors shadow-sm">⚙️</button>
-                <button id="game-period-chip" data-action="openGlobalSettings" class="hidden items-center gap-1.5 text-[11px] sm:text-xs font-black px-2.5 py-1.5 rounded-lg transition-transform shadow-sm active:scale-95 max-w-[55%]" style="background:#6366f1;color:#fff;border:1px solid #4f46e5;"><span>📅</span><span id="game-period-chip-text" class="truncate" style="color:#fff;">Вся история</span></button>
+            <div id="game-header" class="flex justify-between items-center gap-2 mb-2 sm:mb-3 bg-white/60 dark:bg-[#1e1e1e]/80 backdrop-blur-md p-1.5 sm:p-2 rounded-xl shadow-sm border border-gray-100 dark:border-[#2c2c2c] shrink-0">
+                <button data-action="backToLobby" class="shrink-0 flex items-center gap-1.5 text-gray-500 hover:text-examBlue dark:text-gray-400 dark:hover:text-blue-400 font-bold transition-colors text-xs sm:text-sm px-2 py-1 rounded-lg hover:bg-white dark:hover:bg-[#2c2c2c]"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path></svg><span class="hidden sm:inline">Назад</span></button>
+                <div class="flex flex-col items-center flex-1 min-w-0 px-1"><h2 id="game-title-display" class="font-black text-gray-800 dark:text-gray-300 uppercase tracking-widest text-xs sm:text-sm truncate max-w-full">Режим</h2><div id="game-timer-display" class="hidden text-rose-500 font-black text-xs animate-pulse">03:00</div></div>
+                <button id="game-settings-btn" data-action="openGlobalSettings" class="shrink-0 text-gray-400 hover:text-gray-700 dark:text-gray-500 dark:hover:text-gray-300 text-base p-1.5 bg-white dark:bg-[#2c2c2c] rounded-lg transition-colors shadow-sm">⚙️</button>
+                <button id="game-period-chip" data-action="openGlobalSettings" class="hidden shrink-0 items-center gap-1.5 text-[11px] sm:text-xs font-black px-2.5 py-1.5 rounded-lg transition-transform shadow-sm active:scale-95 max-w-[48%]" style="background:#6366f1;color:#fff;border:1px solid #4f46e5;"><span>📅</span><span id="game-period-chip-text" class="truncate" style="color:#fff;">Вся история</span></button>
             </div>
 
             <!-- Прогресс режима выучивания (learned-ДЗ) -->
@@ -617,9 +617,9 @@
             </div>
 
             <!-- Зоны других режимов -->
-            <div id="flashcard-area" class="hidden flex-col flex-grow items-center justify-center w-full gap-4 relative pb-10"></div>
-            <div id="study-area" class="hidden flex-col flex-grow items-center justify-center w-full gap-4 relative pb-10"></div>
-            <div id="visual-trainer-area" class="hidden flex-col flex-grow items-center justify-center w-full gap-4 relative pb-10"></div>
+            <div id="flashcard-area" class="hidden flex-col flex-grow items-center justify-start w-full gap-4 relative pt-3 sm:pt-6 pb-10"></div>
+            <div id="study-area" class="hidden flex-col flex-grow items-center justify-start w-full gap-4 relative pt-3 sm:pt-6 pb-10"></div>
+            <div id="visual-trainer-area" class="hidden flex-col flex-grow items-center justify-start w-full gap-4 relative pt-3 sm:pt-6 pb-10"></div>
             <div id="redpencil-area" class="hidden flex-col flex-grow items-center w-full gap-4 relative pb-16 lg:pb-10">
                 <div class="flex items-center justify-between w-full max-w-4xl mb-2">
                     <h2 class="text-lg sm:text-xl font-black text-gray-800 dark:text-gray-300 truncate pr-4 uppercase tracking-widest" id="rp-title">Документ</h2>
