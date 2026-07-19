@@ -3095,6 +3095,51 @@
             // «ВОВ» (задание 8): выученные задания — союз (выучил на любом устройстве → выучено).
             st.vovLearned = {};
             states.forEach(s => Object.entries(s.stats?.vovLearned || {}).forEach(([id, v]) => { if (v) st.vovLearned[id] = true; }));
+            // Пробники: завершённая попытка важнее активной с тем же id; историю
+            // объединяем по id, активной считаем самую свежую копию.
+            {
+                const historyById = new Map();
+                states.forEach(s => {
+                    const mock = s.stats?.mockExams || {};
+                    (Array.isArray(mock.history) ? mock.history : []).forEach(item => {
+                        if (!item || !item.id) return;
+                        const cur = historyById.get(item.id);
+                        const stamp = Number(item.completedAt || item.updatedAt) || 0;
+                        const curStamp = Number(cur?.completedAt || cur?.updatedAt) || 0;
+                        if (!cur || stamp >= curStamp) historyById.set(item.id, JSON.parse(JSON.stringify(item)));
+                    });
+                });
+                const completedIds = new Set(historyById.keys());
+                let active = null;
+                states.forEach(s => {
+                    const candidate = s.stats?.mockExams?.active;
+                    if (!candidate || !candidate.id || completedIds.has(candidate.id)) return;
+                    if (!active || (Number(candidate.updatedAt) || 0) >= (Number(active.updatedAt) || 0)) {
+                        active = JSON.parse(JSON.stringify(candidate));
+                    }
+                });
+                const history = [...historyById.values()]
+                    .sort((a, b) => (Number(a.completedAt) || 0) - (Number(b.completedAt) || 0))
+                    .slice(-50);
+                st.mockExams = { active, history };
+            }
+            // Ошибки пробников — отдельная долговечная история. Объединяем устройства
+            // по id записи, чтобы одна ошибка не дублировалась после облачного merge.
+            {
+                const byId = new Map();
+                states.forEach(s => {
+                    (Array.isArray(s.stats?.mockExamMistakes) ? s.stats.mockExamMistakes : []).forEach(item => {
+                        if (!item || !item.id) return;
+                        const cur = byId.get(item.id);
+                        if (!cur || (Number(item.createdAt) || 0) >= (Number(cur.createdAt) || 0)) {
+                            byId.set(item.id, JSON.parse(JSON.stringify(item)));
+                        }
+                    });
+                });
+                st.mockExamMistakes = [...byId.values()]
+                    .sort((a, b) => (Number(a.createdAt) || 0) - (Number(b.createdAt) || 0))
+                    .slice(-1000);
+            }
             const achSet = new Set();
             states.forEach(s => (s.stats?.achievements || []).forEach(a => achSet.add(a)));
             st.achievements = [...achSet];
@@ -3169,7 +3214,7 @@
             'bestSpeedrunScore','dailyStats','achievements','achievementsData','egePoints',
             'visualArchitectureProgress','visualArchitectureSolved','visualPaintingProgress','visualPaintingSolved',
             'duelElo','duelGames','duelWins','duelLosses','duelDraws',
-            'matchBestMs','matchGames','vovLearned'
+            'matchBestMs','matchGames','vovLearned','mockExams','mockExamMistakes'
         ];
 
         function applyMergedState(merged) {
@@ -3198,6 +3243,9 @@
             if (!window.state.stats.achievementsData) window.state.stats.achievementsData = {};
             if (!window.state.stats.visualArchitectureProgress) window.state.stats.visualArchitectureProgress = {};
             if (!window.state.stats.visualPaintingProgress) window.state.stats.visualPaintingProgress = {};
+            if (!window.state.stats.mockExams || typeof window.state.stats.mockExams !== 'object') window.state.stats.mockExams = { active: null, history: [] };
+            if (!Array.isArray(window.state.stats.mockExams.history)) window.state.stats.mockExams.history = [];
+            if (!Array.isArray(window.state.stats.mockExamMistakes)) window.state.stats.mockExamMistakes = [];
             localStorage.setItem('ege_final_storage_v4', JSON.stringify(normalized));
             return normalized;
         }

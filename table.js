@@ -1304,6 +1304,9 @@ function _task5GateOk() {
 // Обёртка-гейт: генерирует и при нарушении инварианта перегенерирует.
 // Детектив и режим ДЗ (фиксированные индексы) не валидируются/не ретраятся.
 function generateTable() {
+    // В обычной тренировке без ограничения по эпохе каждый новый раунд имеет
+    // 20% шанс стать цельным заданием того же номера из открытого банка ФИПИ.
+    if (window.EgeExamMode?.maybeOpenTrainingTask?.()) return;
     const skipValidation = () =>
         window.state.currentMode === 'detective' ||
         window.state.isHomeworkMode === true;

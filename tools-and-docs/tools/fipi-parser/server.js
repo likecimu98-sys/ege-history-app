@@ -1065,6 +1065,37 @@ async function solveOne(exam, proj, guid, form) {
   return { answer: null, tried, reason: 'ответ не найден' };
 }
 
+// Проверяет один уже подготовленный ответ через solve.php. Это нужно прежде
+// всего для кратких текстовых ответов и больших таблиц задания 4: полный
+// перебор там невозможен, но осмысленный вариант можно подтвердить у ФИПИ.
+// Перед проверкой восстанавливаем сессию банка фильтром по короткому номеру
+// задания, иначе solve.php после перезапуска парсера может вернуть служебный
+// вердикт вместо результата проверки.
+async function checkOneAnswer(exam, proj, number, guid, answer) {
+  const shortNumber = String(number || '').trim();
+  const taskGuid = String(guid || '').trim();
+  const candidate = String(answer ?? '').trim();
+  if (!/^[a-f0-9]{6}$/i.test(shortNumber)) throw new Error('Некорректный номер задания ФИПИ.');
+  if (!/^[a-f0-9]{32}$/i.test(taskGuid)) throw new Error('Некорректный GUID задания ФИПИ.');
+  if (!candidate || candidate.length > 160) throw new Error('Некорректный проверяемый ответ.');
+
+  await fetchPage(exam, proj, { qid: shortNumber }, 0, 10);
+  const res = await fipiRequest(`${examHost(exam)}/bank/solve.php`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: `guid=${taskGuid}&answer=${encodeURIComponent(candidate)}&chkcode=&ajax=1&proj=${encodeURIComponent(proj)}`,
+  });
+  const verdict = cp1251.decode(res.buf).trim();
+  if (verdict !== '1' && verdict !== '2' && verdict !== '3') {
+    return { correct: false, verdict, reason: 'неожиданный ответ ФИПИ' };
+  }
+  return {
+    correct: verdict === '3',
+    verdict,
+    reason: verdict === '3' ? 'верно' : verdict === '2' ? 'неверно' : 'сессия ФИПИ не приняла ответ',
+  };
+}
+
 // Человекочитаемая расшифровка найденного ответа
 function decodeAnswer(task) {
   const a = task.answer;
@@ -1466,6 +1497,9 @@ const server = http.createServer(async (req, res) => {
       const b = await readBody(req);
       const r = await solveOne(b.exam, b.proj, b.guid, b.form);
       sendJson(res, 200, { ...r, answerText: r.answer ? decodeAnswer({ answer: r.answer, answerForm: b.form, elements: b.elements || [] }) : '' });
+    } else if (url.pathname === '/api/check-answer' && req.method === 'POST') {
+      const b = await readBody(req);
+      sendJson(res, 200, await checkOneAnswer(b.exam, b.proj, b.number, b.guid, b.answer));
     } else if (url.pathname === '/fipi-file') {
       const p = cleanFipiPath(url.searchParams.get('p') || '');
       if (!isSafeFipiPath(p)) throw new Error('Недопустимый путь');

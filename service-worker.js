@@ -1,6 +1,6 @@
 'use strict';
 
-const APP_VERSION = '2026-07-19-2';
+const APP_VERSION = '2026-07-19-8';
 const STATIC_CACHE = `ege-history-static-${APP_VERSION}`;
 const ASSET_CACHE = `ege-history-assets-${APP_VERSION}`;
 const CACHE_NAMES = [STATIC_CACHE, ASSET_CACHE];
@@ -15,6 +15,7 @@ const CORE_URLS = [
     './vendor/telegram-web-app.js',
     './config.js',
     './utils.js',
+    './exam-scoring.js',
     './state.js',
     './table.js',
     './ui.js',
@@ -24,6 +25,7 @@ const CORE_URLS = [
     './match-mode.js',
     './vov-mode.js',
     './visual-trainer.js',
+    './exam-mode.js',
     './app.js',
     './firebase-sync.js',
     // Тяжёлые visual*.generated.js НЕ прекэшируем на install: они загружаются только

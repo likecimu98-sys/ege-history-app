@@ -28,6 +28,8 @@ window.state = {
         duelElo: 1000, duelGames: 0, duelWins: 0, duelLosses: 0, duelDraws: 0,
         matchBestMs: 0, matchGames: 0,   // режим «Подбор» (Quizlet Match): рекорд-время и число раундов
         vovLearned: {},                  // режим «ВОВ» (задание 8, старый образец): id задания → true (выучено)
+        mockExams: { active: null, history: [] }, // пробник 1–12: незавершённая попытка + история
+        mockExamMistakes: [],            // долговечная история ошибок в пробниках и цельных заданиях ФИПИ
         visualArchitectureProgress: {},
         visualArchitectureSolved: 0,
         visualPaintingProgress: {},
@@ -398,7 +400,7 @@ const SAVE_FIELDS = [
     'visualPaintingProgress', 'visualPaintingSolved',
     'bestSpeedrunScore', 'dailyStats', 'achievements', 'achievementsData',
     'duelElo', 'duelGames', 'duelWins', 'duelLosses', 'duelDraws',
-    'matchBestMs', 'matchGames', 'vovLearned'
+    'matchBestMs', 'matchGames', 'vovLearned', 'mockExams', 'mockExamMistakes'
 ];
 
 const MAX_MISTAKES_POOL = 200;
@@ -465,6 +467,11 @@ function saveProgress() {
     saveLocal();
     scheduleSyncToCloud();
 }
+
+// Отдельные полноэкранные режимы сохраняют состояние через стабильный публичный API.
+window.saveLocal = saveLocal;
+window.saveProgress = saveProgress;
+window.syncNow = syncNow;
 
 // ─── Дневной лимит строк (настройки грузит refreshDailyLimit в firebase-sync.js) ───
 // 0/отсутствие лимита = безлимит. Считаем по dailyStats[today].solved — тому же
@@ -802,6 +809,14 @@ function loadFromStorage() {
         if (!Array.isArray(window.state.stats.assignments)) window.state.stats.assignments = [];
         if (!window.state.stats.achievements) window.state.stats.achievements = [];
         if (!window.state.stats.achievementsData) window.state.stats.achievementsData = {};
+        if (!window.state.stats.mockExams || typeof window.state.stats.mockExams !== 'object') {
+            window.state.stats.mockExams = { active: null, history: [] };
+        }
+        if (!Array.isArray(window.state.stats.mockExams.history)) window.state.stats.mockExams.history = [];
+        if (!window.state.stats.mockExams.active || typeof window.state.stats.mockExams.active !== 'object') {
+            window.state.stats.mockExams.active = null;
+        }
+        if (!Array.isArray(window.state.stats.mockExamMistakes)) window.state.stats.mockExamMistakes = [];
         {
             const ad = window.state.stats.achievementsData;
             ['nightOwls','earlyBirds','hwDone','hwPerfect','maxMistakes','hwOnTime','hwLate','hwStreak','hwStreakMax']

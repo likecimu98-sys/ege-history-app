@@ -1960,7 +1960,7 @@ function updateGlobalUI() {
     if ($('zen-stat-solved')) updateText($('zen-stat-solved'), window.state.stats.egePoints || 0);
     updateText($('stat-learned'), totalL);
     updateText($('modal-stat-solved'), window.state.stats.totalSolvedEver);
-    updateText($('modal-stat-mistakes'), window.state.mistakesPool.length);
+    updateText($('modal-stat-mistakes'), window.state.mistakesPool.length + ((window.state.stats.mockExamMistakes || []).length));
 
     const sbt = window.state.stats.solvedByTask || {};
     if ($('modal-stat-task1')) updateText($('modal-stat-task1'), sbt.task1 || 0);
@@ -2073,17 +2073,44 @@ window.openStatsModal = function() {
 };
 
 window.openMistakesListModal = function() {
-    const cont = $('mistakes-list-container'); const pool = window.state.mistakesPool || [];
-    if (pool.length === 0) cont.innerHTML = '<div class="text-center p-8 text-gray-500 font-bold text-sm uppercase tracking-widest bg-white dark:bg-[#1e1e1e] rounded-2xl border border-gray-200 dark:border-[#2c2c2c]">Ошибок нет! Вы молодец 🎉</div>';
-    else { 
-        let ht = '<div class="flex flex-col gap-2">'; 
-        pool.forEach((m, idx) => { 
-            let mTitle = m.task === 'task7' ? '🎨 Задание 7' : (m.task === 'task5' ? '👤 Задание 5' : (m.task === 'task3' ? '🔗 Задание 3' : (m.task === 'task1' ? '⏳ Задание 1' : '📍 Задание 4')));
-            let mContent = m.task === 'task7' ? `<span class="text-amber-600 dark:text-amber-400">${m.fact.culture}</span> ➡️ ${m.fact.trait}` : (m.task === 'task5' ? `<span class="text-blue-600 dark:text-blue-400">${m.fact.person}</span> ➡️ ${m.fact.event}` : (m.task === 'task3' ? `<span class="text-emerald-600 dark:text-emerald-400">${m.fact.process}</span> ➡️ ${m.fact.fact}` : (m.task === 'task1' ? `<span class="text-cyan-700 dark:text-cyan-400">${m.fact.event}</span> ➡️ ${m.fact.year}` : `<span class="text-emerald-600 dark:text-emerald-400">${m.fact.geo}</span> | <span class="text-blue-600 dark:text-blue-400">${m.fact.year}</span><br>${m.fact.event}`)));
-            ht += `<div class="bg-white dark:bg-[#1e1e1e] p-3 rounded-xl border border-rose-100 dark:border-rose-900/30 shadow-sm flex gap-3 text-sm"><div class="font-black text-rose-300 w-4 text-right shrink-0">${idx + 1}.</div><div class="flex flex-col"><span class="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1">${mTitle}</span><span class="font-medium text-gray-800 dark:text-gray-300 leading-tight">${mContent}</span></div></div>`; 
-        }); 
-        ht += '</div>'; 
-        cont.innerHTML = ht; 
+    const cont = $('mistakes-list-container');
+    const pool = window.state.mistakesPool || [];
+    const examPool = (window.state.stats && Array.isArray(window.state.stats.mockExamMistakes))
+        ? window.state.stats.mockExamMistakes.slice().sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0))
+        : [];
+    const esc = value => String(value == null ? '' : value).replace(/[&<>"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[char]));
+    if (pool.length === 0 && examPool.length === 0) {
+        cont.innerHTML = '<div class="text-center p-8 text-gray-500 font-bold text-sm uppercase tracking-widest bg-white dark:bg-[#1e1e1e] rounded-2xl border border-gray-200 dark:border-[#2c2c2c]">Ошибок нет! Вы молодец 🎉</div>';
+    } else {
+        let ht = '';
+        if (examPool.length) {
+            ht += `<div class="mb-5"><div class="flex items-center justify-between mb-2 px-1"><div class="text-[11px] font-black text-rose-500 uppercase tracking-widest">Пробники и задания ФИПИ</div><div class="text-[10px] font-black text-gray-400">${examPool.length} за всё время</div></div><div class="flex flex-col gap-2">`;
+            examPool.forEach((m, idx) => {
+                const date = m.createdAt ? new Date(m.createdAt).toLocaleDateString('ru-RU', { day: '2-digit', month: 'short', year: 'numeric' }) : '';
+                const source = m.source === 'trainer' ? 'Тренажёр · открытый банк' : 'Пробник ЕГЭ';
+                const soft = m.acceptedWithWarning ? '<span class="text-amber-600 dark:text-amber-400">Балл засчитан учебной проверкой</span>' : `<span class="text-rose-600 dark:text-rose-400">${Number(m.points) || 0}/${Number(m.max) || 0} балла</span>`;
+                ht += `<button type="button" data-action="openExamMistake" data-arg="${esc(m.id)}" class="w-full bg-white dark:bg-[#1e1e1e] p-3 rounded-xl border border-rose-200 dark:border-rose-900/40 shadow-sm text-left active:scale-[.99] transition-transform">
+                    <div class="flex items-start gap-3"><div class="font-black text-rose-300 w-5 text-right shrink-0">${idx + 1}.</div><div class="min-w-0 flex-1">
+                    <div class="flex flex-wrap justify-between gap-1"><span class="text-[9px] font-black text-gray-400 uppercase tracking-widest">${source} · №${Number(m.kim) || '?'}</span><span class="text-[9px] font-bold text-gray-400">${esc(date)}</span></div>
+                    <div class="font-bold text-gray-800 dark:text-gray-200 leading-snug mt-1 line-clamp-3">${esc(m.condition || 'Условие задания')}</div>
+                    <div class="mt-2 p-2 rounded-lg bg-rose-50 dark:bg-rose-950/30 text-[11px]"><b class="text-rose-500">Ваш ответ:</b> ${esc(m.answerText || 'Нет ответа')}</div>
+                    <div class="mt-1 p-2 rounded-lg bg-emerald-50 dark:bg-emerald-950/30 text-[11px]"><b class="text-emerald-600">Правильно:</b> ${esc(m.correctText || '')}</div>
+                    <div class="mt-2 text-[10px] font-black">${soft} <span class="text-blue-500 ml-2">Открыть полный разбор →</span></div>
+                    </div></div></button>`;
+            });
+            ht += '</div></div>';
+        }
+        if (pool.length) {
+            ht += `<div><div class="flex items-center justify-between mb-2 px-1"><div class="text-[11px] font-black text-gray-500 uppercase tracking-widest">Ошибки основных тренажёров</div><div class="text-[10px] font-black text-gray-400">${pool.length} сейчас в повторении</div></div><div class="flex flex-col gap-2">`;
+            pool.forEach((m, idx) => {
+                const fact = m.fact || {};
+                const mTitle = m.task === 'task7' ? '🎨 Задание 7' : (m.task === 'task5' ? '👤 Задание 5' : (m.task === 'task3' ? '🔗 Задание 3' : (m.task === 'task1' ? '⏳ Задание 1' : '📍 Задание 4')));
+                const parts = m.task === 'task7' ? [fact.culture, fact.trait] : m.task === 'task5' ? [fact.person, fact.event] : m.task === 'task3' ? [fact.process, fact.fact] : m.task === 'task1' ? [fact.event, fact.year] : [fact.geo, fact.year, fact.event];
+                ht += `<div class="bg-white dark:bg-[#1e1e1e] p-3 rounded-xl border border-rose-100 dark:border-rose-900/30 shadow-sm flex gap-3 text-sm"><div class="font-black text-rose-300 w-4 text-right shrink-0">${idx + 1}.</div><div class="flex flex-col"><span class="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1">${mTitle}</span><span class="font-medium text-gray-800 dark:text-gray-300 leading-tight">${parts.filter(Boolean).map(esc).join(' ➡️ ')}</span></div></div>`;
+            });
+            ht += '</div></div>';
+        }
+        cont.innerHTML = ht;
     }
     showModal('mistakes-list-modal');
 };

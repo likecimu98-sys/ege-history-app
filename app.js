@@ -277,7 +277,7 @@ window.handleSettingsChange = function() {
 
 // === ЕГЭ-БАЛЛЫ ЗА ЗАДАНИЕ ===
 // Критерии оценивания:
-//   task4: 3 балла — без ошибок, 2 — 1 ошибка, 1 — 2 ошибки, 0 — 3+
+//   task4: 3 балла — без ошибок, 2 — 1 ошибка, 1 — 2–3 ошибки, 0 — 4+
 //   task1, task3, task5, task7: 2 балла — без ошибок, 1 — 1 ошибка, 0 — 2+
 // «Ошибка» = строка, которую ученик исправлял хотя бы раз (scored="fixed")
 // или строка, на которую был показан ответ (answersRevealed)
@@ -288,11 +288,10 @@ function calculateEgePoints(rows, task) {
         // Ошибка = исправленная строка, неправильная, или вообще не оценённая (была пропущена)
         return scored === 'fixed' || scored === 'incorrect' || !scored;
     }).length;
-    if (task === 'task4') {
-        return errCount === 0 ? 3 : errCount === 1 ? 2 : errCount === 2 ? 1 : 0;
-    } else {
-        return errCount === 0 ? 2 : errCount === 1 ? 1 : 0;
-    }
+    const kim = Number(String(task || '').replace(/\D/g, ''));
+    if (window.EgeScoring) return window.EgeScoring.pointsFromErrorCount(kim, errCount);
+    if (task === 'task4') return errCount === 0 ? 3 : errCount === 1 ? 2 : errCount <= 3 ? 1 : 0;
+    return errCount === 0 ? 2 : errCount === 1 ? 1 : 0;
 }
 
 // Все ячейки заполнены и КАЖДАЯ верна (read-only, без начисления/пометок). Зеркалит логику checkAnswers.
@@ -682,6 +681,7 @@ const ACTION_HANDLERS = {
     openSwipeMode:          () => window.openSwipeMode?.(),
     openMatchMode:          () => window.openMatchMode?.(),
     openVovMode:            () => window.openVovMode?.(),
+    openExamMode:           () => window.openExamMode?.(),
     backToLobby:            () => window.backToLobby?.(),
     quickStartGame:         (a, a2) => window.quickStartGame?.(a, a2 || 'normal'),
     startVisualTrainer:     () => window.startVisualTrainer?.(),
@@ -712,6 +712,7 @@ const ACTION_HANDLERS = {
     openProfileModal:       () => window.openProfileModal?.(),
     openAchievementsModal:  () => window.openAchievementsModal?.(),
     openMistakesListModal:  () => window.openMistakesListModal?.(),
+    openExamMistake:        (a) => { window.hideModal?.('mistakes-list-modal'); window.openExamMistake?.(a); },
     copyTextReport:         () => window.copyTextReport?.(),
     shareTelegram:          () => window.shareTelegram?.(),
     closeGameOverModal:     () => window.closeGameOverModal?.(),

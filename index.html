@@ -394,6 +394,7 @@
     <!-- Порядок defer гарантирован браузером: выполняются строго по порядку в DOM -->
     <script src="config.js" defer></script>
     <script src="utils.js" defer></script>
+    <script src="exam-scoring.js?v=20260719-3" defer></script>
     <script src="state.js" defer></script>
     <script src="table.js" defer></script>
     <script src="ui.js" defer></script>
@@ -403,6 +404,7 @@
     <script src="match-mode.js" defer></script>
     <script src="vov-mode.js" defer></script>
     <script src="visual-trainer.js" defer></script>
+    <script src="exam-mode.js?v=20260719-6" defer></script>
     <script src="app.js" defer></script>
 
     <!-- ШАПКА -->
@@ -485,6 +487,14 @@
             <!-- Главная кнопка «Продолжить»: одно действие, которое приложение выбирает за ученика.
                  Содержимое рисует renderMainAction() (ui.js) при каждом updateGlobalUI. -->
             <div id="main-action" class="-mb-2"></div>
+            <div data-action="openExamMode" class="bg-gradient-to-br from-blue-700 via-indigo-700 to-violet-700 rounded-2xl p-5 shadow-[0_10px_32px_rgba(37,99,235,0.32)] border border-blue-400/60 cursor-pointer transition-all active:scale-95 hover:-translate-y-1 flex items-center justify-between group overflow-hidden relative text-white">
+                <div class="absolute -right-4 -bottom-8 text-[110px] font-black opacity-10 group-hover:scale-110 transition-transform pointer-events-none">20</div>
+                <div class="flex items-center gap-4 relative z-10">
+                    <div class="w-14 h-14 rounded-2xl bg-white/15 border border-white/20 flex items-center justify-center text-3xl drop-shadow-sm">📝</div>
+                    <div><h4 class="font-black text-lg sm:text-xl uppercase tracking-wide">Пробник ЕГЭ 1–12</h4><p class="text-xs font-bold text-blue-100 mt-0.5">Случайный вариант ФИПИ · честные первичные баллы · сохранение результата</p></div>
+                </div>
+                <div class="bg-white text-blue-700 text-[10px] font-black uppercase px-2.5 py-1.5 rounded-lg shadow-sm relative z-10 whitespace-nowrap">до 20</div>
+            </div>
             <div data-action="startDuelSearch" class="bg-gradient-to-br from-indigo-600 to-purple-700 rounded-2xl p-5 shadow-[0_8px_30px_rgba(99,102,241,0.4)] border border-indigo-400 cursor-pointer transition-all active:scale-95 hover:-translate-y-1 flex items-center justify-between group overflow-hidden relative mb-2 text-white">
                 <div class="absolute -right-4 -bottom-4 text-7xl opacity-20 group-hover:scale-110 transition-transform pointer-events-none">⚔️</div>
                 <div class="flex items-center gap-4 relative z-10">
