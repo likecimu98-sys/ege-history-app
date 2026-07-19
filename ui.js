@@ -1719,8 +1719,8 @@ function computeMainAction() {
     const mistakes = _mistakeCounts();
     const base = { due, hwCount: active.length, hwRemaining, doneToday, unlearned, mistakes };
 
-    // Новичок — с азов
-    if (!(s.totalSolvedEver > 0)) return { ...base, kind: 'start', period: wp || { era: 'early' } };
+    // Новичок — вся история, если учитель или сам ученик не задал ограничение.
+    if (!(s.totalSolvedEver > 0)) return { ...base, kind: 'start', period: wp };
 
     // Порядок: 1) ДЗ  2) ошибки  3) повтор выпавшего из выученного  4) новое  5) слабое  6) готово
 
@@ -1877,7 +1877,7 @@ function renderMainAction() {
             ? `стрик ${a.streak} дн. · новое продолжим завтра · можно закрепить свайпом`
             : `стрик ${a.streak} дн. · закрепи свайпом или повтори (кнопки ниже)`;
     } else if (a.kind === 'start') {
-        title = `Начать: ${_wpLabel(a.period) || 'Древность'}`;
+        title = `Начать: ${_wpLabel(a.period) || 'Вся история'}`;
         sub = 'первые факты за 2 минуты';
     }
     const chip = (label, val, act, dim) => `

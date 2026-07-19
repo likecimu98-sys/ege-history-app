@@ -23,6 +23,8 @@
     let trainingSourceTask = '';
     let singleMistakeEntry = null;
     let skipMixOnce = false;
+    let reviewIssuesOnly = true;
+    let returnToMistakePool = false;
 
     function examMistakes() {
         const stats = window.state && window.state.stats;
@@ -192,21 +194,22 @@
           .em-top{height:58px;flex:0 0 58px;display:flex;align-items:center;gap:10px;padding:7px 14px;background:#fff;border-bottom:1px solid #e5e7eb;box-shadow:0 2px 10px rgba(15,23,42,.05);z-index:5}
           .dark .em-top{background:#1e1e1e;border-color:#2c2c2c}
           .em-title{font-weight:950;font-size:15px;letter-spacing:.08em;text-transform:uppercase}.em-sub{font-size:10px;color:#9ca3af;font-weight:800}
+          .em-back{display:flex;align-items:center;gap:6px;white-space:nowrap}.em-back-icon{font-size:17px;line-height:1}.em-back-label{font-size:10px;text-transform:uppercase;letter-spacing:.04em}
           .em-spacer{flex:1}.em-time{font-variant-numeric:tabular-nums;font-weight:950;background:#eef2ff;color:#4338ca;border-radius:12px;padding:8px 12px}
           .em-btn{border:0;border-radius:12px;padding:10px 15px;font-weight:900;cursor:pointer;background:#e5e7eb;color:#374151;transition:.15s transform,.15s background}
           .em-btn:hover{transform:translateY(-1px)}.em-btn:active{transform:scale(.97)}.em-btn.primary{background:#2563eb;color:#fff}.em-btn.finish{background:#dc2626;color:#fff}.em-btn.ghost{background:transparent}.em-btn.danger{background:#fee2e2;color:#b91c1c}
           .dark .em-btn{background:#2c2c2c;color:#e5e7eb}.dark .em-btn.danger{background:#4c1d1d;color:#fecaca}
           .em-dashboard{height:100%;overflow:auto;padding:22px 16px 55px}.em-dashboard-inner{max-width:1000px;margin:auto}.em-hero{background:#fff;border:1px solid #e5e7eb;border-radius:20px;padding:22px;box-shadow:0 4px 14px rgba(15,23,42,.05)}.dark .em-hero{background:#1e1e1e;border-color:#2c2c2c}.em-hero h2{font-size:24px;margin:0 0 8px;font-weight:1000;color:#1f2937}.dark .em-hero h2{color:#e5e7eb}.em-hero p{margin:0;max-width:720px;line-height:1.55;color:#6b7280;font-weight:700}.em-hero-actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:18px}.em-hero .em-btn{background:#2563eb;color:#fff}.em-hero .em-btn.secondary{background:#eef2ff;color:#4338ca;border:1px solid #c7d2fe}
           .em-card{background:#fff;border:1px solid #e5e7eb;border-radius:18px;padding:17px;margin-top:16px;box-shadow:0 3px 12px rgba(15,23,42,.04)}.dark .em-card{background:#1e1e1e;border-color:#2c2c2c}.em-card h3{margin:0 0 12px;font-size:16px;font-weight:950}.em-progress{height:8px;border-radius:999px;background:#e5e7eb;overflow:hidden}.em-progress span{display:block;height:100%;background:#22c55e;border-radius:inherit}.em-active-row,.em-history-row{display:flex;align-items:center;gap:12px}.em-active-info,.em-history-info{flex:1;min-width:0}.em-muted{font-size:12px;color:#6b7280;font-weight:700}.em-history-list{display:grid;gap:9px}.em-history-row{padding:12px;border-radius:14px;background:#f9fafb;border:1px solid #e5e7eb}.dark .em-history-row{background:#181818;border-color:#2c2c2c}.em-score-pill{font-size:18px;font-weight:1000;color:#2563eb;white-space:nowrap}
-          .em-workspace{display:flex;flex-direction:column;height:calc(100vh - 58px);min-height:0}.em-nav{flex:0 0 auto;display:flex;gap:7px;padding:9px 14px;background:#fff;border-bottom:1px solid #e5e7eb;overflow-x:auto}.dark .em-nav{background:#1e1e1e;border-color:#2c2c2c}.em-nav-btn{width:35px;height:35px;flex:0 0 35px;border-radius:10px;border:1px solid #d1d5db;background:#fff;font-weight:950;color:#4b5563;cursor:pointer}.dark .em-nav-btn{background:#27272a;border-color:#3f3f46;color:#d1d5db}.em-nav-btn.answered{background:#dcfce7;border-color:#86efac;color:#166534}.dark .em-nav-btn.answered{background:#143b2a;border-color:#24744d;color:#86efac}.em-nav-btn.current{background:#2563eb;border-color:#2563eb;color:#fff;box-shadow:0 0 0 3px rgba(37,99,235,.12)}.em-nav-btn.partial{box-shadow:inset 0 -3px #f59e0b}
+          .em-workspace{display:flex;flex-direction:column;height:calc(100vh - 58px);min-height:0}.em-nav{flex:0 0 auto;display:flex;gap:7px;padding:9px 14px;background:#fff;border-bottom:1px solid #e5e7eb;overflow-x:auto}.dark .em-nav{background:#1e1e1e;border-color:#2c2c2c}.em-nav-btn{width:35px;height:35px;flex:0 0 35px;border-radius:10px;border:1px solid #d1d5db;background:#fff;font-weight:950;color:#4b5563;cursor:pointer}.dark .em-nav-btn{background:#27272a;border-color:#3f3f46;color:#d1d5db}.em-nav-btn.answered,.em-nav-btn.review-full{background:#dcfce7;border-color:#86efac;color:#166534}.dark .em-nav-btn.answered,.dark .em-nav-btn.review-full{background:#143b2a;border-color:#24744d;color:#86efac}.em-nav-btn.review-part,.em-nav-btn.review-warning{background:#fef3c7;border-color:#fbbf24;color:#92400e}.dark .em-nav-btn.review-part,.dark .em-nav-btn.review-warning{background:#422006;border-color:#b45309;color:#fde68a}.em-nav-btn.review-zero{background:#fee2e2;border-color:#fca5a5;color:#b91c1c}.dark .em-nav-btn.review-zero{background:#450a0a;border-color:#991b1b;color:#fecaca}.em-nav-btn.current{background:#2563eb;border-color:#2563eb;color:#fff;box-shadow:0 0 0 3px rgba(37,99,235,.12)}.em-nav-btn.partial{box-shadow:inset 0 -3px #f59e0b}.em-review-toolbar{display:flex;align-items:center;gap:8px;padding:8px 14px;background:#f8fafc;border-bottom:1px solid #e5e7eb}.dark .em-review-toolbar{background:#181818;border-color:#2c2c2c}.em-review-toolbar-label{margin-left:auto;font-size:11px;font-weight:900;color:#6b7280}.em-filter-btn{border:1px solid #d1d5db;background:#fff;color:#4b5563;border-radius:999px;padding:7px 11px;font-size:11px;font-weight:900;cursor:pointer}.dark .em-filter-btn{background:#27272a;border-color:#3f3f46;color:#d1d5db}.em-filter-btn.active{background:#2563eb;border-color:#2563eb;color:#fff}
           .em-work{flex:1;min-height:0;overflow:auto;padding:14px;background:#f3f4f6}.dark .em-work{background:#121212}.em-classic-task{width:100%;max-width:1200px;min-height:100%;margin:0 auto;display:flex;align-items:stretch;gap:14px}.em-board-card,.em-pool-panel,.em-media-card,.em-answer-panel{background:#fff;border:1px solid #e5e7eb;border-radius:16px;box-shadow:0 2px 8px rgba(15,23,42,.04);min-width:0}.dark .em-board-card,.dark .em-pool-panel,.dark .em-media-card,.dark .em-answer-panel{background:#1e1e1e;border-color:#2c2c2c}.em-board-card{flex:1 1 55%;overflow:auto}.em-pool-panel{flex:1 1 45%;padding:15px;display:flex;flex-direction:column}.em-panel-title{display:flex;align-items:center;gap:8px;margin:0 0 13px;padding:0 3px;font-size:14px;font-weight:1000;text-transform:uppercase;letter-spacing:.12em}.em-board-table{width:100%;border-collapse:collapse;table-layout:fixed}.em-board-table th{padding:12px 10px;background:#e5ebf2;color:#374151;font-size:13px;font-weight:950;text-align:center;border-bottom:1px solid #d1d5db}.dark .em-board-table th{background:#2c2c2c;color:#e5e7eb;border-color:#3f3f46}.em-board-table td{padding:11px 10px;border-bottom:1px solid #e5e7eb;border-right:1px solid #e5e7eb;text-align:center;font-size:13px;line-height:1.45;vertical-align:middle}.dark .em-board-table td{border-color:#2c2c2c}.em-board-table td:last-child{border-right:0}.em-board-table tr:last-child td{border-bottom:0}.em-board-label{font-weight:1000;color:#6b7280;margin-right:5px}.em-dnd-slot{width:100%;min-height:50px}.em-dnd-slot .dnd-chip{pointer-events:none}.em-options{display:flex;flex-wrap:wrap;justify-content:center;align-content:flex-start;gap:8px;overflow:auto;padding:1px 1px 10px}.em-dnd-chip{font-family:inherit;max-width:100%;white-space:normal;overflow-wrap:anywhere}.em-dnd-chip.selected{border-color:#2563eb!important;background:#eff6ff!important;box-shadow:0 0 0 3px rgba(37,99,235,.17)!important}.dark .em-dnd-chip.selected{background:#172554!important}.em-choice-chip{width:100%;display:flex;align-items:flex-start;gap:9px;text-align:left;line-height:1.4;padding:10px 11px}.em-choice-number{width:25px;height:25px;flex:0 0 25px;border-radius:7px;background:#e5e7eb;display:flex;align-items:center;justify-content:center;font-weight:1000}.em-choice-chip.selected .em-choice-number{background:#2563eb;color:#fff}.em-panel-actions{margin-top:auto;padding-top:13px;border-top:1px solid #e5e7eb;display:flex;align-items:center;justify-content:space-between;gap:9px}.dark .em-panel-actions{border-color:#2c2c2c}.em-panel-progress{font-size:11px;font-weight:850;color:#9ca3af;text-align:center}.em-task-heading{display:flex;align-items:center;gap:8px;margin-bottom:12px}.em-kim-badge{background:#dbeafe;color:#1d4ed8;padding:7px 10px;border-radius:10px;font-weight:1000}.em-points{font-size:11px;color:#6b7280;font-weight:850}
           .em-media-task{width:100%;max-width:1200px;height:100%;min-height:0;margin:0 auto;display:grid;grid-template-columns:minmax(320px,50%) minmax(0,50%);gap:14px}.em-media-card{min-height:0;padding:12px;display:flex;align-items:center;justify-content:center;background:#eef2f7}.dark .em-media-card{background:#181818}.em-media-button{width:100%;height:100%;border:0;background:transparent;padding:0;cursor:zoom-in}.em-media-card img{width:100%;height:100%;max-height:100%;object-fit:contain;filter:drop-shadow(0 5px 12px rgba(15,23,42,.15))}.em-answer-panel{min-height:0;padding:15px;display:flex;flex-direction:column}.em-panel-body{min-height:0;overflow:auto;padding:1px 2px 12px}.em-fipi{font-size:15px;line-height:1.55;color:#1f2937}.dark .em-fipi{color:#e5e7eb}.em-fipi table{border-collapse:collapse;max-width:100%!important;width:auto}.em-fipi td,.em-fipi th{padding:4px 6px;vertical-align:top}.em-fipi table[border] td,.em-fipi table[border] th{border:1px solid #9ca3af}.em-fipi p{margin:0 0 9px}.em-fipi img{max-width:100%;height:auto}.em-text-input{width:100%;border:2px solid #cbd5e1;border-radius:14px;padding:13px 14px;font-size:17px;font-weight:750;outline:none;background:#fff;color:#1f2937}.em-text-input:focus{border-color:#2563eb;box-shadow:0 0 0 4px rgba(37,99,235,.1)}.dark .em-text-input{background:#27272a;border-color:#52525b;color:#fff}.em-clear-note{font-size:11px;color:#6b7280;margin-top:8px}.em-answer-box{margin-top:15px;padding:14px;border-radius:15px;background:#f9fafb;border:1px solid #e5e7eb}.dark .em-answer-box{background:#181818;border-color:#2c2c2c}.em-answer-title{font-size:11px;text-transform:uppercase;letter-spacing:.1em;font-weight:950;color:#6b7280;margin-bottom:10px}
-          .em-result{height:100%;overflow:auto;padding:22px 16px 60px}.em-result-inner{max-width:900px;margin:auto}.em-result-score{text-align:center;background:#fff;border:1px solid #e5e7eb;border-radius:20px;padding:22px;box-shadow:0 3px 12px rgba(15,23,42,.04)}.dark .em-result-score{background:#1e1e1e;border-color:#2c2c2c}.em-result-number{font-size:60px;font-weight:1000;letter-spacing:-.05em;color:#2563eb}.em-result-number span{font-size:25px;color:#6b7280}.em-result-actions{display:flex;gap:10px;justify-content:center;flex-wrap:wrap;margin-top:15px}.em-result-notice{margin:15px auto 0;max-width:680px;padding:12px 14px;border-radius:14px;background:#fffbeb;border:1px solid #fbbf24;color:#92400e;text-align:left;font-size:13px;font-weight:750;line-height:1.45}.dark .em-result-notice{background:#422006;border-color:#b45309;color:#fde68a}.em-breakdown{display:grid;gap:7px;margin-top:15px}.em-break-row{display:grid;grid-template-columns:56px 1fr 80px;align-items:center;gap:10px;padding:11px 13px;border-radius:13px;background:#f9fafb;border:1px solid #e5e7eb}.dark .em-break-row{background:#181818;border-color:#2c2c2c}.em-break-button{width:100%;font:inherit;color:inherit;text-align:left;cursor:pointer;transition:border-color .15s,background .15s,transform .15s}.em-break-button:hover{border-color:#93c5fd;background:#eff6ff;transform:translateY(-1px)}.dark .em-break-button:hover{background:#172554;border-color:#3b82f6}.em-break-score{text-align:right;font-weight:1000}.em-break-score.full{color:#15803d}.em-break-score.part{color:#d97706}.em-break-score.zero{color:#dc2626}
-          .em-review-answer{margin-top:12px;border-radius:13px;padding:12px;background:#f3f4f6;border-left:4px solid #2563eb;font-size:13px}.dark .em-review-answer{background:#181818}.em-review-line+ .em-review-line{margin-top:10px}.em-review-label{display:block;font-size:10px;font-weight:1000;text-transform:uppercase;letter-spacing:.1em;color:#6b7280;margin-bottom:4px}.em-answer-detail{line-height:1.5;font-weight:700}.em-review-points{font-weight:1000;margin-top:10px}.em-exam-warning{margin-top:11px;padding:11px 12px;border-radius:12px;background:#fffbeb;border:1px solid #fbbf24;color:#92400e;font-size:12px;font-weight:750;line-height:1.45}.dark .em-exam-warning{background:#422006;border-color:#b45309;color:#fde68a}.em-warning-tags{display:flex;flex-wrap:wrap;gap:5px;margin-top:7px}.em-warning-tag{padding:3px 7px;border-radius:999px;background:#fef3c7;font-size:10px;font-weight:950;text-transform:uppercase;letter-spacing:.05em}.dark .em-warning-tag{background:#78350f}.em-zoom{position:fixed;inset:0;z-index:10120;background:rgba(0,0,0,.94);display:flex;align-items:center;justify-content:center;padding:16px}.em-zoom img{max-width:100%;max-height:100%;object-fit:contain}.em-zoom button{position:absolute;right:16px;top:16px;border:0;background:#fff;color:#111;width:44px;height:44px;border-radius:50%;font-size:22px;font-weight:1000;cursor:pointer}
+          .em-result{height:100%;overflow:auto;padding:22px 16px 60px}.em-result-inner{max-width:900px;margin:auto}.em-result-score{text-align:center;background:#fff;border:1px solid #e5e7eb;border-radius:20px;padding:22px;box-shadow:0 3px 12px rgba(15,23,42,.04)}.dark .em-result-score{background:#1e1e1e;border-color:#2c2c2c}.em-result-number{font-size:60px;font-weight:1000;letter-spacing:-.05em;color:#2563eb}.em-result-number span{font-size:25px;color:#6b7280}.em-result-actions{display:flex;gap:10px;justify-content:center;flex-wrap:wrap;margin-top:15px}.em-result-overview{display:flex;justify-content:center;gap:8px;flex-wrap:wrap;margin-top:13px}.em-overview-pill{padding:7px 11px;border-radius:999px;font-size:11px;font-weight:950}.em-overview-pill.issue{background:#fee2e2;color:#b91c1c}.em-overview-pill.ok{background:#dcfce7;color:#166534}.dark .em-overview-pill.issue{background:#450a0a;color:#fecaca}.dark .em-overview-pill.ok{background:#052e16;color:#bbf7d0}.em-result-notice{margin:15px auto 0;max-width:680px;padding:12px 14px;border-radius:14px;background:#fffbeb;border:1px solid #fbbf24;color:#92400e;text-align:left;font-size:13px;font-weight:750;line-height:1.45}.dark .em-result-notice{background:#422006;border-color:#b45309;color:#fde68a}.em-breakdown{display:grid;gap:7px;margin-top:15px}.em-break-row{display:grid;grid-template-columns:56px 1fr 80px;align-items:center;gap:10px;padding:11px 13px;border-radius:13px;background:#f9fafb;border:1px solid #e5e7eb}.dark .em-break-row{background:#181818;border-color:#2c2c2c}.em-break-button{width:100%;font:inherit;color:inherit;text-align:left;cursor:pointer;transition:border-color .15s,background .15s,transform .15s}.em-break-button:hover{border-color:#93c5fd;background:#eff6ff;transform:translateY(-1px)}.dark .em-break-button:hover{background:#172554;border-color:#3b82f6}.em-break-score{text-align:right;font-weight:1000}.em-break-score.full{color:#15803d}.em-break-score.part{color:#d97706}.em-break-score.zero{color:#dc2626}.em-correct-details{margin-top:14px;border-top:1px solid #e5e7eb;padding-top:12px}.dark .em-correct-details{border-color:#2c2c2c}.em-correct-details summary{cursor:pointer;font-size:13px;font-weight:950;color:#166534}.dark .em-correct-details summary{color:#86efac}
+          .em-review-answer{margin-top:12px;border-radius:13px;padding:12px;background:#f3f4f6;border-left:4px solid #2563eb;font-size:13px}.dark .em-review-answer{background:#181818}.em-review-status{margin-bottom:11px;padding:9px 11px;border-radius:11px;font-size:12px;font-weight:1000}.em-review-status.full{background:#dcfce7;color:#166534}.em-review-status.part,.em-review-status.warning{background:#fef3c7;color:#92400e}.em-review-status.zero{background:#fee2e2;color:#b91c1c}.dark .em-review-status.full{background:#052e16;color:#bbf7d0}.dark .em-review-status.part,.dark .em-review-status.warning{background:#422006;color:#fde68a}.dark .em-review-status.zero{background:#450a0a;color:#fecaca}.em-review-line+ .em-review-line{margin-top:10px}.em-review-label{display:block;font-size:10px;font-weight:1000;text-transform:uppercase;letter-spacing:.1em;color:#6b7280;margin-bottom:4px}.em-answer-detail{line-height:1.5;font-weight:700}.em-review-points{font-weight:1000;margin-top:10px}.em-exam-warning{margin-top:11px;padding:11px 12px;border-radius:12px;background:#fffbeb;border:1px solid #fbbf24;color:#92400e;font-size:12px;font-weight:750;line-height:1.45}.dark .em-exam-warning{background:#422006;border-color:#b45309;color:#fde68a}.em-warning-tags{display:flex;flex-wrap:wrap;gap:5px;margin-top:7px}.em-warning-tag{padding:3px 7px;border-radius:999px;background:#fef3c7;font-size:10px;font-weight:950;text-transform:uppercase;letter-spacing:.05em}.dark .em-warning-tag{background:#78350f}.em-zoom{position:fixed;inset:0;z-index:10120;background:rgba(0,0,0,.94);display:flex;align-items:center;justify-content:center;padding:16px}.em-zoom img{max-width:100%;max-height:100%;object-fit:contain}.em-zoom button{position:absolute;right:16px;top:16px;border:0;background:#fff;color:#111;width:44px;height:44px;border-radius:50%;font-size:22px;font-weight:1000;cursor:pointer}
           .em-review-value{display:block;padding:8px 10px;border-radius:10px;border:1px solid transparent}.em-review-value+ .em-review-value{margin-top:5px}.em-review-value.wrong{background:#fef2f2;border-color:#fca5a5;color:#b91c1c}.em-review-value.correct{background:#f0fdf4;border-color:#86efac;color:#166534}.dark .em-review-value.wrong{background:#450a0a;border-color:#991b1b;color:#fecaca}.dark .em-review-value.correct{background:#052e16;border-color:#166534;color:#bbf7d0}.em-dnd-slot.review-wrong{background:#fef2f2!important;border-color:#ef4444!important;box-shadow:0 0 0 3px rgba(239,68,68,.12)}.em-dnd-slot.review-wrong .dnd-chip{background:#fee2e2!important;border-color:#ef4444!important;color:#b91c1c!important}.em-dnd-slot.review-correct{background:#f0fdf4!important;border-color:#22c55e!important}.dark .em-dnd-slot.review-wrong{background:#450a0a!important}.dark .em-dnd-slot.review-correct{background:#052e16!important}
           .em-zoom{padding:0;display:block;overflow:hidden;touch-action:none;user-select:none}.em-zoom-stage{position:absolute;inset:0;overflow:hidden;touch-action:none;cursor:grab}.em-zoom-stage.is-dragging{cursor:grabbing}.em-zoom-canvas{position:absolute;left:0;top:0;transform-origin:0 0;will-change:transform}.em-zoom-canvas img{display:block;max-width:none;max-height:none;pointer-events:none;filter:drop-shadow(0 10px 28px rgba(0,0,0,.45))}.em-zoom-toolbar{position:absolute;z-index:3;right:14px;top:max(14px,env(safe-area-inset-top));display:flex;gap:8px}.em-zoom-toolbar button{position:static;width:44px;height:44px;border:0;border-radius:14px;background:rgba(255,255,255,.94);color:#111;font-size:21px;font-weight:1000;box-shadow:0 6px 20px rgba(0,0,0,.25)}.em-zoom-toolbar .em-zoom-close{margin-left:5px}.em-zoom-hint{position:absolute;z-index:2;left:50%;bottom:max(18px,env(safe-area-inset-bottom));transform:translateX(-50%);padding:8px 12px;border-radius:999px;background:rgba(15,23,42,.78);color:#fff;font-size:11px;font-weight:850;white-space:nowrap;pointer-events:none;transition:opacity .25s}.em-zoom-hint.hidden{opacity:0}.em-media-button{position:relative}.em-media-button::after{content:'Нажмите, чтобы увеличить';position:absolute;left:50%;bottom:7px;transform:translateX(-50%);padding:6px 9px;border-radius:999px;background:rgba(15,23,42,.72);color:#fff;font-size:10px;font-weight:850;white-space:nowrap;opacity:.82;pointer-events:none}
           @media(min-width:1000px){.em-dashboard-inner{max-width:1160px}.em-work{padding:18px 24px 24px}.em-classic-task{max-width:1380px;min-height:0;display:grid;grid-template-columns:minmax(0,1.35fr) minmax(360px,.65fr);align-items:start;gap:18px}.em-board-card{width:100%}.em-pool-panel{width:100%;align-self:start;max-height:calc(100vh - 154px);overflow:auto;padding:18px;position:sticky;top:0}.em-pool-panel .em-panel-actions{margin-top:18px}.em-media-task{max-width:1440px;grid-template-columns:minmax(0,1.45fr) minmax(390px,.85fr);gap:18px}.em-media-card{min-height:calc(100vh - 154px);padding:16px}.em-answer-panel{max-height:calc(100vh - 154px);padding:18px}.em-fipi{font-size:16px;line-height:1.62}.em-top{padding-left:22px;padding-right:22px}.em-nav{padding-left:22px;padding-right:22px}}
-          @media(max-width:760px){.em-top{padding:7px 9px;gap:6px}.em-title{font-size:12px}.em-sub{display:none}.em-top .em-btn{padding:9px 10px}.em-time{padding:7px 9px;font-size:12px}.em-nav{padding:8px}.em-nav-btn{width:33px;height:33px;flex-basis:33px}.em-work{padding:8px}.em-classic-task{min-height:auto;display:flex;flex-direction:column;gap:8px}.em-board-card,.em-pool-panel{flex:none}.em-board-table th{padding:9px 6px;font-size:11px}.em-board-table td{padding:7px 5px;font-size:11px}.em-dnd-slot{min-height:43px}.em-pool-panel{padding:11px}.em-panel-title{font-size:12px;margin-bottom:10px}.em-media-task{grid-template-columns:1fr;grid-template-rows:minmax(190px,38vh) minmax(0,1fr);gap:8px}.em-work.has-fixed-media{overflow:hidden}.em-media-card{padding:7px}.em-answer-panel{padding:11px}.em-fipi{font-size:14px}.em-panel-actions{padding-top:9px}.em-panel-progress{display:none}.em-hero{padding:18px}.em-hero h2{font-size:21px}.em-dashboard{padding:14px 10px 45px}.em-active-row,.em-history-row{align-items:flex-start;flex-wrap:wrap}.em-active-info,.em-history-info{flex-basis:100%}.em-result-number{font-size:50px}}
+          @media(max-width:760px){.em-top{padding:7px 9px;gap:6px}.em-title{font-size:12px}.em-sub{display:none}.em-top .em-btn{padding:9px 10px}.em-back-label{display:none}.em-time{padding:7px 9px;font-size:12px}.em-nav{padding:8px}.em-nav-btn{width:33px;height:33px;flex-basis:33px}.em-review-toolbar{padding:7px 8px;gap:6px}.em-filter-btn{padding:6px 8px;font-size:10px}.em-review-toolbar-label{font-size:10px}.em-work{padding:8px}.em-classic-task{min-height:auto;display:flex;flex-direction:column;gap:8px}.em-board-card,.em-pool-panel{flex:none}.em-board-table th{padding:9px 6px;font-size:11px}.em-board-table td{padding:7px 5px;font-size:11px}.em-dnd-slot{min-height:43px}.em-pool-panel{padding:11px}.em-panel-title{font-size:12px;margin-bottom:10px}.em-media-task{grid-template-columns:1fr;grid-template-rows:minmax(190px,38vh) minmax(0,1fr);gap:8px}.em-work.has-fixed-media{overflow:hidden}.em-media-card{padding:7px}.em-answer-panel{padding:11px}.em-fipi{font-size:14px}.em-panel-actions{padding-top:9px}.em-panel-progress{display:none}.em-hero{padding:18px}.em-hero h2{font-size:21px}.em-dashboard{padding:14px 10px 45px}.em-active-row,.em-history-row{align-items:flex-start;flex-wrap:wrap}.em-active-info,.em-history-info{flex-basis:100%}.em-result-number{font-size:50px}.em-break-row{grid-template-columns:50px minmax(0,1fr) 60px;padding:10px 9px;gap:7px}}
         `;
         document.head.appendChild(style);
     }
@@ -226,8 +229,14 @@
     }
 
     function topBar(title, subtitle, showFinish) {
+        const back = view === 'dashboard' ? { action: 'close', label: 'Выйти' }
+            : view === 'work' ? { action: 'dashboard', label: 'К пробникам' }
+            : view === 'result' ? { action: 'dashboard', label: 'К истории' }
+            : view === 'review' ? { action: returnToMistakePool ? 'back-error-pool' : 'result', label: returnToMistakePool ? 'К ошибкам' : 'К итогу' }
+            : view === 'mistake-review' ? { action: 'back-error-pool', label: 'К ошибкам' }
+            : { action: 'close', label: 'Назад' };
         return `<div class="em-top">
-          <button class="em-btn ghost" data-em-action="close" aria-label="Закрыть">←</button>
+          <button class="em-btn ghost em-back" data-em-action="${back.action}" aria-label="${back.label}" title="${back.label}"><span class="em-back-icon">←</span><span class="em-back-label">${back.label}</span></button>
           <div><div class="em-title">${title}</div><div class="em-sub">${subtitle || ''}</div></div>
           <div class="em-spacer"></div>
           ${view === 'work' ? '<div class="em-time" id="em-timer">0:00</div>' : ''}
@@ -236,7 +245,7 @@
     }
 
     function renderDashboard() {
-        stopTimer(false);
+        stopTimer(true);
         view = 'dashboard';
         const state = examState();
         const errorCount = examMistakes().length;
@@ -308,6 +317,37 @@
             const full = isAnswered(task, value);
             return `<button class="em-nav-btn ${full ? 'answered' : some ? 'partial' : ''} ${index === currentIndex ? 'current' : ''}" data-em-action="nav" data-index="${index}">${task.kim}</button>`;
         }).join('')}</div>`;
+    }
+
+    function scoreForTask(record, task) {
+        return record?.scoreByKim?.[task.kim] || window.EgeScoring.scoreTask(task, record?.answers?.[task.id]);
+    }
+
+    function reviewIssueIndices(record, tasks) {
+        return (tasks || tasksForRecord(record)).map((task, index) => ({ index, result: scoreForTask(record, task) }))
+            .filter(item => item.result.points < item.result.max || item.result.acceptedWithWarning)
+            .map(item => item.index);
+    }
+
+    function currentReviewSequence(record, tasks) {
+        const all = (tasks || tasksForRecord(record)).map((_, index) => index);
+        const issues = reviewIssueIndices(record, tasks);
+        return reviewIssuesOnly && issues.length ? issues : all;
+    }
+
+    function reviewNavHtml(tasks, record) {
+        const issues = reviewIssueIndices(record, tasks);
+        const sequence = currentReviewSequence(record, tasks);
+        const sequencePosition = Math.max(0, sequence.indexOf(currentIndex));
+        const label = reviewIssuesOnly && issues.length
+            ? `Ошибка ${sequencePosition + 1} из ${sequence.length}`
+            : `Задание ${currentIndex + 1} из ${tasks.length}`;
+        const nav = `<div class="em-nav">${tasks.map((task, index) => {
+            const result = scoreForTask(record, task);
+            const cls = result.acceptedWithWarning ? 'review-warning' : result.points === result.max ? 'review-full' : result.points > 0 ? 'review-part' : 'review-zero';
+            return `<button class="em-nav-btn ${cls} ${index === currentIndex ? 'current' : ''}" data-em-action="nav" data-index="${index}" aria-label="Задание ${task.kim}: ${result.points} из ${result.max}">${task.kim}</button>`;
+        }).join('')}</div>`;
+        return nav + `<div class="em-review-toolbar"><button class="em-filter-btn ${reviewIssuesOnly && issues.length ? 'active' : ''}" data-em-action="review-filter" data-filter="issues" ${issues.length ? '' : 'disabled'}>Ошибки · ${issues.length}</button><button class="em-filter-btn ${!reviewIssuesOnly || !issues.length ? 'active' : ''}" data-em-action="review-filter" data-filter="all">Все 12</button><span class="em-review-toolbar-label">${label}</span></div>`;
     }
 
     function escapeAttr(value) {
@@ -444,7 +484,9 @@
         const warningKinds = Array.isArray(scoreResult.warningKinds) ? scoreResult.warningKinds : [];
         const warningLabels = { typo: 'Опечатка', spacing: 'Пробелы или знаки', case: 'Регистр', normalized: 'Форма записи' };
         const warning = scoreResult.acceptedWithWarning ? `<div class="em-exam-warning"><b>⚠️ Балл засчитан в учебном режиме.</b><br>На реальном ЕГЭ ответ нужно записать без опечаток, пробелов и лишних знаков, печатными заглавными буквами по образцу бланка №1.<div class="em-warning-tags">${warningKinds.map(kind => `<span class="em-warning-tag">${warningLabels[kind] || 'Форма записи'}</span>`).join('')}</div></div>` : '';
-        return `<div class="em-review-answer"><div class="em-review-line"><span class="em-review-label">Ваш ответ</span><div class="em-answer-detail">${detailedAnswerHtml(task, value, false)}</div></div><div class="em-review-line"><span class="em-review-label">Правильный ответ</span><div class="em-answer-detail">${detailedAnswerHtml(task, task.answer, true)}</div></div><div class="em-review-points">Баллы: ${scoreResult.points || 0} из ${scoreResult.max || window.EgeScoring.maxPoints(task.kim)}</div>${warning}</div>`;
+        const statusClass = scoreResult.acceptedWithWarning ? 'warning' : scoreResult.points === scoreResult.max ? 'full' : scoreResult.points > 0 ? 'part' : 'zero';
+        const statusText = scoreResult.acceptedWithWarning ? '⚠️ Балл засчитан, но запись нужно исправить' : scoreResult.points === scoreResult.max ? '✓ Верно' : scoreResult.points > 0 ? '◐ Частично верно' : '✕ Ошибка';
+        return `<div class="em-review-answer"><div class="em-review-status ${statusClass}">${statusText}</div><div class="em-review-line"><span class="em-review-label">Ваш ответ</span><div class="em-answer-detail">${detailedAnswerHtml(task, value, false)}</div></div><div class="em-review-line"><span class="em-review-label">Правильный ответ</span><div class="em-answer-detail">${detailedAnswerHtml(task, task.answer, true)}</div></div><div class="em-review-points">Баллы: ${scoreResult.points || 0} из ${scoreResult.max || window.EgeScoring.maxPoints(task.kim)}</div>${warning}</div>`;
     }
 
     function plainAnswerText(task, value) {
@@ -491,8 +533,19 @@
 
     function panelActions(readonly, task, scoreResult) {
         if (readonly && view === 'training-result') return `<div class="em-panel-actions"><div class="em-panel-progress">${scoreResult.points}/${scoreResult.max} балла</div><button class="em-btn primary" data-em-action="training-next">Дальше →</button></div>`;
-        if (readonly && view === 'mistake-review') return `<div class="em-panel-actions"><div class="em-panel-progress">Ошибка из общей истории</div><button class="em-btn primary" data-em-action="single-review-close">Закрыть</button></div>`;
-        if (readonly) return `<div class="em-panel-actions"><button class="em-btn" data-em-action="review-prev" ${currentIndex === 0 ? 'disabled' : ''}>← Назад</button><div class="em-panel-progress">Задание ${task.kim} · ${scoreResult.points}/${scoreResult.max}</div><button class="em-btn primary" data-em-action="${currentIndex === 11 ? 'result' : 'review-next'}">${currentIndex === 11 ? 'К результату' : 'Далее →'}</button></div>`;
+        if (readonly && view === 'mistake-review') return `<div class="em-panel-actions"><div class="em-panel-progress">Ошибка из общей истории</div><button class="em-btn primary" data-em-action="back-error-pool">К списку ошибок</button></div>`;
+        if (readonly) {
+            const record = reviewRecord || resultRecord;
+            const tasks = tasksForRecord(record);
+            const sequence = currentReviewSequence(record, tasks);
+            const position = Math.max(0, sequence.indexOf(currentIndex));
+            const previous = position > 0 ? sequence[position - 1] : null;
+            const next = position < sequence.length - 1 ? sequence[position + 1] : null;
+            const center = reviewIssuesOnly && reviewIssueIndices(record, tasks).length ? `Ошибка ${position + 1} из ${sequence.length}` : `Задание ${task.kim} · ${scoreResult.points}/${scoreResult.max}`;
+            const finalAction = returnToMistakePool ? 'back-error-pool' : 'result';
+            const finalLabel = returnToMistakePool ? 'К ошибкам' : 'К результату';
+            return `<div class="em-panel-actions"><button class="em-btn" data-em-action="review-go" data-index="${previous == null ? '' : previous}" ${previous == null ? 'disabled' : ''}>← Назад</button><div class="em-panel-progress">${center}</div><button class="em-btn primary" data-em-action="${next == null ? finalAction : 'review-go'}" ${next == null ? '' : `data-index="${next}"`}>${next == null ? finalLabel : 'Следующая →'}</button></div>`;
+        }
         if (view === 'training') return `<div class="em-panel-actions"><div class="em-panel-progress">Цельное задание из открытого банка</div><button class="em-btn primary" data-em-action="training-check">Проверить ответ</button></div>`;
         const active = examState().active;
         const tasks = activeTasks();
@@ -573,6 +626,7 @@
         previousBodyOverflow = document.body.style.overflow;
         document.body.style.overflow = 'hidden';
         overlay.classList.add('em-open');
+        returnToMistakePool = false;
         overlay.innerHTML = '<div class="em-dashboard"><div class="em-dashboard-inner"><div class="em-card">Загружаем цельное задание ФИПИ…</div></div></div>';
         try {
             const bank = await ensureBank();
@@ -630,6 +684,49 @@
         renderTraining();
     }
 
+    const INTERACTION_SCROLL_SELECTORS = ['.em-work', '.em-board-card', '.em-pool-panel', '.em-panel-body', '.em-options', '.em-answer-panel'];
+
+    function captureInteractionContext(target) {
+        const scroll = INTERACTION_SCROLL_SELECTORS.flatMap(selector => Array.from(overlay?.querySelectorAll(selector) || []).map((element, index) => ({
+            selector,
+            index,
+            top: element.scrollTop,
+            left: element.scrollLeft
+        })));
+        return {
+            scroll,
+            focus: target ? {
+                action: target.dataset.emAction || '',
+                value: target.dataset.value || '',
+                index: target.dataset.index || ''
+            } : null
+        };
+    }
+
+    function restoreInteractionContext(context) {
+        if (!context || !overlay) return;
+        context.scroll.forEach(item => {
+            const element = overlay.querySelectorAll(item.selector)[item.index];
+            if (!element) return;
+            element.scrollTop = item.top;
+            element.scrollLeft = item.left;
+        });
+        if (!context.focus?.action) return;
+        const nextTarget = Array.from(overlay.querySelectorAll('[data-em-action]')).find(element =>
+            element.dataset.emAction === context.focus.action
+            && (element.dataset.value || '') === context.focus.value
+            && (element.dataset.index || '') === context.focus.index
+        );
+        nextTarget?.focus({ preventScroll: true });
+    }
+
+    function rerenderKeepingContext(renderer, target) {
+        const context = captureInteractionContext(target);
+        renderer();
+        restoreInteractionContext(context);
+        requestAnimationFrame(() => restoreInteractionContext(context));
+    }
+
     function renderWork() {
         const active = examState().active;
         const tasks = activeTasks();
@@ -661,16 +758,25 @@
         view = 'result';
         resultRecord = record;
         reviewRecord = null;
+        returnToMistakePool = false;
         const tasks = tasksForRecord(record);
-        const rows = tasks.map((task, index) => {
-            const result = record.scoreByKim?.[task.kim] || window.EgeScoring.scoreTask(task, record.answers?.[task.id]);
-            const cls = result.points === result.max ? 'full' : result.points > 0 ? 'part' : 'zero';
+        const rowFor = (task, index) => {
+            const result = scoreForTask(record, task);
+            const cls = result.acceptedWithWarning ? 'part' : result.points === result.max ? 'full' : result.points > 0 ? 'part' : 'zero';
             const status = result.acceptedWithWarning ? 'Засчитано в учебном режиме · проверьте запись' : result.points === result.max ? 'Выполнено полностью' : result.points > 0 ? 'Частичный балл' : 'Нет балла';
             return `<button class="em-break-row em-break-button" data-em-action="review-task" data-index="${index}" aria-label="Разобрать задание ${task.kim}"><strong>№ ${task.kim}</strong><span class="em-muted">${status} · нажмите, чтобы разобрать</span><span class="em-break-score ${cls}">${result.points} / ${result.max}</span></button>`;
-        }).join('');
+        };
+        const issues = reviewIssueIndices(record, tasks);
+        const issueSet = new Set(issues);
+        const issueRows = issues.map(index => rowFor(tasks[index], index)).join('');
+        const correctRows = tasks.map((task, index) => ({ task, index })).filter(item => !issueSet.has(item.index)).map(item => rowFor(item.task, item.index)).join('');
+        const correctCount = tasks.length - issues.length;
         const warningCount = Object.values(record.scoreByKim || {}).filter(item => item?.acceptedWithWarning).length;
         const notice = warningCount ? `<div class="em-result-notice"><b>⚠️ ${warningCount} ${warningCount === 1 ? 'ответ засчитан' : 'ответа засчитаны'} мягкой проверкой.</b><br>Это учебное послабление. Откройте работу над ошибками: там отмечено, что именно нужно исправить перед ЕГЭ.</div>` : '';
-        overlay.innerHTML = topBar('Результат пробника', 'Первичный балл за задания 1–12', false) + `<div class="em-result"><div class="em-result-inner"><div class="em-result-score"><div class="em-muted">Тестовая часть ЕГЭ</div><div class="em-result-number">${record.score}<span> / 20</span></div><div style="font-weight:850">Время: ${formatDuration(record.durationMs)}</div>${notice}<div class="em-result-actions"><button class="em-btn primary" data-em-action="review">Работа над ошибками</button><button class="em-btn" data-em-action="open-error-pool">Все ошибки пробников</button><button class="em-btn" data-em-action="new">Новый пробник</button><button class="em-btn" data-em-action="dashboard">Все результаты</button></div></div><div class="em-card"><h3>Баллы по заданиям</h3><div class="em-muted">Нажмите на задание, чтобы увидеть условие, свой ответ и правильный ответ.</div><div class="em-breakdown">${rows}</div></div></div></div>`;
+        const breakdown = issues.length
+            ? `<h3>Сначала разберите ошибки</h3><div class="em-muted">Красным отмечены задания без балла, жёлтым — частичный балл или ответ, запись которого нужно исправить.</div><div class="em-breakdown">${issueRows}</div>${correctCount ? `<details class="em-correct-details"><summary>Верные задания · ${correctCount}</summary><div class="em-breakdown">${correctRows}</div></details>` : ''}`
+            : `<h3>Все задания выполнены верно</h3><div class="em-muted">Можно открыть любое задание и сверить свой ответ с эталоном.</div><div class="em-breakdown">${correctRows}</div>`;
+        overlay.innerHTML = topBar('Результат пробника', 'Первичный балл за задания 1–12', false) + `<div class="em-result"><div class="em-result-inner"><div class="em-result-score"><div class="em-muted">Тестовая часть ЕГЭ</div><div class="em-result-number">${record.score}<span> / 20</span></div><div style="font-weight:850">Время: ${formatDuration(record.durationMs)}</div><div class="em-result-overview"><span class="em-overview-pill issue">Требуют разбора: ${issues.length}</span><span class="em-overview-pill ok">Верно: ${correctCount}</span></div>${notice}<div class="em-result-actions"><button class="em-btn primary" data-em-action="review">${issues.length ? `Разобрать ошибки · ${issues.length}` : 'Просмотреть ответы'}</button><button class="em-btn" data-em-action="open-error-pool">Все ошибки пробников</button><button class="em-btn" data-em-action="new">Новый пробник</button><button class="em-btn" data-em-action="dashboard">Все результаты</button></div></div><div class="em-card">${breakdown}</div></div></div>`;
     }
 
     function renderReview() {
@@ -684,7 +790,7 @@
         const scoreResult = record.scoreByKim?.[task.kim] || window.EgeScoring.scoreTask(task, value);
         selectedExamChip = null;
         selectedExamChipTaskId = null;
-        overlay.innerHTML = topBar(`${TASK_ICONS[task.kim] || '📝'} Разбор задания №${task.kim}`, `${record.score}/20 · ${formatDate(record.completedAt)}`, false) + `<div class="em-workspace">${navHtml(tasks, record)}<div class="em-work ${task.image ? 'has-fixed-media' : ''}">${questionHtml(task, value, true, scoreResult)}</div></div>`;
+        overlay.innerHTML = topBar(`${TASK_ICONS[task.kim] || '📝'} Разбор задания №${task.kim}`, `${record.score}/20 · ${formatDate(record.completedAt)}`, false) + `<div class="em-workspace">${reviewNavHtml(tasks, record)}<div class="em-work ${task.image ? 'has-fixed-media' : ''}">${questionHtml(task, value, true, scoreResult)}</div></div>`;
     }
 
     function finishAttempt() {
@@ -732,12 +838,16 @@
         state.active = null;
         state.history = [...state.history.filter(item => item.id !== record.id), record].slice(-50);
         saveExam();
+        returnToMistakePool = false;
         renderResult(record);
     }
 
     function openHistory(id) {
         const record = examState().history.find(item => item.id === id);
-        if (record) renderResult(record);
+        if (record) {
+            returnToMistakePool = false;
+            renderResult(record);
+        }
     }
 
     function handleInput(event) {
@@ -942,6 +1052,7 @@
         if (!target) return;
         const action = target.dataset.emAction;
         if (action === 'close') return closeExamMode();
+        if (action === 'back-error-pool') return backToMistakePool();
         if (action === 'new') return beginNewAttempt();
         if (action === 'resume') return resumeAttempt();
         if (action === 'dashboard') return renderDashboard();
@@ -957,26 +1068,51 @@
         }
         if (action === 'training-check') return finishTrainingTask();
         if (action === 'training-next') return closeTrainingTask();
-        if (action === 'single-review-close') return closeTrainingTask();
         if (action === 'finish') return finishAttempt();
         if (action === 'result') return renderResult(reviewRecord || resultRecord);
-        if (action === 'review') { reviewRecord = resultRecord; currentIndex = 0; return renderReview(); }
-        if (action === 'review-task') { reviewRecord = resultRecord; currentIndex = Math.max(0, Math.min(11, Number(target.dataset.index) || 0)); return renderReview(); }
+        if (action === 'review') {
+            reviewRecord = resultRecord;
+            const tasks = tasksForRecord(reviewRecord);
+            const issues = reviewIssueIndices(reviewRecord, tasks);
+            reviewIssuesOnly = issues.length > 0;
+            currentIndex = issues[0] ?? 0;
+            return renderReview();
+        }
+        if (action === 'review-task') {
+            reviewRecord = resultRecord;
+            reviewIssuesOnly = false;
+            currentIndex = Math.max(0, Math.min(11, Number(target.dataset.index) || 0));
+            return renderReview();
+        }
+        if (action === 'review-filter') {
+            const record = reviewRecord || resultRecord;
+            const tasks = tasksForRecord(record);
+            reviewIssuesOnly = target.dataset.filter === 'issues' && reviewIssueIndices(record, tasks).length > 0;
+            const sequence = currentReviewSequence(record, tasks);
+            if (!sequence.includes(currentIndex)) currentIndex = sequence[0] || 0;
+            return renderReview();
+        }
+        if (action === 'review-go') {
+            currentIndex = Math.max(0, Math.min(11, Number(target.dataset.index) || 0));
+            return renderReview();
+        }
         if (action === 'nav') {
             currentIndex = Number(target.dataset.index) || 0;
             selectedExamChip = null;
             selectedExamChipTaskId = null;
-            return view === 'work' ? renderWork() : renderReview();
+            if (view === 'review') {
+                const record = reviewRecord || resultRecord;
+                const tasks = tasksForRecord(record);
+                if (reviewIssuesOnly && !reviewIssueIndices(record, tasks).includes(currentIndex)) reviewIssuesOnly = false;
+                return renderReview();
+            }
+            return renderWork();
         }
         if (action === 'prev' || action === 'next') {
             currentIndex += action === 'next' ? 1 : -1;
             selectedExamChip = null;
             selectedExamChipTaskId = null;
             return renderWork();
-        }
-        if (action === 'review-prev' || action === 'review-next') {
-            currentIndex += action === 'review-next' ? 1 : -1;
-            return renderReview();
         }
         const isTraining = view === 'training';
         if (view !== 'work' && !isTraining) return;
@@ -987,17 +1123,17 @@
         const commitInteractiveAnswer = value => {
             if (isTraining) {
                 trainingAnswer = value;
-                renderTraining();
+                rerenderKeepingContext(renderTraining, target);
             } else {
                 updateAnswer(task, value);
-                renderWork();
+                rerenderKeepingContext(renderWork, target);
             }
         };
         if (action === 'chip') {
             const digit = target.dataset.value;
             selectedExamChip = selectedExamChipTaskId === task.id && selectedExamChip === digit ? null : digit;
             selectedExamChipTaskId = selectedExamChip ? task.id : null;
-            return isTraining ? renderTraining() : renderWork();
+            return rerenderKeepingContext(isTraining ? renderTraining : renderWork, target);
         }
         if (action === 'slot') {
             const slots = normalizedOrderedAnswer(task, currentValue);
@@ -1035,6 +1171,12 @@
         document.body.style.overflow = previousBodyOverflow;
     }
 
+    function backToMistakePool() {
+        closeExamMode();
+        returnToMistakePool = false;
+        setTimeout(() => window.openMistakesListModal?.(), 0);
+    }
+
     async function openSavedMistake(id) {
         const entry = examMistakes().find(item => item && item.id === id);
         if (!entry) return;
@@ -1042,6 +1184,7 @@
         previousBodyOverflow = document.body.style.overflow;
         document.body.style.overflow = 'hidden';
         overlay.classList.add('em-open');
+        returnToMistakePool = true;
         overlay.innerHTML = '<div class="em-dashboard"><div class="em-dashboard-inner"><div class="em-card">Открываем сохранённую ошибку…</div></div></div>';
         try {
             await ensureBank();
@@ -1052,6 +1195,7 @@
                 if (index !== -1) {
                     resultRecord = attempt;
                     reviewRecord = attempt;
+                    reviewIssuesOnly = true;
                     currentIndex = index;
                     return renderReview();
                 }
@@ -1076,6 +1220,7 @@
             console.error('[Exam mistake]', error);
             overlay.classList.remove('em-open');
             document.body.style.overflow = previousBodyOverflow;
+            returnToMistakePool = false;
             if (typeof window.showToast === 'function') window.showToast('⚠️', error.message || 'Не удалось открыть ошибку', 'bg-rose-500', 'border-rose-700');
         }
     }
@@ -1085,6 +1230,7 @@
         previousBodyOverflow = document.body.style.overflow;
         document.body.style.overflow = 'hidden';
         overlay.classList.add('em-open');
+        returnToMistakePool = false;
         overlay.innerHTML = '<div class="em-dashboard"><div class="em-dashboard-inner"><div class="em-card">Загружаем задания ФИПИ…</div></div></div>';
         try {
             await ensureBank();
