@@ -816,7 +816,15 @@ window.applyGlobalSettings = function() {
     }
 };
 
-function toggleTheme() { localStorage.setItem('ege_theme', document.documentElement.classList.toggle('dark') ? 'dark' : 'light'); }
+function toggleTheme() {
+    const nextTheme = document.documentElement.classList.contains('dark') ? 'light' : 'dark';
+    if (typeof window.applyEgeTheme === 'function') {
+        window.applyEgeTheme(nextTheme, true);
+    } else {
+        document.documentElement.classList.toggle('dark', nextTheme === 'dark');
+        localStorage.setItem('ege_theme', nextTheme);
+    }
+}
 
 /* ──────────────────────────────────────────────────────────
    ТЕМА — только классика (2026-07-18). Класс skin-classic задан прямо на <body>

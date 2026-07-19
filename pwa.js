@@ -106,7 +106,7 @@
         }
 
         try {
-            const registration = await navigator.serviceWorker.register('./service-worker.js');
+            const registration = await navigator.serviceWorker.register('./service-worker.js', { updateViaCache: 'none' });
             const readyRegistration = await navigator.serviceWorker.ready;
             const activeWorker = readyRegistration.active || registration.active || navigator.serviceWorker.controller;
 

@@ -641,7 +641,11 @@ function initStorage() {
     DOM['pool-container'].addEventListener('click', e => { const chip = e.target.closest('.dnd-chip'); if (chip) window.onChipClick(chip, e); });
 
     loadFromStorage();
-    if (localStorage.getItem('ege_theme') === 'dark') document.documentElement.classList.add('dark');
+    if (typeof window.applyEgeTheme === 'function') {
+        window.applyEgeTheme(localStorage.getItem('ege_theme') === 'dark' ? 'dark' : 'light', false);
+    } else if (localStorage.getItem('ege_theme') === 'dark') {
+        document.documentElement.classList.add('dark');
+    }
     // hideLearned теперь всегда true — чекбоксы не нужны
 
     setTimeout(() => $$('.modal-content-hidden').forEach(el => el.classList.remove('modal-content-hidden')), 500);

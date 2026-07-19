@@ -1,12 +1,70 @@
 <!DOCTYPE html>
-<html lang="ru" style="color-scheme: only light;">
+<html lang="ru">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <meta name="theme-color" content="#2563eb">
+    <meta name="color-scheme" content="light dark">
+    <meta name="supported-color-schemes" content="light dark">
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    <script>
+      // Тема приложения не зависит от системного/браузерного Auto Dark Mode.
+      // Применяем сохранённый выбор до первого кадра, чтобы не было вспышки другой темы.
+      (function () {
+        var root = document.documentElement;
+        var themeKey = 'ege_theme';
+        var observerBusy = false;
+
+        function syncBrowserChrome(isDark) {
+          var scheme = isDark ? 'dark' : 'only light';
+          root.style.setProperty('color-scheme', scheme, 'important');
+          root.dataset.appTheme = isDark ? 'dark' : 'light';
+
+          var themeMeta = document.querySelector('meta[name="theme-color"]');
+          if (themeMeta) themeMeta.setAttribute('content', isDark ? '#121212' : '#2563eb');
+
+          var tg = window.Telegram && window.Telegram.WebApp;
+          if (!tg || tg.platform === 'unknown') return;
+          try { if (typeof tg.setHeaderColor === 'function') tg.setHeaderColor(isDark ? '#18181b' : '#ffffff'); } catch (e) {}
+          try { if (typeof tg.setBackgroundColor === 'function') tg.setBackgroundColor(isDark ? '#121212' : '#f8fafc'); } catch (e) {}
+          try { if (typeof tg.setBottomBarColor === 'function') tg.setBottomBarColor(isDark ? '#0e0e0e' : '#ffffff'); } catch (e) {}
+        }
+
+        window.applyEgeTheme = function (theme, persist) {
+          var isDark = theme === true || theme === 'dark';
+          observerBusy = true;
+          root.classList.toggle('dark', isDark);
+          observerBusy = false;
+          syncBrowserChrome(isDark);
+          if (persist) {
+            try { localStorage.setItem(themeKey, isDark ? 'dark' : 'light'); } catch (e) {}
+          }
+          return isDark;
+        };
+
+        var savedTheme = 'light';
+        try { savedTheme = localStorage.getItem(themeKey) === 'dark' ? 'dark' : 'light'; } catch (e) {}
+        window.applyEgeTheme(savedTheme, false);
+
+        // Страховка для старых закэшированных скриптов, которые меняют только класс .dark.
+        new MutationObserver(function () {
+          if (!observerBusy) syncBrowserChrome(root.classList.contains('dark'));
+        }).observe(root, { attributes: true, attributeFilter: ['class'] });
+
+        document.addEventListener('DOMContentLoaded', function () {
+          syncBrowserChrome(root.classList.contains('dark'));
+          var tg = window.Telegram && window.Telegram.WebApp;
+          if (tg && tg.platform !== 'unknown' && typeof tg.onEvent === 'function' && !window.__egeThemeListenerInstalled) {
+            window.__egeThemeListenerInstalled = true;
+            tg.onEvent('themeChanged', function () {
+              syncBrowserChrome(root.classList.contains('dark'));
+            });
+          }
+        }, { once: true });
+      })();
+    </script>
     <title>Решай Историю — онлайн-тренажёр ЕГЭ по истории</title>
     <meta name="description" content="Бесплатный тренажёр для подготовки к ЕГЭ по истории: даты, личности, культура, карты и все типы заданий. Зубрёжка дат, дуэли с друзьями и умное повторение.">
     <link rel="canonical" href="https://reshay-istoriyu.ru/">
@@ -487,14 +545,14 @@
             <!-- Главная кнопка «Продолжить»: одно действие, которое приложение выбирает за ученика.
                  Содержимое рисует renderMainAction() (ui.js) при каждом updateGlobalUI. -->
             <div id="main-action" class="-mb-2"></div>
-            <div data-action="openExamMode" class="bg-gradient-to-br from-blue-700 via-indigo-700 to-violet-700 rounded-2xl p-5 shadow-[0_10px_32px_rgba(37,99,235,0.32)] border border-blue-400/60 cursor-pointer transition-all active:scale-95 hover:-translate-y-1 flex items-center justify-between group overflow-hidden relative text-white">
+            <button type="button" data-action="openExamMode" onclick="if(window.openExamMode){window.openExamMode()}else{location.reload()}" style="background:linear-gradient(135deg,#1d4ed8 0%,#4338ca 52%,#6d28d9 100%);color:#fff" class="w-full text-left bg-gradient-to-br from-blue-700 via-indigo-700 to-violet-700 rounded-2xl p-5 shadow-[0_10px_32px_rgba(37,99,235,0.32)] border border-blue-400/60 cursor-pointer transition-all active:scale-95 hover:-translate-y-1 flex items-center justify-between group overflow-hidden relative text-white">
                 <div class="absolute -right-4 -bottom-8 text-[110px] font-black opacity-10 group-hover:scale-110 transition-transform pointer-events-none">20</div>
                 <div class="flex items-center gap-4 relative z-10">
                     <div class="w-14 h-14 rounded-2xl bg-white/15 border border-white/20 flex items-center justify-center text-3xl drop-shadow-sm">📝</div>
                     <div><h4 class="font-black text-lg sm:text-xl uppercase tracking-wide">Пробник ЕГЭ 1–12</h4><p class="text-xs font-bold text-blue-100 mt-0.5">Случайный вариант ФИПИ · честные первичные баллы · сохранение результата</p></div>
                 </div>
                 <div class="bg-white text-blue-700 text-[10px] font-black uppercase px-2.5 py-1.5 rounded-lg shadow-sm relative z-10 whitespace-nowrap">до 20</div>
-            </div>
+            </button>
             <div data-action="startDuelSearch" class="bg-gradient-to-br from-indigo-600 to-purple-700 rounded-2xl p-5 shadow-[0_8px_30px_rgba(99,102,241,0.4)] border border-indigo-400 cursor-pointer transition-all active:scale-95 hover:-translate-y-1 flex items-center justify-between group overflow-hidden relative mb-2 text-white">
                 <div class="absolute -right-4 -bottom-4 text-7xl opacity-20 group-hover:scale-110 transition-transform pointer-events-none">⚔️</div>
                 <div class="flex items-center gap-4 relative z-10">

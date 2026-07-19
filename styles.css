@@ -75,11 +75,11 @@
 /* --- БЛОКИРОВКА СИСТЕМНОЙ ТЁМНОЙ ТЕМЫ ---
    Дизайн управляется ТОЛЬКО классом .dark на <html>, добавляемым нашим JS.
    Системная тёмная тема телефона/браузера игнорируется полностью. */
-html {
-    color-scheme: only light;
+html:not(.dark) {
+    color-scheme: only light !important;
 }
-.dark {
-    color-scheme: only dark;
+html.dark {
+    color-scheme: dark !important;
 }
 
 /* --- ГЛОБАЛЬНЫЕ СТИЛИ И ПЕРЕМЕННЫЕ --- */

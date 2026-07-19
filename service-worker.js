@@ -1,6 +1,6 @@
 'use strict';
 
-const APP_VERSION = '2026-07-19-8';
+const APP_VERSION = '2026-07-19-9';
 const STATIC_CACHE = `ege-history-static-${APP_VERSION}`;
 const ASSET_CACHE = `ege-history-assets-${APP_VERSION}`;
 const CACHE_NAMES = [STATIC_CACHE, ASSET_CACHE];
@@ -159,7 +159,7 @@ async function networkFirstNavigation(request) {
         : (isCramNav ? scopedRequest('./cram.html') : request);
 
     try {
-        const response = await fetch(request);
+        const response = await fetch(new Request(request, { cache: 'no-cache' }));
         await putIfOk(cache, cacheKey, response);
         return response;
     } catch (error) {
@@ -191,6 +191,23 @@ async function staleWhileRevalidate(request, cacheName) {
 
     if (cached) return cached;
     return (await networkFetch) || Response.error();
+}
+
+// HTML, JavaScript и CSS должны относиться к одной серверной версии. Старая схема
+// stale-while-revalidate могла показать новый index.html вместе со старыми app.js/output.css:
+// первый запуск выглядел сломанным, а после обновления страницы внезапно исправлялся.
+async function networkFirstCode(request, cacheName) {
+    const cache = await caches.open(cacheName);
+    try {
+        const freshRequest = new Request(request, { cache: 'no-cache' });
+        const response = await fetch(freshRequest);
+        await putIfOk(cache, request, response);
+        return response;
+    } catch (error) {
+        return (await cache.match(request)) ||
+            (await cache.match(request, { ignoreSearch: true })) ||
+            Response.error();
+    }
 }
 
 self.addEventListener('install', (event) => {
@@ -230,6 +247,11 @@ self.addEventListener('fetch', (event) => {
 
     if (request.destination === 'image') {
         event.respondWith(cacheFirst(request, ASSET_CACHE));
+        return;
+    }
+
+    if (request.destination === 'script' || request.destination === 'style' || request.destination === 'worker') {
+        event.respondWith(networkFirstCode(request, STATIC_CACHE));
         return;
     }
 
