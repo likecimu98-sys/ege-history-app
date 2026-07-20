@@ -1,0 +1,9 @@
+[Unit]
+Description=Check EGE History Firebase mirror and archive deadlines
+
+[Timer]
+OnCalendar=*-*-* 09:00:00 Europe/Moscow
+Persistent=true
+
+[Install]
+WantedBy=timers.target

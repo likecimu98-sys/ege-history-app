@@ -1,0 +1,26 @@
+{
+  "name": "ege-history-vps-api",
+  "version": "1.0.0",
+  "private": true,
+  "type": "commonjs",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "start": "node src/server.js",
+    "ingest:firebase": "node src/firebase-ingest.js",
+    "migrate": "node scripts/run-migrations.js",
+    "export:firestore": "node scripts/export-firestore.js",
+    "verify:firestore-export": "node scripts/verify-firestore-export.js",
+    "restore:firestore-export": "node scripts/restore-firestore-export.js",
+    "import:firestore": "node scripts/import-firestore.js",
+    "compare:firestore": "node scripts/compare-firestore.js",
+    "test": "node --test test/*.test.js"
+  },
+  "dependencies": {
+    "firebase-admin": "^13.4.0",
+    "google-auth-library": "^10.2.0",
+    "pg": "^8.16.3",
+    "ws": "^8.18.3"
+  }
+}

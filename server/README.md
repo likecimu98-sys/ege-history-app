@@ -1,80 +1,95 @@
-# server/ — бэкенд-эндпоинт выпуска Firebase-токенов
+# VPS migration runbook
 
-Линчпин перехода на строгие правила Firestore (см. `../security/write-surface.md`).
-Даёт Telegram-ученику Firebase custom-token с **`uid = tgId`** и claim `teacher` —
-после этого правило «пишет только владелец» перестаёт лочить людей.
+This directory contains the first-party PostgreSQL API and the operational
+scripts for moving `reshay-istoriyu.ru` away from Firebase without changing the
+learning UI.
 
-**Код бота живёт на VPS (`/root/bot`), НЕ в этом репозитории.** Эти файлы —
-версионируемый исходник, который РАЗВОРАЧИВАЕТСЯ на VPS отдельно (ниже). Пока не
-развёрнут — на прод ничего не влияет: клиент как входил анонимно, так и входит.
+## Current phases
 
-## Файлы
+1. **Shadow (safe now):** the public client and bot still use Firebase. The
+   `hist-firebase-ingest` process copies Firebase changes exactly into
+   PostgreSQL, and `hist-api` is available behind `/api/`.
+2. **Cutover:** the committed client and the staged bot switch together after
+   the resource and Google OAuth gates pass. PostgreSQL becomes authoritative
+   and changes are mirrored back to Firebase for 14 days.
+3. **Archive:** stop the reverse mirror after 14 stable days. Keep the closed
+   Firebase project for 60 days, then export and delete it only after an
+   explicit administrator decision.
 
-| Файл                     | Что                                                            |
-|--------------------------|---------------------------------------------------------------|
-| `initdata.js`            | Проверка подписи Telegram initData (HMAC-SHA256). Security-ядро. |
-| `token-endpoint.js`      | HTTP-обработчик: initData → `createCustomToken(tgId, {claims})`. |
-| `initdata.selftest.js`   | Офлайн-тест подписи (подделка/подмена/протухание/кириллица).   |
-| `endpoint.selftest.js`   | Офлайн-тест эндпоинта с моками (ученик/учитель/401/404).       |
+Do not manually start the reverse mirror while the Firebase client is still in
+production. That would create two writers.
 
-Тесты (ничего живого): `node server/initdata.selftest.js && node server/endpoint.selftest.js`.
+## Production prerequisites
 
-## Выкат на VPS — ОТДЕЛЬНЫЙ процесс (bot.js НЕ трогаем)
+- at least 2 vCPU, 4 GiB RAM and 20 GiB free disk space;
+- Google OAuth client ID and secret in `/etc/ege-history/api.env`;
+- authorized callback
+  `https://reshay-istoriyu.ru/api/v1/auth/google/callback`;
+- a clean Git commit containing `vps-sync-compat.js` and the client changes;
+- the staged bot files in `/root/bot/vps-stage`;
+- a successful Firebase/PostgreSQL comparison and API smoke test.
 
-`vps-main.js` — самодостаточный запускатель: сам читает `serviceAccount.json` и
-`/root/bot/.env` (токен бота), поднимает эндпоинт на `127.0.0.1:8791`. Работающего
-бота не трогает вообще — это отдельное pm2-приложение рядом.
+The preflight refuses the cutover if any prerequisite is missing.
 
-Из корня репозитория (с машины, где есть SSH-ключ к VPS):
+## Cutover from Windows
+
+Prepare the committed client archive, upload it with strict SSH host checking,
+and run all non-destructive checks:
+
+```powershell
+.\deploy-vps.ps1
+```
+
+After the preflight succeeds and the short duel search pause is announced:
+
+```powershell
+.\deploy-vps.ps1 -Cutover -ConfirmCutover RESHAY_HISTORY_VPS
+```
+
+The server creates a backup, performs the final idempotent import and checksum
+comparison, saves rollback copies of the client and bot, enables the 14-day
+reverse mirror, then atomically activates the new client.
+
+## Rollback and deadlines
+
+Within the mirror window, return to the Firebase client and bot with:
 
 ```bash
-# 1. Залить 3 файла рядом с ботом
-scp server/initdata.js server/token-endpoint.js server/vps-main.js root@185.198.152.200:/root/bot/
-
-# 2. Запустить как отдельный pm2-процесс + автозапуск
-ssh root@185.198.152.200 'cd /root/bot && pm2 start vps-main.js --name hist-token && pm2 save'
-
-# 3. Локальная проверка НА сервере (должен ответить 401 {"error":"empty"}, не упасть)
-ssh root@185.198.152.200 'curl -sS -X POST http://127.0.0.1:8791/auth/telegram -H "Content-Type: application/json" -d "{}"'
+CONFIRM_ROLLBACK=RESHAY_HISTORY_FIREBASE /usr/local/sbin/ege-history-rollback
 ```
 
-Если шаг 3 вернул `{"error":"empty"}` — процесс жив и Firebase-admin инициализировался.
-Если `BOT_TOKEN не найден` — глянуть имя ключа в `/root/bot/.env` и либо переименовать
-в `BOT_TOKEN`, либо запустить с `TOKEN_ENV`… (проще: `pm2 delete hist-token`, поправить,
-снова `pm2 start`). Бот при этом не затронут.
+After 14 stable days, create another backup and stop the mirror with:
 
-Легаси-вариант «вписать прямо в bot.js» (НЕ рекомендуется, трогает живого бота) —
-см. историю git этого файла.
-
-## Nginx (тот же домен, отдельный путь) — на VPS
-
-В конфиг `reshay-istoriyu.ru` добавить проксирование ТОЛЬКО пути `/auth/`:
-
-```nginx
-location /auth/ {
-    proxy_pass http://127.0.0.1:8791;
-    proxy_set_header Host $host;
-}
+```bash
+CONFIRM_STOP_MIRROR=RESHAY_HISTORY_STABLE /usr/local/sbin/ege-history-stop-firebase-mirror
 ```
-`nginx -t && systemctl reload nginx`. Порт 8791 наружу НЕ открывать (firewall) —
-только через nginx.
 
-## Клиент (в этом репо, ОТДЕЛЬНЫЙ шаг, за флагом)
+The daily migration reminder sends the administrator a Telegram message at the
+14-day and 60-day deadlines. It never deletes Firebase automatically.
 
-`firebase-sync.js` `initAuth()`: в реальном Telegram (`isRealTelegram()`) сначала
-`POST /auth/telegram {initData: tg.initData}` → `signInWithCustomToken(token)`;
-при любой ошибке — текущий `signInAnonymously()` (полный откат поведения). Вне
-Telegram — как сейчас. Включать за флагом, чтобы катить клиент и бэкенд независимо.
+## Backups
 
-## Порядок безопасного выката
+- six-hour encrypted snapshots:
+  `/var/backups/ege-history/snapshots/six-hour` (last 28);
+- nightly encrypted Telegram snapshots:
+  `/var/backups/ege-history/snapshots/nightly`;
+- weekly encrypted snapshots:
+  `/var/backups/ege-history/weekly` (last 8);
+- Firebase source archive:
+  `/var/backups/ege-history/firebase-source`.
 
-1. ✅ Код + офлайн-тесты (сделано, в репо).
-2. Развернуть эндпоинт на VPS (по явному согласию — живой сервис). Проверить
-   `curl -sS -X POST https://reshay-istoriyu.ru/auth/telegram -d '{}'` → `401` (не 404).
-3. Включить клиентский флаг для СЕБЯ, войти в Telegram, убедиться:
-   `firebase.auth().currentUser.uid === <свой tgId>`.
-4. Раскатать флаг на всех. Прогресс не мигрируем — docId уже = tgId.
-5. Только потом — предпосылки 2–4 (перенос учительских записей/слияния в бота,
-   split fullStateJson) и лишь затем публикация `security/firestore.rules.strict`.
+Every archive includes a PostgreSQL custom dump, an online SQLite backup of the
+bot database, the schema version, sizes and SHA-256 checksums. The age private
+key must remain outside the VPS. The weekly restore job recreates a temporary
+database, reads student state counts and runs SQLite `integrity_check`.
 
-**НЕ включать строгие правила, пока шаги 2–4 не подтверждены на проде.**
+Manual checks:
+
+```bash
+/usr/local/sbin/ege-history-smoke-api
+/usr/local/sbin/ege-history-backup local
+/usr/local/sbin/ege-history-restore-check
+```
+
+No `.env`, service-account file, bot token or database password belongs in Git
+or in the Telegram backup archive.

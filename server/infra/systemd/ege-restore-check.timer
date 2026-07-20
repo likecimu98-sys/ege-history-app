@@ -1,0 +1,10 @@
+[Unit]
+Description=Weekly EGE History restore drill
+
+[Timer]
+OnCalendar=Sun *-*-* 05:15:00 Europe/Moscow
+Persistent=true
+RandomizedDelaySec=300
+
+[Install]
+WantedBy=timers.target

@@ -1,6 +1,6 @@
 'use strict';
 
-const APP_VERSION = '2026-07-19-10';
+const APP_VERSION = '2026-07-20-vps-1';
 const STATIC_CACHE = `ege-history-static-${APP_VERSION}`;
 const ASSET_CACHE = `ege-history-assets-${APP_VERSION}`;
 const CACHE_NAMES = [STATIC_CACHE, ASSET_CACHE];
@@ -27,7 +27,8 @@ const CORE_URLS = [
     './visual-trainer.js',
     './exam-mode.js',
     './app.js',
-    './firebase-sync.js',
+    './cloud-sync.js',
+    './vps-sync-compat.js',
     // Тяжёлые visual*.generated.js НЕ прекэшируем на install: они загружаются только
     // при открытии визуальных режимов и затем кэшируются fetch-handler'ом.
     './data.js',
@@ -127,7 +128,7 @@ async function cacheOfflineAssets() {
             }
 
             // Один запрос за раз и короткая пауза: прогрев идёт постепенно и не
-            // отбирает канал у интерфейса, Firebase и других открытых устройств.
+            // отбирает канал у интерфейса, синхронизации и других открытых устройств.
             await new Promise(resolve => setTimeout(resolve, ASSET_WARMUP_PAUSE_MS));
         }
     })().finally(() => {
@@ -237,6 +238,12 @@ self.addEventListener('fetch', (event) => {
     const url = new URL(request.url);
     const isSameOrigin = url.origin === self.location.origin;
     const isInScope = url.href.startsWith(self.registration.scope);
+
+    // API always goes directly to the VPS and is never stored in the PWA cache.
+    if (isSameOrigin && (url.pathname.startsWith('/api/') || url.pathname === '/auth/telegram')) {
+        event.respondWith(fetch(request));
+        return;
+    }
 
     if (request.mode === 'navigate') {
         event.respondWith(networkFirstNavigation(request));

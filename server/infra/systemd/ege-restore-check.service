@@ -1,0 +1,10 @@
+[Unit]
+Description=Verify that EGE History backups restore successfully
+After=postgresql.service
+
+[Service]
+Type=oneshot
+User=root
+ExecStart=/usr/local/sbin/ege-history-restore-check
+Nice=15
+IOSchedulingClass=idle

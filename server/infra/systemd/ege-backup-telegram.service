@@ -1,0 +1,12 @@
+[Unit]
+Description=EGE History encrypted backup to Telegram admin
+After=postgresql.service network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=root
+ExecStart=/usr/local/sbin/ege-history-backup telegram
+Nice=10
+IOSchedulingClass=best-effort
+IOSchedulingPriority=7

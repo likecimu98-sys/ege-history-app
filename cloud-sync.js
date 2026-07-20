@@ -1,23 +1,22 @@
-// firebase-sync.js — Firebase Auth, Firestore, leaderboard, duel, cloud sync
+// First-party cloud synchronization through the VPS API/PostgreSQL.
 // Загружается как ES Module (type="module")
 
-        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-        import { getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken, GoogleAuthProvider, signInWithPopup, signInWithRedirect, getRedirectResult, signInWithCredential, signOut } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-        import { initializeFirestore, collection, doc, setDoc, getDoc, getDocs, addDoc, updateDoc, deleteDoc, deleteField, onSnapshot, query, where, orderBy, limit, runTransaction, arrayUnion, arrayRemove } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        import {
+            initializeApp, getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken,
+            GoogleAuthProvider, signInWithPopup, signInWithRedirect, getRedirectResult,
+            signInWithCredential, signOut, initializeFirestore, collection, doc, setDoc, getDoc,
+            getDocs, addDoc, updateDoc, deleteDoc, deleteField, onSnapshot, query, where,
+            orderBy, limit, runTransaction, arrayUnion, arrayRemove, vpsApiFetch, refreshVpsAuth
+        } from "./vps-sync-compat.js";
 
-        let firebaseConfig;
-        if (typeof __firebase_config !== 'undefined') {
-            firebaseConfig = JSON.parse(__firebase_config);
-        } else {
-            firebaseConfig = { apiKey: "AIzaSyDdxtpuznCSK5a6CvcJdbt9pzKMXbUVl08", authDomain: "ege-history-bot.firebaseapp.com", projectId: "ege-history-bot", storageBucket: "ege-history-bot.firebasestorage.app", messagingSenderId: "489223236202", appId: "1:489223236202:web:48110779742d40d748f813" };
-        }
+        const cloudConfig = { projectId: 'vps-postgresql' };
         
         const appId = typeof __app_id !== 'undefined' ? __app_id : "ege-history-bot";
         
-        const app = initializeApp(firebaseConfig); 
+        const app = initializeApp(cloudConfig);
         const auth = getAuth(app); 
         
-        // Используем initializeFirestore с авто-определением Long Polling для обхода блокировок
+        // Совместимый клиент обращается к PostgreSQL через наш API на том же домене.
         const db = initializeFirestore(app, {
             experimentalAutoDetectLongPolling: true
         });
@@ -38,17 +37,15 @@
 
         function isTelegramMiniAppContext() {
             const app = getTelegramWebApp();
-            return !!(app && (app.initData || app.initDataUnsafe));
+            return !!(app && ((app.initData && String(app.initData).length > 0)
+                || (app.initDataUnsafe && app.initDataUnsafe.user)));
         }
 
         // СТРОГО «реально открыто из Telegram»: официальный telegram-web-app.js создаёт
-        // window.Telegram.WebApp и в обычном браузере (с пустым initDataUnsafe={}), поэтому
-        // isTelegramMiniAppContext() там тоже true. Для решений «это ПК-браузер или Telegram»
-        // (магик-линк, welcome-экран) нужен признак настоящего запуска: непустой подписанный
-        // initData ЛИБО наличие initDataUnsafe.user.
+        // window.Telegram.WebApp и в обычном браузере, поэтому учитываем только непустой
+        // подписанный initData либо наличие initDataUnsafe.user.
         function isRealTelegram() {
-            const app = getTelegramWebApp();
-            return !!(app && ((app.initData && String(app.initData).length > 0) || (app.initDataUnsafe && app.initDataUnsafe.user)));
+            return isTelegramMiniAppContext();
         }
         window.isRealTelegram = isRealTelegram;
 
@@ -56,6 +53,7 @@
             // Метим устройство как «телеграмное» — чтобы при сбое загрузки SDK в следующий раз
             // не свалиться в случайный анонимный id (см. resolveUserId).
             if (isTelegramMiniAppContext()) localStorage.setItem('was_telegram_device', '1');
+            else localStorage.removeItem('was_telegram_device');
             const tgU = getTelegramUser();
             if (tgU && tgU.id) {
                 localStorage.setItem('known_tg_id', String(tgU.id));
@@ -118,7 +116,7 @@
                 canonical = 'google_' + googleUid;
             } else if (oldStable) {
                 canonical = oldStable;
-            } else if (isTelegramMiniAppContext() || localStorage.getItem('was_telegram_device')) {
+            } else if (isTelegramMiniAppContext()) {
                 // Telegram-устройство, но tg-id ещё не получен (SDK не успел/не загрузился):
                 // НЕ создаём случайный анонимный документ — ждём появления tg-id,
                 // иначе прогресс ученика «переезжает» на случайный id «через раз».
@@ -322,7 +320,7 @@
             const ctrl = new AbortController();
             const timer = setTimeout(() => ctrl.abort(), 6000);
             try {
-                const resp = await fetch('/auth/telegram', {
+                const resp = await fetch('/api/v1/auth/telegram', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ initData }),
@@ -566,6 +564,12 @@
                 }
             } catch (e) {}
         }
+        async function _redeemVpsIdentity(token, kind, replace) {
+            return vpsApiFetch('/api/v1/auth/magic/redeem', {
+                method: 'POST',
+                body: JSON.stringify({ token, kind: kind || 'token', replace: !!replace })
+            });
+        }
         async function _redeemLoginToken() {
             let token = '';
             try { token = (new URLSearchParams(location.search).get('login') || '').trim(); } catch (e) {}
@@ -579,51 +583,30 @@
             // честную смену аккаунта.
             const prevTg = localStorage.getItem('known_tg_id') || '';
             try {
-                const ref = doc(db, 'artifacts', appId, 'public', 'data', 'loginTokens', token);
-                const snap = await getDoc(ref);
-                if (!snap.exists()) {
-                    if (!prevTg) showToast('⚠️', 'Ссылка входа недействительна или уже использована', 'bg-amber-500', 'border-amber-700');
-                    _stripLoginParam(); return;
-                }
-                const d = snap.data() || {};
-                const tgId = String(d.tgId || '').trim();
-                const exp = Number(d.exp) || 0;
-                if (!/^\d+$/.test(tgId) || (exp && Date.now() > exp)) {
-                    showToast('⚠️', 'Ссылка входа истекла — сгенерируй новую в боте', 'bg-amber-500', 'border-amber-700');
-                    try { await deleteDoc(ref); } catch (e) {}
-                    _stripLoginParam(); return;
-                }
-                if (prevTg === tgId) {
-                    // Тот же аккаунт уже подключён — токен не тратим зря, просто чистим URL.
-                    try { await deleteDoc(ref); } catch (e) {}
-                    showToast('✅', 'Этот аккаунт уже подключён на компьютере', 'bg-emerald-500', 'border-emerald-700');
-                    _stripLoginParam(); return;
-                }
-                const hasOtherIdentity = !!(prevTg || localStorage.getItem('google_uid'));
-                if (hasOtherIdentity) {
+                let d;
+                try {
+                    d = await _redeemVpsIdentity(token, 'token', false);
+                } catch (firstError) {
+                    if (firstError.code !== 'identity_switch_confirmation_required') throw firstError;
                     const oldName = localStorage.getItem('student_manual_name') || '';
-                    const ok = await _uiConfirm2('На этом компьютере открыт другой аккаунт' + (oldName ? ' («' + oldName + '»)' : '') + '. Войти в новый? Прогресс текущего уже сохранён в облаке.');
-                    if (!ok) { _stripLoginParam(); return; } // токен не удаляем — пригодится на другом устройстве
-                    // Финальный синк ПРЕЖНЕГО аккаунта (не дольше 4с), затем полная зачистка.
+                    const ok = await _uiConfirm2('На этом компьютере открыт другой аккаунт' + (oldName ? ' («' + oldName + '»)' : '') + '. Войти в новый? Прогресс текущего уже сохранён на сервере.');
+                    if (!ok) { _stripLoginParam(); return; }
                     try { await Promise.race([window.syncProgressToCloud(), new Promise(r => setTimeout(r, 4000))]); } catch (e) {}
+                    d = await _redeemVpsIdentity(token, 'token', true);
                     window._identitySwitching = true;
                     _wipeDeviceIdentity();
-                    localStorage.setItem('known_tg_id', tgId);
-                    if (d.name) localStorage.setItem('student_manual_name', String(d.name));
-                    localStorage.setItem('ege_onboarding_done', '1');
-                    try { sessionStorage.setItem('ege_switch_done', '1'); } catch (e) {}
-                    try { await deleteDoc(ref); } catch (e) {}   // одноразовость
-                    _stripLoginParam();
-                    location.reload(); // чистый старт под новой личностью
-                    return;
                 }
-                // Принимаем личность ученика: с этого момента ПК = его TG-аккаунт.
+                const tgId = String(d.tgId || '').trim();
                 localStorage.setItem('known_tg_id', tgId);
-                if (d.name && !localStorage.getItem('student_manual_name')) localStorage.setItem('student_manual_name', String(d.name));
-                try { await deleteDoc(ref); } catch (e) {}   // одноразовость
-                showToast('✅', 'Вход выполнен — подгружаю прогресс из Telegram', 'bg-emerald-500', 'border-emerald-700');
+                if (d.name) localStorage.setItem('student_manual_name', String(d.name));
+                localStorage.setItem('ege_onboarding_done', '1');
+                try { sessionStorage.setItem('ege_switch_done', '1'); } catch (e) {}
+                _stripLoginParam();
+                location.reload();
+                return;
             } catch (e) {
                 console.error('[Login] redeem error:', e);
+                if (!prevTg) showToast('⚠️', 'Ссылка входа недействительна или уже использована', 'bg-amber-500', 'border-amber-700');
             }
             _stripLoginParam();
         }
@@ -660,12 +643,21 @@
                 if (!snap.exists()) return;
                 const d = snap.data() || {};
                 if (d.status === 'confirmed' && /^\d+$/.test(String(d.tgId || ''))) {
-                    window.cancelPcLoginSession();
+                    if (_pcSessUnsub) { try { _pcSessUnsub(); } catch (e) {} _pcSessUnsub = null; }
                     // Защита от «грязного» устройства: QR предлагается только на свежем ПК,
                     // но если личность всё же есть и НЕ совпадает — полная зачистка + reload,
                     // иначе прогресс двух людей сольётся через legacy_student_ids.
                     const prevTgQr = localStorage.getItem('known_tg_id') || '';
                     const conflict = (prevTgQr && prevTgQr !== String(d.tgId)) || (!prevTgQr && localStorage.getItem('google_uid'));
+                    try {
+                        await _redeemVpsIdentity(token, 'session', !!conflict);
+                    } catch (redeemError) {
+                        console.warn('[PcLogin] redeem:', redeemError && redeemError.message);
+                        showToast('⚠️', 'QR-код уже использован или истёк', 'bg-amber-500', 'border-amber-700');
+                        _pcSessToken = '';
+                        return;
+                    }
+                    _pcSessToken = '';
                     if (conflict) {
                         window._identitySwitching = true;
                         _wipeDeviceIdentity();
@@ -673,18 +665,15 @@
                         if (d.name) localStorage.setItem('student_manual_name', String(d.name));
                         localStorage.setItem('ege_onboarding_done', '1');
                         try { sessionStorage.setItem('ege_switch_done', '1'); } catch (e) {}
-                        try { await deleteDoc(ref); } catch (e) {}
                         location.reload();
                         return;
                     }
                     localStorage.setItem('known_tg_id', String(d.tgId));
                     if (d.name && !localStorage.getItem('student_manual_name')) localStorage.setItem('student_manual_name', String(d.name));
-                    try { await deleteDoc(ref); } catch (e) {}
-                    try { await window.loadProgressFromCloud(); } catch (e) {}
-                    try { window.syncProgressToCloud(); } catch (e) {}
-                    if (window.updateGlobalUI) window.updateGlobalUI();
-                    if (window.updateProgressBars) window.updateProgressBars();
+                    localStorage.setItem('ege_onboarding_done', '1');
+                    try { sessionStorage.setItem('ege_switch_done', '1'); } catch (e) {}
                     if (typeof onConfirmed === 'function') onConfirmed({ name: d.name || '' });
+                    location.reload();
                 }
             }, (e) => console.warn('[PcLogin] listen:', e && e.message));
             return `https://t.me/Reshay_istoriyu_bot?start=pc_${token}`;
@@ -950,13 +939,19 @@
             }
         };
 
-        // PvP FIREBASE DUEL LOGIC
+        // PvP DUEL LOGIC
         // ✅ FIX: Используем runTransaction для атомарного захвата слота player2
         // Это исключает Race Condition когда двое одновременно присоединяются к одному матчу
         let duelUnsubscribe = null;
         // Мой текущий Elo для документа матча (соперник считает свою дельту от него).
         function _myDuelElo() {
             return Number(window.state && window.state.stats && window.state.stats.duelElo) || 1000;
+        }
+        function _nextDuelSeq() {
+            const duel = window.state && window.state.duel;
+            if (!duel) return 1;
+            duel.localSeq = (Number(duel.localSeq) || 0) + 1;
+            return duel.localSeq;
         }
         window.startDuelSearchDb = async function(mode) {
             mode = mode === 'swipe' ? 'swipe' : 'classic';
@@ -1124,6 +1119,7 @@
                         score: score,
                         combo: combo,
                         elo: _myDuelElo(), // объект перезаписывается целиком — рейтинг нельзя терять
+                        seq: _nextDuelSeq(),
                         ...(extra || {}) // свайп-дуэль: {done, correct} — живой прогресс для соперника
                     }
                 });
@@ -1151,6 +1147,7 @@
                     uid: resolveUserId(fbUser),
                     name: localStorage.getItem('student_manual_name') || 'Игрок',
                     score: myFinalScore, combo: myCombo || 0, elo: _myDuelElo(), final: true,
+                    seq: _nextDuelSeq(),
                     ...(extra || {})
                 }});
             } catch(e) { console.error('[Duel] finalize write:', e); }
@@ -3681,8 +3678,16 @@
             const blobJson = localStorage.getItem('ege_final_storage_v4') || '{}';
             let privOk = false;
             try {
-                await setDoc(_privStateRef(canonicalId), { fullStateJson: blobJson, updatedAt: nw }, { merge: true });
+                const savedState = await setDoc(_privStateRef(canonicalId), { fullStateJson: blobJson, updatedAt: nw }, { merge: true });
                 privOk = true;
+                const serverJson = String(savedState?.data?.fullStateJson || '');
+                if (serverJson.length > 10 && serverJson !== blobJson) {
+                    const reconciled = deepMergeStates([blobJson, serverJson]);
+                    if (reconciled) {
+                        applyMergedState(reconciled);
+                        localStorage.setItem('ege_final_storage_v4', JSON.stringify(reconciled));
+                    }
+                }
             } catch (e) { console.warn('[Sync] private blob write fail:', e && e.message); }
 
             const payload = {
@@ -3692,8 +3697,8 @@
                 googleEmail: gEmail,
                 knownTgId: knownTg,
                 knownGoogleId: googleId,
-                totalSolved: s.totalSolvedEver || 0,
-                egePoints: s.egePoints || 0,         // накопленные ЕГЭ-баллы
+                totalSolved: window.state.stats.totalSolvedEver || 0,
+                egePoints: window.state.stats.egePoints || 0,         // накопленные ЕГЭ-баллы
                 weeklyScore: weeklyScore,
                 weeklyEgePoints: weeklyEgePoints,     // ЕГЭ-баллы за неделю
                 weekStartStr: monStr2,
@@ -4100,71 +4105,21 @@
             if (!/^\d{8}$/.test(pin)) return showToast('⚠️', 'Введите 8-значный PIN', 'bg-amber-500', 'border-amber-700');
 
             try {
-                const studentsCol = collection(db, 'artifacts', appId, 'public', 'data', 'students');
-                // Ищем документ с этим PIN
-                const pinQuery = query(studentsCol, where('syncPin', '==', pin), limit(2));
-                const pinSnap = await getDocs(pinQuery);
-                if (pinSnap.empty) return showToast('❌', 'PIN не найден', 'bg-rose-500', 'border-rose-700');
-
-                let targetDoc = null;
-                await waitForTelegramIdentity();
-                const canonicalId = resolveUserId(fbUser);
-                if (!canonicalId) return showToast('⚠️', 'Telegram ID еще не получен. Повторите через пару секунд.', 'bg-amber-500', 'border-amber-700');
-                pinSnap.forEach(docSnap => {
-                    if (docSnap.id !== canonicalId) targetDoc = docSnap;
+                const result = await vpsApiFetch('/api/v1/auth/pin/link', {
+                    method: 'POST', body: JSON.stringify({ pin })
                 });
-                if (!targetDoc) return showToast('⚠️', 'Это ваш собственный PIN', 'bg-amber-500', 'border-amber-700');
-
-                const targetData = targetDoc.data();
-                // Объединяем данные: берём лучшее из двух
-                const mySnap = await getDoc(doc(studentsCol, canonicalId));
-                const myData = mySnap.exists() ? mySnap.data() : {};
-
-                const mySolved = myData.totalSolved || 0;
-                const theirSolved = targetData.totalSolved || 0;
-
-                // If Telegram ID is known, keep the canonical Telegram document and merge PIN data into it.
-                const preferCanonical = !!localStorage.getItem('known_tg_id');
-                const keepRemote = !preferCanonical && theirSolved > mySolved;
-                const keepId   = keepRemote ? targetDoc.id : canonicalId;
-                const absorbId = keepRemote ? canonicalId   : targetDoc.id;
-                const keepData = keepRemote ? targetData : myData;
-                const absData  = keepRemote ? myData : targetData;
-
-                const merged = deepMergeStates([keepData.fullStateJson, absData.fullStateJson].filter(j => j && j.length > 10));
-                const mergedJson = merged ? JSON.stringify(merged) : keepData.fullStateJson;
-                const mergedTotal = merged ? (merged.stats?.totalSolvedEver || Math.max(mySolved, theirSolved)) : Math.max(mySolved, theirSolved);
-
-                await setDoc(doc(studentsCol, keepId), {
-                    fullStateJson: mergedJson, totalSolved: mergedTotal,
-                    _mergedFrom: [...(keepData._mergedFrom || []), absorbId],
-                    _mergedAt: Date.now(), syncPin: keepData.syncPin || targetData.syncPin || '',
-                    tgId: localStorage.getItem('known_tg_id') || (/^\d+$/.test(keepId) ? keepId : ''),
-                    knownTgId: localStorage.getItem('known_tg_id') || '',
-                    canonicalId: keepId,
-                    identitySource: getIdentitySource(keepId),
-                    googleEmail: localStorage.getItem('google_email') || keepData.googleEmail || targetData.googleEmail || '',
-                    knownGoogleId: localStorage.getItem('google_uid') ? 'google_' + localStorage.getItem('google_uid') : (keepData.knownGoogleId || targetData.knownGoogleId || '')
-                }, { merge: true });
-                await setDoc(doc(studentsCol, absorbId), { _mergedInto: keepId, _mergedAt: Date.now() }, { merge: true });
-
-                // Если наш аккаунт поглощён — обновляем stable_student_id
-                if (absorbId === canonicalId) {
-                    localStorage.setItem('stable_student_id', keepId);
-                    if (/^\d+$/.test(keepId)) localStorage.setItem('known_tg_id', keepId);
-                }
-
-                // Загружаем объединённые данные
-                if (merged) {
-                    applyMergedState(merged);
-                }
-
+                const previous = localStorage.getItem('stable_student_id') || '';
+                if (previous && previous !== result.canonicalId) localStorage.setItem('previous_stable_student_id', previous);
+                if (result.canonicalId) localStorage.setItem('stable_student_id', result.canonicalId);
+                if (result.tgId) localStorage.setItem('known_tg_id', String(result.tgId));
+                if (result.state) applyMergedState(result.state);
                 showToast('✅', 'Аккаунты успешно привязаны!', 'bg-emerald-500', 'border-emerald-700');
                 if (input) input.value = '';
-                if (window.updateGlobalUI) window.updateGlobalUI();
-                if (window.updateProgressBars) window.updateProgressBars();
+                try { sessionStorage.setItem('ege_switch_done', '1'); } catch (e) {}
+                setTimeout(() => location.reload(), 400);
             } catch(e) {
                 console.error('[PIN link]', e);
-                showToast('❌', 'Ошибка: ' + e.message, 'bg-rose-500', 'border-rose-700');
+                const msg = e.code === 'pin_not_found' ? 'PIN не найден' : (e.code === 'own_pin' ? 'Это ваш собственный PIN' : 'Ошибка: ' + e.message);
+                showToast('❌', msg, 'bg-rose-500', 'border-rose-700');
             }
         };

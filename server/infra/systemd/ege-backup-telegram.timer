@@ -1,0 +1,9 @@
+[Unit]
+Description=Send nightly EGE History backup to Telegram
+
+[Timer]
+OnCalendar=*-*-* 03:30:00 Europe/Moscow
+Persistent=true
+
+[Install]
+WantedBy=timers.target

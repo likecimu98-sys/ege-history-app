@@ -1,0 +1,236 @@
+diff --git a/bot.js b/bot.js
+index 2ceeb9e..2980787 100644
+--- a/bot.js
++++ b/bot.js
+@@ -1,18 +1,19 @@
+ 'use strict';
+ 
+ require('dotenv').config();
+-const fs = require('fs');
+ const path = require('path');
+ const { Bot, InlineKeyboard, GrammyError, HttpError } = require('grammy');
+ const Database = require('better-sqlite3');
+ const crypto = require('crypto');
++const { createVpsFirestoreCompat } = require('./vps-firestore-compat');
+ 
+ const BOT_TOKEN = process.env.BOT_TOKEN;
+ const BOT_USERNAME = process.env.BOT_USERNAME || 'Reshay_istoriyu_bot';
+ const APP_URL = process.env.APP_URL || 'https://likecimu98-sys.github.io/ege-history-app/';
+ const ADMIN_ID = Number(process.env.ADMIN_ID || 0);
+-const SERVICE_ACCOUNT_PATH = process.env.SERVICE_ACCOUNT || path.join(__dirname, 'serviceAccount.json');
+ const FB_APP_ID = process.env.FB_APP_ID || 'ege-history-bot';
++const HISTORY_API_URL = process.env.HISTORY_API_URL || 'http://127.0.0.1:8792';
++const INTERNAL_API_TOKEN = process.env.INTERNAL_API_TOKEN || '';
+ 
+ if (!BOT_TOKEN) {
+     console.error('BOT_TOKEN is not set in .env');
+@@ -35,6 +36,14 @@ db.exec(`CREATE TABLE IF NOT EXISTS seen_assignments (
+     student_id TEXT NOT NULL, assignment_id TEXT NOT NULL,
+     seen_at TEXT DEFAULT (datetime('now', 'localtime')), PRIMARY KEY (student_id, assignment_id)
+ )`);
++db.exec(`CREATE TABLE IF NOT EXISTS delivered_notify_jobs (
++    job_id TEXT PRIMARY KEY, delivered_at TEXT DEFAULT (datetime('now', 'localtime'))
++)`);
++db.exec(`CREATE TABLE IF NOT EXISTS delivered_notify_recipients (
++    job_id TEXT NOT NULL, recipient_id TEXT NOT NULL,
++    delivered_at TEXT DEFAULT (datetime('now', 'localtime')),
++    PRIMARY KEY (job_id, recipient_id)
++)`);
+ db.exec(`CREATE TABLE IF NOT EXISTS duel_msgs (
+     match_id TEXT NOT NULL, chat_id INTEGER NOT NULL, message_id INTEGER NOT NULL, created_at INTEGER NOT NULL
+ )`);
+@@ -71,19 +80,19 @@ function displayName(u) {
+     return n || (u.username ? '@' + u.username : String(u.id));
+ }
+ 
+-// ---------- Firebase ----------
++// ---------- VPS API / PostgreSQL ----------
+ let fdb = null, base = null, admin = null;
+-let engage = null; // модуль вовлечения (engage.js), инициализируется после Firebase
++let engage = null; // модуль вовлечения (engage.js), инициализируется после API
+ const teachers = new Map(); // tgId(str) -> { name, classes:[{code,name}], orgId, role }
+ const orgs = new Map();     // orgId(str) -> { name, ownerTgId, teacherIds:[] }
+ 
+-function initFirebase() {
+-    if (!fs.existsSync(SERVICE_ACCOUNT_PATH)) { console.log('Firebase OFF: нет ключа', SERVICE_ACCOUNT_PATH); return false; }
+-    admin = require('firebase-admin');
+-    admin.initializeApp({ credential: admin.credential.cert(require(SERVICE_ACCOUNT_PATH)) });
+-    fdb = admin.firestore();
++function initHistoryApi() {
++    if (!INTERNAL_API_TOKEN) { console.log('VPS API OFF: нет INTERNAL_API_TOKEN'); return false; }
++    const compat = createVpsFirestoreCompat({ baseUrl: HISTORY_API_URL, token: INTERNAL_API_TOKEN });
++    admin = compat.admin;
++    fdb = compat.firestore;
+     base = `artifacts/${FB_APP_ID}/public/data`;
+-    console.log('Firebase ON, слушаю', base);
++    console.log('VPS API ON, слушаю', base);
+     return true;
+ }
+ // Массив групп бывает смешанным: старые строки (легаси v3) + новые {code,name}.
+@@ -498,7 +507,7 @@ bot.callbackQuery(/^t_(approve|deny):(\d+)$/, async (ctx) => {
+     const u = db.prepare('SELECT * FROM users WHERE id = ?').get(targetId);
+     const who = displayName(u || { id: targetId });
+     if (action === 'approve') {
+-        if (!fdb) return ctx.answerCallbackQuery('Firebase недоступен');
++        if (!fdb) return ctx.answerCallbackQuery('Сервер данных недоступен');
+         await fdb.doc(`${base}/teachers/${targetId}`).set({ name: who, username: (u && u.username) || '', role: 'solo', classes: [], approvedAt: Date.now(), approvedBy: ADMIN_ID }, { merge: true });
+         applyCommandMenu(targetId, CMD_TEACHER);
+         await ctx.answerCallbackQuery('Одобрено');
+@@ -746,7 +755,7 @@ bot.command('stats', async (ctx) => {
+     const week = db.prepare("SELECT COUNT(*) n FROM users WHERE last_seen >= datetime('now', 'localtime', '-7 days')").get().n;
+     const hwSent = db.prepare('SELECT COUNT(*) n FROM seen_assignments').get().n;
+     const refs = db.prepare('SELECT ref, COUNT(*) n FROM users WHERE ref IS NOT NULL GROUP BY ref ORDER BY n DESC LIMIT 10').all();
+-    let msg = `👥 Всего: ${total}\n📆 Сегодня: ${today}\n🗓 За 7 дней: ${week}\n👨‍🏫 Учителей: ${teachers.size}\n🏫 Школ: ${orgs.size}\n📚 Уведомлений о ДЗ: ${hwSent}\n🔥 Firebase: ${fdb ? 'ON' : 'OFF'}`;
++    let msg = `👥 Всего: ${total}\n📆 Сегодня: ${today}\n🗓 За 7 дней: ${week}\n👨‍🏫 Учителей: ${teachers.size}\n🏫 Школ: ${orgs.size}\n📚 Уведомлений о ДЗ: ${hwSent}\n🗄 Сервер данных: ${fdb ? 'ON' : 'OFF'}`;
+     if (refs.length) msg += '\n\nИсточники (ref):\n' + refs.map(r => `• ${r.ref}: ${r.n}`).join('\n');
+     await ctx.reply(msg);
+ });
+@@ -783,7 +792,7 @@ async function getLimitsCfg() {
+ }
+ function fmtLim(n) { return n > 0 ? `${n} строк/день` : 'безлимит ♾'; }
+ async function admShowLimits(ctx) {
+-    if (!fdb) return admShow(ctx, 'Firebase недоступен', admHomeKb());
++    if (!fdb) return admShow(ctx, 'Сервер данных недоступен', admHomeKb());
+     const c = await getLimitsCfg();
+     const kb = new InlineKeyboard()
+         .text(`🆓 Бесплатные: ${fmtLim(c.freeDaily)}`, 'adm_limset:freeDaily').row()
+@@ -864,7 +873,7 @@ bot.callbackQuery(/^adm_tunlim:(\d+)$/, async (ctx) => {
+     if (ctx.from.id !== ADMIN_ID) return ctx.answerCallbackQuery('Только для админа');
+     const tid = ctx.match[1];
+     const t = teachers.get(tid);
+-    if (!t || !fdb) return ctx.answerCallbackQuery(t ? 'Firebase недоступен' : 'Учитель не найден');
++    if (!t || !fdb) return ctx.answerCallbackQuery(t ? 'Сервер данных недоступен' : 'Учитель не найден');
+     const next = !t.unlimited;
+     try {
+         await fdb.doc(`${base}/teachers/${tid}`).set({ unlimited: next }, { merge: true });
+@@ -881,7 +890,7 @@ bot.command('premium', async (ctx) => {
+     if (ctx.from.id !== ADMIN_ID) return;
+     const raw = String(ctx.match || '').trim();
+     if (!raw) return ctx.reply('Формат: /premium 123456789 или /premium @username — включает/снимает подписку клуба.');
+-    if (!fdb) return ctx.reply('Firebase недоступен.');
++    if (!fdb) return ctx.reply('Сервер данных недоступен.');
+     let target = null;
+     if (/^\d{5,15}$/.test(raw)) target = { id: Number(raw) };
+     else if (/^@?\w{3,32}$/.test(raw)) target = db.prepare('SELECT * FROM users WHERE lower(username) = lower(?)').get(raw.replace(/^@/, ''));
+@@ -900,7 +909,7 @@ bot.command('premium', async (ctx) => {
+ // каналов (бот должен быть админом канала); /premiumgroup без аргумента — список.
+ bot.command('premiumgroup', async (ctx) => {
+     if (ctx.from.id !== ADMIN_ID) return;
+-    if (!fdb) return ctx.reply('Firebase недоступен.');
++    if (!fdb) return ctx.reply('Сервер данных недоступен.');
+     const arg = String(ctx.match || '').trim();
+     let chat = null;
+     if (ctx.chat && (ctx.chat.type === 'group' || ctx.chat.type === 'supergroup')) {
+@@ -938,7 +947,7 @@ bot.callbackQuery(/^adm_trevoke:(\d+)$/, async (ctx) => {
+     if (ctx.from.id !== ADMIN_ID) return ctx.answerCallbackQuery('Только для админа');
+     const tid = ctx.match[1];
+     const t = teachers.get(tid);
+-    if (!fdb) return ctx.answerCallbackQuery('Firebase недоступен');
++    if (!fdb) return ctx.answerCallbackQuery('Сервер данных недоступен');
+     try {
+         // Вместе с ролью снимаем ♾ с его групп — иначе безлимит остался бы у учеников навсегда
+         const hadUnlim = !!(t && t.unlimited);
+@@ -963,7 +972,7 @@ async function grantTeacherByInput(ctx, raw) {
+     else if (/^@?\w{3,32}$/.test(s)) target = db.prepare('SELECT * FROM users WHERE lower(username) = lower(?)').get(s.replace(/^@/, ''));
+     if (!target || !target.id) return ctx.reply('Не нашёл такого пользователя. Нужен числовой ID или @username того, кто уже нажимал /start в боте.');
+     if (teachers.has(String(target.id))) return ctx.reply('Он уже учитель 👨‍🏫');
+-    if (!fdb) return ctx.reply('Firebase недоступен.');
++    if (!fdb) return ctx.reply('Сервер данных недоступен.');
+     const who = displayName(target.id ? target : { id: target.id });
+     await fdb.doc(`${base}/teachers/${target.id}`).set({ name: who, username: target.username || '', role: 'solo', classes: [], approvedAt: Date.now(), approvedBy: ADMIN_ID }, { merge: true });
+     applyCommandMenu(target.id, CMD_TEACHER);
+@@ -984,24 +993,35 @@ const JOB_MAX_AGE_MS = 24 * 3600 * 1000;
+ function watchJobs() {
+     const isSeen = db.prepare('SELECT 1 FROM seen_assignments WHERE student_id = ? AND assignment_id = ?');
+     const markSeen = db.prepare('INSERT OR IGNORE INTO seen_assignments (student_id, assignment_id) VALUES (?, ?)');
++    const isJobDone = db.prepare('SELECT 1 FROM delivered_notify_jobs WHERE job_id = ?');
++    const markJobDone = db.prepare('INSERT OR IGNORE INTO delivered_notify_jobs (job_id) VALUES (?)');
++    const isRecipientDone = db.prepare('SELECT 1 FROM delivered_notify_recipients WHERE job_id = ? AND recipient_id = ?');
++    const markRecipientDone = db.prepare('INSERT OR IGNORE INTO delivered_notify_recipients (job_id, recipient_id) VALUES (?, ?)');
+     const attach = () => fdb.collection(`${base}/notifyJobs`).onSnapshot(async (snap) => {
+         for (const change of snap.docChanges()) {
+             if (change.type !== 'added') continue;
+-            const ref = change.doc.ref, j = change.doc.data() || {};
++            const ref = change.doc.ref, jobId = String(change.doc.id), j = change.doc.data() || {};
+             try {
++                if (isJobDone.get(jobId)) { await ref.delete(); continue; }
+                 const fresh = (Date.now() - (Number(j.ts) || 0)) < JOB_MAX_AGE_MS;
+                 if (fresh && j.type === 'hw_assigned' && j.studentId) {
+                     const dedupeId = String(j.recId || ('noid_' + (j.ts || Date.now())));
+                     if (!isSeen.get(String(j.studentId), dedupeId)) {
+-                        markSeen.run(String(j.studentId), dedupeId);
+-                        if (engage) engage.onHwAssigned(j.studentId, dedupeId, j.ts, j.deadline, j.task);
++                        const engageKey = `engage:${j.studentId}`;
++                        if (engage && !isRecipientDone.get(jobId, engageKey)) {
++                            engage.onHwAssigned(j.studentId, dedupeId, j.ts, j.deadline, j.task);
++                            markRecipientDone.run(jobId, engageKey);
++                        }
+                         const chatId = Number(j.studentId);
+                         const u = Number.isFinite(chatId) ? db.prepare('SELECT notify_hw FROM users WHERE id = ?').get(chatId) : null;
+-                        if (u && u.notify_hw && flagOn('hw_push')) {
++                        if (u && u.notify_hw && flagOn('hw_push') && !isRecipientDone.get(jobId, String(chatId))) {
+                             const label = TASK_LABELS[j.task] || j.task || 'задание';
+                             const dl = j.deadline ? `\n⏰ Дедлайн: ${new Date(j.deadline + 'T00:00:00').toLocaleDateString('ru-RU')}` : '';
+-                            await sendSafe(chatId, `📚 Новое домашнее задание!\n${label} — ${j.total || '?'} строк${dl}\n\nОткрывай и решай 👇`, { reply_markup: appKb() });
++                            const sent = await sendSafe(chatId, `📚 Новое домашнее задание!\n${label} — ${j.total || '?'} строк${dl}\n\nОткрывай и решай 👇`, { reply_markup: appKb() });
++                            if (!sent) throw new Error(`notification_send_failed:${chatId}`);
++                            markRecipientDone.run(jobId, String(chatId));
+                         }
++                        markSeen.run(String(j.studentId), dedupeId);
+                     }
+                 }
+                 if (fresh && j.type === 'hw_done' && j.classCode && flagOn('hw_done')) {
+@@ -1012,11 +1032,20 @@ function watchJobs() {
+                         if (String(tid) === String(j.studentId)) continue;
+                         const u = db.prepare('SELECT notify_hw_done FROM users WHERE id = ?').get(tid);
+                         if (!u || !u.notify_hw_done) continue;
+-                        await sendSafe(tid, `✅ ${name} (группа «${code}») сдал ДЗ: ${label}, ${j.total || '?'} строк${onTime}`); await sleep(50);
++                        if (isRecipientDone.get(jobId, String(tid))) continue;
++                        const sent = await sendSafe(tid, `✅ ${name} (группа «${code}») сдал ДЗ: ${label}, ${j.total || '?'} строк${onTime}`);
++                        if (!sent) throw new Error(`notification_send_failed:${tid}`);
++                        markRecipientDone.run(jobId, String(tid));
++                        await sleep(50);
+                     }
+                 }
+-            } catch (e) { console.error('job processing failed:', e.message); }
+-            try { await ref.delete(); } catch (e) { console.error('job delete failed:', e.message); }
++                markJobDone.run(jobId);
++                await ref.delete();
++            } catch (e) {
++                console.error('job processing failed:', e.message);
++                try { if (typeof ref.fail === 'function') await ref.fail(e); }
++                catch (failError) { console.error('job retry scheduling failed:', failError.message); }
++            }
+         }
+     }, (err) => { console.error('watchJobs error:', err.message); setTimeout(attach, 15000); });
+     attach();
+@@ -1059,6 +1088,10 @@ function watchDuels() {
+ }
+ 
+ setInterval(() => { db.prepare('DELETE FROM duel_msgs WHERE created_at < ?').run(Date.now() - 48 * 3600 * 1000); }, 6 * 3600 * 1000);
++setInterval(() => {
++    db.prepare("DELETE FROM delivered_notify_recipients WHERE delivered_at < datetime('now','-90 days')").run();
++    db.prepare("DELETE FROM delivered_notify_jobs WHERE delivered_at < datetime('now','-90 days')").run();
++}, 24 * 3600 * 1000);
+ 
+ // Гигиена: чистим протухшие токены входа (редим удаляет их сам, это на случай неиспользованных).
+ setInterval(async () => {
+@@ -1073,7 +1106,7 @@ setInterval(async () => {
+ 
+ // ---------- Старт ----------
+ try {
+-    if (initFirebase()) {
++    if (initHistoryApi()) {
+         watchTeachers(); watchOrgs(); watchJobs(); watchDuels();
+         try {
+             engage = require('./engage')({
+@@ -1082,7 +1115,7 @@ try {
+             });
+         } catch (e) { console.error('engage init failed:', e.message); }
+     }
+-} catch (e) { console.error('Firebase init failed:', e.message); }
++} catch (e) { console.error('VPS API init failed:', e.message); }
+ 
+ // ---------- Прочие сообщения (в т.ч. ввод названия группы) ----------
+ // ВАЖНО: регистрируется ПОСЛЕДНИМ (после engage.js) — grammY строит middleware-цепочку
+

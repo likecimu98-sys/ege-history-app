@@ -440,7 +440,7 @@ function buildSavePayload() {
 }
 
 function saveLocal() {
-    // Во время смены аккаунта (см. firebase-sync.js) localStorage уже зачищен —
+    // Во время смены аккаунта (см. cloud-sync.js) localStorage уже зачищен —
     // запись старого состояния воскресила бы прогресс прежнего человека в новом аккаунте.
     if (window._identitySwitching) return;
     localStorage.setItem(STORAGE_KEY, JSON.stringify(buildSavePayload()));
@@ -473,7 +473,7 @@ window.saveLocal = saveLocal;
 window.saveProgress = saveProgress;
 window.syncNow = syncNow;
 
-// ─── Дневной лимит строк (настройки грузит refreshDailyLimit в firebase-sync.js) ───
+// ─── Дневной лимит строк (настройки грузит refreshDailyLimit в cloud-sync.js) ───
 // 0/отсутствие лимита = безлимит. Считаем по dailyStats[today].solved — тому же
 // счётчику, что и вся статистика, поэтому лимит един для таблиц и карточек.
 window.canSolveMore = function() {
@@ -996,7 +996,7 @@ function updateProgressBars() {
     });
 }
 
-// Заглушки для облачных функций (firebase-sync.js перезапишет)
+// Заглушки для облачных функций (cloud-sync.js перезапишет)
 window.loadProgressFromCloud = async function() {};
 window.syncProgressToCloud = async function() {};
 window.loadClassProgress = function() {};

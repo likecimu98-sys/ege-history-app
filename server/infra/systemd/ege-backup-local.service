@@ -1,0 +1,11 @@
+[Unit]
+Description=EGE History local encrypted backup
+After=postgresql.service
+
+[Service]
+Type=oneshot
+User=root
+ExecStart=/usr/local/sbin/ege-history-backup local
+Nice=10
+IOSchedulingClass=best-effort
+IOSchedulingPriority=7
