@@ -61,20 +61,26 @@ grep -Eq '^APP_URL=https://reshay-istoriyu\.ru/?$' /root/bot/.env || {
 }
 
 PREFLIGHT_STAGE="client archive paths"
-if tar -tzf "$CLIENT_ARCHIVE" | grep -Eq '(^/|(^|/)\.\.(/|$))'; then
+ARCHIVE_LIST="$(mktemp /tmp/ege-cutover-list-XXXXXX)"
+WORK=""
+cleanup() {
+  rm -f -- "$ARCHIVE_LIST"
+  if [[ -n "$WORK" ]]; then rm -rf -- "$WORK"; fi
+}
+trap cleanup EXIT
+tar -tzf "$CLIENT_ARCHIVE" >"$ARCHIVE_LIST"
+if grep -Eq '(^/|(^|/)\.\.(/|$))' "$ARCHIVE_LIST"; then
   echo "Unsafe path in client archive" >&2
   exit 8
 fi
-tar -tzf "$CLIENT_ARCHIVE" | grep -qx './index.html\|index.html'
-tar -tzf "$CLIENT_ARCHIVE" | grep -Eq '(^|/)vps-sync-compat\.js$'
-if tar -tzf "$CLIENT_ARCHIVE" | grep -Eq '(^|/)server/'; then
+grep -qx './index.html\|index.html' "$ARCHIVE_LIST"
+grep -Eq '(^|/)vps-sync-compat\.js$' "$ARCHIVE_LIST"
+if grep -Eq '(^|/)server/' "$ARCHIVE_LIST"; then
   echo "Server sources must not be present in the public archive" >&2
   exit 9
 fi
 PREFLIGHT_STAGE="client archive contents"
 WORK="$(mktemp -d /tmp/ege-cutover-preflight-XXXXXX)"
-cleanup() { rm -rf -- "$WORK"; }
-trap cleanup EXIT
 tar -xzf "$CLIENT_ARCHIVE" -C "$WORK"
 [[ -f "$WORK/cloud-sync.js" && -f "$WORK/vps-sync-compat.js" ]]
 if [[ -e "$WORK/firebase-sync.js" ]]; then
