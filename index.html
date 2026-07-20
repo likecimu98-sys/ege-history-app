@@ -451,14 +451,14 @@
     <script src="exam-scoring.js?v=20260719-3" defer></script>
     <script src="state.js" defer></script>
     <script src="table.js" defer></script>
-    <script src="ui.js" defer></script>
+    <script src="ui.js?v=20260720-1" defer></script>
     <script src="modes.js" defer></script>
     <script src="swipe-data.js" defer></script>
     <script src="swipe-mode.js" defer></script>
     <script src="match-mode.js" defer></script>
     <script src="vov-mode.js" defer></script>
     <script src="visual-trainer.js" defer></script>
-    <script src="exam-mode.js?v=20260719-7" defer></script>
+    <script src="exam-mode.js?v=20260720-8" defer></script>
     <script src="app.js" defer></script>
 
     <!-- ШАПКА -->
@@ -932,10 +932,9 @@
             <div id="onb-step-6">
                 <div class="text-6xl mb-3">🏛️</div>
                 <h2 class="text-xl font-black text-gray-800 dark:text-gray-200 mb-2">Добро пожаловать!</h2>
-                <p class="text-sm text-gray-500 dark:text-gray-400 mb-4 leading-relaxed">Укажи своё имя и код класса, чтобы учитель видел твой прогресс.</p>
+                <p class="text-sm text-gray-500 dark:text-gray-400 mb-4 leading-relaxed">Укажи своё имя. Класс подключится автоматически, когда ты войдёшь по ссылке учителя.</p>
                 <div class="flex flex-col gap-3 mb-5">
                     <input type="text" id="onb-name-input" placeholder="Фамилия Имя, класс (11А)" class="w-full p-3 border border-gray-200 dark:border-[#3f3f46] rounded-xl dark:bg-[#181818] dark:text-gray-300 outline-none font-bold text-sm shadow-inner text-center">
-                    <input type="text" id="onb-class-input" placeholder="Код класса (от учителя)" class="w-full p-3 border border-gray-200 dark:border-[#3f3f46] rounded-xl dark:bg-[#181818] dark:text-gray-300 outline-none font-bold text-sm shadow-inner text-center font-mono">
                 </div>
                 <button data-action="finishOnboarding" class="w-full bg-emerald-500 hover:bg-emerald-600 text-white py-3.5 rounded-xl font-black uppercase tracking-wider active:scale-95 transition-transform text-sm shadow-md">Начать тренировку! 🚀</button>
                 <button data-action="finishOnboarding" class="w-full text-gray-400 dark:text-gray-600 py-2 text-xs font-bold mt-1">Пропустить →</button>
@@ -1169,7 +1168,6 @@
                 </button>
             </div>
             <div class="shrink-0"><label class="block text-[10px] font-black text-gray-500 uppercase tracking-widest mb-1.5 px-1">Имя и Фамилия</label><input type="text" id="profile-name-input" placeholder="Иванов Иван, 11 'А'" class="w-full p-3.5 border border-gray-200 rounded-2xl dark:bg-[#181818] dark:border-[#2c2c2c] dark:text-gray-300 outline-none font-bold shadow-inner text-sm"></div>
-            <div class="shrink-0"><label class="block text-[10px] font-black text-gray-500 uppercase tracking-widest mb-1.5 px-1">Код класса (от учителя)</label><input type="text" id="profile-class-code" placeholder="Например: 4921" class="w-full p-3.5 font-mono border border-gray-200 rounded-2xl dark:bg-[#181818] dark:border-[#2c2c2c] dark:text-gray-300 outline-none text-center font-black text-base text-blue-600 dark:text-blue-400 shadow-inner"></div>
             <!-- Выбор темы удалён (2026-07-18): единственная тема — классика (skin-classic на body) -->
             <!-- PIN -->
             <div class="shrink-0 bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-200 dark:border-indigo-800/40 rounded-2xl p-3 flex flex-col gap-2">
