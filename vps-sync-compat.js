@@ -90,7 +90,24 @@ export async function signInAnonymously() {
       });
       if (claimed.user) authSingleton.currentUser = normalizeUser(claimed.user);
     } catch (error) {
-      console.warn('[Cloud] Legacy guest profile was not claimed:', error.message);
+      if (error.code === 'legacy_profile_not_found') {
+        // This device has an old anonymous id that never reached Firebase.
+        // Keep the local progress, but attach future writes to the authenticated
+        // VPS guest instead of repeatedly attempting a forbidden legacy path.
+        const sessionId = authSingleton.currentUser.canonicalDocId || authSingleton.currentUser.uid;
+        if (sessionId) {
+          localStorage.setItem('stable_student_id', sessionId);
+          if (localStorage.getItem('previous_stable_student_id') === legacyId) {
+            localStorage.removeItem('previous_stable_student_id');
+          }
+          const remaining = (localStorage.getItem('legacy_student_ids') || '')
+            .split(',').filter(id => id && id !== legacyId);
+          if (remaining.length) localStorage.setItem('legacy_student_ids', remaining.join(','));
+          else localStorage.removeItem('legacy_student_ids');
+        }
+      } else {
+        console.warn('[Cloud] Legacy guest profile was not claimed:', error.message);
+      }
     }
   }
   authSingleton.initialized = true;
