@@ -26,7 +26,9 @@ if ($Cutover -and $ConfirmCutover -ne $requiredConfirmation) {
 
 $sshOptions = @(
     '-i', (Resolve-Path -LiteralPath $KeyPath).Path,
-    '-o', "UserKnownHostsFile=$((Resolve-Path -LiteralPath $KnownHostsPath).Path)",
+    # Путь known_hosts берём в кавычки: в профиле с пробелом (напр. «Хозяин Саша») ssh иначе
+    # режет значение UserKnownHostsFile по пробелу и не находит файл → «No ED25519 host key is known».
+    '-o', "UserKnownHostsFile=`"$((Resolve-Path -LiteralPath $KnownHostsPath).Path)`"",
     '-o', 'StrictHostKeyChecking=yes',
     '-o', 'HostKeyAlgorithms=ssh-ed25519',
     '-o', 'BatchMode=yes'
