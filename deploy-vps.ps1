@@ -11,6 +11,7 @@ $requiredConfirmation = 'RESHAY_HISTORY_VPS'
 $remoteArchive = '/root/ege-app-cutover.tar.gz'
 $remoteUploading = '/root/ege-app-cutover.tar.gz.uploading'
 $archive = Join-Path ([IO.Path]::GetTempPath()) ("ege-app-cutover-$([guid]::NewGuid().ToString('N')).tar.gz")
+$repoRoot = (Resolve-Path -LiteralPath $PSScriptRoot).Path
 
 function Invoke-Native([scriptblock]$Command, [string]$Failure) {
     & $Command
@@ -32,12 +33,12 @@ $sshOptions = @(
 )
 
 try {
-    $dirty = & git status --porcelain
+    $dirty = & git -C $repoRoot -c "safe.directory=$repoRoot" status --porcelain
     if ($LASTEXITCODE -ne 0) { throw 'git status failed' }
     if ($dirty) { throw 'Commit all migration changes before preparing the production archive.' }
 
-    Invoke-Native { git cat-file -e 'HEAD:vps-sync-compat.js' } 'vps-sync-compat.js is not committed.'
-    Invoke-Native { git archive --format=tar.gz -o $archive HEAD } 'git archive failed'
+    Invoke-Native { git -C $repoRoot -c "safe.directory=$repoRoot" cat-file -e 'HEAD:vps-sync-compat.js' } 'vps-sync-compat.js is not committed.'
+    Invoke-Native { git -C $repoRoot -c "safe.directory=$repoRoot" archive --format=tar.gz -o $archive HEAD } 'git archive failed'
 
     $entries = & tar -tzf $archive
     if ($LASTEXITCODE -ne 0) { throw 'Cannot inspect client archive.' }
