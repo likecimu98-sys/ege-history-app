@@ -205,6 +205,9 @@ async function handle(req, res) {
       return json(res, 200, { token: 'vps-session', user: userForClient(switched.user) }, switched.headers);
     }
     if (req.method === 'GET' && url.pathname === '/api/v1/auth/google/start') {
+      if (!env.googleClientId || !env.googleClientSecret) {
+        return json(res, 503, { error: 'google_not_configured' });
+      }
       if (!limiter.take(`${ip}:google`, 10, 10 * 60 * 1000).ok) return json(res, 429, { error: 'rate_limited' });
       const returnTo = safeReturnTo(url.searchParams.get('returnTo') || '/');
       return redirect(res, await createGoogleStart(session, returnTo));
