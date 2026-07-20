@@ -24,6 +24,10 @@ STATE_FILE="$STATE_DIR/cutover.env"
 install -d -m 700 "$STATE_DIR" "$REPORT_ROOT" "$BOT_OLD" "$CLIENT_NEW"
 tar -xzf "$CLIENT_ARCHIVE" -C "$CLIENT_NEW"
 [[ -f "$CLIENT_NEW/index.html" && -f "$CLIENT_NEW/vps-sync-compat.js" ]]
+# The script uses umask 077 for secrets and backups, but the static client
+# must remain readable by the unprivileged Nginx worker.
+find "$CLIENT_NEW" -type d -exec chmod 755 {} +
+find "$CLIENT_NEW" -type f -exec chmod 644 {} +
 cp -a /root/bot/bot.js /root/bot/engage.js /root/bot/.env "$BOT_OLD/"
 
 INGEST_STOPPED=0
@@ -59,14 +63,14 @@ sed -i 's/^MIRROR_FIREBASE=.*/MIRROR_FIREBASE=1/' "$API_ENV"
 pm2 delete hist-firebase-ingest || true
 ENABLE_FIREBASE_INGEST=0 pm2 startOrReload "$API_DIR/ecosystem.config.cjs" --update-env
 
-# Internal key is kept out of command output and copied only into the root-owned bot environment.
-set -a
-# shellcheck disable=SC1090
-source /etc/ege-history/generated-secrets.env
-set +a
+# Read only the value needed by the bot. Database credentials must never be
+# inherited by the PM2-managed bot process.
+INTERNAL_API_TOKEN_VALUE="$(sed -n 's/^INTERNAL_API_TOKEN=//p' /etc/ege-history/generated-secrets.env)"
+[[ -n "$INTERNAL_API_TOKEN_VALUE" ]]
 sed -i '/^HISTORY_API_URL=/d;/^INTERNAL_API_TOKEN=/d' /root/bot/.env
-printf '\nHISTORY_API_URL=http://127.0.0.1:8792\nINTERNAL_API_TOKEN=%s\n' "$INTERNAL_API_TOKEN" >>/root/bot/.env
+printf '\nHISTORY_API_URL=http://127.0.0.1:8792\nINTERNAL_API_TOKEN=%s\n' "$INTERNAL_API_TOKEN_VALUE" >>/root/bot/.env
 chmod 600 /root/bot/.env
+unset INTERNAL_API_TOKEN_VALUE APP_DB_PASSWORD BACKUP_DB_PASSWORD INTERNAL_API_TOKEN CONFIRM_CUTOVER
 install -m 640 "$BOT_STAGE/bot.js" /root/bot/bot.js
 install -m 640 "$BOT_STAGE/engage.js" /root/bot/engage.js
 install -m 640 "$BOT_STAGE/bot-client.js" /root/bot/bot-client.js
@@ -81,5 +85,10 @@ nginx -t
 systemctl reload nginx
 pm2 save
 curl --fail --silent https://reshay-istoriyu.ru/api/v1/health >/dev/null
-curl --fail --silent https://reshay-istoriyu.ru/ | grep -q 'vps-sync-compat.js'
+CLIENT_HTTP_CHECK="$(mktemp /tmp/ege-cutover-http-XXXXXX)"
+curl --fail --silent https://reshay-istoriyu.ru/ -o "$CLIENT_HTTP_CHECK"
+grep -q 'pwa.js' "$CLIENT_HTTP_CHECK"
+rm -f -- "$CLIENT_HTTP_CHECK"
+curl --fail --silent https://reshay-istoriyu.ru/cloud-sync.js >/dev/null
+curl --fail --silent https://reshay-istoriyu.ru/vps-sync-compat.js >/dev/null
 echo "Production cutover completed at $STAMP. Firebase reverse mirror deadline: $(date -d "@$MIRROR_UNTIL" --iso-8601=seconds)."
