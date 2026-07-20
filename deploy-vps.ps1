@@ -24,11 +24,16 @@ if ($Cutover -and $ConfirmCutover -ne $requiredConfirmation) {
     throw "For the production switch add -ConfirmCutover $requiredConfirmation"
 }
 
+# Use DOS 8.3 short paths (no spaces). A profile whose name contains a space (e.g. a
+# Cyrillic account) otherwise makes ssh split UserKnownHostsFile on the space ->
+# "No ED25519 host key is known". PowerShell 5.1 also mangles embedded quotes when
+# calling native ssh/scp, so quoting the value does not survive; short paths do.
+$fso = New-Object -ComObject Scripting.FileSystemObject
+$keyShort = $fso.GetFile((Resolve-Path -LiteralPath $KeyPath).Path).ShortPath
+$knownHostsShort = $fso.GetFile((Resolve-Path -LiteralPath $KnownHostsPath).Path).ShortPath
 $sshOptions = @(
-    '-i', (Resolve-Path -LiteralPath $KeyPath).Path,
-    # Путь known_hosts берём в кавычки: в профиле с пробелом (напр. «Хозяин Саша») ssh иначе
-    # режет значение UserKnownHostsFile по пробелу и не находит файл → «No ED25519 host key is known».
-    '-o', "UserKnownHostsFile=`"$((Resolve-Path -LiteralPath $KnownHostsPath).Path)`"",
+    '-i', $keyShort,
+    '-o', "UserKnownHostsFile=$knownHostsShort",
     '-o', 'StrictHostKeyChecking=yes',
     '-o', 'HostKeyAlgorithms=ssh-ed25519',
     '-o', 'BatchMode=yes'
