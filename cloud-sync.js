@@ -108,12 +108,20 @@
             const knownTg = localStorage.getItem('known_tg_id');
             const googleUid = localStorage.getItem('google_uid');
             const oldStable = localStorage.getItem('stable_student_id');
+            const sessionCanonical = userObj && userObj.canonicalDocId
+                ? String(userObj.canonicalDocId)
+                : '';
             
             let canonical;
             if (knownTg) {
                 canonical = knownTg;
             } else if (googleUid) {
                 canonical = 'google_' + googleUid;
+            } else if (sessionCanonical) {
+                // On the VPS the authenticated session is the ownership source of
+                // truth. A successfully claimed legacy profile already returns its
+                // legacy id here; an unclaimed stale local id must not override it.
+                canonical = sessionCanonical;
             } else if (oldStable) {
                 canonical = oldStable;
             } else if (isTelegramMiniAppContext()) {
