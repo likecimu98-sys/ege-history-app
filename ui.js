@@ -2201,10 +2201,16 @@ window.openAchievementsModal = function() {
     showModal('achievements-modal');
 };
 
-window.openTeacherModal = function() {
+window.openTeacherModal = async function() {
+    const authorized = window.checkTeacherRole ? await window.checkTeacherRole() : false;
+    if (!authorized) {
+        hideModal('teacher-modal');
+        return false;
+    }
     let tc = localStorage.getItem('teacher_class_code'); if(!tc) { tc = Math.floor(1000 + Math.random() * 9000).toString(); localStorage.setItem('teacher_class_code', tc); } $('teacher-class-code-input').value = tc;
     if (window.populateTeacherGroups) window.populateTeacherGroups();
     switchTeacherTab('stats'); showModal('teacher-modal');
+    return true;
 };
 
 // Заполнить дропдаун группами учителя (window._teacherGroups = [{code,name}]).

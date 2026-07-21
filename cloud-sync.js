@@ -7,7 +7,7 @@
             signInWithCredential, signOut, initializeFirestore, collection, doc, setDoc, getDoc,
             getDocs, addDoc, updateDoc, deleteDoc, deleteField, onSnapshot, query, where,
             orderBy, limit, runTransaction, arrayUnion, arrayRemove, vpsApiFetch, refreshVpsAuth
-        } from "./vps-sync-compat.js";
+        } from "./vps-sync-compat.js?v=20260721-1";
 
         const cloudConfig = { projectId: 'vps-postgresql' };
         
@@ -344,18 +344,36 @@
             }
         }
 
+        let telegramAuthRetryTimer = null;
         const initAuth = async () => {
-            // Токен-вход (uid=tgId) включён для ВСЕХ в реальном Telegram. Аварийный
-            // выключатель: localStorage.ege_tg_token_auth='0'. Любой сбой (нет эндпоинта/
-            // сети/подписи) → проваливаемся в существующий анонимный вход — поведение как раньше.
+            // В Telegram подписанный initData — единственный источник личности.
+            // Нельзя откатываться на cookie/гостя: WebView может хранить сессию другого
+            // Telegram-аккаунта, пока новая серверная проверка ещё не завершилась.
             const _tokenAuthOn = localStorage.getItem('ege_tg_token_auth') !== '0';
-            if (_tokenAuthOn && isRealTelegram()) {
-                try {
-                    const tk = await _fetchTgCustomToken();
-                    if (tk) { await signInWithCustomToken(auth, tk); return; }
-                } catch (e) {
-                    console.warn('TG custom-token вход не удался, откат на анонимный:', e && e.message);
+            if (isRealTelegram()) {
+                if (_tokenAuthOn) {
+                    try {
+                        const tk = await _fetchTgCustomToken();
+                        if (tk) {
+                            if (telegramAuthRetryTimer) clearTimeout(telegramAuthRetryTimer);
+                            telegramAuthRetryTimer = null;
+                            await signInWithCustomToken(auth, tk);
+                            return;
+                        }
+                    } catch (e) {
+                        console.warn('[Auth] Telegram session verification failed:', e && e.message);
+                    }
                 }
+
+                // Fail closed: локальный тренажёр продолжает работать, но чужая
+                // серверная сессия не получает ни синхронизацию, ни роль учителя.
+                if (!telegramAuthRetryTimer && _tokenAuthOn) {
+                    telegramAuthRetryTimer = setTimeout(() => {
+                        telegramAuthRetryTimer = null;
+                        if (isRealTelegram() && navigator.onLine !== false) initAuth();
+                    }, 5000);
+                }
+                return;
             }
             if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
                 try {
@@ -2201,6 +2219,12 @@
         let _loadSeq = 0;
         window.loadClassProgress = async function() {
             if (!db) return;
+            const roleIsFresh = window.state.isTeacherAdmin === true
+                && Date.now() - (Number(window._teacherRoleVerifiedAt) || 0) < 2 * 60 * 1000;
+            if (!roleIsFresh) {
+                const authorized = window.checkTeacherRole ? await window.checkTeacherRole() : false;
+                if (!authorized) return;
+            }
             const mySeq = ++_loadSeq;
             const tc  = document.getElementById('teacher-class-code-input').value.trim();
             const cont  = document.getElementById('teacher-class-stats');
@@ -3255,31 +3279,40 @@
             return normalized;
         }
 
-        // Роль учителя: одобренные через бота (@Reshay_istoriyu_bot → /teacher) лежат в
-        // artifacts/{appId}/public/data/teachers/{tgId}. Если текущий пользователь там есть —
-        // открываем кабинет без секретных 5 тапов и подсказываем, где он.
-        // Глобальный админ (Саша) — единственный, кто видит всю базу учеников без фильтра.
-        // Это не секрет (обычный Telegram ID) и управляет только объёмом обзора в кабинете.
-        const GLOBAL_ADMIN_TG = '352253483';
+        // Роль учителя подтверждает только серверная сессия. localStorage/known_tg_id —
+        // лишь клиентская подсказка для синхронизации и никогда не источник прав.
         window.checkTeacherRole = async function() {
+            window.state.isTeacherAdmin = false;
+            window._isGlobalAdmin = false;
+            window._teacherRole = 'student';
+            window._teacherOrgId = null;
+            window._teacherGroups = [];
+            window._teacherRoleVerifiedAt = 0;
             try {
-                if (!db) return;
-                const tid = localStorage.getItem('known_tg_id') || '';
-                if (!/^\d+$/.test(tid)) return;
-                window._isGlobalAdmin = (tid === GLOBAL_ADMIN_TG);
-                const snap = await getDoc(doc(db, 'artifacts', appId, 'public', 'data', 'teachers', tid));
-                if (!snap.exists() && !window._isGlobalAdmin) return;
-                window.state.isTeacherAdmin = true;
-
-                const data = snap.exists() ? snap.data() : {};
-                window._teacherRole = data.role || (window._isGlobalAdmin ? 'admin' : 'solo');
-                window._teacherOrgId = data.orgId || null;
+                if (!db || !fbUser) return false;
+                const roleInfo = await vpsApiFetch('/api/v1/teacher/classes');
+                const allowedCodes = new Set((Array.isArray(roleInfo.classes) ? roleInfo.classes : []).map(String));
+                window._teacherRole = roleInfo.role || 'solo';
+                window._teacherOrgId = roleInfo.orgId || null;
+                window._isGlobalAdmin = window._teacherRole === 'admin';
 
                 // Группы учителя: [{code,name}]. Старый формат (массив строк) тоже переварим.
                 const norm = (arr) => (Array.isArray(arr) ? arr : []).map(c =>
                     typeof c === 'string' ? { code: c, name: c } : { code: c.code, name: c.name || c.code })
                     .filter(c => c && c.code);
-                let groups = norm(data.classes);
+                let groups = [...allowedCodes].map(code => ({ code, name: code }));
+
+                // Названия собственных групп читаем только ПОСЛЕ серверной проверки роли.
+                const tid = String(fbUser.canonicalDocId || '');
+                if (/^\d+$/.test(tid)) {
+                    try {
+                        const snap = await getDoc(doc(db, 'artifacts', appId, 'public', 'data', 'teachers', tid));
+                        if (snap.exists()) {
+                            const byCode = new Map(norm(snap.data().classes).map(group => [String(group.code), group]));
+                            groups = groups.map(group => byCode.get(String(group.code)) || group);
+                        }
+                    } catch (e) { console.warn('[teacherRole] profile:', e && e.message); }
+                }
 
                 // Владелец школы видит группы ВСЕХ преподавателей своей организации.
                 if (window._teacherRole === 'org_owner' && window._teacherOrgId) {
@@ -3293,9 +3326,12 @@
                     } catch (e) { console.warn('[teacherRole] org classes:', e && e.message); }
                 }
                 window._teacherGroups = groups;
+                window.state.isTeacherAdmin = true;
+                window._teacherRoleVerifiedAt = Date.now();
 
                 // Код класса по умолчанию — первая группа (объект → .code)
-                if (!localStorage.getItem('teacher_class_code') && groups[0]) {
+                const currentCode = localStorage.getItem('teacher_class_code') || '';
+                if (groups[0] && (!currentCode || (!window._isGlobalAdmin && !allowedCodes.has(currentCode)))) {
                     localStorage.setItem('teacher_class_code', groups[0].code);
                 }
                 if (window.populateTeacherGroups) window.populateTeacherGroups();
@@ -3303,7 +3339,14 @@
                     sessionStorage.setItem('teacher_hint_shown', '1');
                     setTimeout(() => showToast('👨‍🏫', 'Кабинет учителя доступен: двойной клик по логотипу', 'bg-purple-600', 'border-purple-800'), 2500);
                 }
-            } catch (e) { console.warn('[teacherRole]', e && e.message); }
+                return true;
+            } catch (e) {
+                if (window.populateTeacherGroups) window.populateTeacherGroups();
+                const modal = document.getElementById('teacher-modal');
+                if (modal && !modal.classList.contains('hidden') && typeof hideModal === 'function') hideModal('teacher-modal');
+                if (e && e.status !== 401 && e.status !== 403) console.warn('[teacherRole]', e && e.message);
+                return false;
+            }
         };
 
         // ─── P4: приватный блоб прогресса ────────────────────────────────────

@@ -55,6 +55,11 @@ function notifyAuth() {
   }
 }
 
+function hasSignedTelegramContext() {
+  const webApp = window.Telegram && window.Telegram.WebApp;
+  return !!(webApp && typeof webApp.initData === 'string' && webApp.initData.length > 0);
+}
+
 async function loadSession({ notify = true } = {}) {
   try {
     const payload = await apiFetch(`${API}/auth/session`);
@@ -74,7 +79,13 @@ function ensureAuthInit() {
 }
 
 export function initializeApp(config) { return { config, kind: 'vps-app' }; }
-export function getAuth() { ensureAuthInit(); return authSingleton; }
+export function getAuth() {
+  // Telegram initData is the only identity source inside the Mini App. Do not
+  // expose a cookie session left by another Telegram account while initData is
+  // still being verified by /auth/telegram.
+  if (!hasSignedTelegramContext()) ensureAuthInit();
+  return authSingleton;
+}
 export function initializeFirestore() { return { kind: 'vps-store' }; }
 
 export async function signInAnonymously() {
@@ -124,7 +135,11 @@ export async function signInWithCustomToken() {
 
 export function onAuthStateChanged(auth, listener) {
   auth.listeners.add(listener);
-  ensureAuthInit().then(() => listener(auth.currentUser)).catch(() => listener(null));
+  if (auth.initialized) {
+    queueMicrotask(() => listener(auth.currentUser));
+  } else if (!hasSignedTelegramContext()) {
+    ensureAuthInit().then(() => listener(auth.currentUser)).catch(() => listener(null));
+  }
   return () => auth.listeners.delete(listener);
 }
 

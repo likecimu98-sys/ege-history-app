@@ -1,10 +1,20 @@
 'use strict';
 
-const APP_VERSION = '2026-07-20-vps-5';
+const APP_VERSION = '2026-07-21-vps-6';
 const STATIC_CACHE = `ege-history-static-${APP_VERSION}`;
 const ASSET_CACHE = `ege-history-assets-${APP_VERSION}`;
 const CACHE_NAMES = [STATIC_CACHE, ASSET_CACHE];
 const ASSET_WARMUP_PAUSE_MS = 300;
+
+// Installation must stay tiny: Telegram WebView can suspend a worker that
+// competes with the first page load. The complete app shell is cached shortly
+// after the UI becomes interactive instead of blocking activation.
+const INSTALL_URLS = [
+    './index.html',
+    './pwa.js',
+    './output.css',
+    './styles.css'
+];
 
 const CORE_URLS = [
     './',
@@ -54,6 +64,7 @@ const CORE_URLS = [
 
 const ASSET_MANIFEST_URL = './offline-assets.json';
 let warmAssetsPromise = null;
+let warmAppShellPromise = null;
 
 function scopedUrl(path) {
     return new URL(path, self.registration.scope).toString();
@@ -63,22 +74,39 @@ function scopedRequest(path, cacheMode = 'reload') {
     return new Request(scopedUrl(path), { cache: cacheMode });
 }
 
-async function addCoreFiles() {
+async function cachePaths(paths, cacheMode = 'default', concurrency = 4) {
     const cache = await caches.open(STATIC_CACHE);
-    for (const path of CORE_URLS) {
-        const request = scopedRequest(path);
-        try {
-            const response = await fetch(request);
-            if (!response.ok) {
-                console.warn('[SW] Core file is not available:', path, response.status);
-                continue;
+    const queue = [...new Set(paths)];
+    const worker = async () => {
+        while (queue.length) {
+            const path = queue.shift();
+            const request = scopedRequest(path, cacheMode);
+            try {
+                const response = await fetch(request);
+                if (!response.ok) {
+                    console.warn('[SW] App file is not available:', path, response.status);
+                    continue;
+                }
+                await cache.put(request, response.clone());
+            } catch (error) {
+                console.warn('[SW] Failed to cache app file:', path, error);
             }
-            await cache.put(request, response.clone());
-        } catch (error) {
-            // Один недоступный файл не должен отменять установку всего Service Worker.
-            console.warn('[SW] Failed to cache core file:', path, error);
         }
-    }
+    };
+    const count = Math.max(1, Math.min(concurrency, queue.length));
+    await Promise.all(Array.from({ length: count }, () => worker()));
+}
+
+async function addCoreFiles() {
+    await cachePaths(INSTALL_URLS, 'reload', 4);
+}
+
+async function cacheAppShell() {
+    if (warmAppShellPromise) return warmAppShellPromise;
+    warmAppShellPromise = cachePaths(CORE_URLS, 'default', 4).finally(() => {
+        warmAppShellPromise = null;
+    });
+    return warmAppShellPromise;
 }
 
 async function putIfOk(cache, request, response) {
@@ -91,6 +119,7 @@ async function cacheOfflineAssets() {
     if (warmAssetsPromise) return warmAssetsPromise;
 
     warmAssetsPromise = (async () => {
+        await cacheAppShell();
         const manifestRequest = scopedRequest(ASSET_MANIFEST_URL);
         const manifestCache = await caches.open(STATIC_CACHE);
         let manifestResponse = null;
@@ -224,6 +253,12 @@ self.addEventListener('activate', (event) => {
 });
 
 self.addEventListener('message', (event) => {
+    if (event.data && event.data.type === 'CACHE_APP_SHELL') {
+        event.waitUntil(cacheAppShell().catch((error) => {
+            console.warn('[SW] App shell cache warmup failed:', error);
+        }));
+        return;
+    }
     if (event.data && event.data.type === 'CACHE_OFFLINE_ASSETS') {
         event.waitUntil(cacheOfflineAssets().catch((error) => {
             console.warn('[SW] Offline asset cache warmup failed:', error);

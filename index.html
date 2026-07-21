@@ -198,6 +198,14 @@
             background:rgba(255,255,255,.4); transform:skewX(-20deg);
             left:-60%; animation:sk-shimmer 1.6s .5s infinite ease-in-out;
         }
+        .sk-recovery { display:none; width:100%; text-align:center; color:#475569; font-size:.78rem; line-height:1.45; }
+        .sk-recovery.sk-visible { display:flex; flex-direction:column; align-items:center; gap:.7rem; }
+        .sk-recovery button {
+            width:100%; min-height:44px; border:0; border-radius:14px; padding:.75rem 1rem;
+            background:#2563eb; color:white; font-weight:900; font-size:.82rem; cursor:pointer;
+            box-shadow:0 7px 18px rgba(37,99,235,.24);
+        }
+        .sk-recovery button:disabled { opacity:.65; cursor:wait; }
         /* ─────────────────────────────────────────────────────────── */
     </style>
 </head>
@@ -314,6 +322,10 @@
         <div style="width:100%;text-align:center;display:flex;flex-direction:column;gap:.75rem">
           <p class="sk-title">Спускаемся на дно<span class="sk-dots"></span></p>
           <div class="sk-bar-wrap"><div class="sk-bar"></div></div>
+          <div id="app-boot-recovery" class="sk-recovery">
+            <span>Загрузка задержалась. Прогресс не потеряется.</span>
+            <button id="app-boot-repair" type="button">Восстановить загрузку</button>
+          </div>
         </div>
       </div>
     </div>
@@ -328,7 +340,25 @@
           el.addEventListener('transitionend', function() { el.remove(); }, { once: true });
         }
         document.addEventListener('app:ready', dismissSkeleton);
-        window.addEventListener('load', function() { setTimeout(dismissSkeleton, 300); });
+
+        async function repairAppBoot() {
+          var button = document.getElementById('app-boot-repair');
+          if (button) { button.disabled = true; button.textContent = 'Обновляем приложение…'; }
+          try {
+            if ('serviceWorker' in navigator) {
+              var regs = await navigator.serviceWorker.getRegistrations();
+              await Promise.all(regs.map(function(reg) { return reg.unregister(); }));
+            }
+            if ('caches' in window) {
+              var names = await caches.keys();
+              await Promise.all(names.filter(function(name) { return name.indexOf('ege-history-') === 0; })
+                .map(function(name) { return caches.delete(name); }));
+            }
+          } catch (e) {}
+          location.reload();
+        }
+        var repairButton = document.getElementById('app-boot-repair');
+        if (repairButton) repairButton.addEventListener('click', repairAppBoot);
 
         // ── ГОТОВНОСТЬ ПРИЛОЖЕНИЯ: инлайн-вотчер, никакой сети и никаких гонок ──
         // Заставка снимается, когда ЯДРО РЕАЛЬНО ИСПОЛНИЛОСЬ: quickStartGame определяет
@@ -346,19 +376,13 @@
             dismissSkeleton();
             return;
           }
-          if (Date.now() - bootT0 > 20000) {
-            // 20с — ядро не доехало (обрыв сети/прокси). Один раз тихо перезагружаемся:
-            // повтор добирает файлы из кэша. Если и после перезапуска пусто — открываем
-            // страницу как есть, чтобы человек не смотрел на вечную заставку.
-            var retried = null;
-            try { retried = sessionStorage.getItem('ege_boot_retry'); } catch (e) {}
-            if (!retried) {
-              try { sessionStorage.setItem('ege_boot_retry', '1'); } catch (e) {}
-              location.reload();
-              return;
-            }
-            document.dispatchEvent(new Event('app:ready'));
-            dismissSkeleton();
+          if (Date.now() - bootT0 > 12000) {
+            // Не перезагружаем страницу автоматически: в мобильном WebView повторный
+            // refresh обрывал установку SW и мог оставить смешанный кэш ещё раз.
+            var recovery = document.getElementById('app-boot-recovery');
+            if (recovery) recovery.classList.add('sk-visible');
+            var title = document.querySelector('#app-skeleton .sk-title');
+            if (title) title.textContent = 'Загрузка задержалась';
             return;
           }
           setTimeout(watchBoot, 100);
@@ -451,7 +475,7 @@
     <script src="exam-scoring.js?v=20260719-3" defer></script>
     <script src="state.js" defer></script>
     <script src="table.js" defer></script>
-    <script src="ui.js?v=20260720-1" defer></script>
+    <script src="ui.js?v=20260721-1" defer></script>
     <script src="modes.js" defer></script>
     <script src="swipe-data.js" defer></script>
     <script src="swipe-mode.js" defer></script>
@@ -459,7 +483,7 @@
     <script src="vov-mode.js" defer></script>
     <script src="visual-trainer.js" defer></script>
     <script src="exam-mode.js?v=20260720-8" defer></script>
-    <script src="app.js" defer></script>
+    <script src="app.js?v=20260721-1" defer></script>
 
     <!-- ШАПКА -->
     <header id="main-header" class="sticky top-0 z-50 no-print transition-colors duration-400 pt-2 pb-2 sm:pt-3 sm:pb-3 px-4">
@@ -1234,7 +1258,7 @@
     <!-- jsPDF грузится лениво (см. loadJsPDFOnDemand в cloud-sync.js) — не нужен при старте -->
 
     <!-- === PWA + first-party cloud sync loader === -->
-    <script src="pwa.js" defer></script>
+    <script src="pwa.js?v=20260721-1" defer></script>
 
     <!-- Ядро (факты, ~659 КБ): нужно для лобби и заданий. Приложение ОТКРЫВАЕТСЯ сразу
          после него — defer парсит HTML параллельно, порядок выполнения гарантирован. -->

@@ -1,8 +1,10 @@
 (function () {
     'use strict';
 
-    const CLOUD_SYNC_MODULE = './cloud-sync.js';
+    const CLOUD_SYNC_MODULE = './cloud-sync.js?v=20260721-1';
+    const APP_SHELL_CACHE_MESSAGE = { type: 'CACHE_APP_SHELL' };
     const OFFLINE_CACHE_MESSAGE = { type: 'CACHE_OFFLINE_ASSETS' };
+    const APP_SHELL_WARMUP_DELAY_MS = 2500;
     const OFFLINE_WARMUP_DELAY_MS = 12000;
     const OFFLINE_WARMUP_IDLE_TIMEOUT_MS = 8000;
 
@@ -18,6 +20,21 @@
     // Так он не конкурирует с холодным запуском приложения и всё равно постепенно
     // наполняет офлайн-кэш, пока ученик работает.
     let _warmScheduled = false;
+    let _shellWarmScheduled = false;
+    function scheduleAppShellWarmup(worker) {
+        if (_shellWarmScheduled) return;
+        _shellWarmScheduled = true;
+        setTimeout(() => {
+            if (document.visibilityState === 'hidden' || navigator.onLine === false) {
+                _shellWarmScheduled = false;
+                return;
+            }
+            const target = worker || (navigator.serviceWorker && navigator.serviceWorker.controller);
+            if (target) target.postMessage(APP_SHELL_CACHE_MESSAGE);
+            else _shellWarmScheduled = false;
+        }, APP_SHELL_WARMUP_DELAY_MS);
+    }
+
     function scheduleOfflineWarmup(worker) {
         if (_warmScheduled) return;
         _warmScheduled = true;
@@ -113,6 +130,10 @@
             const readyRegistration = await navigator.serviceWorker.ready;
             const activeWorker = readyRegistration.active || registration.active || navigator.serviceWorker.controller;
 
+            // Быстро установленный SW не скачивает второй экземпляр всего приложения
+            // параллельно первому запуску. Полную оболочку прогреваем уже после отрисовки.
+            scheduleAppShellWarmup(activeWorker);
+
             // Прогрев офлайн-кэша (~300 картинок) НЕ должен конкурировать за канал в
             // первые секунды первой загрузки. Ждём простоя (requestIdleCallback) или
             // тайм-аут, чтобы сначала отрисовалось и стало интерактивным приложение.
@@ -125,6 +146,8 @@
     window.addEventListener('online', () => {
         setOfflineFlag();
         syncAfterReconnect();
+        _shellWarmScheduled = false;
+        scheduleAppShellWarmup(navigator.serviceWorker && navigator.serviceWorker.controller);
         _warmScheduled = false;
         scheduleOfflineWarmup(navigator.serviceWorker && navigator.serviceWorker.controller);
     });

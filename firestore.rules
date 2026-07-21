@@ -1,47 +1,11 @@
 rules_version = '2';
 
-// ════════════════════════════════════════════════════════════════════════════
-//  ПРАВИЛА БЕЗОПАСНОСТИ FIRESTORE — тренажёр ЕГЭ по истории
-//  ⚠️  ПРОЧТИ SECURITY.md ПЕРЕД ДЕПЛОЕМ.
-//
-//  Это БЕЗОПАСНЫЙ BASELINE: доступ к данным приложения — только авторизованным,
-//  всё остальное — запрет по умолчанию. Он:
-//    • НЕ залочит учеников (все клиенты авторизуются: custom-token в Telegram
-//      или анонимно в standalone-PWA);
-//    • НИЧЕГО не сломает (покрывает все под-пути через {document=**});
-//    • закрывает доступ для совсем неавторизованных запросов — главное отличие
-//      от «test mode» (allow read, write: if true), который оставляет данные
-//      публичными для всего интернета.
-//
-//  СЛЕДУЮЩИЙ ШАГ (ужесточение: «ученик пишет только свой документ», изоляция
-//  классов, лимит размера блоба) — это отдельный, более строгий ruleset; он
-//  ПОЛНОСТЬЮ приведён в SECURITY.md. Деплоить его можно только ПОСЛЕ проверки в
-//  Rules Playground/эмуляторе, потому что ID документа = канонический ID
-//  (Telegram/Google), который в общем случае НЕ равен request.auth.uid.
-// ════════════════════════════════════════════════════════════════════════════
-
+// Firebase is a rollback archive after the PostgreSQL cutover. Production
+// clients, including stale PWA versions, must use the first-party VPS API.
+// Admin SDK access used by the temporary mirror/backups is not affected by
+// Firestore Security Rules.
 service cloud.firestore {
   match /databases/{database}/documents {
-
-    function authed() {
-      return request.auth != null;
-    }
-
-    // Все данные приложения (ученики, классы/ДЗ, дуэли, лидерборд и их подколлекции)
-    // живут под artifacts/{appId}/public/data. Доступ — только авторизованным.
-    match /artifacts/{appId}/public/data/{document=**} {
-      allow read, write: if authed();
-    }
-
-    // P4 (2026-07-17): приватный прогресс ученика (fullStateJson) переезжает в
-    // private/data/state/{id}. В baseline доступ как у public — авторизованным;
-    // строгий ruleset (tools-and-docs/security/firestore.rules.strict) сузит его
-    // до «владелец пишет, владелец+учитель читают».
-    match /artifacts/{appId}/private/data/{document=**} {
-      allow read, write: if authed();
-    }
-
-    // Всё, что вне этого пути — запрет по умолчанию.
     match /{document=**} {
       allow read, write: if false;
     }

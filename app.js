@@ -16,18 +16,12 @@ window.handleLogoClick = async function() {
     // а вход учеников убран, так что 5 тапов — лишняя возня. Двойной клик достаточно.
     if (window.secretClicks >= 2) {
         window.secretClicks = 0;
-        // Кабинет учителя — ТОЛЬКО для одобренных учителей и админа. Роль выставляет
-        // checkTeacherRole по документу teachers/{tgId}; без роли — обычное обновление лобби
-        // (ученик увидит просто «Лобби обновлено», кабинет не откроется).
-        let authorized = window.state.isTeacherAdmin === true;
-        if (!authorized && window.checkTeacherRole) {
-            try { await window.checkTeacherRole(); } catch (e) {}
-            authorized = window.state.isTeacherAdmin === true;
-        }
-        if (authorized) {
+        // Окно само перепроверяет роль по серверной HttpOnly-сессии. Локальный
+        // флаг нельзя использовать как доказательство доступа: он мог остаться
+        // от предыдущего аккаунта в том же Telegram WebView.
+        const opened = window.openTeacherModal ? await window.openTeacherModal() : false;
+        if (opened) {
             showToast('👨‍🏫', 'Кабинет учителя открыт!', 'bg-purple-600', 'border-purple-800');
-            if (window.loadClassProgress) window.loadClassProgress();
-            window.openTeacherModal();
         } else {
             updateGlobalUI();
             showToast('🔄', 'Лобби обновлено', 'bg-blue-500', 'border-blue-700');
