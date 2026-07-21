@@ -1,6 +1,6 @@
 'use strict';
 
-const APP_VERSION = '2026-07-21-vps-6';
+const APP_VERSION = '2026-07-21-vps-7';
 const STATIC_CACHE = `ege-history-static-${APP_VERSION}`;
 const ASSET_CACHE = `ege-history-assets-${APP_VERSION}`;
 const CACHE_NAMES = [STATIC_CACHE, ASSET_CACHE];
@@ -176,6 +176,8 @@ async function cleanupOldCaches() {
     }));
 }
 
+const NAV_NETWORK_TIMEOUT_MS = 3000;
+
 async function networkFirstNavigation(request) {
     const cache = await caches.open(STATIC_CACHE);
     // cram.html и другие под-страницы (iframe) кэшируем под их собственным URL,
@@ -188,15 +190,22 @@ async function networkFirstNavigation(request) {
     const cacheKey = isRootNav ? scopedRequest('./index.html')
         : (isCramNav ? scopedRequest('./cram.html') : request);
 
-    try {
-        const response = await fetch(new Request(request, { cache: 'no-cache' }));
-        await putIfOk(cache, cacheKey, response);
-        return response;
-    } catch (error) {
-        return (await cache.match(request, { ignoreSearch: true })) ||
-            (await cache.match(scopedRequest('./index.html'))) ||
-            Response.error();
+    const cached = (await cache.match(cacheKey)) ||
+        (await cache.match(scopedRequest('./index.html')));
+    const network = fetch(new Request(request, { cache: 'no-cache' }))
+        .then(async (response) => { await putIfOk(cache, cacheKey, response.clone()); return response; });
+
+    // Есть кэш → не держим белый экран: если сеть не ответила за NAV_NETWORK_TIMEOUT_MS
+    // (обычное дело в мобильном Telegram WebView), отдаём кэш, а свежий HTML осядет в
+    // кэше в фоне и покажется при следующем открытии. При быстрой сети — сразу свежий.
+    if (cached) {
+        return await Promise.race([
+            network.catch(() => cached),
+            new Promise((resolve) => setTimeout(() => resolve(cached), NAV_NETWORK_TIMEOUT_MS))
+        ]);
     }
+    try { return await network; }
+    catch (error) { return Response.error(); }
 }
 
 async function cacheFirst(request, cacheName) {
@@ -223,21 +232,25 @@ async function staleWhileRevalidate(request, cacheName) {
     return (await networkFetch) || Response.error();
 }
 
-// HTML, JavaScript и CSS должны относиться к одной серверной версии. Старая схема
-// stale-while-revalidate могла показать новый index.html вместе со старыми app.js/output.css:
-// первый запуск выглядел сломанным, а после обновления страницы внезапно исправлялся.
-async function networkFirstCode(request, cacheName) {
+// Код (JS/CSS) отдаём ИЗ КЭША сразу, а сеть дёргаем в фоне для обновления кэша.
+// Это критично для Telegram WebView на медленной мобильной сети: прежний networkFirst
+// заставлял ждать сеть для КАЖДОГО из ~15 скриптов (включая data.js ~659КБ) на каждом
+// открытии → заставка висела >20с. Консистентность обеспечена иначе, без потери скорости:
+//   • кэш версионируется по APP_VERSION (новый деплой = новый ПУСТОЙ кэш → весь набор
+//     тянется свежим один раз и остаётся согласованным внутри версии);
+//   • часто меняющиеся файлы несут ?v=<дата> в URL, поэтому СОВПАДЕНИЕ ТОЧНОЕ (без
+//     ignoreSearch) — новый ?v= = промах = свежая загрузка, старый JS не подставляется.
+// НЕ возвращать networkFirst для кода: это и был регресс скорости после миграции.
+async function cacheFirstCode(request, cacheName) {
     const cache = await caches.open(cacheName);
-    try {
-        const freshRequest = new Request(request, { cache: 'no-cache' });
-        const response = await fetch(freshRequest);
-        await putIfOk(cache, request, response);
-        return response;
-    } catch (error) {
-        return (await cache.match(request)) ||
-            (await cache.match(request, { ignoreSearch: true })) ||
-            Response.error();
+    const cached = await cache.match(request);
+    if (cached) {
+        fetch(request).then((response) => putIfOk(cache, request, response)).catch(() => {});
+        return cached;
     }
+    const response = await fetch(request);
+    await putIfOk(cache, request, response);
+    return response;
 }
 
 self.addEventListener('install', (event) => {
@@ -293,7 +306,7 @@ self.addEventListener('fetch', (event) => {
     }
 
     if (request.destination === 'script' || request.destination === 'style' || request.destination === 'worker') {
-        event.respondWith(networkFirstCode(request, STATIC_CACHE));
+        event.respondWith(cacheFirstCode(request, STATIC_CACHE));
         return;
     }
 
