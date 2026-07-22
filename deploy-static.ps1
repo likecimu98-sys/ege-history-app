@@ -64,10 +64,13 @@ STAMP="$(date +%Y%m%d-%H%M%S)"
 NEW="/var/www/ege-app.release-$STAMP"
 rm -rf "$NEW"
 install -d -m 755 "$NEW"
-tar -xzf /root/ege-app-static.tar.gz -C "$NEW"
+tar --warning=no-timestamp -xzf /root/ege-app-static.tar.gz -C "$NEW"
 test -f "$NEW/index.html" && test -f "$NEW/service-worker.js"
 find "$NEW" -type d -exec chmod 755 {} +
 find "$NEW" -type f -exec chmod 644 {} +
+# Git archive timestamps come from the workstation clock. Normalize them to the
+# VPS clock so Nginx never emits future Last-Modified validators to browsers.
+find "$NEW" -type f -exec touch -c {} +
 mv /var/www/ege-app "/var/www/ege-app.prev-$STAMP"
 mv "$NEW" /var/www/ege-app
 ls -1dt /var/www/ege-app.prev-* 2>/dev/null | tail -n +4 | xargs -r rm -rf
