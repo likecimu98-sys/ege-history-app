@@ -1,11 +1,18 @@
 'use strict';
 
-const APP_VERSION = '2026-07-22-vps-8';
+const APP_VERSION = '2026-07-22-vps-9';
 const RELEASE_ASSET_VERSION = '20260722-1';
 const STATIC_CACHE = `ege-history-static-${APP_VERSION}`;
 const ASSET_CACHE = `ege-history-assets-${APP_VERSION}`;
 const CACHE_NAMES = [STATIC_CACHE, ASSET_CACHE];
 const ASSET_WARMUP_PAUSE_MS = 300;
+// Железное правило после серии iOS-инцидентов: НИ ОДИН ответ страницы не должен ждать
+// CacheStorage. На iOS WKWebView cache.match/cache.put под нагрузкой (20 defer-скриптов
+// разом) сериализуются и могут не ответить никогда → respondWith висит → белый экран.
+// Чтение кэша ограничено таймаутом (норма — единицы мс; дольше = «залип» → идём в сеть),
+// запись кэша всегда фоновая (waitUntil), install не блокирует активацию на кэшировании.
+const CACHE_READ_TIMEOUT_MS = 1500;
+const INSTALL_WARMUP_TIMEOUT_MS = 4000;
 
 // Installation must stay tiny: Telegram WebView can suspend a worker that
 // competes with the first page load. The complete app shell is cached shortly
@@ -180,7 +187,6 @@ async function cleanupOldCaches() {
 const NAV_NETWORK_TIMEOUT_MS = 3000;
 
 async function networkFirstNavigation(request) {
-    const cache = await caches.open(STATIC_CACHE);
     // cram.html и другие под-страницы (iframe) кэшируем под их собственным URL,
     // а не под index.html — иначе навигация iframe затирала бы кэш главной страницы.
     const url = new URL(request.url);
@@ -191,22 +197,32 @@ async function networkFirstNavigation(request) {
     const cacheKey = isRootNav ? scopedRequest('./index.html')
         : (isCramNav ? scopedRequest('./cram.html') : request);
 
-    const cached = (await cache.match(cacheKey)) ||
-        (await cache.match(scopedRequest('./index.html')));
+    // Сеть — основной источник и НИКОГДА не ждёт CacheStorage: запись в кэш фоновая
+    // (fire-and-forget), иначе на холодном кэше iOS завис бы на cache.put(index.html).
     const network = fetch(new Request(request, { cache: 'no-cache' }))
-        .then(async (response) => { await putIfOk(cache, cacheKey, response.clone()); return response; });
+        .then((response) => {
+            caches.open(STATIC_CACHE)
+                .then((cache) => putIfOk(cache, cacheKey, response.clone()))
+                .catch(() => {});
+            return response;
+        });
 
-    // Есть кэш → не держим белый экран: если сеть не ответила за NAV_NETWORK_TIMEOUT_MS
-    // (обычное дело в мобильном Telegram WebView), отдаём кэш, а свежий HTML осядет в
-    // кэше в фоне и покажется при следующем открытии. При быстрой сети — сразу свежий.
-    if (cached) {
-        return await Promise.race([
-            network.catch(() => cached),
-            new Promise((resolve) => setTimeout(() => resolve(cached), NAV_NETWORK_TIMEOUT_MS))
-        ]);
-    }
-    try { return await network; }
-    catch (error) { return Response.error(); }
+    // Чтение кэша тоже под защитой: если CacheStorage залип, сеть всё равно приедет.
+    const cachedLookup = caches.open(STATIC_CACHE)
+        .then((cache) => cache.match(cacheKey).then((hit) => hit || cache.match(scopedRequest('./index.html'))))
+        .catch(() => null);
+
+    // Быстрая сеть → сразу свежий HTML. Медленная сеть, но есть кэш → отдаём кэш через
+    // NAV_NETWORK_TIMEOUT_MS (не держим белый экран). Сеть упала → кэш, иначе Response.error().
+    return await Promise.race([
+        network.catch(async () => (await cachedLookup) || Response.error()),
+        new Promise((resolve) => {
+            setTimeout(async () => {
+                const cached = await cachedLookup;
+                if (cached) resolve(cached);
+            }, NAV_NETWORK_TIMEOUT_MS);
+        })
+    ]);
 }
 
 async function cacheFirst(request, cacheName) {
@@ -240,8 +256,10 @@ async function staleWhileRevalidate(request, cacheName) {
 // even though Nginx has already completed every 200 response.
 function respondWithReleaseCode(event) {
     const request = event.request;
-    const cachePromise = caches.open(STATIC_CACHE);
-    const cachedPromise = cachePromise.then((cache) => cache.match(request));
+    const cachePromise = caches.open(STATIC_CACHE).catch(() => null);
+    const cachedPromise = cachePromise
+        .then((cache) => (cache ? cache.match(request) : null))
+        .catch(() => null);
     let networkPairPromise = null;
 
     const networkPair = () => {
@@ -254,17 +272,29 @@ function respondWithReleaseCode(event) {
         return networkPairPromise;
     };
 
-    const responsePromise = cachedPromise.then(async (cached) => {
-        if (cached) return cached;
-        return (await networkPair()).client;
-    });
+    // Кэш-хит быстро → отдаём из кэша (сеть НЕ дёргаем: скорость + офлайн сохранены).
+    // Кэш-промах → сеть. Кэш «завис» дольше CACHE_READ_TIMEOUT_MS → не ждём его, идём в сеть,
+    // чтобы CacheStorage на iOS не мог удержать страницу на загрузчике.
+    const responsePromise = (async () => {
+        const cached = await Promise.race([
+            cachedPromise,
+            new Promise((resolve) => setTimeout(() => resolve('__cache_timeout__'), CACHE_READ_TIMEOUT_MS))
+        ]);
+        if (cached && cached !== '__cache_timeout__') return cached;
+        try {
+            return (await networkPair()).client;
+        } catch (error) {
+            const late = (cached === '__cache_timeout__') ? await cachedPromise.catch(() => null) : null;
+            return late || Response.error();
+        }
+    })();
 
     const cacheWritePromise = cachedPromise.then(async (cached) => {
         if (cached) return;
         const pair = await networkPair();
         if (!pair.cache || (!pair.cache.ok && pair.cache.type !== 'opaque')) return;
         const cache = await cachePromise;
-        await cache.put(request, pair.cache);
+        if (cache) await cache.put(request, pair.cache);
     }).catch((error) => {
         console.warn('[SW] Release asset cache write failed:', request.url, error);
     });
@@ -275,7 +305,12 @@ function respondWithReleaseCode(event) {
 
 self.addEventListener('install', (event) => {
     self.skipWaiting();
-    event.waitUntil(addCoreFiles());
+    // Кэширование оболочки не должно уметь подвесить установку: если CacheStorage на iOS
+    // залипнет, install всё равно завершится по таймауту и новый (безопасный) SW активируется.
+    event.waitUntil(Promise.race([
+        addCoreFiles().catch(() => {}),
+        new Promise((resolve) => setTimeout(resolve, INSTALL_WARMUP_TIMEOUT_MS))
+    ]));
 });
 
 self.addEventListener('activate', (event) => {
