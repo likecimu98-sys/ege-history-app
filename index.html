@@ -99,15 +99,15 @@
     <link rel="manifest" href="manifest.webmanifest">
     <link rel="icon" type="image/png" href="assets/icons/icon-192.png">
     <link rel="apple-touch-icon" href="assets/icons/icon-180.png">
-    <link rel="stylesheet" href="tokens.css">
-    <link rel="stylesheet" href="output.css">
-    <link rel="stylesheet" href="theme-aurora.css">
-    <link rel="stylesheet" href="styles.css">
+    <link rel="stylesheet" href="tokens.css?v=20260722-1">
+    <link rel="stylesheet" href="output.css?v=20260722-1">
+    <link rel="stylesheet" href="theme-aurora.css?v=20260722-1">
+    <link rel="stylesheet" href="styles.css?v=20260722-1">
     
     <!-- Самохостинг telegram-web-app.js: telegram.org часто недоступен (сеть/VPN),
          тогда window.Telegram не создавался → known_tg_id не считывался → случайный id «через раз».
          Локальная копия отдаётся с того же origin и кэшируется service worker'ом. -->
-    <script src="vendor/telegram-web-app.js" defer></script>
+    <script src="vendor/telegram-web-app.js?v=20260722-1" defer></script>
 
     <style>
         /* Этот inline-блок намеренно МИНИМАЛЕН: только то, что должно сработать на
@@ -333,9 +333,41 @@
 
     <script>
       (function() {
+        var BOOT_RELEASE = '20260722-1';
+        var bootT0 = Date.now();
+        function bootSignal(phase, detail) {
+          try {
+            var params = new URLSearchParams({ client_boot: phase, v: BOOT_RELEASE });
+            if (detail) params.set('d', String(detail).slice(0, 80));
+            fetch('/api/v1/health?' + params.toString(), {
+              method: 'GET', cache: 'no-store', credentials: 'same-origin', keepalive: true
+            }).catch(function() {});
+          } catch (e) {}
+        }
+        window.__egeBootSignal = bootSignal;
+        bootSignal('html');
+
+        window.addEventListener('error', function(event) {
+          var source = '';
+          try {
+            source = event.filename ? new URL(event.filename, location.href).pathname.split('/').pop() :
+              (event.target && event.target.src ? new URL(event.target.src, location.href).pathname.split('/').pop() : 'inline');
+          } catch (e) { source = 'unknown'; }
+          bootSignal('error', source + ':' + (event.lineno || 0));
+        }, true);
+        window.addEventListener('unhandledrejection', function() { bootSignal('rejection'); });
+
+        function isIosTelegramLaunch() {
+          var ios = /iPad|iPhone|iPod/.test(navigator.userAgent || '');
+          var launch = /(?:^|[?#&])tgWebApp(?:Data|Version|Platform)=/i
+            .test((location.search || '') + (location.hash || ''));
+          return ios && (launch || !!window.TelegramWebviewProxy);
+        }
+
         function dismissSkeleton() {
           var el = document.getElementById('app-skeleton');
           if (!el || el.classList.contains('sk-gone')) return;
+          bootSignal('core', String(Date.now() - bootT0));
           el.classList.add('sk-gone');
           el.addEventListener('transitionend', function() { el.remove(); }, { once: true });
         }
@@ -344,18 +376,24 @@
         async function repairAppBoot() {
           var button = document.getElementById('app-boot-repair');
           if (button) { button.disabled = true; button.textContent = 'Обновляем приложение…'; }
-          try {
-            if ('serviceWorker' in navigator) {
-              var regs = await navigator.serviceWorker.getRegistrations();
-              await Promise.all(regs.map(function(reg) { return reg.unregister(); }));
-            }
-            if ('caches' in window) {
-              var names = await caches.keys();
-              await Promise.all(names.filter(function(name) { return name.indexOf('ege-history-') === 0; })
-                .map(function(name) { return caches.delete(name); }));
-            }
-          } catch (e) {}
-          location.reload();
+          var cleanup = (async function() {
+            try {
+              if ('serviceWorker' in navigator) {
+                var regs = await navigator.serviceWorker.getRegistrations();
+                await Promise.all(regs.map(function(reg) { return reg.unregister(); }));
+              }
+              if ('caches' in window) {
+                var names = await caches.keys();
+                await Promise.all(names.filter(function(name) { return name.indexOf('ege-history-') === 0; })
+                  .map(function(name) { return caches.delete(name); }));
+              }
+            } catch (e) {}
+          })();
+          // Broken iOS CacheStorage must not be able to block the rescue itself.
+          await Promise.race([cleanup, new Promise(function(resolve) { setTimeout(resolve, 1500); })]);
+          var next = new URL(location.href);
+          next.searchParams.set('_boot', String(Date.now()));
+          location.replace(next.toString());
         }
         var repairButton = document.getElementById('app-boot-repair');
         if (repairButton) repairButton.addEventListener('click', repairAppBoot);
@@ -368,7 +406,6 @@
         // обновления не лежал в старом SW-кэше и на моргнувшей сети ВИС — заставка не
         // снималась вовсе. Этот вотчер живёт в самом index.html: одна версия со скелетоном,
         // работает даже если ни одно событие не долетело и любой файл завис.
-        var bootT0 = Date.now();
         (function watchBoot() {
           if (typeof window.quickStartGame === 'function' && document.readyState !== 'loading') {
             try { sessionStorage.removeItem('ege_boot_retry'); } catch (e) {}
@@ -376,7 +413,20 @@
             dismissSkeleton();
             return;
           }
-          if (Date.now() - bootT0 > 12000) {
+          var elapsed = Date.now() - bootT0;
+          if (elapsed > 6000 && isIosTelegramLaunch() && 'serviceWorker' in navigator &&
+              navigator.serviceWorker.controller && !window.__egeIosSwRecoveryStarted) {
+            var recovered = '';
+            try { recovered = sessionStorage.getItem('ege_ios_sw_recovery') || ''; } catch (e) {}
+            if (recovered !== BOOT_RELEASE) {
+              window.__egeIosSwRecoveryStarted = true;
+              try { sessionStorage.setItem('ege_ios_sw_recovery', BOOT_RELEASE); } catch (e) {}
+              bootSignal('ios_sw_recovery', String(elapsed));
+              repairAppBoot();
+              return;
+            }
+          }
+          if (elapsed > 12000) {
             // Не перезагружаем страницу автоматически: в мобильном WebView повторный
             // refresh обрывал установку SW и мог оставить смешанный кэш ещё раз.
             var recovery = document.getElementById('app-boot-recovery');
@@ -470,20 +520,20 @@
 
     <!-- JS разбит на модули: config → utils → state → table → ui → modes → app -->
     <!-- Порядок defer гарантирован браузером: выполняются строго по порядку в DOM -->
-    <script src="config.js" defer></script>
-    <script src="utils.js" defer></script>
-    <script src="exam-scoring.js?v=20260719-3" defer></script>
-    <script src="state.js" defer></script>
-    <script src="table.js" defer></script>
-    <script src="ui.js?v=20260721-1" defer></script>
-    <script src="modes.js" defer></script>
-    <script src="swipe-data.js" defer></script>
-    <script src="swipe-mode.js" defer></script>
-    <script src="match-mode.js" defer></script>
-    <script src="vov-mode.js" defer></script>
-    <script src="visual-trainer.js" defer></script>
-    <script src="exam-mode.js?v=20260720-8" defer></script>
-    <script src="app.js?v=20260721-1" defer></script>
+    <script src="config.js?v=20260722-1" defer></script>
+    <script src="utils.js?v=20260722-1" defer></script>
+    <script src="exam-scoring.js?v=20260722-1" defer></script>
+    <script src="state.js?v=20260722-1" defer></script>
+    <script src="table.js?v=20260722-1" defer></script>
+    <script src="ui.js?v=20260722-1" defer></script>
+    <script src="modes.js?v=20260722-1" defer></script>
+    <script src="swipe-data.js?v=20260722-1" defer></script>
+    <script src="swipe-mode.js?v=20260722-1" defer></script>
+    <script src="match-mode.js?v=20260722-1" defer></script>
+    <script src="vov-mode.js?v=20260722-1" defer></script>
+    <script src="visual-trainer.js?v=20260722-1" defer></script>
+    <script src="exam-mode.js?v=20260722-1" defer></script>
+    <script src="app.js?v=20260722-1" defer></script>
 
     <!-- ШАПКА -->
     <header id="main-header" class="sticky top-0 z-50 no-print transition-colors duration-400 pt-2 pb-2 sm:pt-3 sm:pb-3 px-4">
@@ -1258,11 +1308,11 @@
     <!-- jsPDF грузится лениво (см. loadJsPDFOnDemand в cloud-sync.js) — не нужен при старте -->
 
     <!-- === PWA + first-party cloud sync loader === -->
-    <script src="pwa.js?v=20260721-1" defer></script>
+    <script src="pwa.js?v=20260722-1" defer></script>
 
     <!-- Ядро (факты, ~659 КБ): нужно для лобби и заданий. Приложение ОТКРЫВАЕТСЯ сразу
          после него — defer парсит HTML параллельно, порядок выполнения гарантирован. -->
-    <script src="data.js" defer></script>
+    <script src="data.js?v=20260722-1" defer></script>
     <!-- app:ready диспатчит инлайн-вотчер готовности в начале <body> (см. watchBoot):
          отдельный boot-ready.js убран — свежий файл не лежал в старом SW-кэше и на
          моргнувшей сети вис, не давая снять заставку. -->

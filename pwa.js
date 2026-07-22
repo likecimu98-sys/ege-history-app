@@ -1,11 +1,11 @@
 (function () {
     'use strict';
 
-    const CLOUD_SYNC_MODULE = './cloud-sync.js?v=20260721-1';
+    const CLOUD_SYNC_MODULE = './cloud-sync.js?v=20260722-1';
     const APP_SHELL_CACHE_MESSAGE = { type: 'CACHE_APP_SHELL' };
     const OFFLINE_CACHE_MESSAGE = { type: 'CACHE_OFFLINE_ASSETS' };
-    const APP_SHELL_WARMUP_DELAY_MS = 2500;
-    const OFFLINE_WARMUP_DELAY_MS = 12000;
+    const APP_SHELL_WARMUP_DELAY_MS = 45000;
+    const OFFLINE_WARMUP_DELAY_MS = 90000;
     const OFFLINE_WARMUP_IDLE_TIMEOUT_MS = 8000;
 
     let cloudSyncPromise = null;
@@ -16,9 +16,32 @@
         return 'serviceWorker' in navigator && location.protocol !== 'file:';
     }
 
-    // Откладываем прогрев офлайн-ассетов минимум на 12 секунд, а затем ждём простоя.
-    // Так он не конкурирует с холодным запуском приложения и всё равно постепенно
-    // наполняет офлайн-кэш, пока ученик работает.
+    function isIosTelegramMiniApp() {
+        const isIos = /iPad|iPhone|iPod/.test(navigator.userAgent || '');
+        if (!isIos) return false;
+        const tg = window.Telegram && window.Telegram.WebApp;
+        const signedTelegram = !!(tg && (
+            (typeof tg.initData === 'string' && tg.initData.length > 0) ||
+            (tg.initDataUnsafe && tg.initDataUnsafe.user)
+        ));
+        const launchParams = /(?:^|[?#&])tgWebApp(?:Data|Version|Platform)=/i
+            .test(`${location.search || ''}${location.hash || ''}`);
+        return signedTelegram || launchParams || !!window.TelegramWebviewProxy;
+    }
+
+    async function disableEmbeddedIosServiceWorkers() {
+        if (!('serviceWorker' in navigator)) return;
+        try {
+            const registrations = await navigator.serviceWorker.getRegistrations();
+            await Promise.all(registrations.map((registration) => registration.unregister()));
+        } catch (error) {
+            console.warn('[PWA] iOS Telegram service worker cleanup failed:', error);
+        }
+    }
+
+    // Прогрев оболочки и офлайн-ассетов начинается только после устойчивого запуска,
+    // а затем ждёт простоя. CacheStorage не конкурирует с холодной загрузкой и первыми
+    // действиями ученика; кэш постепенно наполняется во время длинной сессии.
     let _warmScheduled = false;
     let _shellWarmScheduled = false;
     function scheduleAppShellWarmup(worker) {
@@ -72,6 +95,7 @@
             .then((module) => {
                 cloudSyncReady = true;
                 try { localStorage.setItem('ege_cloud_loaded_at', String(Date.now())); } catch (e) {}
+                if (typeof window.__egeBootSignal === 'function') window.__egeBootSignal('cloud');
                 return module;
             })
             .catch((error) => {
@@ -122,6 +146,17 @@
         if (location.pathname.startsWith('/migration-preview/')) return;
         if (!canUseServiceWorker()) {
             console.warn('[PWA] Service worker needs http:// or https://. Open the app through a local server or hosting.');
+            return;
+        }
+
+        // Telegram on iOS runs in WKWebView. Its CacheStorage can serialize or stall
+        // concurrent writes from a Service Worker while defer scripts are waiting.
+        // Telegram itself cannot launch the Mini App without a network connection,
+        // so reliability wins here: keep localStorage/offline-in-open-page behavior,
+        // but do not install an intercepting worker in this embedded environment.
+        if (isIosTelegramMiniApp()) {
+            window.__egeServiceWorkerDisabledReason = 'ios-telegram-webview';
+            await disableEmbeddedIosServiceWorkers();
             return;
         }
 
@@ -190,6 +225,7 @@
         loadCloudSync,
         loadFirebaseSync: loadCloudSync,
         syncAfterReconnect,
-        flushBeforePause
+        flushBeforePause,
+        isIosTelegramMiniApp
     };
 })();

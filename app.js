@@ -649,6 +649,7 @@ function initStorage() {
     checkURLForHomework();
     window.egeAppStorageReady = true;
     document.dispatchEvent(new Event('ege:storage-ready'));
+    if (typeof window.__egeBootSignal === 'function') window.__egeBootSignal('storage');
     if (window.egePwa && navigator.onLine !== false) window.egePwa.loadCloudSync?.();
 
     // Таймер общего времени — сохраняем каждые 30 сек

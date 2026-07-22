@@ -1,6 +1,7 @@
 'use strict';
 
-const APP_VERSION = '2026-07-21-vps-7';
+const APP_VERSION = '2026-07-22-vps-8';
+const RELEASE_ASSET_VERSION = '20260722-1';
 const STATIC_CACHE = `ege-history-static-${APP_VERSION}`;
 const ASSET_CACHE = `ege-history-assets-${APP_VERSION}`;
 const CACHE_NAMES = [STATIC_CACHE, ASSET_CACHE];
@@ -11,9 +12,9 @@ const ASSET_WARMUP_PAUSE_MS = 300;
 // after the UI becomes interactive instead of blocking activation.
 const INSTALL_URLS = [
     './index.html',
-    './pwa.js',
-    './output.css',
-    './styles.css'
+    `./pwa.js?v=${RELEASE_ASSET_VERSION}`,
+    `./output.css?v=${RELEASE_ASSET_VERSION}`,
+    `./styles.css?v=${RELEASE_ASSET_VERSION}`
 ];
 
 const CORE_URLS = [
@@ -21,31 +22,31 @@ const CORE_URLS = [
     './index.html',
     './cram.html',
     './manifest.webmanifest',
-    './pwa.js',
-    './vendor/telegram-web-app.js',
-    './config.js',
-    './utils.js',
-    './exam-scoring.js',
-    './state.js',
-    './table.js',
-    './ui.js',
-    './modes.js',
-    './swipe-data.js',
-    './swipe-mode.js',
-    './match-mode.js',
-    './vov-mode.js',
-    './visual-trainer.js',
-    './exam-mode.js',
-    './app.js',
-    './cloud-sync.js',
-    './vps-sync-compat.js',
+    `./pwa.js?v=${RELEASE_ASSET_VERSION}`,
+    `./vendor/telegram-web-app.js?v=${RELEASE_ASSET_VERSION}`,
+    `./config.js?v=${RELEASE_ASSET_VERSION}`,
+    `./utils.js?v=${RELEASE_ASSET_VERSION}`,
+    `./exam-scoring.js?v=${RELEASE_ASSET_VERSION}`,
+    `./state.js?v=${RELEASE_ASSET_VERSION}`,
+    `./table.js?v=${RELEASE_ASSET_VERSION}`,
+    `./ui.js?v=${RELEASE_ASSET_VERSION}`,
+    `./modes.js?v=${RELEASE_ASSET_VERSION}`,
+    `./swipe-data.js?v=${RELEASE_ASSET_VERSION}`,
+    `./swipe-mode.js?v=${RELEASE_ASSET_VERSION}`,
+    `./match-mode.js?v=${RELEASE_ASSET_VERSION}`,
+    `./vov-mode.js?v=${RELEASE_ASSET_VERSION}`,
+    `./visual-trainer.js?v=${RELEASE_ASSET_VERSION}`,
+    `./exam-mode.js?v=${RELEASE_ASSET_VERSION}`,
+    `./app.js?v=${RELEASE_ASSET_VERSION}`,
+    `./cloud-sync.js?v=${RELEASE_ASSET_VERSION}`,
+    `./vps-sync-compat.js?v=${RELEASE_ASSET_VERSION}`,
     // Тяжёлые visual*.generated.js НЕ прекэшируем на install: они загружаются только
     // при открытии визуальных режимов и затем кэшируются fetch-handler'ом.
-    './data.js',
-    './tokens.css',
-    './output.css',
-    './theme-aurora.css',
-    './styles.css',
+    `./data.js?v=${RELEASE_ASSET_VERSION}`,
+    `./tokens.css?v=${RELEASE_ASSET_VERSION}`,
+    `./output.css?v=${RELEASE_ASSET_VERSION}`,
+    `./theme-aurora.css?v=${RELEASE_ASSET_VERSION}`,
+    `./styles.css?v=${RELEASE_ASSET_VERSION}`,
     './offline-assets.json',
     './assets/icons/icon-48.png',
     './assets/icons/icon-72.png',
@@ -232,25 +233,44 @@ async function staleWhileRevalidate(request, cacheName) {
     return (await networkFetch) || Response.error();
 }
 
-// Код (JS/CSS) отдаём ИЗ КЭША сразу, а сеть дёргаем в фоне для обновления кэша.
-// Это критично для Telegram WebView на медленной мобильной сети: прежний networkFirst
-// заставлял ждать сеть для КАЖДОГО из ~15 скриптов (включая data.js ~659КБ) на каждом
-// открытии → заставка висела >20с. Консистентность обеспечена иначе, без потери скорости:
-//   • кэш версионируется по APP_VERSION (новый деплой = новый ПУСТОЙ кэш → весь набор
-//     тянется свежим один раз и остаётся согласованным внутри версии);
-//   • часто меняющиеся файлы несут ?v=<дата> в URL, поэтому СОВПАДЕНИЕ ТОЧНОЕ (без
-//     ignoreSearch) — новый ?v= = промах = свежая загрузка, старый JS не подставляется.
-// НЕ возвращать networkFirst для кода: это и был регресс скорости после миграции.
-async function cacheFirstCode(request, cacheName) {
-    const cache = await caches.open(cacheName);
-    const cached = await cache.match(request);
-    if (cached) {
-        fetch(request).then((response) => putIfOk(cache, request, response)).catch(() => {});
-        return cached;
-    }
-    const response = await fetch(request);
-    await putIfOk(cache, request, response);
-    return response;
+// JS/CSS immutable inside one release: exact URL + release query string. On a cold
+// cache the network response must reach the page IMMEDIATELY. CacheStorage writes are
+// deliberately detached from respondWith: iOS WKWebView can serialize concurrent
+// cache.put calls for many defer scripts and otherwise keep the page on the loader
+// even though Nginx has already completed every 200 response.
+function respondWithReleaseCode(event) {
+    const request = event.request;
+    const cachePromise = caches.open(STATIC_CACHE);
+    const cachedPromise = cachePromise.then((cache) => cache.match(request));
+    let networkPairPromise = null;
+
+    const networkPair = () => {
+        if (!networkPairPromise) {
+            networkPairPromise = fetch(request).then((response) => ({
+                client: response,
+                cache: response.clone()
+            }));
+        }
+        return networkPairPromise;
+    };
+
+    const responsePromise = cachedPromise.then(async (cached) => {
+        if (cached) return cached;
+        return (await networkPair()).client;
+    });
+
+    const cacheWritePromise = cachedPromise.then(async (cached) => {
+        if (cached) return;
+        const pair = await networkPair();
+        if (!pair.cache || (!pair.cache.ok && pair.cache.type !== 'opaque')) return;
+        const cache = await cachePromise;
+        await cache.put(request, pair.cache);
+    }).catch((error) => {
+        console.warn('[SW] Release asset cache write failed:', request.url, error);
+    });
+
+    event.respondWith(responsePromise);
+    event.waitUntil(cacheWritePromise);
 }
 
 self.addEventListener('install', (event) => {
@@ -259,17 +279,18 @@ self.addEventListener('install', (event) => {
 });
 
 self.addEventListener('activate', (event) => {
-    event.waitUntil((async () => {
-        await cleanupOldCaches();
-        await self.clients.claim();
-    })());
+    // Do not delete the previous release while its page can still be executing.
+    // Old caches are removed only after the new page has loaded and warmed its shell.
+    event.waitUntil(self.clients.claim());
 });
 
 self.addEventListener('message', (event) => {
     if (event.data && event.data.type === 'CACHE_APP_SHELL') {
-        event.waitUntil(cacheAppShell().catch((error) => {
-            console.warn('[SW] App shell cache warmup failed:', error);
-        }));
+        event.waitUntil(cacheAppShell()
+            .then(() => cleanupOldCaches())
+            .catch((error) => {
+                console.warn('[SW] App shell cache warmup failed:', error);
+            }));
         return;
     }
     if (event.data && event.data.type === 'CACHE_OFFLINE_ASSETS') {
@@ -306,7 +327,7 @@ self.addEventListener('fetch', (event) => {
     }
 
     if (request.destination === 'script' || request.destination === 'style' || request.destination === 'worker') {
-        event.respondWith(cacheFirstCode(request, STATIC_CACHE));
+        respondWithReleaseCode(event);
         return;
     }
 
