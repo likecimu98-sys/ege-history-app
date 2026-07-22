@@ -247,7 +247,7 @@ export async function getDocs(ref) {
   return new VpsQuerySnapshot(ref, payload.docs);
 }
 
-async function writeDoc(ref, data, mode, expectedVersion) {
+async function writeDoc(ref, data, mode, expectedVersion, _retried = false) {
   // The VPS API builds the public leaderboard from indexed student profiles.
   // Legacy clients still try to refresh the old Firestore cache document; the
   // write is intentionally treated as a successful no-op.
@@ -256,11 +256,22 @@ async function writeDoc(ref, data, mode, expectedVersion) {
   }
   const isState = ref.path.includes('/private/data/state/');
   const knownVersion = expectedVersion === undefined && isState ? documentVersions.get(ref.path) : expectedVersion;
-  const result = await apiFetch(`${API}/store/doc`, {
-    method: 'PUT', body: JSON.stringify({ path: ref.path, data, mode, ...(knownVersion === undefined ? {} : { expectedVersion: knownVersion }) })
-  });
-  documentVersions.set(ref.path, Number(result.version) || 0);
-  return result;
+  try {
+    const result = await apiFetch(`${API}/store/doc`, {
+      method: 'PUT', body: JSON.stringify({ path: ref.path, data, mode, ...(knownVersion === undefined ? {} : { expectedVersion: knownVersion }) })
+    });
+    documentVersions.set(ref.path, Number(result.version) || 0);
+    return result;
+  } catch (error) {
+    // Конфликт версий (пока писали, чужая запись легла раньше): раньше это молча теряло
+    // сохранение прогресса. Обновляем известную версию через getDoc и повторяем ОДИН раз,
+    // чтобы устаревшая локальная версия не роняла запись. Только для версионируемых стейт-доков.
+    if (error.status === 409 && !_retried && knownVersion !== undefined) {
+      try { await getDoc(ref); } catch (_) { /* getDoc обновляет documentVersions */ }
+      return writeDoc(ref, data, mode, undefined, true);
+    }
+    throw error;
+  }
 }
 
 export async function setDoc(ref, data, options = {}) {
@@ -384,12 +395,23 @@ export function onSnapshot(ref, onNext, onError = () => {}) {
   ensureSocket();
   listener.refresh();
 
-  // Fallback also heals missed events after mobile suspend.
-  const pollMs = ref.path.includes('/matches') ? 1200 : 10000;
-  const timer = setInterval(() => { if (document.visibilityState !== 'hidden') listener.refresh(); }, pollMs);
+  // Поллинг — ТОЛЬКО запасной канал, а не дубль websocket'а. Пока сокет открыт,
+  // сервер сам присылает 'change', поэтому мы лишь изредка «подлечиваем» пропущенные
+  // события (после сна экрана в мобильном WebView). Когда сокет лежит — опрашиваем
+  // активно. Раньше опрос шёл безусловно каждые 10с (и 1.2с на /matches) даже при живом
+  // сокете — это был постоянный ручеёк store/query, зря нагружавший один VPS-IP.
+  const isMatches = ref.path.includes('/matches');
+  const socketOpen = () => !!live.socket && live.socket.readyState === WebSocket.OPEN;
+  const nextDelayMs = () => socketOpen()
+    ? (isMatches ? 6000 : 45000)   // сокет жив: редкий safety-heal
+    : (isMatches ? 1500 : 5000);   // сокет лежит: активный fallback
+  let pollTimer = setTimeout(function tick() {
+    if (document.visibilityState !== 'hidden') listener.refresh();
+    pollTimer = setTimeout(tick, nextDelayMs());
+  }, nextDelayMs());
   return () => {
     stopped = true;
-    clearInterval(timer);
+    clearTimeout(pollTimer);
     const set = live.listeners.get(ref.path);
     if (set) {
       set.delete(listener);
