@@ -70,7 +70,7 @@ async function coldCodeDoesNotWaitForCacheStorage() {
     let lifetimePromise;
     const event = {
         request: {
-            url: 'https://reshay-istoriyu.ru/app.js?v=20260722-1',
+            url: 'https://reshay-istoriyu.ru/app.js?v=20260722-2',
             method: 'GET', mode: 'cors', destination: 'script'
         },
         respondWith(promise) { responsePromise = Promise.resolve(promise); },
@@ -98,7 +98,7 @@ async function exactReleaseHitAvoidsNetwork() {
     let responsePromise;
     const event = {
         request: {
-            url: 'https://reshay-istoriyu.ru/app.js?v=20260722-1',
+            url: 'https://reshay-istoriyu.ru/app.js?v=20260722-2',
             method: 'GET', mode: 'cors', destination: 'script'
         },
         respondWith(promise) { responsePromise = Promise.resolve(promise); },
@@ -171,7 +171,7 @@ function bootHtmlIsOneAtomicRelease() {
     }
     assert.ok(bootAssets.length >= 20, 'boot asset list was unexpectedly short');
     assert.deepEqual(
-        bootAssets.filter((asset) => !/[?&]v=20260722-1(?:&|$)/.test(asset)),
+        bootAssets.filter((asset) => !/[?&]v=20260722-2(?:&|$)/.test(asset)),
         [],
         'a boot JS/CSS file is not tied to the release URL'
     );

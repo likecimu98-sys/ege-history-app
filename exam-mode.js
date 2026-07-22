@@ -2,7 +2,7 @@
 (function() {
     'use strict';
 
-    const BANK_SRC = 'exam-bank.generated.js?v=20260719-2';
+    const BANK_SRC = 'exam-bank.generated.js?v=20260722-3';
     const ORDERED_KIMS = new Set([1, 2, 3, 4, 5, 7]);
     const CHOICE_KIMS = new Set([6, 12]);
     const TASK_ICONS = Object.freeze({ 1: '⏳', 2: '🗓️', 3: '🔗', 4: '📍', 5: '👤', 6: '📜', 7: '🎨', 8: '🪙', 9: '🗺️', 10: '🗺️', 11: '🗺️', 12: '🗺️' });
@@ -367,7 +367,7 @@
 
     function taskTemplate(task) {
         const template = document.createElement('template');
-        template.innerHTML = task.html || '';
+        template.innerHTML = task.html || (task.question ? `<div>${escapeAttr(task.question).replace(/\n/g, '<br>')}</div>` : '');
         return template;
     }
 
@@ -376,6 +376,9 @@
     }
 
     function matchingTargets(task) {
+        if (Array.isArray(task.targets) && task.targets.length) {
+            return task.targets.map(target => ({ label: String(target.label || ''), text: cleanText(target.text) }));
+        }
         const template = taskTemplate(task);
         const found = new Map();
         template.content.querySelectorAll('b').forEach(labelNode => {
@@ -396,6 +399,7 @@
     }
 
     function task4Structure(task) {
+        if (Array.isArray(task.grid) && task.grid.length) return task.grid;
         const template = taskTemplate(task);
         const table = Array.from(template.content.querySelectorAll('table')).find(candidate => {
             const text = cleanText(candidate.textContent).toLocaleLowerCase('ru-RU');
@@ -435,7 +439,14 @@
     function orderedBoardHtml(task, slots, readonly) {
         if (task.kim === 4) {
             const rows = task4Structure(task);
-            if (rows) return `<table class="em-board-table"><thead><tr><th>🗺️ Объект</th><th>📜 Событие</th><th>⏳ Дата</th></tr></thead><tbody>${rows.map(row => `<tr>${row.map(cell => `<td>${Number.isInteger(cell.slotIndex) && cell.slotIndex >= 0 ? slotHtml(task, slots, cell.slotIndex, readonly, cell.label) : cell.html}</td>`).join('')}</tr>`).join('')}</tbody></table>`;
+            if (rows) return `<table class="em-board-table"><thead><tr><th>🗺️ Объект</th><th>📜 Событие</th><th>⏳ Дата</th></tr></thead><tbody>${rows.map(row => `<tr>${row.map(cell => {
+                const slotIndex = Number.isInteger(cell.slot) ? cell.slot : cell.slotIndex;
+                const label = cell.label || EXAM_LETTERS[slotIndex] || '';
+                const content = Number.isInteger(slotIndex) && slotIndex >= 0
+                    ? slotHtml(task, slots, slotIndex, readonly, label)
+                    : (cell.html !== undefined ? cell.html : escapeAttr(cell.text || ''));
+                return `<td>${content}</td>`;
+            }).join('')}</tr>`).join('')}</tbody></table>`;
         }
 
         const headers = orderedHeaders(task.kim);
@@ -516,7 +527,7 @@
             taskId: task.id,
             kim: task.kim,
             createdAt: now,
-            condition: cleanText(taskTemplate(task).content.textContent).slice(0, 360),
+            condition: taskConditionText(task).slice(0, 360),
             answer: clone(value == null ? '' : value),
             answerText: plainAnswerText(task, value),
             correctText: plainAnswerText(task, task.answer),
@@ -547,7 +558,7 @@
             const finalLabel = returnToMistakePool ? 'К ошибкам' : 'К результату';
             return `<div class="em-panel-actions"><button class="em-btn" data-em-action="review-go" data-index="${previous == null ? '' : previous}" ${previous == null ? 'disabled' : ''}>← Назад</button><div class="em-panel-progress">${center}</div><button class="em-btn primary" data-em-action="${next == null ? finalAction : 'review-go'}" ${next == null ? '' : `data-index="${next}"`}>${next == null ? finalLabel : 'Следующая →'}</button></div>`;
         }
-        if (view === 'training') return `<div class="em-panel-actions"><div class="em-panel-progress">Цельное задание из открытого банка</div><button class="em-btn primary" data-em-action="training-check">Проверить ответ</button></div>`;
+        if (view === 'training') return `<div class="em-panel-actions"><div class="em-panel-progress">Задание №${task.kim}</div><button class="em-btn primary" data-em-action="training-check">Проверить ответ</button></div>`;
         const active = examState().active;
         const tasks = activeTasks();
         return `<div class="em-panel-actions"><button class="em-btn" data-em-action="prev" ${currentIndex === 0 ? 'disabled' : ''}>← Назад</button><div class="em-panel-progress">${answeredCount(active, tasks)} из 12 отвечено</div><button class="em-btn primary" data-em-action="${currentIndex === 11 ? 'finish' : 'next'}">${currentIndex === 11 ? 'Сдать пробник' : 'Далее →'}</button></div>`;
@@ -581,11 +592,25 @@
         return `<div class="em-answer-box"><div class="em-answer-title">Ваш ответ</div><input class="em-text-input" data-task-id="${task.id}" value="${escapeAttr(String(value || ''))}" ${readonly ? 'disabled' : ''} autocomplete="off" autocapitalize="sentences" spellcheck="false" placeholder="Введите слово или словосочетание"><div class="em-clear-note">Пробелы, регистр и Е/Ё не влияют на балл. Небольшую опечатку учебный режим тоже засчитает, но после сдачи предупредит о правилах ЕГЭ.</div></div>`;
     }
 
+    function taskQuestionHtml(task) {
+        if (task.html) return task.html;
+        const text = String(task.question || '').trim();
+        if (!text) return '';
+        return `<p>${escapeAttr(text).replace(/\n{2,}/g, '</p><p>').replace(/\n/g, '<br>')}</p>`;
+    }
+
+    function taskConditionText(task) {
+        if (task.question) return cleanText(task.question);
+        if (Array.isArray(task.targets)) return task.targets.map(target => `${target.label}) ${target.text}`).join(' · ');
+        if (Array.isArray(task.grid)) return task.grid.flat().map(cell => cell.text || '').filter(Boolean).join(' · ');
+        return cleanText(taskTemplate(task).content.textContent);
+    }
+
     function renderClassicQuestionTask(task, value, readonly, scoreResult) {
         const panel = readonly
             ? `<h3 class="em-panel-title"><span>🔎</span> Работа над ошибками</h3>${reviewSummary(task, value, scoreResult)}`
             : `<h3 class="em-panel-title"><span>${CHOICE_KIMS.has(task.kim) ? '🧩' : '✍️'}</span> ${CHOICE_KIMS.has(task.kim) ? 'Варианты' : 'Ответ'}</h3>${CHOICE_KIMS.has(task.kim) ? choiceOptionsHtml(task, value, false) : textAnswerHtml(task, value, false)}`;
-        return `<div class="em-classic-task"><section class="em-board-card" style="padding:15px"><div class="em-panel-body">${taskHeading(task)}<div class="em-fipi">${task.html}</div></div></section><aside class="em-pool-panel">${panel}${panelActions(readonly, task, scoreResult)}</aside></div>`;
+        return `<div class="em-classic-task"><section class="em-board-card" style="padding:15px"><div class="em-panel-body">${taskHeading(task)}<div class="em-fipi">${taskQuestionHtml(task)}</div></div></section><aside class="em-pool-panel">${panel}${panelActions(readonly, task, scoreResult)}</aside></div>`;
     }
 
     function renderMediaTask(task, value, readonly, scoreResult) {
@@ -593,7 +618,7 @@
             ? reviewSummary(task, value, scoreResult)
             : CHOICE_KIMS.has(task.kim) ? choiceOptionsHtml(task, value, false) : textAnswerHtml(task, value, false);
         const alt = task.kim >= 9 ? 'Карта к заданиям 9–12' : 'Изображение к заданию';
-        return `<div class="em-media-task"><section class="em-media-card"><button class="em-media-button" data-em-action="zoom" data-src="${escapeAttr(task.image)}" aria-label="Увеличить изображение"><img src="${escapeAttr(task.image)}" alt="${alt}"></button></section><aside class="em-answer-panel"><div class="em-panel-body">${taskHeading(task)}<div class="em-fipi">${task.html}</div>${readonly ? '<h3 class="em-panel-title"><span>🔎</span> Работа над ошибками</h3>' : ''}${answer}</div>${panelActions(readonly, task, scoreResult)}</aside></div>`;
+        return `<div class="em-media-task"><section class="em-media-card"><button class="em-media-button" data-em-action="zoom" data-src="${escapeAttr(task.image)}" aria-label="Увеличить изображение"><img src="${escapeAttr(task.image)}" alt="${alt}"></button></section><aside class="em-answer-panel"><div class="em-panel-body">${taskHeading(task)}<div class="em-fipi">${taskQuestionHtml(task)}</div>${readonly ? '<h3 class="em-panel-title"><span>🔎</span> Работа над ошибками</h3>' : ''}${answer}</div>${panelActions(readonly, task, scoreResult)}</aside></div>`;
     }
 
     function questionHtml(task, value, readonly, scoreResult) {
@@ -605,8 +630,8 @@
     function renderTraining() {
         if (!trainingTask) return closeTrainingTask();
         const readonly = view === 'training-result' || view === 'mistake-review';
-        const subtitle = view === 'mistake-review' ? 'Сохранённая ошибка из пробника' : 'Открытый банк ФИПИ · цельное задание в обычной тренировке';
-        overlay.innerHTML = topBar(`${TASK_ICONS[trainingTask.kim] || '📝'} Задание ФИПИ №${trainingTask.kim}`, subtitle, false)
+        const subtitle = view === 'mistake-review' ? 'Сохранённая ошибка из пробника' : '';
+        overlay.innerHTML = topBar(`${TASK_ICONS[trainingTask.kim] || '📝'} Задание №${trainingTask.kim}`, subtitle, false)
             + `<div class="em-workspace"><div class="em-work ${trainingTask.image ? 'has-fixed-media' : ''}">${questionHtml(trainingTask, trainingAnswer, readonly, trainingScore)}</div></div>`;
     }
 
@@ -664,8 +689,17 @@
         if (!['task1', 'task3', 'task4', 'task5', 'task7'].includes(taskKey)) return false;
         const roll = Number.isFinite(randomValue) ? randomValue : Math.random();
         if (roll >= 0.2) return false;
-        openTrainingTask(taskKey);
-        return true;
+        // Никогда не задерживаем обычный тренажёр ожиданием сети. Пока компактный банк
+        // греется в фоне, показываем привычный вопрос; после загрузки подмешивание станет
+        // мгновенным и отрисуется тем же генератором таблиц, без отдельного экрана.
+        if (!window.EGE_EXAM_BANK) {
+            ensureBank().catch(error => console.warn('[exam bank warmup]', error && error.message));
+            return false;
+        }
+        const kim = Number(taskKey.replace(/\D/g, ''));
+        const pool = (window.EGE_EXAM_BANK.tasks || []).filter(task => task.kim === kim);
+        if (!pool.length || typeof window.renderEmbeddedFipiTask !== 'function') return false;
+        return window.renderEmbeddedFipiTask(pool[randomIndex(pool.length)]) !== false;
     }
 
     function finishTrainingTask() {
@@ -1245,6 +1279,23 @@
         }
     }
 
+    (function scheduleBankWarmup() {
+        let scheduled = false;
+        function schedule() {
+            if (scheduled) return;
+            scheduled = true;
+            setTimeout(() => {
+                const run = () => ensureBank().catch(error => console.warn('[exam bank warmup]', error && error.message));
+                if ('requestIdleCallback' in window) requestIdleCallback(run, { timeout: 6000 });
+                else setTimeout(run, 1800);
+            }, 2200);
+        }
+        if (window.egeAppStorageReady) schedule();
+        else document.addEventListener('ege:storage-ready', schedule, { once: true });
+        // Fallback for unusual embeds where storage initialization is intercepted.
+        setTimeout(schedule, 8000);
+    })();
+
     window.addEventListener('pagehide', () => { if (view === 'work') stopTimer(true); });
     window.openExamMode = openExamMode;
     window.closeExamMode = closeExamMode;
@@ -1254,6 +1305,7 @@
         isAnswered,
         open: openExamMode,
         close: closeExamMode,
+        preload: ensureBank,
         openMistake: openSavedMistake,
         openTrainingTask,
         maybeOpenTrainingTask

@@ -273,15 +273,12 @@ window.handleSettingsChange = function() {
 // Критерии оценивания:
 //   task4: 3 балла — без ошибок, 2 — 1 ошибка, 1 — 2–3 ошибки, 0 — 4+
 //   task1, task3, task5, task7: 2 балла — без ошибок, 1 — 1 ошибка, 0 — 2+
-// «Ошибка» = строка, которую ученик исправлял хотя бы раз (scored="fixed")
-// или строка, на которую был показан ответ (answersRevealed)
+// «Ошибка» = один неверный символ ответа, а не одна строка таблицы. Это важно
+// для задания 4, где в одной строке могут находиться несколько ячеек ответа.
 function calculateEgePoints(rows, task) {
     if (window.state.answersRevealed) return 0;
-    const errCount = [...rows].filter(tr => {
-        const scored = tr.dataset.scored;
-        // Ошибка = исправленная строка, неправильная, или вообще не оценённая (была пропущена)
-        return scored === 'fixed' || scored === 'incorrect' || !scored;
-    }).length;
+    const slots = [...rows].flatMap(tr => [...tr.querySelectorAll('.dnd-slot')]);
+    const errCount = slots.filter(slot => slot.dataset.scored !== 'correct').length;
     const kim = Number(String(task || '').replace(/\D/g, ''));
     if (window.EgeScoring) return window.EgeScoring.pointsFromErrorCount(kim, errCount);
     if (task === 'task4') return errCount === 0 ? 3 : errCount === 1 ? 2 : errCount <= 3 ? 1 : 0;
@@ -356,6 +353,13 @@ function checkAnswers(isSure, auto) {
             const chip = slot.querySelector('.dnd-chip');
             const valToCheck = chip ? (chip.dataset.pureText || chip.innerText) : null;
             const slotCorrect = acceptSet ? acceptSet.has(valToCheck) : (valToCheck === slot.dataset.expected);
+            // Фиксируем первую отправку каждой позиции. Исправленный ответ всё
+            // равно остаётся одной ошибкой при подсчёте первичных баллов ЕГЭ.
+            if (!slot.dataset.scored) {
+                slot.dataset.scored = chip && slotCorrect && !slot.classList.contains('revealed-slot')
+                    ? 'correct'
+                    : 'incorrect';
+            }
             if (slotCorrect && !slot.classList.contains('revealed-slot')) {
                 slot.classList.add('correct-slot');
                 slot.classList.remove('incorrect-slot');
@@ -527,6 +531,7 @@ function toggleAnswers() {
                 }
             }
             tr.querySelectorAll('.dnd-slot').forEach(slot => {
+                if (!slot.dataset.scored) slot.dataset.scored = 'incorrect';
                 if (!slot.classList.contains('correct-slot')) {
                     slot._userChildren = Array.from(slot.childNodes);
                     slot.innerHTML = `<div class="dnd-chip in-slot revealed-chip">${slot.dataset.expected}</div>`;

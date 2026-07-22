@@ -99,15 +99,15 @@
     <link rel="manifest" href="manifest.webmanifest">
     <link rel="icon" type="image/png" href="assets/icons/icon-192.png">
     <link rel="apple-touch-icon" href="assets/icons/icon-180.png">
-    <link rel="stylesheet" href="tokens.css?v=20260722-1">
-    <link rel="stylesheet" href="output.css?v=20260722-1">
-    <link rel="stylesheet" href="theme-aurora.css?v=20260722-1">
-    <link rel="stylesheet" href="styles.css?v=20260722-1">
+    <link rel="stylesheet" href="tokens.css?v=20260722-2">
+    <link rel="stylesheet" href="output.css?v=20260722-2">
+    <link rel="stylesheet" href="theme-aurora.css?v=20260722-2">
+    <link rel="stylesheet" href="styles.css?v=20260722-2">
     
     <!-- Самохостинг telegram-web-app.js: telegram.org часто недоступен (сеть/VPN),
          тогда window.Telegram не создавался → known_tg_id не считывался → случайный id «через раз».
          Локальная копия отдаётся с того же origin и кэшируется service worker'ом. -->
-    <script src="vendor/telegram-web-app.js?v=20260722-1" defer></script>
+    <script src="vendor/telegram-web-app.js?v=20260722-2" defer></script>
 
     <style>
         /* Этот inline-блок намеренно МИНИМАЛЕН: только то, что должно сработать на
@@ -333,7 +333,7 @@
 
     <script>
       (function() {
-        var BOOT_RELEASE = '20260722-1';
+        var BOOT_RELEASE = '20260722-2';
         var bootT0 = Date.now();
         function bootSignal(phase, detail) {
           try {
@@ -520,20 +520,20 @@
 
     <!-- JS разбит на модули: config → utils → state → table → ui → modes → app -->
     <!-- Порядок defer гарантирован браузером: выполняются строго по порядку в DOM -->
-    <script src="config.js?v=20260722-1" defer></script>
-    <script src="utils.js?v=20260722-1" defer></script>
-    <script src="exam-scoring.js?v=20260722-1" defer></script>
-    <script src="state.js?v=20260722-1" defer></script>
-    <script src="table.js?v=20260722-1" defer></script>
-    <script src="ui.js?v=20260722-1" defer></script>
-    <script src="modes.js?v=20260722-1" defer></script>
-    <script src="swipe-data.js?v=20260722-1" defer></script>
-    <script src="swipe-mode.js?v=20260722-1" defer></script>
-    <script src="match-mode.js?v=20260722-1" defer></script>
-    <script src="vov-mode.js?v=20260722-1" defer></script>
-    <script src="visual-trainer.js?v=20260722-1" defer></script>
-    <script src="exam-mode.js?v=20260722-1" defer></script>
-    <script src="app.js?v=20260722-1" defer></script>
+    <script src="config.js?v=20260722-2" defer></script>
+    <script src="utils.js?v=20260722-2" defer></script>
+    <script src="exam-scoring.js?v=20260722-2" defer></script>
+    <script src="state.js?v=20260722-2" defer></script>
+    <script src="table.js?v=20260722-2" defer></script>
+    <script src="ui.js?v=20260722-2" defer></script>
+    <script src="modes.js?v=20260722-2" defer></script>
+    <script src="swipe-data.js?v=20260722-2" defer></script>
+    <script src="swipe-mode.js?v=20260722-2" defer></script>
+    <script src="match-mode.js?v=20260722-2" defer></script>
+    <script src="vov-mode.js?v=20260722-2" defer></script>
+    <script src="visual-trainer.js?v=20260722-2" defer></script>
+    <script src="exam-mode.js?v=20260722-2" defer></script>
+    <script src="app.js?v=20260722-2" defer></script>
 
     <!-- ШАПКА -->
     <header id="main-header" class="sticky top-0 z-50 no-print transition-colors duration-400 pt-2 pb-2 sm:pt-3 sm:pb-3 px-4">
@@ -1308,11 +1308,11 @@
     <!-- jsPDF грузится лениво (см. loadJsPDFOnDemand в cloud-sync.js) — не нужен при старте -->
 
     <!-- === PWA + first-party cloud sync loader === -->
-    <script src="pwa.js?v=20260722-1" defer></script>
+    <script src="pwa.js?v=20260722-2" defer></script>
 
     <!-- Ядро (факты, ~659 КБ): нужно для лобби и заданий. Приложение ОТКРЫВАЕТСЯ сразу
          после него — defer парсит HTML параллельно, порядок выполнения гарантирован. -->
-    <script src="data.js?v=20260722-1" defer></script>
+    <script src="data.js?v=20260722-2" defer></script>
     <!-- app:ready диспатчит инлайн-вотчер готовности в начале <body> (см. watchBoot):
          отдельный boot-ready.js убран — свежий файл не лежал в старом SW-кэше и на
          моргнувшей сети вис, не давая снять заставку. -->

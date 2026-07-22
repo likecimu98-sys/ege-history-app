@@ -226,12 +226,16 @@ window.computeDayStreak = function(dailyStats) {
 
 // Хелперы для SRS-ключей
 function factKey(f, task) {
+    if (f?._fipiKey) return f._fipiKey;
     const t = task || window.state.currentTask;
     return (TASK_CONFIG[t] || TASK_CONFIG.task4).keyFn(f);
 }
 
 function mistakeMatchesFact(m, fact, task) {
     const t = task || window.state.currentTask;
+    if (fact?._fipiKey || m?.fact?._fipiKey) {
+        return m.task === t && m.fact?._fipiKey === fact?._fipiKey;
+    }
     return m.task === t && (TASK_CONFIG[t] || TASK_CONFIG.task4).matchFn(m.fact, fact);
 }
 
@@ -277,6 +281,9 @@ function cacheDOM() {
 // Для task4 (множественные поля) и детектива возвращаем null → точное сравнение.
 const _ACCEPT_PAIRS = { task3: ['process', 'fact'], task5: ['event', 'person'], task7: ['culture', 'trait'] };
 window.acceptableAnswerSet = function(row, task) {
+    // Official bank tasks are self-contained: similarly worded author questions
+    // must not silently widen the accepted answer.
+    if (row?._fipiExpected !== undefined) return new Set([String(row._fipiExpected)]);
     if (task === 'task1' && row?.year) return new Set([String(row.year)]);
     const pair = _ACCEPT_PAIRS[task];
     if (!pair || !row) return null;

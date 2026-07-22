@@ -1178,6 +1178,9 @@ function generateDistractorsTask4(target, poolItems) {
 // ═══════════════════════════════════════════════════════════
 
 function generateTableOnce() {
+    // Any ordinary round replaces a previously embedded bank task. The marker is
+    // intentionally session-only and is never persisted in the student state.
+    window._activeEmbeddedFipiTask = null;
     // Режим «Решать»: случайный формат задания (task3/4/5/7) каждый раунд,
     // в выбранном (или любом) периоде. Формат меняется на каждой «Дальше».
     if (window.state.currentMode === 'solve') {
@@ -1300,6 +1303,119 @@ function _task5GateOk() {
     }
     return !_task5PoolPaired();
 }
+
+// Цельное задание из открытого банка использует ровно тот же стол, фишки и
+// проверку, что и авторские вопросы. Источник данных намеренно не показывается:
+// для ученика это обычной раунд выбранного задания, без смены интерфейса.
+function renderEmbeddedFipiTask(task) {
+    const taskKey = `task${Number(task?.kim) || 0}`;
+    if (!task || !['task1', 'task3', 'task4', 'task5', 'task7'].includes(taskKey)) return false;
+    if (taskKey !== window.state.currentTask) return false;
+
+    const answerDigits = window.EgeScoring?.normalizeSymbols(task.answer) || String(task.answer || '').split('');
+    const options = new Map((task.elements || []).map(item => [String(item.n), String(item.text || '').trim()]));
+    const optionForSlot = index => options.get(String(answerDigits[index] || '')) || '';
+    if (!answerDigits.length || answerDigits.some((_, index) => !optionForSlot(index))) return false;
+
+    const structuredRows = taskKey === 'task4' ? task.grid : task.targets;
+    if (!Array.isArray(structuredRows)) return false;
+    if (taskKey === 'task4' && structuredRows.length !== 4) return false;
+    if (taskKey !== 'task4' && structuredRows.length !== answerDigits.length) return false;
+
+    resetTableUI();
+    window._activeEmbeddedFipiTask = task;
+    window.state.tableHasMistake = false;
+    window.state.answersRevealed = false;
+
+    const facts = [];
+    const body = $('task-table-body');
+    const pool = $('pool-container');
+    const letters = ['А', 'Б', 'В', 'Г', 'Д', 'Е'];
+
+    const makeSlot = (expected, label, slotIndex) => {
+        const slot = document.createElement('div');
+        slot.className = 'dnd-slot relative';
+        slot.dataset.expected = expected;
+        slot.dataset.letter = label || '?';
+        slot.dataset.fipiSlot = String(slotIndex);
+        return slot;
+    };
+
+    if (taskKey === 'task4') {
+        $('table-head').innerHTML = '<tr><th class="p-1.5 sm:p-3 text-[12px] sm:text-[14px] font-bold border-b border-gray-200 dark:border-[#2c2c2c] w-[27.5%] text-center">🗺️ Объект</th><th class="p-1.5 sm:p-3 text-[12px] sm:text-[14px] font-bold border-b border-gray-200 dark:border-[#2c2c2c] w-[45%] border-l border-gray-200 dark:border-[#2c2c2c] text-center">📜 Событие</th><th class="p-1.5 sm:p-3 text-[12px] sm:text-[14px] font-bold border-b border-gray-200 dark:border-[#2c2c2c] w-[27.5%] border-l border-gray-200 dark:border-[#2c2c2c] text-center">⏳ Дата</th></tr>';
+        task.grid.forEach((sourceRow, rowIndex) => {
+            const resolved = sourceRow.map(cell => Number.isInteger(cell.slot) ? optionForSlot(cell.slot) : String(cell.text || ''));
+            const fact = {
+                geo: resolved[0], event: resolved[1], year: resolved[2],
+                _fipiKey: `fipi_${task.id}_${rowIndex}`,
+                _fipiTaskId: task.id
+            };
+            facts.push(fact);
+            const tr = document.createElement('tr');
+            tr.className = 'border-b border-gray-100 dark:border-[#2c2c2c] bg-white dark:bg-[#1e1e1e] transition-colors hover:bg-gray-50 dark:hover:bg-[#25282a]';
+            tr.dataset.index = String(rowIndex);
+            sourceRow.forEach((cell, cellIndex) => {
+                const td = document.createElement('td');
+                td.className = 'p-1 sm:p-3 py-1.5 align-middle text-center overflow-hidden border-l border-gray-100 dark:border-[#2c2c2c] first:border-l-0';
+                if (Number.isInteger(cell.slot)) {
+                    td.appendChild(makeSlot(optionForSlot(cell.slot), letters[cell.slot], cell.slot));
+                } else {
+                    const span = document.createElement('span');
+                    span.className = `text-[12px] sm:text-[14px] ${cellIndex === 2 ? 'font-bold text-blue-800 dark:text-blue-400' : 'text-gray-700 dark:text-gray-300'} leading-relaxed block`;
+                    span.textContent = String(cell.text || '');
+                    td.appendChild(span);
+                }
+                tr.appendChild(td);
+            });
+            body.appendChild(tr);
+        });
+    } else {
+        const cfg = TASK_CONFIG[taskKey];
+        const targets = task.targets;
+        $('table-head').innerHTML = `<tr>${cfg.tableHeaders.map((header, index) =>
+            `<th class="p-1.5 sm:p-3 text-[12px] sm:text-[14px] font-bold border-b border-gray-200 dark:border-[#2c2c2c] w-[${cfg.headerWidths[index]}] ${index === 0 ? 'text-left pl-2 sm:pl-4' : 'border-l border-gray-200 dark:border-[#2c2c2c] text-center'}">${header}</th>`
+        ).join('')}</tr>`;
+        const fieldMap = { task1: ['event', 'year'], task3: ['process', 'fact'], task5: ['event', 'person'], task7: ['culture', 'trait'] };
+        const [displayField, hiddenField] = fieldMap[taskKey];
+        targets.forEach((target, index) => {
+            const expected = optionForSlot(index);
+            const fact = {
+                [displayField]: String(target.text || ''),
+                [hiddenField]: expected,
+                id: `fipi_${task.id}_${index}`,
+                _fipiKey: `fipi_${task.id}_${index}`,
+                _fipiTaskId: task.id,
+                _fipiExpected: expected
+            };
+            facts.push(fact);
+            const tr = document.createElement('tr');
+            tr.className = 'border-b border-gray-100 dark:border-[#2c2c2c] bg-white dark:bg-[#1e1e1e] transition-colors hover:bg-gray-50 dark:hover:bg-[#25282a]';
+            tr.dataset.index = String(index);
+            const labelCell = document.createElement('td');
+            labelCell.className = 'p-1.5 sm:p-3 py-1.5 align-middle text-left border-r border-gray-100 dark:border-[#2c2c2c]';
+            const label = document.createElement('span');
+            label.className = 'text-[12px] sm:text-[14px] font-bold text-gray-800 dark:text-gray-300 leading-relaxed block';
+            label.textContent = `${target.label || letters[index] || '?'}) ${target.text || ''}`;
+            labelCell.appendChild(label);
+            const slotCell = document.createElement('td');
+            slotCell.className = 'p-1 sm:p-3 py-1.5 align-middle text-center overflow-hidden';
+            slotCell.appendChild(makeSlot(expected, target.label || letters[index], index));
+            tr.append(labelCell, slotCell);
+            body.appendChild(tr);
+        });
+    }
+
+    window.state.currentTargetData = facts;
+    shuffleArray([...(task.elements || [])]).forEach(item => {
+        const chip = document.createElement('div');
+        chip.className = `dnd-chip${taskKey === 'task7' ? ' task7-chip' : ''}`;
+        chip.textContent = String(item.text || '').trim();
+        chip.dataset.pureText = String(item.text || '').trim();
+        pool.appendChild(chip);
+    });
+    return true;
+}
+window.renderEmbeddedFipiTask = renderEmbeddedFipiTask;
 
 // Обёртка-гейт: генерирует и при нарушении инварианта перегенерирует.
 // Детектив и режим ДЗ (фиксированные индексы) не валидируются/не ретраятся.

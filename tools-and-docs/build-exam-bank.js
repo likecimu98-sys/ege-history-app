@@ -8,6 +8,7 @@
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
+const { parse: parseHtml } = require('./tools/fipi-parser/node_modules/node-html-parser');
 const constructor = require('./tools/fipi-parser/constructor.js');
 
 const ROOT = path.resolve(__dirname, '..');
@@ -61,6 +62,68 @@ function sanitizeHtml(html) {
     .replace(/javascript\s*:/gi, '');
 }
 
+function cleanText(value) {
+  return String(value || '').replace(/\u00a0/g, ' ').replace(/\s+/g, ' ').trim();
+}
+
+function extractMatchingTargets(prompt, taskId) {
+  const targets = [];
+  let current = null;
+  const lines = String(prompt || '').replace(/\r/g, '').split('\n').map(line => line.trim()).filter(Boolean);
+  for (const line of lines) {
+    const match = line.match(/^([А-Е])\)\s*(.*)$/);
+    if (match) {
+      current = { label: match[1], text: match[2] };
+      targets.push(current);
+      continue;
+    }
+    if (/^\d+\)\s*/.test(line) || /^Запишите в таблицу/i.test(line)) {
+      current = null;
+      continue;
+    }
+    if (current) current.text += `${current.text ? ' ' : ''}${line}`;
+  }
+  targets.forEach(target => { target.text = cleanText(target.text); });
+  if (targets.length !== 4 || targets.some(target => !target.text)) {
+    throw new Error(`Не удалось выделить 4 позиции задания ${taskId}`);
+  }
+  return targets;
+}
+
+function nearestTable(node) {
+  for (let parent = node && node.parentNode; parent; parent = parent.parentNode) {
+    if (parent.tagName === 'TABLE') return parent;
+  }
+  return null;
+}
+
+function extractTask4Grid(html, taskId) {
+  const root = parseHtml(sanitizeHtml(html));
+  for (const table of root.querySelectorAll('table')) {
+    const rows = table.querySelectorAll('tr').filter(row => nearestTable(row) === table);
+    const wideRows = rows.filter(row => row.childNodes.filter(node => node.tagName === 'TD').length >= 3);
+    const text = cleanText(table.textContent).toLocaleLowerCase('ru-RU');
+    if (wideRows.length < 2 || !text.includes('географический объект') || !text.includes('событие') || !text.includes('время')) continue;
+    const grid = wideRows.slice(1).map(row => row.childNodes.filter(node => node.tagName === 'TD').slice(0, 3).map(cell => {
+      const value = cleanText(cell.textContent);
+      const marker = value.match(/_+\s*\(([А-Е])\)/) || value.match(/^\(([А-Е])\)$/);
+      return marker ? { slot: 'АБВГДЕ'.indexOf(marker[1]) } : { text: value };
+    }));
+    const slots = grid.flat().map(cell => cell.slot).filter(Number.isInteger).sort((a, b) => a - b);
+    if (grid.length === 4 && grid.every(row => row.length === 3) && slots.join(',') === '0,1,2,3,4,5') return grid;
+  }
+  throw new Error(`Не удалось разобрать таблицу задания 4: ${taskId}`);
+}
+
+function compactQuestion(prompt, elements) {
+  let question = String(prompt || '').replace(/\r/g, '').trim();
+  if (elements.length) {
+    const firstOption = question.match(/(?:^|\n)\s*1\)\s+/);
+    if (firstOption) question = question.slice(0, firstOption.index).trim();
+  }
+  return question;
+}
+
 function resolveImage(task, ref) {
   if (!ref || /^(?:data:|https?:)/i.test(ref)) return null;
   const normalized = String(ref).replace(/[\\/]+/g, path.sep);
@@ -96,13 +159,6 @@ function bestImageRef(task, refs) {
   return candidates[0].ref;
 }
 
-function rewriteImages(task, html) {
-  return sanitizeHtml(html).replace(/(<img\b[^>]*?\bsrc\s*=\s*)(["'])([^"']+)\2/gi, (all, prefix, quote, ref) => {
-    if (/^(?:data:|https?:)/i.test(ref)) return all;
-    return `${prefix}${quote}${copyImage(task, ref)}${quote}`;
-  });
-}
-
 function build() {
   fs.mkdirSync(ASSET_DIR, { recursive: true });
   const externalAnswers = readJson(ANSWERS_FILE).answers || {};
@@ -128,9 +184,6 @@ function build() {
       if (imageRef) image = copyImage(sourceTask, imageRef);
     }
 
-    let html = rewriteImages(sourceTask, task.questionHtml || raw.prompt || task.questionText || '');
-    if ([8, 9, 10, 11, 12].includes(task.kim)) html = html.replace(/<img\b[^>]*>/gi, '');
-
     const elements = (raw.elements || []).map((item, index) => ({
       n: Number(item.n) || index + 1,
       text: String(item.text || '').trim()
@@ -139,20 +192,22 @@ function build() {
     const acceptedAnswers = Array.isArray(external && external.acceptedAnswers)
       ? external.acceptedAnswers.map(String)
       : [answer];
-
-    return {
+    const distinctAnswers = [...new Set(acceptedAnswers.map(value => String(value).trim()).filter(value => value && value !== answer))];
+    const prompt = String(raw.prompt || task.questionText || task.questionHtml || '').trim();
+    const compact = {
       id: task.number,
       kim: task.kim,
-      groupId: task.groupId || '',
-      groupOrder: task.groupOrder || 0,
-      type: task.answerType || raw.type || '',
-      html,
       elements,
-      answer,
-      acceptedAnswers,
-      answerText: task.answerText || '',
-      image
+      answer
     };
+    if (task.groupId) compact.groupId = task.groupId;
+    if (task.groupOrder) compact.groupOrder = task.groupOrder;
+    if (image) compact.image = image;
+    if (distinctAnswers.length) compact.acceptedAnswers = [answer, ...distinctAnswers];
+    if ([1, 3, 5, 7].includes(task.kim)) compact.targets = extractMatchingTargets(prompt, task.number);
+    else if (task.kim === 4) compact.grid = extractTask4Grid(task.questionHtml || '', task.number);
+    else if (task.kim !== 2) compact.question = compactQuestion(prompt, elements);
+    return compact;
   });
 
   const counts = {};
@@ -181,8 +236,8 @@ function build() {
   }
 
   const bank = {
-    schemaVersion: 1,
-    version: 'fipi-history-2026-07-19-2',
+    schemaVersion: 2,
+    version: 'fipi-history-2026-07-22-3',
     source: 'Открытый банк заданий ФИПИ, ЕГЭ История, задания 1–12',
     generatedAt: new Date().toISOString(),
     counts,

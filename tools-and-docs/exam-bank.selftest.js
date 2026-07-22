@@ -3,6 +3,7 @@
 const assert = require('assert');
 const fs = require('fs');
 const path = require('path');
+const zlib = require('zlib');
 const bank = require('../exam-bank.generated.js');
 const scoring = require('../exam-scoring.js');
 
@@ -12,9 +13,13 @@ scoring.setKnownTextAnswers(bank.tasks
 
 assert.strictEqual(bank.tasks.length, 843);
 assert.strictEqual(bank.mapGroupCount, 64);
-assert.strictEqual(bank.version, 'fipi-history-2026-07-19-2');
+assert.strictEqual(bank.schemaVersion, 2);
+assert.strictEqual(bank.version, 'fipi-history-2026-07-22-3');
 for (let kim = 1; kim <= 12; kim++) assert.ok(bank.counts[kim] > 0, `пустой пул ${kim}`);
 assert.strictEqual(new Set(bank.tasks.map(task => task.id)).size, bank.tasks.length);
+const bankSource = fs.readFileSync(path.join(__dirname, '..', 'exam-bank.generated.js'));
+assert.ok(bankSource.length < 900 * 1024, `банк снова раздулся: ${bankSource.length} байт`);
+assert.ok(zlib.gzipSync(bankSource).length < 150 * 1024, 'сжатый банк должен оставаться лёгким');
 
 const groups = new Map();
 bank.tasks.filter(task => task.kim >= 9).forEach(task => {
@@ -29,14 +34,21 @@ for (const members of groups.values()) {
 
 for (const task of bank.tasks) {
   assert.ok(task.answer, `нет ответа ${task.id}`);
-  assert.ok(String(task.html || '').replace(/<[^>]+>/g, '').trim().length >= 12, `пустое условие ${task.id}`);
-  assert.ok(Array.isArray(task.acceptedAnswers) && task.acceptedAnswers.length > 0, `нет допустимых ответов ${task.id}`);
-  assert.ok(!/<script\b|\son[a-z]+\s*=|javascript\s*:/i.test(task.html), `небезопасный html ${task.id}`);
+  assert.ok(!Object.prototype.hasOwnProperty.call(task, 'html'), `тяжёлый HTML остался в ${task.id}`);
+  if ([1, 3, 5, 7].includes(task.kim)) {
+    assert.strictEqual(task.targets.length, 4, `неверное число позиций ${task.id}`);
+    task.targets.forEach(target => assert.ok(target.label && target.text, `пустая позиция ${task.id}`));
+  } else if (task.kim === 4) {
+    assert.strictEqual(task.grid.length, 4, `неверное число строк ${task.id}`);
+    assert.deepStrictEqual(task.grid.flat().map(cell => cell.slot).filter(Number.isInteger).sort((a, b) => a - b), [0, 1, 2, 3, 4, 5]);
+  } else if (task.kim !== 2) {
+    assert.ok(String(task.question || '').trim().length >= 12, `пустое условие ${task.id}`);
+    assert.ok(!/<script\b|javascript\s*:/i.test(task.question), `небезопасный текст ${task.id}`);
+  }
   if (task.image) {
     const imageFile = path.join(__dirname, '..', task.image);
     assert.ok(fs.existsSync(imageFile), `нет картинки ${task.image}`);
     assert.ok(fs.statSync(imageFile).size > 20 * 1024, `подозрительно маленькое изображение ${task.image} (${task.id})`);
-    assert.ok(!/<img\b/i.test(task.html), `изображение продублировано в условии ${task.id}`);
   }
   if ([2, 6, 12].includes(task.kim)) assert.ok(task.elements.length >= 3, `нет вариантов ${task.id}`);
   if ([1, 2, 3, 4, 5, 6, 7, 12].includes(task.kim)) {
@@ -46,16 +58,11 @@ for (const task of bank.tasks) {
   }
   const perfect = scoring.scoreTask(task, task.answer);
   assert.strictEqual(perfect.points, perfect.max, `эталон не даёт максимум ${task.id}`);
-  task.acceptedAnswers.forEach(answer => assert.strictEqual(scoring.scoreTask(task, answer).points, perfect.max, `допустимый ответ не принят ${task.id}: ${answer}`));
+  (task.acceptedAnswers || [task.answer]).forEach(answer => assert.strictEqual(scoring.scoreTask(task, answer).points, perfect.max, `допустимый ответ не принят ${task.id}: ${answer}`));
 }
 
 for (const task of bank.tasks.filter(task => [1, 3, 5, 7].includes(task.kim))) {
-  const text = task.html.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ');
-  ['А', 'Б', 'В', 'Г'].forEach(letter => assert.ok(text.includes(`${letter})`), `нет позиции ${letter} в ${task.id}`));
-}
-for (const task of bank.tasks.filter(task => task.kim === 4)) {
-  const text = task.html.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ');
-  ['А', 'Б', 'В', 'Г', 'Д', 'Е'].forEach(letter => assert.ok(text.includes(`(${letter})`), `нет пропуска ${letter} в ${task.id}`));
+  assert.deepStrictEqual(task.targets.map(target => target.label), ['А', 'Б', 'В', 'Г']);
 }
 
 const expectedAnswerLengths = { 1: 4, 2: 3, 3: 4, 4: 6, 5: 4, 7: 4 };
