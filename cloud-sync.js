@@ -3364,6 +3364,39 @@
             } catch (e) { return ''; }
         }
 
+        function _applyTeacherClassAssignment(profiles, notify) {
+            let hasInvite = false, inviteCode = '', inviteAt = 0;
+            for (const data of profiles || []) {
+                if (data && Object.prototype.hasOwnProperty.call(data, 'inviteClassCode')
+                    && (Number(data.inviteAt) || 0) >= inviteAt) {
+                    hasInvite = true;
+                    inviteCode = String(data.inviteClassCode || '');
+                    inviteAt = Number(data.inviteAt) || 0;
+                }
+            }
+            if (!hasInvite) return false;
+
+            const previousCode = localStorage.getItem('student_class_code') || '';
+            if (inviteCode) localStorage.setItem('student_class_code', inviteCode);
+            else localStorage.removeItem('student_class_code');
+            const classInput = document.getElementById('profile-class-code');
+            if (classInput) classInput.value = inviteCode;
+
+            if (notify) {
+                const lastConsumed = Number(localStorage.getItem('consumed_invite_at') || 0);
+                if (inviteAt > lastConsumed || previousCode !== inviteCode) {
+                    if (inviteAt > lastConsumed) localStorage.setItem('consumed_invite_at', String(inviteAt));
+                    if (inviteCode && previousCode !== inviteCode) {
+                        showToast('🎓', `Ты в классе «${inviteCode}»!`, 'bg-emerald-500', 'border-emerald-700');
+                        if (window.pullClassAssignments) window.pullClassAssignments(inviteCode).catch(() => {});
+                    } else if (!inviteCode && previousCode) {
+                        showToast('🎓', 'Курс завершён — ты больше не в группе', 'bg-blue-500', 'border-blue-700');
+                    }
+                }
+            }
+            return true;
+        }
+
         // ─── Дневной лимит строк ─────────────────────────────────────────────
         // Настройки в config/limits: { freeDaily, premiumDaily, clubUrl, message }, 0 = безлимит.
         // Категории: обычный → freeDaily; подписчик клуба (premium на документе ученика,
@@ -3456,6 +3489,11 @@
                 // Имя используется только в ручной дедупликации с дополнительными проверками
 
                 if (allFound.size === 0) { window.refreshDailyLimit && window.refreshDailyLimit(); return; }
+
+                // Apply the teacher-owned class before account merging or any later
+                // progress save. The merge branch can return early, so doing this in
+                // the single-document branch was a first-login race.
+                _applyTeacherClassAssignment(allFound.values(), true);
 
                 // P4: свежий блоб может лежать в private/state (новые клиенты), а у старых
                 // доков — ещё в public. Собираем приватные и подмешиваем во ВСЕ слияния ниже:
@@ -3563,38 +3601,6 @@
                     const classEl = document.getElementById('profile-class-code');
                     if (classEl) classEl.value = bestData.classCode;
                 }
-                // Управление классом извне через поле inviteClassCode на документе ученика
-                // (teacher-authoritative код группы): непустой = приглашение/перевод, пустая
-                // строка "" = учитель выпустил из группы. Раньше поле стиралось после первого
-                // применения — из-за этого при мульти-устройстве/повторной синхронизации
-                // syncProgressToCloud возвращал СТАРЫЙ локальный код, и ученик «выпадал» из группы.
-                // Теперь НЕ стираем: адаптируем код учителя при КАЖДОЙ загрузке (синк уже не вернёт
-                // старый), а тост/подтяжку ДЗ показываем только для НОВОГО инвайта (по inviteAt).
-                {
-                    let hasInv = false, invCode = '', invAt = 0;
-                    allFound.forEach((data) => {
-                        if (data && Object.prototype.hasOwnProperty.call(data, 'inviteClassCode') && (Number(data.inviteAt) || 0) >= invAt) {
-                            hasInv = true; invCode = String(data.inviteClassCode || ''); invAt = Number(data.inviteAt) || 0;
-                        }
-                    });
-                    if (hasInv) {
-                        const prevCode = localStorage.getItem('student_class_code') || '';
-                        if (invCode) localStorage.setItem('student_class_code', invCode);
-                        else localStorage.removeItem('student_class_code');
-                        const classEl2 = document.getElementById('profile-class-code');
-                        if (classEl2) classEl2.value = invCode;
-                        const lastConsumed = Number(localStorage.getItem('consumed_invite_at') || 0);
-                        if (invAt > lastConsumed || prevCode !== invCode) {
-                            if (invAt > lastConsumed) localStorage.setItem('consumed_invite_at', String(invAt));
-                            if (invCode && prevCode !== invCode) {
-                                showToast('🎓', `Ты в классе «${invCode}»!`, 'bg-emerald-500', 'border-emerald-700');
-                                if (window.pullClassAssignments) window.pullClassAssignments(invCode).catch(() => {});
-                            } else if (!invCode && prevCode) {
-                                showToast('🎓', 'Курс завершён — ты больше не в группе', 'bg-blue-500', 'border-blue-700');
-                            }
-                        }
-                    }
-                }
                 if (bestData?.tgId && /^\d+$/.test(String(bestData.tgId))) localStorage.setItem('known_tg_id', String(bestData.tgId));
                 if (bestData?.knownTgId && /^\d+$/.test(String(bestData.knownTgId))) localStorage.setItem('known_tg_id', String(bestData.knownTgId));
                 if (bestData?.googleEmail && !localStorage.getItem('google_email')) localStorage.setItem('google_email', bestData.googleEmail);
@@ -3687,7 +3693,12 @@
                 const localJson = localStorage.getItem('ege_final_storage_v4') || '{}';
                 const currentSnap = await getDoc(doc(studentsCol, canonicalId));
                 if (currentSnap.exists()) {
-                    const remoteJson = currentSnap.data().fullStateJson || '';
+                    const currentProfile = currentSnap.data();
+                    // A save may start while the first cloud load is still running.
+                    // Re-apply the invite from the just-read server profile before
+                    // constructing a payload, so an empty device cannot clear it.
+                    _applyTeacherClassAssignment([currentProfile], false);
+                    const remoteJson = currentProfile.fullStateJson || '';
                     const merged = deepMergeStates([remoteJson, localJson].filter(j => j && j.length > 10));
                     if (merged) applyMergedState(merged);
                 }

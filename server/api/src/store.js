@@ -65,6 +65,23 @@ function opKind(value) {
 
 function sameValue(a, b) { return JSON.stringify(a) === JSON.stringify(b); }
 
+function protectTeacherClassAssignment(currentData, patch, isSelfWrite) {
+  const next = { ...(patch || {}) };
+  if (!isSelfWrite) return next;
+
+  // The class invite is teacher-owned state. A student's normal progress sync
+  // must not clear or replace it, even if the first device save races the
+  // initial profile load. Internal bot and teacher writes bypass this helper.
+  delete next.inviteClassCode;
+  delete next.inviteAt;
+  delete next.leftClassAt;
+  if (currentData && Object.prototype.hasOwnProperty.call(currentData, 'inviteClassCode')
+      && Object.prototype.hasOwnProperty.call(next, 'classCode')) {
+    next.classCode = String(currentData.inviteClassCode || '');
+  }
+  return next;
+}
+
 function applyPatch(current, patch, merge) {
   const target = merge ? { ...(current || {}) } : {};
   for (const [key, raw] of Object.entries(patch || {})) {
@@ -328,7 +345,10 @@ class DocumentStore extends EventEmitter {
       const result = await client.query(`SELECT doc_id,user_id,data,version FROM ${ref.table} WHERE doc_id=$1 FOR UPDATE`, [ref.docId]);
       const current = result.rows[0] || null;
       const actualMode = current ? mode : 'create';
-      if (!await authorizeWrite(client, ref, ctx, current, patch, actualMode, options)) {
+      const selfStudentWrite = ref.collection === 'students' && !options.internal && !ctx?.admin && !!ctx
+        && (ctx.docIds.has(ref.docId) || (!!current?.user_id && current.user_id === ctx.userId));
+      const effectivePatch = protectTeacherClassAssignment(current?.data || null, patch, selfStudentWrite);
+      if (!await authorizeWrite(client, ref, ctx, current, effectivePatch, actualMode, options)) {
         throw Object.assign(new Error('forbidden'), { statusCode: 403 });
       }
       if (mode === 'update' && !current) throw Object.assign(new Error('not_found'), { statusCode: 404 });
@@ -338,12 +358,12 @@ class DocumentStore extends EventEmitter {
         throw Object.assign(new Error('version_conflict'), { statusCode: 409 });
       }
       const merge = mode === 'update' || mode === 'merge';
-      let next = applyPatch(current?.data || {}, patch || {}, merge);
-      if (ref.collection === 'matches') next = mergeMatchData(current?.data || null, next, patch || {});
+      let next = applyPatch(current?.data || {}, effectivePatch, merge);
+      if (ref.collection === 'matches') next = mergeMatchData(current?.data || null, next, effectivePatch);
       if (!options.replaceState
           && (ref.collection === 'state' || ref.collection === 'students')
-          && patch?.fullStateJson && current?.data?.fullStateJson) {
-        next.fullStateJson = mergeStateJson(current.data.fullStateJson, patch.fullStateJson);
+          && effectivePatch?.fullStateJson && current?.data?.fullStateJson) {
+        next.fullStateJson = mergeStateJson(current.data.fullStateJson, effectivePatch.fullStateJson);
       }
       let userId = current?.user_id || null;
       if ((ref.collection === 'students' || ref.collection === 'state') && ctx
@@ -360,7 +380,7 @@ class DocumentStore extends EventEmitter {
         RETURNING doc_id,data,version`, [ref.docId, userId, JSON.stringify(next)]);
       if (options.auditAction) await client.query(
         'INSERT INTO audit_events(actor_user_id,action,target,details) VALUES($1,$2,$3,$4)',
-        [ctx?.userId || null, options.auditAction, ref.path, JSON.stringify({ fields: Object.keys(patch || {}) })]
+        [ctx?.userId || null, options.auditAction, ref.path, JSON.stringify({ fields: Object.keys(effectivePatch) })]
       );
       return { id: ref.docId, data: saved.rows[0].data, version: Number(saved.rows[0].version), conflictMerged };
     };
@@ -413,4 +433,7 @@ class DocumentStore extends EventEmitter {
   }
 }
 
-module.exports = { DocumentStore, parsePath, collectionFromPath, applyPatch, mergeMatchData, accessContext, publicStudent, COLLECTIONS };
+module.exports = {
+  DocumentStore, parsePath, collectionFromPath, applyPatch, mergeMatchData,
+  protectTeacherClassAssignment, accessContext, publicStudent, COLLECTIONS
+};

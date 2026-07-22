@@ -4,7 +4,9 @@ process.env.DATABASE_URL ||= 'postgresql://test:test@127.0.0.1:5432/test';
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { parsePath, collectionFromPath, applyPatch, mergeMatchData } = require('../src/store');
+const {
+  parsePath, collectionFromPath, applyPatch, mergeMatchData, protectTeacherClassAssignment
+} = require('../src/store');
 const { pool } = require('../src/db');
 
 test.after(() => pool.end());
@@ -31,6 +33,29 @@ test('applies merge, delete and Firestore-compatible array operations', () => {
 
 test('set mode does not retain fields absent from the new document', () => {
   assert.deepEqual(applyPatch({ old: true }, { fresh: true }, false), { fresh: true });
+});
+
+test('student sync cannot overwrite a class assigned by a teacher invite', () => {
+  const current = { classCode: '11A', inviteClassCode: '11A', inviteAt: 100 };
+  assert.deepEqual(
+    protectTeacherClassAssignment(current, {
+      classCode: '', inviteClassCode: 'OTHER', inviteAt: 200, leftClassAt: 200, totalSolved: 7
+    }, true),
+    { classCode: '11A', totalSolved: 7 }
+  );
+});
+
+test('teacher removal remains authoritative during a later student sync', () => {
+  const current = { classCode: '', inviteClassCode: '', inviteAt: 200, leftClassAt: 200 };
+  assert.deepEqual(
+    protectTeacherClassAssignment(current, { classCode: 'OLD', totalSolved: 8 }, true),
+    { classCode: '', totalSolved: 8 }
+  );
+});
+
+test('teacher and internal writes may change the assigned class', () => {
+  const patch = { classCode: '11B', inviteClassCode: '11B', inviteAt: 300 };
+  assert.deepEqual(protectTeacherClassAssignment({ inviteClassCode: '11A' }, patch, false), patch);
 });
 
 test('duel merge ignores delayed and duplicate player updates', () => {
