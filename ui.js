@@ -1969,12 +1969,23 @@ function updateGlobalUI() {
     updateText($('modal-stat-solved'), window.state.stats.totalSolvedEver);
     updateText($('modal-stat-mistakes'), window.state.mistakesPool.length + ((window.state.stats.mockExamMistakes || []).length));
 
-    const sbt = window.state.stats.solvedByTask || {};
-    if ($('modal-stat-task1')) updateText($('modal-stat-task1'), sbt.task1 || 0);
-    if ($('modal-stat-task3')) $('modal-stat-task3').textContent = sbt.task3 || 0;
-    if ($('modal-stat-task4')) updateText($('modal-stat-task4'), sbt.task4 || 0);
-    if ($('modal-stat-task5')) updateText($('modal-stat-task5'), sbt.task5 || 0);
-    if ($('modal-stat-task7')) updateText($('modal-stat-task7'), sbt.task7 || 0);
+    // Вместо счётчиков по заданиям — два понятных показателя: время за решением
+    // (totalTimeSpent тикает по секунде в app.js) и % выученных фактов по всем заданиям.
+    if ($('modal-stat-time')) {
+        const sec = window.state.stats.totalTimeSpent || 0;
+        const h = Math.floor(sec / 3600), m = Math.floor((sec % 3600) / 60);
+        updateText($('modal-stat-time'), h > 0 ? `${h} ч ${m} мин` : `${m} мин`);
+    }
+    if ($('modal-stat-learned-pct') && window.learnedCountInPeriod) {
+        let learnedAll = 0, totalAll = 0;
+        ['task1', 'task3', 'task4', 'task5', 'task7'].forEach(t => {
+            const r = window.learnedCountInPeriod(t, 'all');
+            learnedAll += r.learned; totalAll += r.total;
+        });
+        const pct = totalAll ? Math.round(learnedAll * 100 / totalAll) : 0;
+        updateText($('modal-stat-learned-pct'), pct + '%');
+        if ($('modal-stat-learned-abs')) $('modal-stat-learned-abs').textContent = `${learnedAll} из ${totalAll}`;
+    }
 
     if (window.state.isHomeworkMode && window.state.hwTargetIndices && window.state.hwTargetIndices.length > 0 && $('hw-remaining'))
         updateText($('hw-remaining'), window.state.hwCurrentPool.length);

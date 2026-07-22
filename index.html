@@ -99,15 +99,15 @@
     <link rel="manifest" href="manifest.webmanifest">
     <link rel="icon" type="image/png" href="assets/icons/icon-192.png">
     <link rel="apple-touch-icon" href="assets/icons/icon-180.png">
-    <link rel="stylesheet" href="tokens.css?v=20260722-3">
-    <link rel="stylesheet" href="output.css?v=20260722-3">
-    <link rel="stylesheet" href="theme-aurora.css?v=20260722-3">
-    <link rel="stylesheet" href="styles.css?v=20260722-3">
+    <link rel="stylesheet" href="tokens.css?v=20260722-4">
+    <link rel="stylesheet" href="output.css?v=20260722-4">
+    <link rel="stylesheet" href="theme-aurora.css?v=20260722-4">
+    <link rel="stylesheet" href="styles.css?v=20260722-4">
     
     <!-- Самохостинг telegram-web-app.js: telegram.org часто недоступен (сеть/VPN),
          тогда window.Telegram не создавался → known_tg_id не считывался → случайный id «через раз».
          Локальная копия отдаётся с того же origin и кэшируется service worker'ом. -->
-    <script src="vendor/telegram-web-app.js?v=20260722-3" defer></script>
+    <script src="vendor/telegram-web-app.js?v=20260722-4" defer></script>
 
     <style>
         /* Этот inline-блок намеренно МИНИМАЛЕН: только то, что должно сработать на
@@ -333,7 +333,7 @@
 
     <script>
       (function() {
-        var BOOT_RELEASE = '20260722-3';
+        var BOOT_RELEASE = '20260722-4';
         var bootT0 = Date.now();
         function bootSignal(phase, detail) {
           try {
@@ -520,20 +520,20 @@
 
     <!-- JS разбит на модули: config → utils → state → table → ui → modes → app -->
     <!-- Порядок defer гарантирован браузером: выполняются строго по порядку в DOM -->
-    <script src="config.js?v=20260722-3" defer></script>
-    <script src="utils.js?v=20260722-3" defer></script>
-    <script src="exam-scoring.js?v=20260722-3" defer></script>
-    <script src="state.js?v=20260722-3" defer></script>
-    <script src="table.js?v=20260722-3" defer></script>
-    <script src="ui.js?v=20260722-3" defer></script>
-    <script src="modes.js?v=20260722-3" defer></script>
-    <script src="swipe-data.js?v=20260722-3" defer></script>
-    <script src="swipe-mode.js?v=20260722-3" defer></script>
-    <script src="match-mode.js?v=20260722-3" defer></script>
-    <script src="vov-mode.js?v=20260722-3" defer></script>
-    <script src="visual-trainer.js?v=20260722-3" defer></script>
-    <script src="exam-mode.js?v=20260722-3" defer></script>
-    <script src="app.js?v=20260722-3" defer></script>
+    <script src="config.js?v=20260722-4" defer></script>
+    <script src="utils.js?v=20260722-4" defer></script>
+    <script src="exam-scoring.js?v=20260722-4" defer></script>
+    <script src="state.js?v=20260722-4" defer></script>
+    <script src="table.js?v=20260722-4" defer></script>
+    <script src="ui.js?v=20260722-4" defer></script>
+    <script src="modes.js?v=20260722-4" defer></script>
+    <script src="swipe-data.js?v=20260722-4" defer></script>
+    <script src="swipe-mode.js?v=20260722-4" defer></script>
+    <script src="match-mode.js?v=20260722-4" defer></script>
+    <script src="vov-mode.js?v=20260722-4" defer></script>
+    <script src="visual-trainer.js?v=20260722-4" defer></script>
+    <script src="exam-mode.js?v=20260722-4" defer></script>
+    <script src="app.js?v=20260722-4" defer></script>
 
     <!-- ШАПКА -->
     <header id="main-header" class="sticky top-0 z-50 no-print transition-colors duration-400 pt-2 pb-2 sm:pt-3 sm:pb-3 px-4">
@@ -615,14 +615,6 @@
             <!-- Главная кнопка «Продолжить»: одно действие, которое приложение выбирает за ученика.
                  Содержимое рисует renderMainAction() (ui.js) при каждом updateGlobalUI. -->
             <div id="main-action" class="-mb-2"></div>
-            <button type="button" data-action="openExamMode" onclick="if(window.openExamMode){window.openExamMode()}else{location.reload()}" style="background:linear-gradient(135deg,#1d4ed8 0%,#4338ca 52%,#6d28d9 100%);color:#fff" class="w-full text-left bg-gradient-to-br from-blue-700 via-indigo-700 to-violet-700 rounded-2xl p-5 shadow-[0_10px_32px_rgba(37,99,235,0.32)] border border-blue-400/60 cursor-pointer transition-all active:scale-95 hover:-translate-y-1 flex items-center justify-between group overflow-hidden relative text-white">
-                <div class="absolute -right-4 -bottom-8 text-[110px] font-black opacity-10 group-hover:scale-110 transition-transform pointer-events-none">20</div>
-                <div class="flex items-center gap-4 relative z-10">
-                    <div class="w-14 h-14 rounded-2xl bg-white/15 border border-white/20 flex items-center justify-center text-3xl drop-shadow-sm">📝</div>
-                    <div><h4 class="font-black text-lg sm:text-xl uppercase tracking-wide">Пробник ЕГЭ 1–12</h4><p class="text-xs font-bold text-blue-100 mt-0.5">Случайный вариант ФИПИ · честные первичные баллы · сохранение результата</p></div>
-                </div>
-                <div class="bg-white text-blue-700 text-[10px] font-black uppercase px-2.5 py-1.5 rounded-lg shadow-sm relative z-10 whitespace-nowrap">до 20</div>
-            </button>
             <div data-action="startDuelSearch" class="bg-gradient-to-br from-indigo-600 to-purple-700 rounded-2xl p-5 shadow-[0_8px_30px_rgba(99,102,241,0.4)] border border-indigo-400 cursor-pointer transition-all active:scale-95 hover:-translate-y-1 flex items-center justify-between group overflow-hidden relative mb-2 text-white">
                 <div class="absolute -right-4 -bottom-4 text-7xl opacity-20 group-hover:scale-110 transition-transform pointer-events-none">⚔️</div>
                 <div class="flex items-center gap-4 relative z-10">
@@ -654,12 +646,13 @@
 
             <div>
                 <h3 class="text-xs font-black tracking-widest text-gray-400 dark:text-gray-500 mb-3 px-1 uppercase">Базовые задания</h3>
-                <div class="grid grid-cols-2 sm:grid-cols-5 gap-3 sm:gap-4">
+                <div class="grid grid-cols-2 sm:grid-cols-3 gap-3 sm:gap-4">
                     <div data-action="quickStartGame" data-arg="task1" data-arg2="normal" class="bg-white dark:bg-[#1e1e1e] rounded-2xl p-4 sm:p-6 shadow-sm border border-gray-100 dark:border-[#2c2c2c] cursor-pointer transition-all active:scale-95 hover:-translate-y-1 hover:shadow-md flex flex-col items-center justify-center text-center gap-2 sm:gap-3 group"><div class="w-12 h-12 sm:w-14 sm:h-14 rounded-xl bg-cyan-50 dark:bg-cyan-900/30 flex items-center justify-center text-2xl sm:text-3xl group-hover:scale-110 transition-transform shrink-0">⏳</div><div><h4 class="font-black text-gray-800 dark:text-gray-300 text-base sm:text-xl uppercase tracking-wide">Задание №1</h4><p class="text-[10px] sm:text-sm font-bold text-gray-400 mt-1">Хронология</p></div><div class="w-full mt-2"><div class="w-full bg-gray-100 dark:bg-[#2c2c2c] rounded-full h-1.5"><div id="progress-bar-task1" class="bg-cyan-500 h-1.5 rounded-full transition-all duration-500" style="width:0%"></div></div><p class="text-[9px] font-bold text-gray-400 mt-1" id="progress-text-task1">0 выучено</p></div></div>
                     <div data-action="quickStartGame" data-arg="task3" data-arg2="normal" class="bg-white dark:bg-[#1e1e1e] rounded-2xl p-4 sm:p-6 shadow-sm border border-gray-100 dark:border-[#2c2c2c] cursor-pointer transition-all active:scale-95 hover:-translate-y-1 hover:shadow-md flex flex-col items-center justify-center text-center gap-2 sm:gap-3 group"><div class="w-12 h-12 sm:w-14 sm:h-14 rounded-xl bg-emerald-50 dark:bg-emerald-900/30 flex items-center justify-center text-2xl sm:text-3xl group-hover:scale-110 transition-transform shrink-0">🔗</div><div><h4 class="font-black text-gray-800 dark:text-gray-300 text-base sm:text-xl uppercase tracking-wide">Задание №3</h4><p class="text-[10px] sm:text-sm font-bold text-gray-400 mt-1">Процессы и факты</p></div><div class="w-full mt-2"><div class="w-full bg-gray-100 dark:bg-[#2c2c2c] rounded-full h-1.5"><div id="progress-bar-task3" class="bg-emerald-500 h-1.5 rounded-full transition-all duration-500" style="width:0%"></div></div><p class="text-[9px] font-bold text-gray-400 mt-1" id="progress-text-task3">0 выучено</p></div></div>
                     <div data-action="quickStartGame" data-arg="task4" data-arg2="normal" class="bg-white dark:bg-[#1e1e1e] rounded-2xl p-4 sm:p-6 shadow-sm border border-gray-100 dark:border-[#2c2c2c] cursor-pointer transition-all active:scale-95 hover:-translate-y-1 hover:shadow-md flex flex-col items-center justify-center text-center gap-2 sm:gap-3 group"><div class="w-12 h-12 sm:w-14 sm:h-14 rounded-xl bg-blue-50 dark:bg-blue-900/30 flex items-center justify-center text-2xl sm:text-3xl group-hover:scale-110 transition-transform shrink-0">📍</div><div><h4 class="font-black text-gray-800 dark:text-gray-300 text-base sm:text-xl uppercase tracking-wide">Задание №4</h4><p class="text-[10px] sm:text-sm font-bold text-gray-400 mt-1">География и события</p></div><div class="w-full mt-2"><div class="w-full bg-gray-100 dark:bg-[#2c2c2c] rounded-full h-1.5"><div id="progress-bar-task4" class="bg-blue-500 h-1.5 rounded-full transition-all duration-500" style="width:0%"></div></div><p class="text-[9px] font-bold text-gray-400 mt-1" id="progress-text-task4">0 выучено</p></div></div>
                     <div data-action="quickStartGame" data-arg="task5" data-arg2="normal" class="bg-white dark:bg-[#1e1e1e] rounded-2xl p-4 sm:p-6 shadow-sm border border-gray-100 dark:border-[#2c2c2c] cursor-pointer transition-all active:scale-95 hover:-translate-y-1 hover:shadow-md flex flex-col items-center justify-center text-center gap-2 sm:gap-3 group"><div class="w-12 h-12 sm:w-14 sm:h-14 rounded-xl bg-purple-50 dark:bg-purple-900/30 flex items-center justify-center text-2xl sm:text-3xl group-hover:scale-110 transition-transform shrink-0">👤</div><div><h4 class="font-black text-gray-800 dark:text-gray-300 text-base sm:text-xl uppercase tracking-wide">Задание №5</h4><p class="text-[10px] sm:text-sm font-bold text-gray-400 mt-1">Исторические личности</p></div><div class="w-full mt-2"><div class="w-full bg-gray-100 dark:bg-[#2c2c2c] rounded-full h-1.5"><div id="progress-bar-task5" class="bg-purple-500 h-1.5 rounded-full transition-all duration-500" style="width:0%"></div></div><p class="text-[9px] font-bold text-gray-400 mt-1" id="progress-text-task5">0 выучено</p></div></div>
-                    <div data-action="quickStartGame" data-arg="task7" data-arg2="normal" class="col-span-2 sm:col-span-1 bg-white dark:bg-[#1e1e1e] rounded-2xl p-4 sm:p-6 shadow-sm border border-gray-100 dark:border-[#2c2c2c] cursor-pointer transition-all active:scale-95 hover:-translate-y-1 hover:shadow-md flex flex-col items-center justify-center text-center gap-2 sm:gap-3 group"><div class="w-12 h-12 sm:w-14 sm:h-14 rounded-xl bg-amber-50 dark:bg-amber-900/30 flex items-center justify-center text-2xl sm:text-3xl group-hover:scale-110 transition-transform shrink-0">🎨</div><div><h4 class="font-black text-gray-800 dark:text-gray-300 text-base sm:text-xl uppercase tracking-wide">Задание №7</h4><p class="text-[10px] sm:text-sm font-bold text-gray-400 mt-1">Памятники культуры</p></div><div class="w-full mt-2"><div class="w-full bg-gray-100 dark:bg-[#2c2c2c] rounded-full h-1.5"><div id="progress-bar-task7" class="bg-amber-500 h-1.5 rounded-full transition-all duration-500" style="width:0%"></div></div><p class="text-[9px] font-bold text-gray-400 mt-1" id="progress-text-task7">0 выучено</p></div></div>
+                    <div data-action="quickStartGame" data-arg="task7" data-arg2="normal" class="bg-white dark:bg-[#1e1e1e] rounded-2xl p-4 sm:p-6 shadow-sm border border-gray-100 dark:border-[#2c2c2c] cursor-pointer transition-all active:scale-95 hover:-translate-y-1 hover:shadow-md flex flex-col items-center justify-center text-center gap-2 sm:gap-3 group"><div class="w-12 h-12 sm:w-14 sm:h-14 rounded-xl bg-amber-50 dark:bg-amber-900/30 flex items-center justify-center text-2xl sm:text-3xl group-hover:scale-110 transition-transform shrink-0">🎨</div><div><h4 class="font-black text-gray-800 dark:text-gray-300 text-base sm:text-xl uppercase tracking-wide">Задание №7</h4><p class="text-[10px] sm:text-sm font-bold text-gray-400 mt-1">Памятники культуры</p></div><div class="w-full mt-2"><div class="w-full bg-gray-100 dark:bg-[#2c2c2c] rounded-full h-1.5"><div id="progress-bar-task7" class="bg-amber-500 h-1.5 rounded-full transition-all duration-500" style="width:0%"></div></div><p class="text-[9px] font-bold text-gray-400 mt-1" id="progress-text-task7">0 выучено</p></div></div>
+                    <div data-action="pickTaskForMode" data-arg="solve" class="bg-white dark:bg-[#1e1e1e] rounded-2xl p-4 sm:p-6 shadow-sm border border-gray-100 dark:border-[#2c2c2c] cursor-pointer transition-all active:scale-95 hover:-translate-y-1 hover:shadow-md flex flex-col items-center justify-center text-center gap-2 sm:gap-3 group"><div class="w-12 h-12 sm:w-14 sm:h-14 rounded-xl bg-red-50 dark:bg-red-900/30 flex items-center justify-center text-2xl sm:text-3xl group-hover:rotate-12 transition-transform shrink-0">🎲</div><div><h4 class="font-black text-gray-800 dark:text-gray-300 text-base sm:text-xl uppercase tracking-wide">Решать</h4><p class="text-[10px] sm:text-sm font-bold text-gray-400 mt-1">Все форматы вперемешку</p></div></div>
                 </div>
             </div>
 
@@ -682,14 +675,24 @@
                 </div>
             </div>
 
-            <div>
-                <h3 class="text-xs font-black tracking-widest text-gray-400 dark:text-gray-500 mb-3 px-1 uppercase">🎯 Испытания</h3>
+            <details class="lobby-acc">
+                <summary class="flex items-center justify-between cursor-pointer select-none mb-3 px-1">
+                    <h3 class="text-xs font-black tracking-widest text-gray-400 dark:text-gray-500 uppercase">🎯 Испытания</h3>
+                    <span class="acc-chev text-gray-400 text-[10px] font-black">▼</span>
+                </summary>
                 <div class="grid grid-cols-1 gap-4">
-                    <div data-action="pickTaskForMode" data-arg="solve" class="bg-white dark:bg-[#1e1e1e] rounded-2xl p-4 sm:p-6 shadow-sm border border-gray-100 dark:border-[#2c2c2c] cursor-pointer transition-all active:scale-95 hover:-translate-y-1 hover:shadow-md flex items-center gap-4 group"><div class="w-12 h-12 rounded-full bg-red-50 dark:bg-red-900/30 flex items-center justify-center text-2xl group-hover:rotate-12 transition-transform shrink-0">🎲</div><div><h4 class="font-black text-gray-800 dark:text-gray-300 text-sm sm:text-base uppercase tracking-wide">Решать</h4><p class="text-[10px] sm:text-xs font-bold text-gray-400 leading-tight">Все форматы вперемешку</p></div></div>
+                    <button type="button" data-action="openExamMode" onclick="if(window.openExamMode){window.openExamMode()}else{location.reload()}" style="background:linear-gradient(135deg,#1d4ed8 0%,#4338ca 52%,#6d28d9 100%);color:#fff" class="w-full text-left bg-gradient-to-br from-blue-700 via-indigo-700 to-violet-700 rounded-2xl p-5 shadow-[0_10px_32px_rgba(37,99,235,0.32)] border border-blue-400/60 cursor-pointer transition-all active:scale-95 hover:-translate-y-1 flex items-center justify-between group overflow-hidden relative text-white">
+                        <div class="absolute -right-4 -bottom-8 text-[110px] font-black opacity-10 group-hover:scale-110 transition-transform pointer-events-none">20</div>
+                        <div class="flex items-center gap-4 relative z-10">
+                            <div class="w-14 h-14 rounded-2xl bg-white/15 border border-white/20 flex items-center justify-center text-3xl drop-shadow-sm">📝</div>
+                            <div><h4 class="font-black text-lg sm:text-xl uppercase tracking-wide">Пробник ЕГЭ 1–12</h4><p class="text-xs font-bold text-blue-100 mt-0.5">Случайный вариант ФИПИ · честные первичные баллы · сохранение результата</p></div>
+                        </div>
+                        <div class="bg-white text-blue-700 text-[10px] font-black uppercase px-2.5 py-1.5 rounded-lg shadow-sm relative z-10 whitespace-nowrap">до 20</div>
+                    </button>
                     <div data-action="pickTaskForMode" data-arg="detective" class="bg-[#f3efe6] dark:bg-[#2a2722] rounded-2xl p-5 shadow-sm border-2 border-dashed border-[#d1c1a5] dark:border-[#4a4235] cursor-pointer transition-all active:scale-95 hover:-translate-y-1 hover:shadow-md flex items-center justify-between group overflow-hidden relative"><div class="absolute -right-4 -bottom-4 text-6xl opacity-10 group-hover:scale-110 transition-transform pointer-events-none">🕵️</div><div class="flex items-center gap-4 relative z-10"><div class="text-3xl drop-shadow-sm">🕵️</div><div><h4 class="font-black text-[#3e352d] dark:text-[#dcd6c7] text-lg uppercase tracking-wide">Секретный архив</h4><p class="text-xs font-bold text-[#8a7f72] dark:text-[#8a7f72] mt-0.5">Восстановите утерянные данные</p></div></div><div class="bg-red-600 text-white text-[9px] font-black uppercase px-2 py-1 rounded-md rotate-12 relative z-10 hidden sm:block">Секретно</div></div>
                     <div data-action="pickTaskForMode" data-arg="redpencil" class="bg-[#f4ecd8] dark:bg-[#302b24] rounded-2xl p-5 shadow-sm border border-amber-200 dark:border-[#4a4235] cursor-pointer transition-all active:scale-95 hover:-translate-y-1 hover:shadow-md flex items-center gap-4 group overflow-hidden relative"><div class="absolute inset-0 bg-[radial-gradient(#d1c1a5_1px,transparent_1px)] dark:bg-[radial-gradient(#4a4235_1px,transparent_1px)] bg-[size:20px_20px] opacity-30 pointer-events-none"></div><div class="text-3xl drop-shadow-sm relative z-10 group-hover:rotate-12 transition-transform">🖍️</div><div class="relative z-10"><h4 class="font-black text-[#5c2b2b] dark:text-[#e5c0c0] text-lg uppercase tracking-wide">Красный карандаш</h4><p class="text-xs font-bold text-[#8a6a52] dark:text-[#8a6a52] mt-0.5">Найди исторические фейки</p></div></div>
                 </div>
-            </div>
+            </details>
         </div>
 
         <!-- ИГРОВОЙ ЭКРАН -->
@@ -1275,12 +1278,9 @@
                     <div class="text-center bg-white dark:bg-[#1e1e1e] p-4 rounded-2xl border border-gray-200 dark:border-[#2c2c2c] shadow-sm"><p class="text-[10px] text-gray-400 uppercase font-black tracking-widest">Всего решено</p><p class="text-3xl font-black text-examBlue dark:text-blue-400 mt-1" id="modal-stat-solved">0</p></div>
                     <div class="text-center bg-white dark:bg-[#1e1e1e] p-4 rounded-2xl border border-gray-200 dark:border-[#2c2c2c] shadow-sm relative overflow-hidden cursor-pointer hover:border-rose-400 transition-colors active:scale-95 group" data-action="openMistakesListModal"><div class="absolute inset-0 bg-rose-50 dark:bg-rose-900/10 opacity-50 pointer-events-none transition-opacity group-hover:opacity-100"></div><p class="text-[10px] text-rose-400 uppercase font-black tracking-widest relative z-10">Ошибок в пуле</p><p class="text-3xl font-black text-rose-500 relative z-10 mt-1" id="modal-stat-mistakes">0</p><div class="absolute bottom-1 left-0 w-full text-center text-[8px] text-rose-400/70 font-bold uppercase">Смотреть</div></div>
                 </div>
-                <div class="grid grid-cols-5 gap-2 sm:gap-3 mb-6">
-                    <div class="text-center bg-white dark:bg-[#1e1e1e] p-2 sm:p-3 rounded-2xl border border-cyan-100 dark:border-cyan-900/30 shadow-sm"><p class="text-[8px] sm:text-[9px] text-cyan-500 uppercase font-black tracking-widest">⏳ №1</p><p class="text-lg sm:text-xl font-black text-cyan-600 dark:text-cyan-400 mt-1" id="modal-stat-task1">0</p></div>
-                    <div class="text-center bg-white dark:bg-[#1e1e1e] p-2 sm:p-3 rounded-2xl border border-emerald-100 dark:border-emerald-900/30 shadow-sm"><p class="text-[8px] sm:text-[9px] text-emerald-400 uppercase font-black tracking-widest">🔗 №3</p><p class="text-lg sm:text-xl font-black text-emerald-600 dark:text-emerald-400 mt-1" id="modal-stat-task3">0</p></div>
-                    <div class="text-center bg-white dark:bg-[#1e1e1e] p-2 sm:p-3 rounded-2xl border border-blue-100 dark:border-blue-900/30 shadow-sm"><p class="text-[8px] sm:text-[9px] text-blue-400 uppercase font-black tracking-widest">📍 №4</p><p class="text-lg sm:text-xl font-black text-blue-600 dark:text-blue-400 mt-1" id="modal-stat-task4">0</p></div>
-                    <div class="text-center bg-white dark:bg-[#1e1e1e] p-2 sm:p-3 rounded-2xl border border-purple-100 dark:border-purple-900/30 shadow-sm"><p class="text-[8px] sm:text-[9px] text-purple-400 uppercase font-black tracking-widest">👤 №5</p><p class="text-lg sm:text-xl font-black text-purple-600 dark:text-purple-400 mt-1" id="modal-stat-task5">0</p></div>
-                    <div class="text-center bg-white dark:bg-[#1e1e1e] p-2 sm:p-3 rounded-2xl border border-amber-100 dark:border-amber-900/30 shadow-sm"><p class="text-[8px] sm:text-[9px] text-amber-400 uppercase font-black tracking-widest">🎨 №7</p><p class="text-lg sm:text-xl font-black text-amber-600 dark:text-amber-400 mt-1" id="modal-stat-task7">0</p></div>
+                <div class="grid grid-cols-2 gap-4 mb-6">
+                    <div class="text-center bg-white dark:bg-[#1e1e1e] p-4 rounded-2xl border border-indigo-100 dark:border-indigo-900/30 shadow-sm"><p class="text-[10px] text-indigo-400 uppercase font-black tracking-widest">⏱ Время за решением</p><p class="text-2xl sm:text-3xl font-black text-indigo-600 dark:text-indigo-400 mt-1" id="modal-stat-time">0 мин</p></div>
+                    <div class="text-center bg-white dark:bg-[#1e1e1e] p-4 rounded-2xl border border-emerald-100 dark:border-emerald-900/30 shadow-sm"><p class="text-[10px] text-emerald-500 uppercase font-black tracking-widest">🧠 Фактов выучено</p><p class="text-2xl sm:text-3xl font-black text-emerald-600 dark:text-emerald-400 mt-1" id="modal-stat-learned-pct">0%</p><p class="text-[9px] font-bold text-gray-400 mt-0.5" id="modal-stat-learned-abs"></p></div>
                 </div>
                 <div class="mb-6 bg-white dark:bg-[#1e1e1e] p-4 rounded-2xl border border-gray-200 dark:border-[#2c2c2c] shadow-sm"><h3 class="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-3">Прогресс по эпохам</h3><div id="stats-era-container" class="space-y-3"></div></div>
                 <div class="mb-2 bg-white dark:bg-[#1e1e1e] p-4 rounded-2xl border border-gray-200 dark:border-[#2c2c2c] shadow-sm"><h3 class="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-3">Активность по дням (по заданиям)</h3><div id="stats-daily-container" class="space-y-2"></div></div>
@@ -1308,11 +1308,11 @@
     <!-- jsPDF грузится лениво (см. loadJsPDFOnDemand в cloud-sync.js) — не нужен при старте -->
 
     <!-- === PWA + first-party cloud sync loader === -->
-    <script src="pwa.js?v=20260722-3" defer></script>
+    <script src="pwa.js?v=20260722-4" defer></script>
 
     <!-- Ядро (факты, ~659 КБ): нужно для лобби и заданий. Приложение ОТКРЫВАЕТСЯ сразу
          после него — defer парсит HTML параллельно, порядок выполнения гарантирован. -->
-    <script src="data.js?v=20260722-3" defer></script>
+    <script src="data.js?v=20260722-4" defer></script>
     <!-- app:ready диспатчит инлайн-вотчер готовности в начале <body> (см. watchBoot):
          отдельный boot-ready.js убран — свежий файл не лежал в старом SW-кэше и на
          моргнувшей сети вис, не давая снять заставку. -->

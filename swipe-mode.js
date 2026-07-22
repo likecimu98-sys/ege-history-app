@@ -68,11 +68,14 @@
     // Колоду генерирует создатель матча и кладёт в документ матча (снапшоты правителей
     // включены) — рассинхрон при разных версиях приложения исключён.
     // 45 секунд на матч: побеждает тот, кто наберёт больше очков до конца таймера.
-    // Пары — современники (разница начал правлений ≤100 лет), чтобы было честно-сложно;
-    // исключение: Алексей Михайлович — «джокер», можно с любым до Николая II включительно.
+    // Пары — современники (разница начал правлений ≤150 лет), чтобы было честно-сложно;
+    // правители СССР/РФ (с 1917 г.) — ТОЛЬКО друг с другом: царь против генсека — слишком
+    // просто и исторически «грязно». Исключение: Алексей Михайлович — «джокер», можно
+    // с любым до Николая II включительно.
     const DUEL_SECTIONS = 4, DUEL_CARDS_PER_SECTION = 10, DUEL_MS = 45000;
     window.SWIPE_DUEL_MS = DUEL_MS;
-    const PAIR_MAX_GAP = 100;
+    const PAIR_MAX_GAP = 150;
+    const MODERN_BOUNDARY = 1917; // с этого года начинаются правители СССР/РФ
     const WILDCARD_ID = 'aleksey';
     const WILDCARD_PARTNER_MAX_START = 1894; // начало правления Николая II
 
@@ -80,9 +83,15 @@
         const m = String((r && r.years) || '').match(/\d{3,4}/);
         return m ? parseInt(m[0], 10) : null;
     }
+    function _isModern(r) {
+        const y = _startYear(r);
+        return y != null && y >= MODERN_BOUNDARY;
+    }
     function _pairCompatible(a, b) {
         const ya = _startYear(a), yb = _startYear(b);
         if (ya == null || yb == null) return false;
+        // СССР/РФ не смешиваем с дореволюционными ни при каких зазорах.
+        if (_isModern(a) !== _isModern(b)) return false;
         if (a.id === WILDCARD_ID) return yb <= WILDCARD_PARTNER_MAX_START;
         if (b.id === WILDCARD_ID) return ya <= WILDCARD_PARTNER_MAX_START;
         return Math.abs(ya - yb) <= PAIR_MAX_GAP;
@@ -104,9 +113,13 @@
             pairs.push([r, p]);
         }
         // Страховка: если совместимых пар не хватило — добираем соседей по хронологии.
+        // Сортируем сперва по эпохе (до/после 1917), потом по году — и пары через границу
+        // СССР/РФ не создаём даже здесь.
         if (pairs.length < DUEL_SECTIONS) {
-            const rest = pool.filter(r => !used.has(r.id)).sort((x, y) => (_startYear(x) || 0) - (_startYear(y) || 0));
+            const rest = pool.filter(r => !used.has(r.id)).sort((x, y) =>
+                ((_isModern(x) ? 1 : 0) - (_isModern(y) ? 1 : 0)) || ((_startYear(x) || 0) - (_startYear(y) || 0)));
             for (let i = 0; i + 1 < rest.length && pairs.length < DUEL_SECTIONS; i += 2) {
+                if (_isModern(rest[i]) !== _isModern(rest[i + 1])) { i -= 1; continue; }
                 pairs.push([rest[i], rest[i + 1]]);
             }
         }
@@ -322,8 +335,9 @@
         ov.className = 'no-print';
         ov.style.cssText = 'position:fixed;inset:0;z-index:10050;display:flex;flex-direction:column;background:radial-gradient(circle at 50% 0%,#1e293b,#0b1120);overscroll-behavior:contain;touch-action:none;overflow:hidden';
         _renderShell();
-        // Стартовая пара — по возможности современники (разница правлений ≤100 лет):
-        // свайпать «кто из двух рядом стоявших» интереснее, чем Рюрик против Путина.
+        // Стартовая пара — по возможности современники (разница правлений ≤150 лет,
+        // СССР/РФ — только между собой): свайпать «кто из двух рядом стоявших»
+        // интереснее, чем Рюрик против Путина.
         let a = pool[0], b = pool[1];
         const mate = pool.slice(1).find(o => _pairCompatible(a, o));
         if (mate) b = mate;
@@ -452,7 +466,13 @@
         if (!_sw) return;
         if (_sw.duel) return _duelNextSection(); // дуэль идёт по фиксированным секциям матча
         const rest = _sw.pool.filter(r => !_sw.used.has(r.id));
-        if (rest.length >= 2) { _setPair(rest[0], rest[1]); }
+        if (rest.length >= 2) {
+            // Следующая пара — тоже современники (и не через границу 1917 г.).
+            // Если совместимых не осталось — берём первых двух: лучше так, чем конец колоды.
+            const a = rest[0];
+            const mate = rest.slice(1).find(o => _pairCompatible(a, o)) || rest[1];
+            _setPair(a, mate);
+        }
         else { _renderEnd(); }
     }
 

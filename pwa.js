@@ -1,7 +1,7 @@
 (function () {
     'use strict';
 
-    const CLOUD_SYNC_MODULE = './cloud-sync.js?v=20260722-3';
+    const CLOUD_SYNC_MODULE = './cloud-sync.js?v=20260722-4';
     const APP_SHELL_CACHE_MESSAGE = { type: 'CACHE_APP_SHELL' };
     const OFFLINE_CACHE_MESSAGE = { type: 'CACHE_OFFLINE_ASSETS' };
     const APP_SHELL_WARMUP_DELAY_MS = 45000;

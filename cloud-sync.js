@@ -7,7 +7,7 @@
             signInWithCredential, signOut, initializeFirestore, collection, doc, setDoc, getDoc,
             getDocs, addDoc, updateDoc, deleteDoc, deleteField, onSnapshot, query, where,
             orderBy, limit, runTransaction, arrayUnion, arrayRemove, vpsApiFetch, refreshVpsAuth
-        } from "./vps-sync-compat.js?v=20260722-1";
+        } from "./vps-sync-compat.js?v=20260722-4";
 
         const cloudConfig = { projectId: 'vps-postgresql' };
         
