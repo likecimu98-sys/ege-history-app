@@ -7,7 +7,7 @@
             signInWithCredential, signOut, initializeFirestore, collection, doc, setDoc, getDoc,
             getDocs, addDoc, updateDoc, deleteDoc, deleteField, onSnapshot, query, where,
             orderBy, limit, runTransaction, arrayUnion, arrayRemove, vpsApiFetch, refreshVpsAuth
-        } from "./vps-sync-compat.js?v=20260723-1";
+        } from "./vps-sync-compat.js?v=20260723-2";
 
         const cloudConfig = { projectId: 'vps-postgresql' };
         
@@ -2311,10 +2311,23 @@
                 // P4: блоб прогресса теперь в private/state (в публичном он остаётся лишь
                 // у ещё не обновившихся клиентов). Подставляем приватный блоб в объекты
                 // учеников — весь код кабинета ниже (computeStudentData, PDF) работает как раньше.
-                await Promise.all(st.map(async (s) => {
-                    const j = await _readPrivateBlob(s.uid);
-                    if (j) s.fullStateJson = j;
-                }));
+                // ВАЖНО: не устраиваем шторм. Раньше Promise.all тянул блоб КАЖДОГО ученика
+                // разом; у админа в «все классы» это ~1200 запросов → выжигали rate-limit
+                // API (300/мин с IP), и следующий клик по кабинету падал 429 → «Офлайн»
+                // через раз. Теперь блобы тянем только в режиме класса (или для небольшого
+                // списка), пачками по 8. В общем обзоре админа карточки живут на публичных
+                // полях — для деталей открой конкретный класс.
+                const needBlobs = (filterClass && tc) || st.length <= 400;
+                if (needBlobs) {
+                    const BLOB_CONC = 8;
+                    for (let i = 0; i < st.length; i += BLOB_CONC) {
+                        if (mySeq !== _loadSeq) return;
+                        await Promise.all(st.slice(i, i + BLOB_CONC).map(async (s) => {
+                            const j = await _readPrivateBlob(s.uid);
+                            if (j) s.fullStateJson = j;
+                        }));
+                    }
+                }
                 if (mySeq !== _loadSeq) return;
 
                 const enriched = st.map(s => computeStudentData(s, monStr, monday));
@@ -2377,7 +2390,11 @@
                 }
             } catch(e) {
                 console.error(e);
-                cont.innerHTML = '<p class="text-rose-500 text-xs font-bold text-center py-4">Нет подключения к серверу (Офлайн)</p>';
+                // 429 — это не «офлайн», а сгоревший минутный лимит запросов: говорим честно.
+                const tooMany = !!e && (e.status === 429 || e.code === 'rate_limited');
+                cont.innerHTML = tooMany
+                    ? '<p class="text-rose-500 text-xs font-bold text-center py-4">Слишком много запросов подряд — подожди минуту и обнови кабинет</p>'
+                    : '<p class="text-rose-500 text-xs font-bold text-center py-4">Нет подключения к серверу (Офлайн)</p>';
                 const hwCtrl = document.getElementById('teacher-hw-control');
                 if (hwCtrl) {
                     hwCtrl.classList.remove('hidden');

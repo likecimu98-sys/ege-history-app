@@ -2261,10 +2261,18 @@ window.populateTeacherGroups = function() {
             if (filterLabel) filterLabel.classList.remove('hidden');
         }
     } else {
-        // групп нет: дропдаун прячем, оставляем ручной код (для админа/старых учителей)
+        // групп нет: дропдаун прячем. Ручной ввод кода и фильтр «только мой класс» —
+        // ТОЛЬКО для глобального админа: обычный учитель без групп не должен вводить
+        // чужие коды классов и видеть чужих учеников (изоляция кабинета). Ему — в бота
+        // за группой (/newclass), сервер всё равно не отдаст не его класс.
         if (wrap) { wrap.classList.add('hidden'); wrap.classList.remove('flex'); }
-        if (codeWrap) codeWrap.classList.remove('hidden');
-        if (filterLabel) filterLabel.classList.remove('hidden');
+        if (isAdmin) {
+            if (codeWrap) codeWrap.classList.remove('hidden');
+            if (filterLabel) filterLabel.classList.remove('hidden');
+        } else {
+            if (codeWrap) codeWrap.classList.add('hidden');
+            if (filterLabel) filterLabel.classList.add('hidden');
+        }
     }
 };
 
