@@ -19,6 +19,7 @@ window.state = {
         eraStats: {},
         factStreaks: {},
         totalTimeSpent: 0,
+        timeByTask: { task1: 0, task3: 0, task4: 0, task5: 0, task7: 0 }, // секунды в игре по заданиям
         bestSpeedrunScore: 0,
         egePoints: 0,
         dailyStats: {},
@@ -394,7 +395,7 @@ function updateFactSRS(fKey, isCorrect, isSure) {
 const STORAGE_KEY = 'ege_final_storage_v4';
 const SAVE_FIELDS = [
     'streak', 'totalSolvedEver', 'solvedByTask', 'flashcardsSolved',
-    'eraStats', 'factStreaks', 'hwFlashcardsToSolve', 'totalTimeSpent',
+    'eraStats', 'factStreaks', 'hwFlashcardsToSolve', 'totalTimeSpent', 'timeByTask',
     'egePoints', 'hwTask1', 'hwTask3', 'hwTask4', 'hwTask5', 'hwTask7', 'assignments',
     'visualArchitectureProgress', 'visualArchitectureSolved',
     'visualPaintingProgress', 'visualPaintingSolved',

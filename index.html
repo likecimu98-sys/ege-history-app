@@ -99,15 +99,15 @@
     <link rel="manifest" href="manifest.webmanifest">
     <link rel="icon" type="image/png" href="assets/icons/icon-192.png">
     <link rel="apple-touch-icon" href="assets/icons/icon-180.png">
-    <link rel="stylesheet" href="tokens.css?v=20260722-4">
-    <link rel="stylesheet" href="output.css?v=20260722-4">
-    <link rel="stylesheet" href="theme-aurora.css?v=20260722-4">
-    <link rel="stylesheet" href="styles.css?v=20260722-4">
+    <link rel="stylesheet" href="tokens.css?v=20260723-1">
+    <link rel="stylesheet" href="output.css?v=20260723-1">
+    <link rel="stylesheet" href="theme-aurora.css?v=20260723-1">
+    <link rel="stylesheet" href="styles.css?v=20260723-1">
     
     <!-- Самохостинг telegram-web-app.js: telegram.org часто недоступен (сеть/VPN),
          тогда window.Telegram не создавался → known_tg_id не считывался → случайный id «через раз».
          Локальная копия отдаётся с того же origin и кэшируется service worker'ом. -->
-    <script src="vendor/telegram-web-app.js?v=20260722-4" defer></script>
+    <script src="vendor/telegram-web-app.js?v=20260723-1" defer></script>
 
     <style>
         /* Этот inline-блок намеренно МИНИМАЛЕН: только то, что должно сработать на
@@ -333,7 +333,7 @@
 
     <script>
       (function() {
-        var BOOT_RELEASE = '20260722-4';
+        var BOOT_RELEASE = '20260723-1';
         var bootT0 = Date.now();
         function bootSignal(phase, detail) {
           try {
@@ -520,20 +520,20 @@
 
     <!-- JS разбит на модули: config → utils → state → table → ui → modes → app -->
     <!-- Порядок defer гарантирован браузером: выполняются строго по порядку в DOM -->
-    <script src="config.js?v=20260722-4" defer></script>
-    <script src="utils.js?v=20260722-4" defer></script>
-    <script src="exam-scoring.js?v=20260722-4" defer></script>
-    <script src="state.js?v=20260722-4" defer></script>
-    <script src="table.js?v=20260722-4" defer></script>
-    <script src="ui.js?v=20260722-4" defer></script>
-    <script src="modes.js?v=20260722-4" defer></script>
-    <script src="swipe-data.js?v=20260722-4" defer></script>
-    <script src="swipe-mode.js?v=20260722-4" defer></script>
-    <script src="match-mode.js?v=20260722-4" defer></script>
-    <script src="vov-mode.js?v=20260722-4" defer></script>
-    <script src="visual-trainer.js?v=20260722-4" defer></script>
-    <script src="exam-mode.js?v=20260722-4" defer></script>
-    <script src="app.js?v=20260722-4" defer></script>
+    <script src="config.js?v=20260723-1" defer></script>
+    <script src="utils.js?v=20260723-1" defer></script>
+    <script src="exam-scoring.js?v=20260723-1" defer></script>
+    <script src="state.js?v=20260723-1" defer></script>
+    <script src="table.js?v=20260723-1" defer></script>
+    <script src="ui.js?v=20260723-1" defer></script>
+    <script src="modes.js?v=20260723-1" defer></script>
+    <script src="swipe-data.js?v=20260723-1" defer></script>
+    <script src="swipe-mode.js?v=20260723-1" defer></script>
+    <script src="match-mode.js?v=20260723-1" defer></script>
+    <script src="vov-mode.js?v=20260723-1" defer></script>
+    <script src="visual-trainer.js?v=20260723-1" defer></script>
+    <script src="exam-mode.js?v=20260723-1" defer></script>
+    <script src="app.js?v=20260723-1" defer></script>
 
     <!-- ШАПКА -->
     <header id="main-header" class="sticky top-0 z-50 no-print transition-colors duration-400 pt-2 pb-2 sm:pt-3 sm:pb-3 px-4">
@@ -1282,6 +1282,16 @@
                     <div class="text-center bg-white dark:bg-[#1e1e1e] p-4 rounded-2xl border border-indigo-100 dark:border-indigo-900/30 shadow-sm"><p class="text-[10px] text-indigo-400 uppercase font-black tracking-widest">⏱ Время за решением</p><p class="text-2xl sm:text-3xl font-black text-indigo-600 dark:text-indigo-400 mt-1" id="modal-stat-time">0 мин</p></div>
                     <div class="text-center bg-white dark:bg-[#1e1e1e] p-4 rounded-2xl border border-emerald-100 dark:border-emerald-900/30 shadow-sm"><p class="text-[10px] text-emerald-500 uppercase font-black tracking-widest">🧠 Фактов выучено</p><p class="text-2xl sm:text-3xl font-black text-emerald-600 dark:text-emerald-400 mt-1" id="modal-stat-learned-pct">0%</p><p class="text-[9px] font-bold text-gray-400 mt-0.5" id="modal-stat-learned-abs"></p></div>
                 </div>
+                <div class="mb-6 bg-white dark:bg-[#1e1e1e] p-4 rounded-2xl border border-gray-200 dark:border-[#2c2c2c] shadow-sm">
+                    <h3 class="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-3">По заданиям · время и выучено</h3>
+                    <div class="space-y-2.5">
+                        <div class="flex items-center justify-between gap-2"><span class="text-[11px] font-black text-cyan-500 uppercase w-14 shrink-0">⏳ №1</span><div class="flex-1 bg-gray-100 dark:bg-[#2c2c2c] rounded-full h-1.5"><div id="stat-row-bar-task1" class="bg-cyan-500 h-1.5 rounded-full transition-all duration-500" style="width:0%"></div></div><span class="text-[11px] font-black text-gray-600 dark:text-gray-300 w-16 text-right" id="stat-row-time-task1">0 мин</span><span class="text-[11px] font-black text-emerald-600 dark:text-emerald-400 w-10 text-right" id="stat-row-pct-task1">0%</span></div>
+                        <div class="flex items-center justify-between gap-2"><span class="text-[11px] font-black text-emerald-500 uppercase w-14 shrink-0">🔗 №3</span><div class="flex-1 bg-gray-100 dark:bg-[#2c2c2c] rounded-full h-1.5"><div id="stat-row-bar-task3" class="bg-emerald-500 h-1.5 rounded-full transition-all duration-500" style="width:0%"></div></div><span class="text-[11px] font-black text-gray-600 dark:text-gray-300 w-16 text-right" id="stat-row-time-task3">0 мин</span><span class="text-[11px] font-black text-emerald-600 dark:text-emerald-400 w-10 text-right" id="stat-row-pct-task3">0%</span></div>
+                        <div class="flex items-center justify-between gap-2"><span class="text-[11px] font-black text-blue-500 uppercase w-14 shrink-0">📍 №4</span><div class="flex-1 bg-gray-100 dark:bg-[#2c2c2c] rounded-full h-1.5"><div id="stat-row-bar-task4" class="bg-blue-500 h-1.5 rounded-full transition-all duration-500" style="width:0%"></div></div><span class="text-[11px] font-black text-gray-600 dark:text-gray-300 w-16 text-right" id="stat-row-time-task4">0 мин</span><span class="text-[11px] font-black text-emerald-600 dark:text-emerald-400 w-10 text-right" id="stat-row-pct-task4">0%</span></div>
+                        <div class="flex items-center justify-between gap-2"><span class="text-[11px] font-black text-purple-500 uppercase w-14 shrink-0">👤 №5</span><div class="flex-1 bg-gray-100 dark:bg-[#2c2c2c] rounded-full h-1.5"><div id="stat-row-bar-task5" class="bg-purple-500 h-1.5 rounded-full transition-all duration-500" style="width:0%"></div></div><span class="text-[11px] font-black text-gray-600 dark:text-gray-300 w-16 text-right" id="stat-row-time-task5">0 мин</span><span class="text-[11px] font-black text-emerald-600 dark:text-emerald-400 w-10 text-right" id="stat-row-pct-task5">0%</span></div>
+                        <div class="flex items-center justify-between gap-2"><span class="text-[11px] font-black text-amber-500 uppercase w-14 shrink-0">🎨 №7</span><div class="flex-1 bg-gray-100 dark:bg-[#2c2c2c] rounded-full h-1.5"><div id="stat-row-bar-task7" class="bg-amber-500 h-1.5 rounded-full transition-all duration-500" style="width:0%"></div></div><span class="text-[11px] font-black text-gray-600 dark:text-gray-300 w-16 text-right" id="stat-row-time-task7">0 мин</span><span class="text-[11px] font-black text-emerald-600 dark:text-emerald-400 w-10 text-right" id="stat-row-pct-task7">0%</span></div>
+                    </div>
+                </div>
                 <div class="mb-6 bg-white dark:bg-[#1e1e1e] p-4 rounded-2xl border border-gray-200 dark:border-[#2c2c2c] shadow-sm"><h3 class="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-3">Прогресс по эпохам</h3><div id="stats-era-container" class="space-y-3"></div></div>
                 <div class="mb-2 bg-white dark:bg-[#1e1e1e] p-4 rounded-2xl border border-gray-200 dark:border-[#2c2c2c] shadow-sm"><h3 class="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-3">Активность по дням (по заданиям)</h3><div id="stats-daily-container" class="space-y-2"></div></div>
             </div>
@@ -1308,11 +1318,11 @@
     <!-- jsPDF грузится лениво (см. loadJsPDFOnDemand в cloud-sync.js) — не нужен при старте -->
 
     <!-- === PWA + first-party cloud sync loader === -->
-    <script src="pwa.js?v=20260722-4" defer></script>
+    <script src="pwa.js?v=20260723-1" defer></script>
 
     <!-- Ядро (факты, ~659 КБ): нужно для лобби и заданий. Приложение ОТКРЫВАЕТСЯ сразу
          после него — defer парсит HTML параллельно, порядок выполнения гарантирован. -->
-    <script src="data.js?v=20260722-4" defer></script>
+    <script src="data.js?v=20260723-1" defer></script>
     <!-- app:ready диспатчит инлайн-вотчер готовности в начале <body> (см. watchBoot):
          отдельный boot-ready.js убран — свежий файл не лежал в старом SW-кэше и на
          моргнувшей сети вис, не давая снять заставку. -->

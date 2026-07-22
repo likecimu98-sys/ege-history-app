@@ -1969,21 +1969,27 @@ function updateGlobalUI() {
     updateText($('modal-stat-solved'), window.state.stats.totalSolvedEver);
     updateText($('modal-stat-mistakes'), window.state.mistakesPool.length + ((window.state.stats.mockExamMistakes || []).length));
 
-    // Вместо счётчиков по заданиям — два понятных показателя: время за решением
-    // (totalTimeSpent тикает по секунде в app.js) и % выученных фактов по всем заданиям.
-    if ($('modal-stat-time')) {
-        const sec = window.state.stats.totalTimeSpent || 0;
+    // Вместо счётчиков решённого — время и % выученного: общие сверху и по каждому
+    // заданию (timeByTask тикает в app.js только на игровом экране конкретного таска).
+    const fmtDur = (sec) => {
         const h = Math.floor(sec / 3600), m = Math.floor((sec % 3600) / 60);
-        updateText($('modal-stat-time'), h > 0 ? `${h} ч ${m} мин` : `${m} мин`);
-    }
-    if ($('modal-stat-learned-pct') && window.learnedCountInPeriod) {
+        return h > 0 ? `${h} ч ${m} м` : `${m} мин`;
+    };
+    if ($('modal-stat-time')) updateText($('modal-stat-time'), fmtDur(window.state.stats.totalTimeSpent || 0));
+    if (window.learnedCountInPeriod) {
+        const tbt = window.state.stats.timeByTask || {};
         let learnedAll = 0, totalAll = 0;
         ['task1', 'task3', 'task4', 'task5', 'task7'].forEach(t => {
             const r = window.learnedCountInPeriod(t, 'all');
             learnedAll += r.learned; totalAll += r.total;
+            const pct = r.total ? Math.round(r.learned * 100 / r.total) : 0;
+            if ($('stat-row-time-' + t)) updateText($('stat-row-time-' + t), fmtDur(tbt[t] || 0));
+            if ($('stat-row-pct-' + t)) updateText($('stat-row-pct-' + t), pct + '%');
+            const bar = $('stat-row-bar-' + t);
+            if (bar) bar.style.width = pct + '%';
         });
-        const pct = totalAll ? Math.round(learnedAll * 100 / totalAll) : 0;
-        updateText($('modal-stat-learned-pct'), pct + '%');
+        const pctAll = totalAll ? Math.round(learnedAll * 100 / totalAll) : 0;
+        if ($('modal-stat-learned-pct')) updateText($('modal-stat-learned-pct'), pctAll + '%');
         if ($('modal-stat-learned-abs')) $('modal-stat-learned-abs').textContent = `${learnedAll} из ${totalAll}`;
     }
 

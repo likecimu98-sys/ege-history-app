@@ -7,7 +7,7 @@
             signInWithCredential, signOut, initializeFirestore, collection, doc, setDoc, getDoc,
             getDocs, addDoc, updateDoc, deleteDoc, deleteField, onSnapshot, query, where,
             orderBy, limit, runTransaction, arrayUnion, arrayRemove, vpsApiFetch, refreshVpsAuth
-        } from "./vps-sync-compat.js?v=20260722-4";
+        } from "./vps-sync-compat.js?v=20260723-1";
 
         const cloudConfig = { projectId: 'vps-postgresql' };
         
@@ -3090,6 +3090,12 @@
                 const sbt = s.stats?.solvedByTask || {};
                 TEXT_TASK_KEYS.forEach(k => { st.solvedByTask[k] = Math.max(st.solvedByTask[k], sbt[k] || 0); });
             });
+            // Время по заданиям — как solvedByTask: по-ключевой max между устройствами.
+            st.timeByTask = { task1: 0, task3: 0, task4: 0, task5: 0, task7: 0 };
+            states.forEach(s => {
+                const tbt = s.stats?.timeByTask || {};
+                TEXT_TASK_KEYS.forEach(k => { st.timeByTask[k] = Math.max(st.timeByTask[k], tbt[k] || 0); });
+            });
             st.factStreaks = {};
             states.forEach(s => {
                 Object.entries(s.stats?.factStreaks || {}).forEach(([k, v]) => {
@@ -3239,7 +3245,7 @@
 
         const CLOUD_STATE_FIELDS = [
             'streak','totalSolvedEver','solvedByTask','flashcardsSolved','eraStats','factStreaks',
-            'hwFlashcardsToSolve','hwTask1','hwTask3','hwTask4','hwTask5','hwTask7','totalTimeSpent',
+            'hwFlashcardsToSolve','hwTask1','hwTask3','hwTask4','hwTask5','hwTask7','totalTimeSpent','timeByTask',
             'bestSpeedrunScore','dailyStats','achievements','achievementsData','egePoints',
             'visualArchitectureProgress','visualArchitectureSolved','visualPaintingProgress','visualPaintingSolved',
             'duelElo','duelGames','duelWins','duelLosses','duelDraws',

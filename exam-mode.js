@@ -2,7 +2,7 @@
 (function() {
     'use strict';
 
-    const BANK_SRC = 'exam-bank.generated.js?v=20260722-4';
+    const BANK_SRC = 'exam-bank.generated.js?v=20260723-1';
     const ORDERED_KIMS = new Set([1, 2, 3, 4, 5, 7]);
     const CHOICE_KIMS = new Set([6, 12]);
     const TASK_ICONS = Object.freeze({ 1: '⏳', 2: '🗓️', 3: '🔗', 4: '📍', 5: '👤', 6: '📜', 7: '🎨', 8: '🪙', 9: '🗺️', 10: '🗺️', 11: '🗺️', 12: '🗺️' });

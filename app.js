@@ -663,6 +663,14 @@ function initStorage() {
         const today = getTodayString();
         if (!window.state.stats.dailyStats[today]) window.state.stats.dailyStats[today] = { timeSpent: 0, solved: 0 };
         window.state.stats.dailyStats[today].timeSpent++;
+        // Время по заданиям: тикаем только когда открыт игровой экран и активен один
+        // из базовых тасков (лобби/модалки не считаются — это «время за решением»).
+        const gc = document.getElementById('game-container');
+        const curTask = window.state.currentTask;
+        if (gc && !gc.classList.contains('hidden') && /^task(1|3|4|5|7)$/.test(curTask || '')) {
+            const tbt = window.state.stats.timeByTask || (window.state.stats.timeByTask = {});
+            tbt[curTask] = (tbt[curTask] || 0) + 1;
+        }
         if (window.state.stats.totalTimeSpent % 30 === 0) saveLocal();
     }, 1000);
 }
