@@ -1968,6 +1968,30 @@ function renderLobbySide() {
 }
 window.renderLobbySide = renderLobbySide;
 
+// ── Лобби под диалогом задания (ПК) ─────────────────────────────────────────
+// На ПК задание открывается диалогом, а лобби остаётся видимым фоном (CSS,
+// блок «ПК КАК ОТДЕЛЬНОЕ УСТРОЙСТВО»). pointer-events: none снимает мышь, но
+// НЕ убирает кнопки из обхода по Tab и из скринридера — фокус уезжал бы за
+// затемнение, в интерфейс, которого сейчас нет. Это чинит inert.
+//
+// Наблюдатель, а не правка по месту: класс in-game вешают пять разных мест
+// (app.js ×3, modes.js, visual-trainer.js). Пятая правка рано или поздно
+// потеряется — источник истины должен быть один.
+(function initLobbyInert() {
+    const lobby = document.getElementById('lobby-area');
+    if (!lobby || !('inert' in HTMLElement.prototype)) return;
+    const sync = () => {
+        const off = document.body.classList.contains('in-game');
+        lobby.inert = off;
+        if (off) lobby.setAttribute('aria-hidden', 'true');
+        else lobby.removeAttribute('aria-hidden');
+    };
+    new MutationObserver(sync).observe(document.body, {
+        attributes: true, attributeFilter: ['class']
+    });
+    sync();
+})();
+
 // ── Клавиатура в задании (ПК) ───────────────────────────────────────────────
 // Того, чего на телефоне нет вообще. Ученик, который час решает вариант, мышью
 // работает кратно медленнее. Раскладка: 1-9 — поставить вариант из пула,
