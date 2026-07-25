@@ -1,0 +1,147 @@
+/* ═══════════════════════════════════════════════════════════════════════════
+   theme-classic.css — оформление единственной живой темы приложения.
+
+   ИСТОРИЯ. Раньше здесь лежал theme-aurora.css: 1055 строк, 54.5 КБ, 420
+   объявлений !important. Это была неоновая тема-скин, и её БАЗА применялась
+   глобально — правилами без привязки к какому-либо body.skin-*. Поверх базы
+   лежали шесть наборов скинов, один из которых (classic) возвращал интерфейс
+   к светлому виду.
+
+   Скин с 18.07.2026 всегда один — classic (ui.js принудительно снимает с <body>
+   классы aurora/constructivism/coffee/sakura/forest/scholar). То есть 47 КБ из
+   54 были либо мёртвым кодом, либо активной помехой: база авроры перекрывала
+   дизайн-токены и навязывала карточкам лобби тёмную заливку, тень
+   0 2px 12px rgba(0,0,0,.3), backdrop-filter и неоновые градиенты прогресс-баров.
+   Хуже того, в ui.js уже был описан симптом: пока скрипты качались, «лобби
+   стояло авророй с мёртвыми кнопками» — база светила сквозь недогруженный JS.
+
+   Здесь оставлены ТОЛЬКО правила body.skin-classic — 27 штук.
+   Возвращать сюда базу неоновой темы не нужно: если когда-нибудь понадобятся
+   скины, они делаются поверх токенов из tokens.css, а не встречным потоком
+   !important. Проверяет tools-and-docs/design-lint.js.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* Палитра --a-* объявляется внутри body.skin-classic — намеренно, без :root:
+   значения по умолчанию не должны существовать, чтобы нечему было «просвечивать».
+   Нужные правилам переменные: --a-b1, --a-b2, --a-border, --a-muted, --a-s1, --a-s2, --a-s3, --a-txt. */
+
+body.skin-classic {
+  --a-bg:     #f8fafc;
+  --a-s1:     #ffffff;
+  --a-s2:     #f1f5f9;
+  --a-s3:     #e2e8f0;
+  --a-b1:     #2563eb;
+  --a-b2:     #7c3aed;
+  --a-b3:     #e11d48;
+  --a-txt:    #1e293b;
+  --a-muted:  #64748b;
+  --a-border: #e2e8f0;
+}
+
+body.skin-classic #top-stats-bar { background: rgba(255,255,255,.95) !important; box-shadow: 0 2px 16px rgba(0,0,0,.08) !important; }
+
+body.skin-classic #bottom-nav { background: rgba(255,255,255,.97) !important; border-top-color: #e2e8f0 !important; box-shadow: 0 -2px 8px rgba(0,0,0,.06) !important; }
+
+body.skin-classic [data-action="quickStartGame"],
+body.skin-classic [data-action="pickTaskForMode"] { background: #ffffff !important; }
+
+body.skin-classic .dnd-slot { background-color: #f8fafc !important; border-color: #cbd5e1 !important; }
+
+body.skin-classic .dnd-chip { background: #ffffff !important; border-color: #cbd5e1 !important; color: #1e293b !important; }
+
+html.dark body.skin-classic {
+  --a-bg:     #121212;
+  --a-s1:     #1e1e1e;
+  --a-s2:     #181818;
+  --a-s3:     #2c2c2c;
+  --a-txt:    #d1d5db;
+  --a-muted:  #9ca3af;
+  --a-border: #374151;
+}
+
+html.dark body.skin-classic #top-stats-bar { background: rgba(24,24,24,.95) !important; box-shadow: 0 2px 16px rgba(0,0,0,.4) !important; }
+
+html.dark body.skin-classic #bottom-nav { background: rgba(14,14,14,.97) !important; border-top-color: #374151 !important; }
+
+html.dark body.skin-classic [data-action="quickStartGame"],
+html.dark body.skin-classic [data-action="pickTaskForMode"] { background: #1e1e1e !important; }
+
+body.skin-classic {
+  /* game header делаем светлым */
+}
+
+body.skin-classic #game-header {
+  background: var(--a-s2) !important;
+  border-color: var(--a-border) !important;
+  backdrop-filter: none !important;
+}
+
+body.skin-classic #table-container {
+  background: var(--a-s1) !important;
+  border-color: var(--a-border) !important;
+}
+
+body.skin-classic #pool-panel {
+  background: var(--a-s2) !important;
+  border-color: var(--a-border) !important;
+}
+
+body.skin-classic #table-head {
+  background: var(--a-s3) !important;
+}
+
+body.skin-classic .dnd-slot {
+  background-color: var(--a-s2) !important;
+  border-color: var(--a-border) !important;
+}
+
+body.skin-classic #check-btn-sure {
+  background: linear-gradient(135deg,#059669,#10b981) !important;
+  box-shadow: 0 4px 16px rgba(16,185,129,.3) !important;
+}
+
+body.skin-classic #check-btn-doubt {
+  background: linear-gradient(135deg,#4f46e5,#8b5cf6) !important;
+  box-shadow: 0 4px 16px rgba(139,92,246,.3) !important;
+}
+
+body.skin-classic #next-btn {
+  background: linear-gradient(135deg,var(--a-b1),var(--a-b2)) !important;
+  box-shadow: 0 4px 20px rgba(0,0,0,.2) !important;
+}
+
+body.skin-classic .bg-emerald-500 {
+  background: linear-gradient(135deg,#059669,#10b981) !important;
+  box-shadow: 0 4px 12px rgba(16,185,129,.25) !important;
+}
+
+body.skin-classic .bg-blue-600 {
+  background: linear-gradient(135deg,var(--a-b1),var(--a-b2)) !important;
+  box-shadow: 0 4px 12px rgba(0,0,0,.15) !important;
+}
+
+body.skin-classic [data-action="startDuelSearch"] {
+  background: linear-gradient(135deg,rgba(59,130,246,.1),rgba(139,92,246,.08)) !important;
+  border-color: rgba(59,130,246,.25) !important;
+  box-shadow: 0 4px 16px rgba(59,130,246,.1) !important;
+}
+
+body.skin-classic [data-action="startDuelSearch"] h4 {
+  background: none !important;
+  -webkit-text-fill-color: var(--a-txt) !important;
+  color: var(--a-txt) !important;
+}
+
+body.skin-classic [data-action="startDuelSearch"] p {
+  color: var(--a-muted) !important;
+}
+
+body.skin-classic [data-action="nextOnbStep"],
+body.skin-classic [data-action="finishOnboarding"].bg-emerald-500 {
+  background: linear-gradient(135deg,var(--a-b1),var(--a-b2)) !important;
+  box-shadow: 0 4px 16px rgba(0,0,0,.15) !important;
+}
+
+html.dark body.skin-classic .dnd-chip:not(.in-slot) { background:#27272a !important; border-color:#3f3f46 !important; color:#e4e4e7 !important; }
+
+html.dark body.skin-classic .dnd-chip.selected:not(.in-slot) { background:rgba(59,130,246,.22) !important; border-color:#3b82f6 !important; color:#f1f5f9 !important; }

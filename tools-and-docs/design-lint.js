@@ -35,7 +35,6 @@ const SKIP_DIRS = new Set(['node_modules', '.git', 'dist', 'build']);
 const SKIP_FILES = [
     /\.generated\.js$/,
     /(^|[\\/])output\.css$/,
-    /(^|[\\/])theme-aurora\.css$/,   // задача #30: уедет под body.skin-aurora целиком
     /(^|[\\/])design-lint\.js$/,
     /(^|[\\/])tokens\.css$/,         // здесь значения объявляются — это их дом
 ];

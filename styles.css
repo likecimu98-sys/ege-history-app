@@ -1588,7 +1588,7 @@ details.lobby-acc[open] .acc-chev { transform: rotate(180deg); }
     position: absolute; top: 10px; right: 10px;
     font-size: var(--t-micro); font-weight: var(--t-micro-w);
     padding: 2px 7px; border-radius: var(--r-sm);
-    background: rgba(16, 185, 129, .14); color: var(--c-success);
+    background: rgba(16, 185, 129, .14); color: var(--c-success-text);
     white-space: nowrap; font-variant-numeric: tabular-nums;
 }
 
@@ -1641,6 +1641,56 @@ details.lobby-acc[open] .acc-chev { transform: rotate(180deg); }
    перебьёт — зависит от порядка подключения файлов. Фиксируем явно, иначе
    скрытая карточка (например баннер ДЗ) окажется видимой. */
 .card-row.hidden, .card-feat.hidden, .card-tile.hidden { display: none; }
+
+/* ── Читаемость вторичного текста ─────────────────────────────────────────
+   В разметке вторичный текст почти везде помечен `text-gray-400`. На белом это
+   даёт контраст 2.4:1 при пороге WCAG AA 4.5:1 — то есть по всему приложению
+   подписи были формально нечитаемы. Держалось это на глобальном правиле из
+   theme-aurora.css (`.text-gray-500, .text-gray-400, .text-gray-600 { color:
+   var(--a-muted) !important }`), где классика переопределяла --a-muted на
+   slate-500. Аврора удалена — возвращаем то же самое, но через токен и без
+   !important (styles.css грузится после output.css, специфичности хватает).
+
+   Замер после правки: gray-400 → var(--c-muted-2) = #6b7280 ≈ 4.8:1.
+
+   ⚠️ Это перекраска Tailwind-утилиты, то есть тот же приём, за который я ругаю
+   аврору. Разница в том, что здесь один токен и три строки вместо 226
+   !important, и что настоящее лечение (заменить класс в разметке) вынесено в
+   отдельную задачу: text-gray-400 встречается в 32 местах на одном экране. */
+.text-gray-300, .text-gray-400, .text-stone-400 { color: var(--c-muted-2); }
+.dark .dark\:text-gray-400,
+.dark .dark\:text-gray-500,
+.dark .dark\:text-gray-600 { color: var(--c-muted); }
+
+/* ── Шапка-«остров»: наследие тёмной вёрстки ──────────────────────────────
+   Разметка #top-stats-bar писалась под ТЁМНУЮ шапку неоновой темы: подписи
+   помечены text-white/50, разделители и кнопки — bg-white/10. Когда шапка стала
+   светлой, белое по белому исчезло, и это лечили правилом внутри theme-aurora.css
+   (`html:not(.dark) #top-stats-bar .text-white\/50`). Правило было привязано к
+   ТЕМЕ, а не к скину, поэтому при выносе классики оно потерялось — подписи
+   «выучено» и «баллов» пропали. Переносим сюда и завязываем на токены, чтобы
+   работало в обеих темах.
+
+   ⚠️ Это совместимость с чужой вёрсткой, а не решение. По-настоящему лечится
+   заменой text-white/50 → токен прямо в index.html; там же живут кегли 7px и 9px,
+   нарушающие шкалу (минимум 11px). Вынесено в отдельную задачу: шапка — общий
+   для всех экранов компонент, её нельзя переделывать мимоходом. */
+/* Цифры статов: в разметке на них висят бледные Tailwind-классы (blue-300,
+   violet-300) — контраст на белом 1.8:1, читать невозможно. Их перекрывала
+   аврора; возвращаем явно и без неонового text-shadow (он рисовался под тёмную
+   шапку и на светлой выглядел грязью). */
+#stat-learned { color: var(--c-stat-learned); text-shadow: none; }
+#stat-solved  { color: var(--c-stat-solved);  text-shadow: none; }
+#stat-days    { color: var(--c-stat-days);    text-shadow: none; }
+#stat-ege     { color: var(--c-stat-learned); text-shadow: none; }
+#ege-ring     { stroke: var(--c-stat-learned); filter: none; }
+
+#top-stats-bar .text-white\/50 { color: var(--c-muted-2); }
+#top-stats-bar .bg-white\/10   { background-color: rgba(15, 23, 42, .12); }
+#top-stats-bar .hover\:bg-white\/20:hover { background-color: rgba(15, 23, 42, .18); }
+.dark #top-stats-bar .text-white\/50 { color: var(--c-muted); }
+.dark #top-stats-bar .bg-white\/10   { background-color: rgba(255, 255, 255, .10); }
+.dark #top-stats-bar .hover\:bg-white\/20:hover { background-color: rgba(255, 255, 255, .20); }
 
 /* ── Отвязка от theme-aurora.css ──────────────────────────────────────────
    В проекте лежит theme-aurora.css: 1055 строк и 420 объявлений !important.

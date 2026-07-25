@@ -50,7 +50,7 @@ GitHub `https://github.com/likecimu98-sys/ege-history-app` (пока публи�
   После правки классов в разметке/JS: `npm run build:css` (конфиг
   `tailwind.config.js`, источник `input.css`). Иначе новый класс тихо не
   применится.
-- Дизайн-токены: `tokens.css` (акценты приложения) и `theme-aurora.css`
+- Дизайн-токены: `tokens.css` (система: радиусы/тени/шкала/акценты) и `theme-classic.css` (единственный живой скин; аврора удалена 25.07.2026)
   (8 скинов — aurora/classic/constructivism/vaporwave/sakura/terminal/
   midnight/scholar, список в `SKINS` в `ui.js`).
 - Нет сборщика бэкенда/бандлера для JS-логики — правишь файлы напрямую.

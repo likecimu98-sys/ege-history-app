@@ -3,7 +3,7 @@
   "counts": {
     "radius": 161,
     "font-too-small": 280,
-    "shadow-literal": 93
+    "shadow-literal": 103
   },
   "byFile": {
     "radius": {
@@ -65,6 +65,7 @@
       "index.html": 2,
       "styles.css": 45,
       "swipe-mode.js": 2,
+      "theme-classic.css": 10,
       "tools-and-docs/tools/fipi-parser/constructor.js": 1,
       "tools-and-docs/tools/fipi-parser/output/_answer-work/gdzotvet-maps.html": 2,
       "tools-and-docs/tools/fipi-parser/output/_answer-work/gdzotvet-task4.html": 2,
