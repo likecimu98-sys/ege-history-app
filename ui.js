@@ -1017,6 +1017,9 @@ window.updateGamePeriodChip = function() {
     const chosen = window.state.periodChosen || window.state._wpApplied
         || (() => { try { return localStorage.getItem('ege_period_chosen') === '1'; } catch (e) { return false; } })();
     if (txt) txt.textContent = chosen ? window.currentPeriodLabel() : 'Период';
+    // Пульсация-подсказка только пока период ни разу не выбран осознанно. Дальше она
+    // не несёт информации и просто мозолит глаз (CSS: #game-period-chip.is-hinting).
+    chip.classList.toggle('is-hinting', !chosen);
     gear.classList.add('hidden');
     chip.classList.remove('hidden'); chip.classList.add('flex');
 };
@@ -1879,27 +1882,86 @@ function renderMainAction() {
         title = `Начать: ${_wpLabel(a.period) || 'Вся история'}`;
         sub = 'первые факты за 2 минуты';
     }
-    const chip = (label, val, act, dim) => `
-        <button onclick="window.mainActionGo('${act}')" style="flex:1;min-width:0;background:${dim ? 'rgba(255,255,255,0.6)' : '#fff'};border:1px solid rgba(0,0,0,0.08);border-radius:999px;padding:10px 8px;font-size:11px;font-weight:900;color:#475569;cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" class="dark:!bg-[#1e1e1e] dark:!text-gray-300 active:scale-95 transition-transform">${label}${val != null ? ` · ${val}` : ''}</button>`;
+    // Чипов под кнопкой было четыре, и они спорили с самой кнопкой: «Повтор» и «Слабое» —
+    // ровно то, что computeMainAction() и так выбирает сам (kind 'review' / 'weak'), а ДЗ
+    // теперь живёт отдельной строкой-делом выше. Остались только «Ошибки»: единственный
+    // вход, которого нет в лестнице главной кнопки. И он появляется, лишь когда ошибки есть.
+    const chip = (label, val, act) => `
+        <button type="button" class="la-chip" onclick="window.mainActionGo('${act}')">${label}${val != null ? ` <span class="n">${val}</span>` : ''}</button>`;
     box.innerHTML = `
-        <div onclick="window.mainActionGo()" style="background:${m.bg};border-radius:18px;padding:16px 18px;cursor:pointer;color:#fff;box-shadow:0 8px 24px rgba(0,0,0,0.18)" class="active:scale-[0.98] transition-transform">
+        <div onclick="window.mainActionGo()" style="background:${m.bg};border-radius:var(--r-md);padding:16px 18px;cursor:pointer;color:#fff;box-shadow:var(--e-2)" class="active:scale-[0.98] transition-transform">
             <div style="display:flex;align-items:center;gap:14px">
-                <div style="font-size:30px;line-height:1;flex-shrink:0">${m.icon}</div>
+                <div style="font-size:28px;line-height:1;flex-shrink:0">${m.icon}</div>
                 <div style="flex:1;min-width:0">
-                    <div style="font-size:17px;font-weight:900;letter-spacing:.01em">${title}</div>
-                    ${sub ? `<div style="font-size:12px;font-weight:700;opacity:.85;margin-top:2px">${sub}</div>` : ''}
+                    <div style="font-size:var(--t-title);font-weight:800;letter-spacing:.01em">${title}</div>
+                    ${sub ? `<div style="font-size:var(--t-caption);font-weight:600;opacity:.88;margin-top:2px">${sub}</div>` : ''}
                 </div>
                 <div style="font-size:20px;opacity:.8;flex-shrink:0">›</div>
             </div>
         </div>
-        <div style="display:flex;gap:6px;margin-top:8px">
-            ${chip('📚 ДЗ', a.hwCount || null, 'hwtab', !a.hwCount)}
-            ${chip('🔧 Ошибки', a.mistakes.total || null, 'mistakes', !a.mistakes.total)}
-            ${chip('🧠 Повтор', a.due.total || null, 'review', !a.due.total)}
-            ${chip('🎯 Слабое', null, 'weak', false)}
-        </div>`;
+        ${a.mistakes.total ? `<div style="display:flex;gap:var(--gap-tap);margin-top:8px">${chip('🔧 Работа над ошибками', a.mistakes.total, 'mistakes')}</div>` : ''}`;
+
+    // Строка «Повторение» (тип 3): дело со сроком, показываем только когда память
+    // реально просит. Пустая строка «0 к повторению» — это шум, а не информация.
+    const rev = document.getElementById('lobby-review-row');
+    if (rev) {
+        const n = (a.due && a.due.total) || 0;
+        rev.classList.toggle('hidden', n === 0);
+        const cnt = document.getElementById('lobby-review-count');
+        if (cnt) cnt.textContent = n;
+    }
+    // Живой статус дуэли: собственный рейтинг честнее статичной плашки «Online»,
+    // которая висела на старом баннере независимо от того, есть ли кто-то в сети.
+    const elo = document.getElementById('lobby-duel-elo');
+    if (elo) {
+        const r = window.state && window.state.stats && window.state.stats.duelElo;
+        if (r) { elo.textContent = '★ ' + Math.round(r); elo.hidden = false; }
+        else { elo.hidden = true; }
+    }
 }
 window.renderMainAction = renderMainAction;
+
+// ── Вкладки разделов лобби ──────────────────────────────────────────────────
+// Пришли на смену гармошкам. Гармошка прячет содержимое и заставляет спрашивать
+// «что там внутри», а её заголовок был высотой 16px при норме пальца 44. Вкладки
+// показывают все группы всегда, переключают одним касанием и не дают высоте
+// экрана скакать. Выбранная вкладка переживает перезаход — ученик возвращается
+// туда же, где был. Тот же компонент в волне ПК разворачивается в боковой рельс.
+const _TAB_KEY = 'ege_lobby_tab';
+function initLobbyTabs() {
+    const bar = document.getElementById('lobby-tabs');
+    if (!bar || bar.dataset.bound === '1') return;
+    bar.dataset.bound = '1';
+    const tabs = Array.prototype.slice.call(bar.querySelectorAll('.la-tab'));
+    const panels = Array.prototype.slice.call(document.querySelectorAll('.la-panel'));
+    if (!tabs.length) return;
+    const show = (name, persist) => {
+        if (!tabs.some(t => t.dataset.tab === name)) name = tabs[0].dataset.tab;
+        tabs.forEach(t => t.setAttribute('aria-selected', String(t.dataset.tab === name)));
+        panels.forEach(p => { p.hidden = p.dataset.panel !== name; });
+        if (persist) { try { localStorage.setItem(_TAB_KEY, name); } catch (e) {} }
+    };
+    bar.addEventListener('click', e => {
+        const t = e.target.closest && e.target.closest('.la-tab');
+        if (t) show(t.dataset.tab, true);
+    });
+    // Стрелки: вкладки должны работать с клавиатуры — на ПК это основной способ.
+    bar.addEventListener('keydown', e => {
+        if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
+        const i = tabs.indexOf(document.activeElement);
+        if (i < 0) return;
+        e.preventDefault();
+        const next = tabs[(i + (e.key === 'ArrowRight' ? 1 : tabs.length - 1)) % tabs.length];
+        next.focus();
+        show(next.dataset.tab, true);
+    });
+    let saved = null;
+    try { saved = localStorage.getItem(_TAB_KEY); } catch (e) {}
+    show(saved || tabs[0].dataset.tab, false);
+}
+window.initLobbyTabs = initLobbyTabs;
+if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', initLobbyTabs, { once: true });
+else initLobbyTabs();
 
 function updateGlobalUI() {
     renderMainAction();

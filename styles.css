@@ -1451,12 +1451,226 @@ details.lobby-acc summary { list-style: none; }
 details.lobby-acc .acc-chev { transition: transform .25s ease; }
 details.lobby-acc[open] .acc-chev { transform: rotate(180deg); }
 
-/* Кнопка периода в шапке игры: мягкая пульсация-подсказка «на меня можно нажать» */
-@keyframes period-chip-glow {
-    0%, 100% { box-shadow: 0 1px 2px rgba(0, 0, 0, .15); }
-    50%      { box-shadow: 0 0 14px rgba(99, 102, 241, .8); }
+/* Кнопка периода в шапке игры: подсказка «на меня можно нажать».
+   ПРАВИЛО СИСТЕМЫ: пульсирующая подсветка НИКОГДА не выходит за границы своего
+   элемента. Было `box-shadow: 0 0 14px` наружу — а до края #game-header остаётся
+   6.7px (замер 25.07.2026), то есть больше половины ореола вылезало за рамку и
+   резалось её скруглённым углом. Обрезки через overflow в предках нет — ореолу
+   просто некуда деваться. Анимируем inset-обводку: она не зависит от отступов
+   родителя и не сломается ни при какой вёрстке шапки. */
+@keyframes period-chip-hint {
+    0%, 100% { box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .34); }
+    50%      { box-shadow: inset 0 0 0 2px rgba(255, 255, 255, .92); }
 }
-#game-period-chip { animation: period-chip-glow 2.6s ease-in-out infinite; }
+/* Подсказка живёт только до первого осознанного выбора периода: класс вешает
+   updateGamePeriodChip() в ui.js. Подсказка, которая не выключается, перестаёт
+   быть подсказкой и становится раздражителем. */
+#game-period-chip.is-hinting { animation: period-chip-hint 2.6s ease-in-out infinite; }
 @media (prefers-reduced-motion: reduce) {
-    #game-period-chip { animation: none; }
+    #game-period-chip.is-hinting { animation: none; }
 }
+
+/* ══════════════════════════════════════════════════════════════════════════
+   СЛОЙ КОМПОНЕНТОВ ЛОББИ · дизайн-система, июль 2026
+   ──────────────────────────────────────────────────────────────────────────
+   Всё ниже собрано ТОЛЬКО из токенов tokens.css. Хардкод hex и «на глаз»
+   подобранных px здесь запрещён — иначе система теряет смысл (это уже
+   происходило: tokens.css объявили и год не применяли, аудит нашёл 7 радиусов,
+   15 теней и 13 размеров шрифта в одном лобби). Проверяет design-lint.js.
+
+   Акцент режима приходит из разметки одной переменной: style="--a:var(--a-task1)".
+   Хекс в разметке не пишем никогда. Акцент имеет право появиться ровно в трёх
+   местах: подложка иконки (14%), полоса прогресса, рамка активного состояния.
+   ══════════════════════════════════════════════════════════════════════════ */
+
+/* ── Чип действия под главной кнопкой ──────────────────────────────────── */
+.la-chip {
+    min-height: var(--tap-min);
+    display: inline-flex; align-items: center; justify-content: center; gap: 5px;
+    padding: 0 14px; border-radius: var(--r-full);
+    background: var(--c-card); border: 1px solid var(--c-border-2);
+    font-size: var(--t-label); font-weight: var(--t-label-w); color: var(--c-text-soft);
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    cursor: pointer; transition: transform .12s ease, background .12s ease;
+}
+.la-chip:active { transform: scale(.96); }
+.la-chip:focus-visible { outline: 2px solid var(--c-indigo); outline-offset: 2px; }
+.la-chip .n { font-variant-numeric: tabular-nums; opacity: .75; }
+
+/* ── Вкладки разделов. На ПК тот же компонент разворачивается в рельс ──── */
+.la-tabs {
+    display: flex; gap: var(--gap-tap); overflow-x: auto;
+    scrollbar-width: none; -webkit-overflow-scrolling: touch; padding-bottom: 2px;
+}
+.la-tabs::-webkit-scrollbar { display: none; }
+.la-tab {
+    flex: 0 0 auto; min-height: var(--tap-min);
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 0 14px; border-radius: var(--r-full);
+    background: var(--c-card); border: 1px solid var(--c-border);
+    font-size: var(--t-label); font-weight: var(--t-label-w); color: var(--c-muted-2);
+    white-space: nowrap; cursor: pointer;
+    transition: background .15s ease, color .15s ease, border-color .15s ease;
+}
+.la-tab .n { font-size: var(--t-micro); font-weight: var(--t-micro-w); opacity: .65; font-variant-numeric: tabular-nums; }
+.la-tab[aria-selected="true"] { background: var(--c-indigo); border-color: var(--c-indigo); color: #fff; }
+.la-tab[aria-selected="true"] .n { opacity: .8; }
+.la-tab:focus-visible { outline: 2px solid var(--c-indigo); outline-offset: 2px; }
+
+/* Панель раздела: показана только выбранная вкладка */
+.la-panel[hidden] { display: none; }
+
+/* ── ТИП 1 · Плитка режима ─────────────────────────────────────────────────
+   Сетка по 3. Вся плитка — тап-цель, поэтому min-height задан явно. */
+.card-tile {
+    min-height: 92px;
+    display: flex; flex-direction: column; align-items: center; gap: 6px;
+    padding: 12px 8px; text-align: center;
+    background: var(--c-card); border: 1px solid var(--c-border);
+    border-radius: var(--r-md); box-shadow: var(--e-1);
+    cursor: pointer; transition: transform .12s ease, box-shadow .12s ease, border-color .12s ease;
+}
+.card-tile:hover { box-shadow: var(--e-2); transform: translateY(-2px); }
+.card-tile:active { transform: scale(.96); border-color: var(--a, var(--c-border-2)); }
+.card-tile:focus-visible { outline: 2px solid var(--c-indigo); outline-offset: 2px; }
+.card-tile .ico {
+    position: relative; width: 36px; height: 36px; flex: 0 0 36px;
+    border-radius: var(--r-sm); display: flex; align-items: center; justify-content: center;
+    font-size: 19px; color: var(--a, var(--c-indigo));
+}
+/* Подложка иконки — акцент на 14%. Через ::before, а не color-mix():
+   старые WebView в Telegram на Android color-mix() не понимают. */
+.card-tile .ico::before {
+    content: ""; position: absolute; inset: 0; border-radius: inherit;
+    background: var(--a, var(--c-indigo)); opacity: .14;
+}
+.card-tile .ico > * { position: relative; }
+/* display:block обязателен — иначе строчные b и i слипаются в «№1Хронология».
+   Плитка узкая (109px на 375-м экране), поэтому длинные слова переносим по
+   слогам, а не выпускаем за край: «РешатьВперемешку» вылезала из карточки. */
+.card-tile > span { display: block; min-width: 0; max-width: 100%; }
+.card-tile b { display: block; font-size: var(--t-label); font-weight: 800; line-height: 1.15; color: var(--c-text); overflow-wrap: anywhere; }
+.card-tile i { display: block; font-style: normal; font-size: var(--t-micro); font-weight: 500; color: var(--c-muted-2); line-height: 1.2; margin-top: 2px; overflow-wrap: anywhere; hyphens: auto; }
+/* Полоса прогресса. Пустую шкалу не рисуем — ноль демотивирует и ест место;
+   блок появляется сам, как только по заданию выучен первый факт. */
+/* Заливку прогресса намеренно НЕ делаем через <i>: селектор `.card-tile i`
+   выше уже задаёт шрифт подзаголовка и подмешивался бы сюда. Отдельный класс
+   вместо тега — чтобы каскад не воевал сам с собой. */
+.card-tile .pb { width: 100%; height: 3px; border-radius: var(--r-full); background: var(--c-card-2); overflow: hidden; margin-top: 2px; }
+.card-tile .pb > .fill { display: block; height: 100%; width: 0; border-radius: var(--r-full); background: var(--a, var(--c-indigo)); transition: width .5s ease; }
+.card-tile .pb[data-zero="1"] { display: none; }
+
+/* ── ТИП 2 · Событие (дуэль и пробник — и больше ничто) ───────────────────
+   Признак типа — живой статус: сколько людей онлайн, какой был результат. */
+.card-feat {
+    position: relative; min-height: 88px;
+    display: flex; flex-direction: column; gap: 7px; padding: 12px;
+    text-align: left; background: var(--c-card);
+    border: 1px solid var(--c-border); border-radius: var(--r-md); box-shadow: var(--e-1);
+    cursor: pointer; transition: transform .12s ease, box-shadow .12s ease, border-color .12s ease;
+}
+.card-feat:hover { box-shadow: var(--e-2); transform: translateY(-2px); border-color: var(--a, var(--c-border-2)); }
+.card-feat:active { transform: scale(.97); }
+.card-feat:focus-visible { outline: 2px solid var(--c-indigo); outline-offset: 2px; }
+.card-feat .ico {
+    position: relative; width: 34px; height: 34px; flex: 0 0 34px;
+    border-radius: var(--r-sm); display: flex; align-items: center; justify-content: center;
+    font-size: 18px; color: var(--a, var(--c-indigo));
+}
+.card-feat .ico::before {
+    content: ""; position: absolute; inset: 0; border-radius: inherit;
+    background: var(--a, var(--c-indigo)); opacity: .14;
+}
+.card-feat .ico > * { position: relative; }
+.card-feat b { display: block; font-size: var(--t-label); font-weight: 800; letter-spacing: -.01em; color: var(--c-text); }
+.card-feat i { display: block; font-style: normal; font-size: var(--t-micro); font-weight: 500; color: var(--c-muted-2); line-height: 1.3; margin-top: 1px; }
+.card-feat .live {
+    position: absolute; top: 10px; right: 10px;
+    font-size: var(--t-micro); font-weight: var(--t-micro-w);
+    padding: 2px 7px; border-radius: var(--r-sm);
+    background: rgba(16, 185, 129, .14); color: var(--c-success);
+    white-space: nowrap; font-variant-numeric: tabular-nums;
+}
+
+/* ── ТИП 3 · Строка (дело со сроком: ДЗ, повторение) ──────────────────────
+   Полоса слева кодирует срочность. Это ЕДИНСТВЕННОЕ место, где цвет означает
+   состояние, а не режим: красная — горит, янтарная — скоро, серая — потом. */
+.card-row {
+    display: flex; align-items: center; gap: 10px;
+    min-height: 56px; padding: 9px 12px; width: 100%; text-align: left;
+    background: var(--c-card); border: 1px solid var(--c-border);
+    border-left: 3px solid var(--a, var(--c-muted-3));
+    border-radius: var(--r-md); box-shadow: var(--e-1);
+    cursor: pointer; transition: transform .12s ease, box-shadow .12s ease;
+}
+.card-row:hover { box-shadow: var(--e-2); }
+.card-row:active { transform: scale(.98); }
+.card-row:focus-visible { outline: 2px solid var(--c-indigo); outline-offset: 2px; }
+.card-row .ico {
+    position: relative; width: 32px; height: 32px; flex: 0 0 32px;
+    border-radius: var(--r-sm); display: flex; align-items: center; justify-content: center;
+    font-size: 17px; color: var(--a, var(--c-indigo));
+}
+.card-row .ico::before {
+    content: ""; position: absolute; inset: 0; border-radius: inherit;
+    background: var(--a, var(--c-indigo)); opacity: .14;
+}
+.card-row .ico > * { position: relative; }
+.card-row .txt { flex: 1; min-width: 0; }
+.card-row b { display: block; font-size: var(--t-label); font-weight: 750; color: var(--c-text); }
+.card-row i { display: block; font-style: normal; font-size: var(--t-micro); font-weight: 500; color: var(--c-muted-2); }
+.card-row .cnt { font-size: var(--t-label); font-weight: 800; color: var(--a, var(--c-muted-2)); font-variant-numeric: tabular-nums; flex: 0 0 auto; }
+
+/* ── Сетки лобби ─────────────────────────────────────────────────────────── */
+.la-grid-3 { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--gap-tap); }
+.la-grid-2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--gap-tap); }
+@media (min-width: 640px) {
+    .la-grid-3 { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
+    .la-grid-2 { gap: 12px; }
+}
+
+/* ── Служебное ───────────────────────────────────────────────────────────── */
+/* Только для скринридера: сохраняем поля, которые читает/пишет старый JS
+   (например progress-text-taskN из state.js), не показывая их глазу. */
+.la-sr {
+    position: absolute; width: 1px; height: 1px;
+    padding: 0; margin: -1px; overflow: hidden;
+    clip-path: inset(50%); white-space: nowrap; border: 0;
+}
+/* Tailwind-класс .hidden имеет ту же специфичность, что и .card-*, и кто кого
+   перебьёт — зависит от порядка подключения файлов. Фиксируем явно, иначе
+   скрытая карточка (например баннер ДЗ) окажется видимой. */
+.card-row.hidden, .card-feat.hidden, .card-tile.hidden { display: none; }
+
+/* ── Отвязка от theme-aurora.css ──────────────────────────────────────────
+   В проекте лежит theme-aurora.css: 1055 строк и 420 объявлений !important.
+   Исторически это была неоновая тема-скин, но с 18.07.2026 скин всегда один —
+   skin-classic (см. ui.js: «ТЕМА — только классика»). Файл при этом грузится
+   безусловно, и его ГЛОБАЛЬНЫЕ правила (не привязанные ни к какому body.skin-*)
+   продолжают действовать: карточки лобби ловятся по [data-action="…"] и получают
+   тёмную заливку, тень 0 2px 12px rgba(0,0,0,.3) и backdrop-filter, а
+   #progress-bar-* — неоновые градиенты со свечением. Именно поэтому визуал
+   расползается: половина стилей приходит из темы, которой никто не пользуется.
+
+   Правильное лечение — увести всю глобальную часть авроры под body.skin-aurora
+   (класс, который никогда не ставится), оставив рабочие блоки body.skin-classic.
+   Это отдельная задача: аврора держит светлую шапку и трогает все экраны, так
+   что её нельзя чинить мимоходом в конце длинной сессии.
+   До тех пор снимаем её хватку точечно — только с новых компонентов лобби. */
+#lobby-area .card-tile,
+#lobby-area .card-feat,
+#lobby-area .card-row {
+    background: var(--c-card) !important;
+    border-color: var(--c-border) !important;
+    box-shadow: var(--e-1) !important;
+    backdrop-filter: none !important;
+}
+#lobby-area .card-tile:hover,
+#lobby-area .card-feat:hover,
+#lobby-area .card-row:hover { box-shadow: var(--e-2) !important; }
+/* Заливка прогресса — плоский акцент режима, без неонового градиента и ореола */
+#lobby-area .card-tile .pb > .fill {
+    background: var(--a, var(--c-indigo)) !important;
+    box-shadow: none !important;
+}
+#lobby-area .card-tile .pb { background: var(--c-card-2) !important; }

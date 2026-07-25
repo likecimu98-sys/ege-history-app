@@ -992,7 +992,13 @@ function updateProgressBars() {
         const pct = Math.min(100, Math.round((info.learned / info.total) * 100));
         const bar = $('progress-bar-' + task);
         const txt = $('progress-text-' + task);
-        if (bar) bar.style.width = pct + '%';
+        if (bar) {
+            bar.style.width = pct + '%';
+            // Пустую шкалу не показываем: ноль демотивирует и занимает место на плитке.
+            // Блок возвращается сам, как только по заданию выучен первый факт.
+            const pb = bar.parentElement;
+            if (pb && pb.classList.contains('pb')) pb.dataset.zero = info.learned === 0 ? '1' : '0';
+        }
         if (txt) txt.textContent = info.learned + ' / ' + info.total + ' выучено';
     });
 }
