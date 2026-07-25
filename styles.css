@@ -1853,6 +1853,139 @@ button.stat-card:hover { border-color: var(--c-border-2); }
     letter-spacing: 0; text-transform: none;
 }
 
+/* ══════════════════════════════════════════════════════════════════════════
+   КАБИНЕТ УЧИТЕЛЯ — карточка ученика
+   ──────────────────────────────────────────────────────────────────────────
+   Замер до правки (одна карточка): 11 подписей кеглем 8px, 5 цифр в KPI-ряду
+   пятью разными цветами, 5 кнопок пятью пастельными фонами, разделители
+   захардкожены как #f1f5f9 БЕЗ тёмного варианта — в тёмной теме карточка
+   расчерчена почти белыми линиями. Всё это инлайн-стилями в шаблоне строки.
+
+   Экран, где учитель ищет глазами отстающего, обязан быть спокойным: цвет
+   работает, только пока он редкий. Здесь цветом кодируются ровно две вещи —
+   точность (она и есть оценка) и статус-бейджи. Остальное — текст.
+   ══════════════════════════════════════════════════════════════════════════ */
+.tc-card {
+    background: var(--c-card); border: 1px solid var(--c-border);
+    border-radius: var(--r-md); box-shadow: var(--e-1); padding: 14px;
+}
+.tc-sep { border-top: 1px solid var(--c-border); }
+
+/* Шапка карточки. На телефоне бейджи и имя в одной строке не уживаются: бейджи
+   съедали половину ширины, и мета-строка рассыпалась по одному пункту на строку.
+   Поэтому по умолчанию два ряда, и только с 560px — в строку. */
+.tc-head { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 8px 10px; padding-bottom: 11px; }
+.tc-ident { display: flex; align-items: center; gap: 10px; flex: 1 1 100%; min-width: 0; }
+.tc-avatar {
+    position: relative; flex-shrink: 0;
+    width: 38px; height: 38px; border-radius: var(--r-sm);
+    display: flex; align-items: center; justify-content: center;
+    color: #fff; font-weight: 800; font-size: 16px;
+}
+.tc-avatar .medal { position: absolute; bottom: -5px; right: -6px; font-size: 14px; }
+.tc-name { font-weight: 700; font-size: 14px; color: var(--c-text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tc-meta { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 2px; font-size: var(--t-micro); font-weight: 500; color: var(--c-muted-2); }
+.tc-meta .id { font-family: ui-monospace, monospace; }
+.tc-badges { display: flex; gap: 4px; flex-wrap: wrap; flex: 1 1 100%; }
+@media (min-width: 560px) {
+    .tc-ident  { flex: 1 1 auto; }
+    .tc-badges { flex: 0 1 auto; justify-content: flex-end; max-width: 50%; }
+}
+.tc-badge {
+    font-size: var(--t-micro); font-weight: 600; white-space: nowrap;
+    padding: 3px 7px; border-radius: var(--r-sm);
+    background: var(--c-card-2); color: var(--c-muted-2); border: 1px solid var(--c-border);
+}
+.tc-badge.is-danger { background: #fef2f2; color: #b91c1c; border-color: #fecaca; }
+.tc-badge.is-warn   { background: #fff7ed; color: #9a3412; border-color: #fed7aa; }
+.tc-badge.is-ok     { background: #f0fdf4; color: #15803d; border-color: #bbf7d0; }
+.tc-badge.is-info   { background: #eff6ff; color: #1d4ed8; border-color: #bfdbfe; }
+.dark .tc-badge.is-danger { background: rgba(190,18,60,.18); color: #fda4af; border-color: rgba(190,18,60,.4); }
+.dark .tc-badge.is-warn   { background: rgba(234,88,12,.18); color: #fdba74; border-color: rgba(234,88,12,.4); }
+.dark .tc-badge.is-ok     { background: rgba(22,163,74,.18); color: #86efac; border-color: rgba(22,163,74,.4); }
+.dark .tc-badge.is-info   { background: rgba(37,99,235,.18); color: #93c5fd; border-color: rgba(37,99,235,.4); }
+
+.tc-kpis { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 6px; padding: 11px 0; text-align: center; }
+.tc-kpi > .k { display: block; font-size: var(--t-micro); font-weight: 500; color: var(--c-muted-2); }
+.tc-kpi > .v { display: block; margin-top: 2px; font-size: 15px; font-weight: 700; color: var(--c-text); font-variant-numeric: tabular-nums; }
+/* Точность — единственная цифра, которую красим: это оценка, а не счётчик. */
+.tc-kpi > .v.acc-hi  { color: var(--c-success-text); }
+.tc-kpi > .v.acc-mid { color: #b45309; }
+.tc-kpi > .v.acc-lo  { color: var(--c-danger); }
+.dark .tc-kpi > .v.acc-mid { color: #fbbf24; }
+
+/* Две колонки только когда они реально помещаются. На 375px пять пар «эмодзи +
+   число» в половине ширины переносились в кашу. */
+.tc-split { display: grid; grid-template-columns: 1fr; gap: 12px; padding: 10px 0; }
+@media (min-width: 560px) { .tc-split { grid-template-columns: 1fr 1fr; gap: 14px; } }
+.tc-sub { font-size: var(--t-micro); font-weight: 600; color: var(--c-muted-2); margin-bottom: 5px; }
+.tc-tasks { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: var(--t-label); font-weight: 600; color: var(--c-text); font-variant-numeric: tabular-nums; }
+.tc-tasks b { font-weight: 700; margin-left: 2px; }
+.tc-foot { display: flex; gap: 10px; flex-wrap: wrap; padding: 9px 0 4px; font-size: var(--t-caption); font-weight: 500; color: var(--c-muted-2); }
+.tc-foot b { color: var(--c-text); font-weight: 700; font-variant-numeric: tabular-nums; }
+
+/* wrap обязателен: пять кнопок в 375px не помещаются, и последняя («объединить
+   аккаунты») уезжала за правый край карточки. */
+.tc-actions { display: flex; flex-wrap: wrap; gap: 6px; padding-top: 9px; }
+.tc-btn {
+    display: flex; align-items: center; justify-content: center; gap: 5px;
+    min-height: 38px; padding: 0 12px;
+    border-radius: var(--r-sm); border: 1px solid var(--c-border);
+    background: var(--c-card-2); color: var(--c-text-soft);
+    font-size: var(--t-label); font-weight: 600; white-space: nowrap;
+    cursor: pointer; transition: border-color .15s, transform .1s;
+}
+.tc-btn:active { transform: scale(.96); }
+.tc-btn:hover { border-color: var(--c-border-2); }
+.tc-btn.is-grow { flex: 1; }
+/* Ровно одно основное действие на карточку — выдать домашку. */
+.tc-btn.is-primary { background: var(--c-brand); border-color: var(--c-brand); color: #fff; }
+
+/* Панель управления классом. Была сплошным синим градиентом: белые подписи на
+   белом-с-прозрачностью давали плейсхолдеры «код»/«год» контрастом ниже 2:1. */
+.tc-toolbar {
+    background: var(--c-card); border: 1px solid var(--c-border);
+    border-radius: var(--r-md); box-shadow: var(--e-1); padding: 10px;
+}
+.tc-field {
+    display: flex; align-items: center; gap: 8px;
+    background: var(--c-card-2); border: 1px solid var(--c-border);
+    border-radius: var(--r-sm); padding: 7px 11px; min-height: 40px;
+}
+.tc-field > .lb { font-size: var(--t-caption); font-weight: 600; color: var(--c-muted-2); flex-shrink: 0; }
+.tc-field input[type="text"], .tc-field input[type="number"], .tc-field select {
+    background: transparent; outline: none; border: 0;
+    font-size: var(--t-label); font-weight: 700; color: var(--c-text);
+}
+.tc-field input::placeholder { color: var(--c-muted-3); font-weight: 500; }
+
+/* Сегменты списка. Раньше лежали в overflow-x-auto и последний («Топ недели»)
+   уезжал за край — на телефоне о нём просто не знали. */
+.tc-segments { display: flex; flex-wrap: wrap; gap: 6px; }
+.tc-seg {
+    min-height: 34px; padding: 0 12px;
+    display: inline-flex; align-items: center; gap: 5px;
+    border-radius: var(--r-full); border: 1px solid var(--c-border);
+    background: var(--c-card); color: var(--c-muted-2);
+    font-size: var(--t-label); font-weight: 600; cursor: pointer;
+    transition: background .15s, color .15s, border-color .15s;
+}
+.tc-seg[aria-pressed="true"] { background: var(--c-brand); border-color: var(--c-brand); color: #fff; }
+
+/* Раскрывающиеся блоки: «нажми чтобы раскрыть» словами заменено на шеврон. */
+.tc-details { background: var(--c-card); border: 1px solid var(--c-border); border-radius: var(--r-md); overflow: hidden; }
+.tc-details > summary {
+    display: flex; align-items: center; gap: 8px;
+    padding: 11px 12px; cursor: pointer; list-style: none;
+    font-size: var(--t-label); font-weight: 650; color: var(--c-text);
+}
+.tc-details > summary::-webkit-details-marker { display: none; }
+.tc-details > summary::after {
+    content: '⌄'; margin-left: auto; font-size: 15px; line-height: 1;
+    color: var(--c-muted-2); transform: translateY(-2px); transition: transform .2s;
+}
+.tc-details[open] > summary::after { transform: rotate(180deg) translateY(-1px); }
+
 /* ── Служебное ───────────────────────────────────────────────────────────── */
 /* Только для скринридера: сохраняем поля, которые читает/пишет старый JS
    (например progress-text-taskN из state.js), не показывая их глазу. */

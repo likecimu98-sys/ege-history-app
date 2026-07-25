@@ -7,7 +7,7 @@
             signInWithCredential, signOut, initializeFirestore, collection, doc, setDoc, getDoc,
             getDocs, addDoc, updateDoc, deleteDoc, deleteField, onSnapshot, query, where,
             orderBy, limit, runTransaction, arrayUnion, arrayRemove, vpsApiFetch, refreshVpsAuth
-        } from "./vps-sync-compat.js?v=20260726-4";
+        } from "./vps-sync-compat.js?v=20260726-8";
 
         const cloudConfig = { projectId: 'vps-postgresql' };
         
@@ -1456,21 +1456,23 @@
                 const dayIdx = (new Date(d.date).getDay() + 6) % 7;
                 return `<div style="display:flex;flex-direction:column;align-items:center;gap:2px;flex:1">
                     <div title="${d.date}: ${d.val} строк" style="width:100%;max-width:14px;height:${h}px;background:${color};border-radius:3px 3px 0 0"></div>
-                    <span style="font-size:8px;color:#9ca3af;font-weight:700">${days[dayIdx]}</span>
+                    <span style="font-size:11px;color:var(--c-muted-2);font-weight:500">${days[dayIdx]}</span>
                 </div>`;
             }).join('');
         }
 
         function renderEraRows(eraData) {
-            return Object.values(eraData).map(e => {
+            // Без защиты Object.values(null) роняет рендер ВСЕГО списка учеников
+            // из-за одного ученика без данных по эпохам.
+            return Object.values(eraData || {}).map(e => {
                 if (!e.total) return '';
                 const c = e.pct >= 80 ? 'var(--c-success)' : e.pct >= 60 ? 'var(--c-warn)' : 'var(--c-danger-soft)';
-                return `<div style="display:flex;align-items:center;gap:6px;margin-bottom:3px">
-                    <span style="font-size:9px;color:#6b7280;font-weight:700;min-width:68px">${e.name}</span>
-                    <div style="flex:1;height:6px;background:#f1f5f9;border-radius:3px;overflow:hidden">
-                        <div style="height:100%;width:${e.pct}%;background:${c};border-radius:3px"></div>
+                return `<div style="display:flex;align-items:center;gap:6px;margin-bottom:4px">
+                    <span style="font-size:11px;color:var(--c-muted-2);font-weight:500;min-width:72px">${e.name}</span>
+                    <div style="flex:1;height:6px;background:var(--c-card-2);border-radius:999px;overflow:hidden">
+                        <div style="height:100%;width:${e.pct}%;background:${c};border-radius:999px"></div>
                     </div>
-                    <span style="font-size:9px;font-weight:700;color:${c};min-width:28px;text-align:right">${e.pct}%</span>
+                    <span style="font-size:11px;font-weight:700;color:var(--c-text);min-width:30px;text-align:right;font-variant-numeric:tabular-nums">${e.pct}%</span>
                 </div>`;
             }).join('');
         }
@@ -1486,12 +1488,12 @@
                 if (d.t5) parts.push(`<span style="color:var(--c-purple)">👤${d.t5}</span>`);
                 if (d.t7) parts.push(`<span style="color:var(--c-warn)">🎨${d.t7}</span>`);
                 const taskStr = parts.length ? parts.join(' ') : `<span style="color:var(--c-brand)">${d.val}</span>`;
-                return `<div style="display:flex;justify-content:space-between;align-items:center;font-size:9px;padding:3px 0;border-bottom:1px solid #f8fafc">
-                    <span style="font-weight:700;color:#94a3b8;min-width:30px">${dateStr}</span>
-                    <span style="font-weight:700">${taskStr}</span>
-                    <span style="color:#94a3b8;font-weight:600">${d.mins}м</span>
+                return `<div style="display:flex;justify-content:space-between;align-items:center;font-size:12px;padding:4px 0;border-bottom:1px solid var(--c-border);font-variant-numeric:tabular-nums">
+                    <span style="font-weight:600;color:var(--c-text);min-width:34px">${dateStr}</span>
+                    <span style="font-weight:600">${taskStr}</span>
+                    <span style="color:var(--c-muted-2);font-weight:500">${d.mins} мин</span>
                 </div>`;
-            }).join('') || '<div style="font-size:9px;color:#94a3b8;padding:4px 0">Нет данных</div>';
+            }).join('') || '<div style="font-size:12px;color:var(--c-muted-2);padding:4px 0">Нет данных</div>';
         }
 
         function renderStudentCard(s, idx) {
@@ -1507,87 +1509,87 @@
             const hue      = Array.from(String(s.uid || s.name || 'x')).reduce((h, c) => (h * 31 + c.charCodeAt(0)) >>> 0, 7) % 360;
             const timeStr  = s.timeSpentMin >= 60 ? `${Math.floor(s.timeSpentMin/60)}ч ${s.timeSpentMin%60}м` : `${s.timeSpentMin}м`;
             const accStr   = s.accuracy !== null ? `${s.accuracy}%` : '—';
-            const accColor = s.accuracy === null ? '#9ca3af' : s.accuracy >= 80 ? 'var(--c-success)' : s.accuracy >= 60 ? 'var(--c-warn)' : 'var(--c-danger-soft)';
+            // Цветом кодируем ОДНУ цифру — точность: она и есть оценка. Остальные
+            // KPI были пятью разными цветами и не читались как один ряд.
+            const accCls = s.accuracy === null ? '' : s.accuracy >= 80 ? 'acc-hi' : s.accuracy >= 60 ? 'acc-mid' : 'acc-lo';
             const atRiskBadge = s.atRisk
-                ? `<span style="font-size:9px;font-weight:700;background:#fef2f2;color:var(--c-danger);border:1px solid #fecaca;padding:2px 6px;border-radius:4px">⚠️ ${s.daysSinceActive}д без входа</span>` : '';
+                ? `<span class="tc-badge is-danger">⚠️ ${s.daysSinceActive}д без входа</span>` : '';
             const todayBadge = s.isToday
-                ? `<span style="font-size:9px;font-weight:700;background:#f0fdf4;color:#16a34a;border:1px solid #bbf7d0;padding:2px 6px;border-radius:4px">🟢 онлайн сегодня</span>` : '';
+                ? `<span class="tc-badge is-ok">🟢 сегодня</span>` : '';
             const hwDeadlineStr = s.hwDeadline ? ' · до ' + new Date(s.hwDeadline + 'T00:00:00').toLocaleDateString('ru-RU', {day:'numeric',month:'short'}) : '';
             const hwBadge = (s.hwRemaining > 0)
-                ? `<span style="font-size:9px;font-weight:700;background:#fff7ed;color:#ea580c;border:1px solid #fed7aa;padding:2px 6px;border-radius:4px">📝 ДЗ: ${s.hwRemaining}${hwDeadlineStr}</span>`
-                : (s.hwDeadline ? `<span style="font-size:9px;font-weight:700;background:#f0fdf4;color:#16a34a;border:1px solid #bbf7d0;padding:2px 6px;border-radius:4px">✅ ДЗ выполнено</span>` : '');
+                ? `<span class="tc-badge is-warn">📝 ДЗ: ${s.hwRemaining}${hwDeadlineStr}</span>`
+                : (s.hwDeadline ? `<span class="tc-badge is-ok">✅ ДЗ сдано</span>` : '');
             const hwTimingBadge = ((s.hwOnTimeTotal||0) || (s.hwLateTotal||0))
-                ? `<span style="font-size:9px;font-weight:700;background:#eff6ff;color:#0369a1;border:1px solid #bae6fd;padding:2px 6px;border-radius:4px">⏱ вовремя ${s.hwOnTimeTotal||0}${(s.hwLateTotal||0)?` · опозд. ${s.hwLateTotal}`:''}${(s.hwStreakMax||0)>=3?` · 🔥${s.hwStreakMax}`:''}</span>`
+                ? `<span class="tc-badge is-info">⏱ вовремя ${s.hwOnTimeTotal||0}${(s.hwLateTotal||0)?` · опозд. ${s.hwLateTotal}`:''}${(s.hwStreakMax||0)>=3?` · 🔥${s.hwStreakMax}`:''}</span>`
                 : '';
             const weakBlock = s.weakEra
-                ? `<div style="margin-top:6px;font-size:10px;color:#9ca3af;font-weight:700">📍 Слабая тема: <span style="color:var(--c-danger-soft)">${s.weakEra.name} — ${s.weakEra.pct}%</span></div>` : '';
+                ? `<div class="tc-foot" style="padding:6px 0 0">📍 Слабая тема: <b>${s.weakEra.name} — ${s.weakEra.pct}%</b></div>` : '';
             const _sbt = s.solvedByTask || {}, _mbt = s.mistakesByTask || {};
             const _tm = [['task1','⏳'],['task3','🔗'],['task4','📍'],['task5','👤'],['task7','🎨']];
-            const solvedRow = _tm.map(([t,e]) => `<span>${e}<b style="color:var(--c-brand);margin-left:2px">${_sbt[t]||0}</b></span>`).join('');
-            const mistRow = _tm.map(([t,e]) => `<span>${e}<b style="color:${(_mbt[t]||0)>0?'var(--c-danger)':'#94a3b8'};margin-left:2px">${_mbt[t]||0}</b></span>`).join('');
+            const solvedRow = _tm.map(([t,e]) => `<span>${e}<b>${_sbt[t]||0}</b></span>`).join('');
+            const mistRow = _tm.map(([t,e]) => `<span>${e}<b style="color:${(_mbt[t]||0)>0?'var(--c-danger)':'var(--c-muted-3)'}">${_mbt[t]||0}</b></span>`).join('');
+            const tgId = String(s.tgId || s.knownTgId || '');
 
-            return `<div class="bg-white dark:bg-[#1e1e1e] rounded-2xl p-4 shadow-sm border border-gray-100 dark:border-[#2c2c2c] flex flex-col">
-                <div style="display:flex;justify-content:space-between;align-items:flex-start;padding-bottom:10px;border-bottom:1px solid #f1f5f9;gap:8px">
-                    <div style="display:flex;align-items:center;gap:9px;flex:1;min-width:0">
-                        <div style="position:relative;flex-shrink:0">
-                            <div style="width:37px;height:37px;border-radius:12px;background:linear-gradient(135deg,hsl(${hue},68%,52%),hsl(${(hue + 42) % 360},68%,40%));color:#fff;display:flex;align-items:center;justify-content:center;font-weight:900;font-size:16px;box-shadow:0 2px 6px rgba(0,0,0,.15)">${initial}</div>
-                            ${medal ? `<span style="position:absolute;bottom:-5px;right:-6px;font-size:14px;filter:drop-shadow(0 1px 1px rgba(0,0,0,.3))">${medal}</span>` : ''}
-                        </div>
+            return `<div class="tc-card">
+                <div class="tc-head tc-sep" style="border-top:0;border-bottom:1px solid var(--c-border)">
+                    <div class="tc-ident">
+                        <div class="tc-avatar" style="background:hsl(${hue},58%,46%)">${initial}${medal ? `<span class="medal">${medal}</span>` : ''}</div>
                         <div style="min-width:0">
-                            <div class="dark:text-gray-200" style="font-weight:900;font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${dispName}</div>
-                            <div style="font-size:9px;color:#94a3b8;margin-top:1px;display:flex;gap:6px;flex-wrap:wrap">
-                                <span style="color:#cbd5e1;font-weight:800">#${idx + 1}</span>
-                                <span style="font-family:monospace;color:#64748b">🆔 ${esc(s.tgId || s.knownTgId || s.canonicalId || s.uid || '—')}</span>
-                                ${s.classCode ? `<span style="color:var(--c-brand);font-weight:700">класс ${esc(s.classCode)}</span>` : ''}
+                            <div class="tc-name">${dispName}</div>
+                            <div class="tc-meta">
+                                <span>#${idx + 1}</span>
+                                <span class="id">🆔 ${esc(s.tgId || s.knownTgId || s.canonicalId || s.uid || '—')}</span>
+                                ${s.classCode ? `<span>класс ${esc(s.classCode)}</span>` : ''}
+                                <span>${s.lastActiveStr}</span>
                             </div>
-                            <div style="font-size:9px;color:#94a3b8;margin-top:1px">${s.lastActiveStr}</div>
                         </div>
                     </div>
-                    <div style="display:flex;gap:4px;flex-wrap:wrap;justify-content:flex-end;flex-shrink:0">${hwBadge}${hwTimingBadge}${atRiskBadge}${todayBadge}</div>
+                    <div class="tc-badges">${hwBadge}${hwTimingBadge}${atRiskBadge}${todayBadge}</div>
                 </div>
-                <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:6px;padding:10px 0;border-bottom:1px solid #f1f5f9;text-align:center">
-                    <div><div style="font-size:8px;color:#94a3b8;font-weight:700;text-transform:uppercase">Решено</div><div style="font-size:13px;font-weight:900;color:var(--c-brand)">${s.totalSolved||0}</div></div>
-                    <div><div style="font-size:8px;color:#94a3b8;font-weight:700;text-transform:uppercase">⭐ Баллы</div><div style="font-size:13px;font-weight:900;color:var(--c-warn)">${s.egePoints||0}</div></div>
-                    <div><div style="font-size:8px;color:#94a3b8;font-weight:700;text-transform:uppercase">Выучено</div><div style="font-size:13px;font-weight:900;color:var(--c-success)">${s.learnedCount}</div></div>
-                    <div><div style="font-size:8px;color:#94a3b8;font-weight:700;text-transform:uppercase">Стрик</div><div style="font-size:13px;font-weight:900;color:var(--c-warn)">${s.streak}🔥</div></div>
-                    <div><div style="font-size:8px;color:#94a3b8;font-weight:700;text-transform:uppercase">Точность</div><div style="font-size:13px;font-weight:900;color:${accColor}">${accStr}</div></div>
+                <div class="tc-kpis tc-sep" style="border-top:0;border-bottom:1px solid var(--c-border)">
+                    <div class="tc-kpi"><span class="k">Решено</span><span class="v">${s.totalSolved||0}</span></div>
+                    <div class="tc-kpi"><span class="k">Баллы</span><span class="v">${s.egePoints||0}</span></div>
+                    <div class="tc-kpi"><span class="k">Выучено</span><span class="v">${s.learnedCount}</span></div>
+                    <div class="tc-kpi"><span class="k">Стрик</span><span class="v">${s.streak}</span></div>
+                    <div class="tc-kpi"><span class="k">Точность</span><span class="v ${accCls}">${accStr}</span></div>
                 </div>
-                <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;padding:8px 0;border-bottom:1px solid #f1f5f9">
+                <div class="tc-split" style="border-bottom:1px solid var(--c-border)">
                     <div>
-                        <div style="font-size:8px;color:#94a3b8;font-weight:700;text-transform:uppercase;margin-bottom:4px">Решено по заданиям</div>
-                        <div style="display:flex;gap:10px;font-size:11px;font-weight:700">${solvedRow}</div>
+                        <div class="tc-sub">Решено по заданиям</div>
+                        <div class="tc-tasks">${solvedRow}</div>
                     </div>
                     <div>
-                        <div style="font-size:8px;color:#94a3b8;font-weight:700;text-transform:uppercase;margin-bottom:4px">Ошибки сейчас (${s.mistakeTotal||0})</div>
-                        <div style="display:flex;gap:10px;font-size:11px;font-weight:700">${mistRow}</div>
+                        <div class="tc-sub">Ошибки сейчас (${s.mistakeTotal||0})</div>
+                        <div class="tc-tasks">${mistRow}</div>
                     </div>
                 </div>
-                <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;padding:10px 0;border-bottom:1px solid #f1f5f9">
+                <div class="tc-split" style="border-bottom:1px solid var(--c-border)">
                     <div>
-                        <div style="font-size:8px;color:#94a3b8;font-weight:700;text-transform:uppercase;margin-bottom:6px">Активность 7 дней</div>
+                        <div class="tc-sub">Активность 7 дней</div>
                         <div style="display:flex;align-items:flex-end;gap:2px;height:40px">${renderMiniBar(s.last7)}</div>
                     </div>
                     <div>
-                        <div style="font-size:8px;color:#94a3b8;font-weight:700;text-transform:uppercase;margin-bottom:6px">Точность по эпохам</div>
-                        ${renderEraRows(s.eraData) || '<div style="font-size:9px;color:#94a3b8;padding-top:4px">Нет данных</div>'}
+                        <div class="tc-sub">Точность по эпохам</div>
+                        ${renderEraRows(s.eraData) || '<div class="tc-sub" style="margin:0">Нет данных</div>'}
                         ${weakBlock}
                     </div>
                 </div>
-                <div style="padding:8px 0;border-bottom:1px solid #f1f5f9">
-                    <div style="font-size:8px;color:#94a3b8;font-weight:700;text-transform:uppercase;margin-bottom:4px">Подневная статистика</div>
+                <div style="padding:10px 0;border-bottom:1px solid var(--c-border)">
+                    <div class="tc-sub">Подневная статистика</div>
                     ${renderDailyDetail(s.last7)}
                 </div>
-                <div style="display:flex;gap:8px;flex-wrap:wrap;padding:8px 0 4px;font-size:9px;color:#94a3b8;font-weight:700">
-                    <span>⏱ В игре: <b style="color:#a78bfa">${timeStr}</b></span>
-                    <span>📝 Попыток: <b style="color:#64748b">${s.totalAttempts||0}</b></span>
-                    <span>✅ Верных: <b style="color:var(--c-success)">${s.totalCorrect||0}</b></span>
+                <div class="tc-foot">
+                    <span>⏱ В игре: <b>${timeStr}</b></span>
+                    <span>📝 Попыток: <b>${s.totalAttempts||0}</b></span>
+                    <span>✅ Верных: <b>${s.totalCorrect||0}</b></span>
                 </div>
-                <div style="display:flex;gap:6px;padding-top:8px;border-top:1px solid #f1f5f9">
-                    ${/^\d{5,}$/.test(String(s.tgId || s.knownTgId || '')) ? `<button onclick="window.open('tg://user?id=${String(s.tgId || s.knownTgId)}')" class="bg-sky-50 text-sky-600 hover:bg-sky-100 dark:bg-sky-900/20 dark:text-sky-400 px-3 py-2 rounded-xl text-[10px] font-black uppercase tracking-wider transition-colors active:scale-95" title="Написать ученику в Telegram">✈️</button>` : ''}
-                    <button onclick="window.promptAssignHw('${safeUid}','${safeName}')" class="flex-1 bg-rose-50 text-rose-600 hover:bg-rose-100 dark:bg-rose-900/20 dark:text-rose-400 py-2 rounded-xl text-[10px] font-black uppercase tracking-wider transition-colors active:scale-95">📝 ДЗ</button>
-                    <button onclick="window.openStudentAssignmentsList('${safeUid}','${safeName}')" class="bg-indigo-50 text-indigo-600 hover:bg-indigo-100 dark:bg-indigo-900/20 dark:text-indigo-400 px-3 py-2 rounded-xl text-[10px] font-black uppercase tracking-wider transition-colors active:scale-95" title="Выданные ДЗ ученика и отмена">📋</button>
-                    <button onclick="window.downloadStudentPDF('${safeUid}')" class="flex-1 bg-blue-50 text-blue-600 hover:bg-blue-100 dark:bg-blue-900/20 dark:text-blue-400 py-2 rounded-xl text-[10px] font-black uppercase tracking-wider transition-colors active:scale-95">📄 Отчёт</button>
-                    <button onclick="window.selectStudentForMerge('${safeUid}','${safeName}')" data-student-uid="${safeUid}" class="bg-amber-50 text-amber-600 hover:bg-amber-100 dark:bg-amber-900/20 dark:text-amber-400 px-3 py-2 rounded-xl text-[10px] font-black uppercase tracking-wider transition-colors active:scale-95" title="Объединить с другим аккаунтом">🔀</button>
+                <div class="tc-actions" style="border-top:1px solid var(--c-border)">
+                    ${/^\d{5,}$/.test(tgId) ? `<button class="tc-btn" onclick="window.open('tg://user?id=${tgId}')" title="Написать ученику в Telegram">✈️</button>` : ''}
+                    <button class="tc-btn is-primary is-grow" onclick="window.promptAssignHw('${safeUid}','${safeName}')">📝 Выдать ДЗ</button>
+                    <button class="tc-btn" onclick="window.openStudentAssignmentsList('${safeUid}','${safeName}')" title="Выданные ДЗ ученика и отмена">📋</button>
+                    <button class="tc-btn is-grow" onclick="window.downloadStudentPDF('${safeUid}')">📄 Отчёт</button>
+                    <button class="tc-btn" onclick="window.selectStudentForMerge('${safeUid}','${safeName}')" data-student-uid="${safeUid}" title="Объединить с другим аккаунтом">🔀</button>
                 </div>
             </div>`;
         }
@@ -1904,17 +1906,10 @@
         window._teacherSegment = window._teacherSegment || 'all';
         window.setTeacherSegment = function(seg) {
             window._teacherSegment = seg || 'all';
+            // Раньше состояние переключалось девятью Tailwind-классами руками.
+            // Теперь один aria-pressed: и вид, и доступность из одного источника.
             document.querySelectorAll('#teacher-segments button[data-seg]').forEach(b => {
-                const on = b.dataset.seg === window._teacherSegment;
-                b.classList.toggle('bg-blue-600', on);
-                b.classList.toggle('text-white', on);
-                b.classList.toggle('border-blue-600', on);
-                b.classList.toggle('bg-white', !on);
-                b.classList.toggle('dark:bg-[#1e1e1e]', !on);
-                b.classList.toggle('text-gray-500', !on);
-                b.classList.toggle('dark:text-gray-400', !on);
-                b.classList.toggle('border-gray-200', !on);
-                b.classList.toggle('dark:border-[#2c2c2c]', !on);
+                b.setAttribute('aria-pressed', String(b.dataset.seg === window._teacherSegment));
             });
             window.sortAndRenderStudents();
         };

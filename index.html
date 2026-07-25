@@ -99,15 +99,15 @@
     <link rel="manifest" href="manifest.webmanifest">
     <link rel="icon" type="image/png" href="assets/icons/icon-192.png">
     <link rel="apple-touch-icon" href="assets/icons/icon-180.png">
-    <link rel="stylesheet" href="tokens.css?v=20260726-4">
-    <link rel="stylesheet" href="output.css?v=20260726-4">
-    <link rel="stylesheet" href="theme-classic.css?v=20260726-4">
-    <link rel="stylesheet" href="styles.css?v=20260726-4">
+    <link rel="stylesheet" href="tokens.css?v=20260726-8">
+    <link rel="stylesheet" href="output.css?v=20260726-8">
+    <link rel="stylesheet" href="theme-classic.css?v=20260726-8">
+    <link rel="stylesheet" href="styles.css?v=20260726-8">
     
     <!-- Самохостинг telegram-web-app.js: telegram.org часто недоступен (сеть/VPN),
          тогда window.Telegram не создавался → known_tg_id не считывался → случайный id «через раз».
          Локальная копия отдаётся с того же origin и кэшируется service worker'ом. -->
-    <script src="vendor/telegram-web-app.js?v=20260726-4" defer></script>
+    <script src="vendor/telegram-web-app.js?v=20260726-8" defer></script>
 
     <style>
         /* Этот inline-блок намеренно МИНИМАЛЕН: только то, что должно сработать на
@@ -333,7 +333,7 @@
 
     <script>
       (function() {
-        var BOOT_RELEASE = '20260726-4';
+        var BOOT_RELEASE = '20260726-8';
         var bootT0 = Date.now();
         function bootSignal(phase, detail) {
           try {
@@ -520,20 +520,20 @@
 
     <!-- JS разбит на модули: config → utils → state → table → ui → modes → app -->
     <!-- Порядок defer гарантирован браузером: выполняются строго по порядку в DOM -->
-    <script src="config.js?v=20260726-4" defer></script>
-    <script src="utils.js?v=20260726-4" defer></script>
-    <script src="exam-scoring.js?v=20260726-4" defer></script>
-    <script src="state.js?v=20260726-4" defer></script>
-    <script src="table.js?v=20260726-4" defer></script>
-    <script src="ui.js?v=20260726-4" defer></script>
-    <script src="modes.js?v=20260726-4" defer></script>
-    <script src="swipe-data.js?v=20260726-4" defer></script>
-    <script src="swipe-mode.js?v=20260726-4" defer></script>
-    <script src="match-mode.js?v=20260726-4" defer></script>
-    <script src="vov-mode.js?v=20260726-4" defer></script>
-    <script src="visual-trainer.js?v=20260726-4" defer></script>
-    <script src="exam-mode.js?v=20260726-4" defer></script>
-    <script src="app.js?v=20260726-4" defer></script>
+    <script src="config.js?v=20260726-8" defer></script>
+    <script src="utils.js?v=20260726-8" defer></script>
+    <script src="exam-scoring.js?v=20260726-8" defer></script>
+    <script src="state.js?v=20260726-8" defer></script>
+    <script src="table.js?v=20260726-8" defer></script>
+    <script src="ui.js?v=20260726-8" defer></script>
+    <script src="modes.js?v=20260726-8" defer></script>
+    <script src="swipe-data.js?v=20260726-8" defer></script>
+    <script src="swipe-mode.js?v=20260726-8" defer></script>
+    <script src="match-mode.js?v=20260726-8" defer></script>
+    <script src="vov-mode.js?v=20260726-8" defer></script>
+    <script src="visual-trainer.js?v=20260726-8" defer></script>
+    <script src="exam-mode.js?v=20260726-8" defer></script>
+    <script src="app.js?v=20260726-8" defer></script>
 
     <!-- ШАПКА -->
     <header id="main-header" class="sticky top-0 z-50 no-print transition-colors duration-400 pt-2 pb-2 sm:pt-3 sm:pb-3 px-4">
@@ -1178,86 +1178,75 @@
              <!-- ВКЛАДКА: УЧЕНИКИ -->
              <div class="flex-grow p-3 sm:p-4 overflow-y-auto overflow-x-hidden custom-scroll flex flex-col bg-gray-50 dark:bg-[#121212] relative w-full" id="teacher-tab-stats">
                 <!-- Панель потока: код класса · «дошли до года» · фильтр -->
-                <div class="mb-3 shrink-0 rounded-2xl p-3 shadow-md" style="background:linear-gradient(135deg,#4f46e5,#2563eb)">
-                    <!-- flex-wrap: на ПК чипы (группа·класс·пригласить·дошли до·фильтр) шире панели — без переноса последний обрезается -->
-                    <div class="flex flex-col sm:flex-row flex-wrap items-stretch sm:items-center gap-2">
+                <!-- Панель управления классом. Была синим градиентом во всю ширину:
+                     белые подписи на white/15 давали плейсхолдеры «код» и «год»
+                     контрастом ниже 2:1, а сама панель кричала громче данных. -->
+                <div class="tc-toolbar mb-3 shrink-0">
+                    <!-- flex-wrap, а не колонка на телефоне: поля короткие, в колонку
+                         они занимали пять экранных строк ради пяти слов -->
+                    <div class="flex flex-row flex-wrap items-center gap-2">
                         <!-- Дропдаун групп учителя (заполняется populateTeacherGroups). Появляется, когда есть группы. -->
-                        <label id="teacher-group-wrap" class="hidden items-center gap-2 bg-white/20 hover:bg-white/30 rounded-xl pl-3 pr-2.5 py-2 justify-center transition-colors cursor-pointer">
-                            <span class="text-[10px] font-black text-white/70 uppercase tracking-widest shrink-0">Группа</span>
-                            <span class="relative flex items-center">
-                                <select id="teacher-group-select" onchange="window.onTeacherGroupChange&&window.onTeacherGroupChange(this.value)" class="appearance-none font-black text-white text-sm bg-transparent outline-none cursor-pointer pr-5 max-w-[180px] truncate [&>option]:text-black [&>option]:font-bold"></select>
-                                <span class="pointer-events-none absolute right-0 text-white/70 text-[9px]">▼</span>
-                            </span>
+                        <label id="teacher-group-wrap" class="tc-field hidden cursor-pointer">
+                            <span class="lb">Группа</span>
+                            <select id="teacher-group-select" onchange="window.onTeacherGroupChange&&window.onTeacherGroupChange(this.value)" class="cursor-pointer max-w-[180px] truncate"></select>
                         </label>
-                        <label id="teacher-code-wrap" class="flex items-center gap-2 bg-white/15 rounded-xl px-3 py-2 justify-center">
-                            <span class="text-[10px] font-black text-white/70 uppercase tracking-widest shrink-0">Класс</span>
-                            <input type="text" id="teacher-class-code-input" placeholder="код" onchange="saveTeacherClassCode()" class="w-20 text-center font-mono font-black text-white text-base bg-transparent outline-none placeholder-white/40">
+                        <label id="teacher-code-wrap" class="tc-field">
+                            <span class="lb">Класс</span>
+                            <input type="text" id="teacher-class-code-input" placeholder="код" onchange="saveTeacherClassCode()" class="w-20 font-mono">
                         </label>
-                        <button onclick="window.copyClassInvite&&window.copyClassInvite()" class="flex items-center gap-1.5 bg-white/15 hover:bg-white/25 active:scale-95 rounded-xl px-3 py-2 justify-center transition-all" title="Ссылка-приглашение: ученик нажимает её в Telegram и автоматически попадает в этот класс">
-                            <span class="text-sm">🔗</span><span class="text-[10px] font-black text-white uppercase tracking-wide">Пригласить</span>
-                        </button>
+                        <button onclick="window.copyClassInvite&&window.copyClassInvite()" class="tc-btn" title="Ссылка-приглашение: ученик нажимает её в Telegram и автоматически попадает в этот класс">🔗 Пригласить</button>
                         <!-- «Дошли до года»: ученики повторяют всё от 862 до этой границы (кнопка «Продолжить») -->
-                        <label class="flex items-center gap-2 bg-white/15 rounded-xl px-3 py-2 justify-center" title="До какого года дошли на занятиях — ученики будут повторять всё от 862 года до этой границы">
-                            <span class="text-[10px] font-black text-white/70 uppercase tracking-widest shrink-0">Дошли до</span>
-                            <input type="number" id="teacher-current-upto" min="862" max="2026" placeholder="год" onchange="window.saveClassCurrentUpto&&window.saveClassCurrentUpto(this.value)" class="w-16 text-center font-black text-white text-sm bg-transparent outline-none placeholder-white/40">
-                            <span class="text-[10px] font-black text-white/70 shrink-0">г.</span>
+                        <label class="tc-field" title="До какого года дошли на занятиях — ученики будут повторять всё от 862 года до этой границы">
+                            <span class="lb">Дошли до</span>
+                            <input type="number" id="teacher-current-upto" min="862" max="2026" placeholder="год" onchange="window.saveClassCurrentUpto&&window.saveClassCurrentUpto(this.value)" class="w-16">
                         </label>
-                        <label class="flex items-center gap-2 bg-white/15 rounded-xl px-3 py-2 justify-center cursor-pointer sm:ml-auto">
+                        <label class="tc-field cursor-pointer sm:ml-auto">
                             <input type="checkbox" id="teacher-filter-class" onchange="window.loadClassProgress()" class="w-4 h-4 rounded shrink-0">
-                            <span class="text-[10px] font-black text-white uppercase tracking-wide">Только мой класс</span>
+                            <span class="lb" style="color:var(--c-text)">Только мой класс</span>
                         </label>
                     </div>
                     <!-- Что реально показано: класс / все — заполняет loadClassProgress -->
-                    <div id="teacher-filter-mode-note" class="hidden w-full text-center text-[10px] font-bold text-white/60 mt-2"></div>
+                    <div id="teacher-filter-mode-note" class="hidden w-full text-center text-[11px] font-medium text-gray-500 dark:text-gray-400 mt-2"></div>
                 </div>
                 <!-- Сводка по классу: «сегодня одним взглядом» -->
                 <div id="teacher-class-summary" class="hidden mb-3 shrink-0">
-                    <div class="grid grid-cols-4 gap-2">
-                        <div class="rounded-xl p-2.5 text-center shadow-sm bg-blue-50 dark:bg-blue-900/20 border border-blue-100 dark:border-blue-900/40">
-                            <div class="text-base leading-none">👥</div>
-                            <div class="text-lg font-black text-blue-600 dark:text-blue-400 leading-tight" id="summary-count">0</div>
-                            <div class="text-[8px] text-blue-500/70 dark:text-blue-400/70 uppercase font-black tracking-widest">учеников</div>
-                        </div>
-                        <div class="rounded-xl p-2.5 text-center shadow-sm bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-100 dark:border-emerald-900/40">
-                            <div class="text-base leading-none">⚡</div>
-                            <div class="text-lg font-black text-emerald-600 dark:text-emerald-400 leading-tight" id="summary-active">0</div>
-                            <div class="text-[8px] text-emerald-500/70 dark:text-emerald-400/70 uppercase font-black tracking-widest">сегодня</div>
-                        </div>
-                        <div class="rounded-xl p-2.5 text-center shadow-sm bg-purple-50 dark:bg-purple-900/20 border border-purple-100 dark:border-purple-900/40">
-                            <div class="text-base leading-none">📈</div>
-                            <div class="text-lg font-black text-purple-600 dark:text-purple-400 leading-tight" id="summary-avg">0</div>
-                            <div class="text-[8px] text-purple-500/70 dark:text-purple-400/70 uppercase font-black tracking-widest">ср. решено</div>
-                        </div>
-                        <div class="rounded-xl p-2.5 text-center shadow-sm bg-rose-50 dark:bg-rose-900/20 border border-rose-100 dark:border-rose-900/40">
-                            <div class="text-base leading-none">💤</div>
-                            <div class="text-lg font-black text-rose-500 leading-tight" id="summary-atrisk">0</div>
-                            <div class="text-[8px] text-rose-500/70 uppercase font-black tracking-widest">3д+ молчат</div>
-                        </div>
+                    <!-- Четыре сводных числа. Было: четыре пастельных фона, четыре
+                         цвета цифр и подписи кеглем 8px — ряд читался как гирлянда,
+                         а не как сводка. Цветом остался только «молчат 3 дня+»:
+                         единственное число, которое требует действия. -->
+                    <div class="tc-kpis" style="grid-template-columns:repeat(4,minmax(0,1fr));padding:0">
+                        <div class="tc-kpi tc-card" style="padding:10px 6px"><span class="v" id="summary-count">0</span><span class="k">учеников</span></div>
+                        <div class="tc-kpi tc-card" style="padding:10px 6px"><span class="v" id="summary-active">0</span><span class="k">были сегодня</span></div>
+                        <div class="tc-kpi tc-card" style="padding:10px 6px"><span class="v" id="summary-avg">0</span><span class="k">в среднем решено</span></div>
+                        <div class="tc-kpi tc-card" style="padding:10px 6px"><span class="v acc-lo" id="summary-atrisk">0</span><span class="k">молчат 3 дня+</span></div>
                     </div>
                 </div>
                 <div id="teacher-hw-control" class="hidden mb-3 shrink-0"></div>
                 <!-- Действия: выдача ДЗ + PDF-сводка -->
+                <!-- Раньше «ДЗ всему классу 🔥» было красным во всю ширину — самым
+                     громким элементом экрана. Массовая выдача домашки не то, ради
+                     чего сюда заходят, и красный тут ничего не предупреждает. -->
                 <div class="flex gap-2 mb-3 shrink-0">
-                    <button onclick="window.promptAssignHwClass&&window.promptAssignHwClass()" class="flex-1 bg-rose-500 hover:bg-rose-600 active:scale-95 transition-all text-white font-black uppercase tracking-wide rounded-2xl px-3 py-3 text-[11px] sm:text-sm shadow-md flex items-center justify-center gap-1">📝 ДЗ всему классу 🔥</button>
-                    <button onclick="window.openClassAssignmentsList&&window.openClassAssignmentsList()" class="shrink-0 bg-indigo-50 text-indigo-600 hover:bg-indigo-100 dark:bg-indigo-900/20 dark:text-indigo-400 active:scale-95 transition-all font-black uppercase tracking-wide rounded-2xl px-4 py-3 text-[11px] sm:text-sm" title="Список выданных ДЗ и отмена">📋 ДЗ</button>
-                    <button onclick="window.downloadClassReportPDF&&window.downloadClassReportPDF()" class="shrink-0 bg-blue-50 text-blue-600 hover:bg-blue-100 dark:bg-blue-900/20 dark:text-blue-400 active:scale-95 transition-all font-black uppercase tracking-wide rounded-2xl px-4 py-3 text-[11px] sm:text-sm" title="Скачать PDF-сводку класса">📄 PDF</button>
+                    <button onclick="window.promptAssignHwClass&&window.promptAssignHwClass()" class="tc-btn is-primary is-grow">📝 Выдать ДЗ всему классу</button>
+                    <button onclick="window.openClassAssignmentsList&&window.openClassAssignmentsList()" class="tc-btn" title="Список выданных ДЗ и отмена">📋 ДЗ</button>
+                    <button onclick="window.downloadClassReportPDF&&window.downloadClassReportPDF()" class="tc-btn" title="Скачать PDF-сводку класса">📄 PDF</button>
                 </div>
-                <div class="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1.5 px-1 shrink-0 mt-1">👥 Ученики</div>
+                <div class="stat-h3 shrink-0 mt-1">Ученики</div>
                 <!-- Сегменты учеников: быстрые фильтры списка карточек -->
-                <div id="teacher-segments" class="flex gap-1.5 mb-2 shrink-0 overflow-x-auto custom-scroll">
-                    <button data-seg="all" onclick="window.setTeacherSegment&&window.setTeacherSegment('all')" class="shrink-0 bg-blue-600 text-white border border-blue-600 rounded-xl px-3 py-1.5 text-[10px] font-black uppercase tracking-wide transition-colors">Все <span data-segcnt="all"></span></button>
-                    <button data-seg="risk" onclick="window.setTeacherSegment&&window.setTeacherSegment('risk')" class="shrink-0 bg-white dark:bg-[#1e1e1e] text-gray-500 dark:text-gray-400 border border-gray-200 dark:border-[#2c2c2c] rounded-xl px-3 py-1.5 text-[10px] font-black uppercase tracking-wide transition-colors">🔴 Риск <span data-segcnt="risk"></span></button>
-                    <button data-seg="debt" onclick="window.setTeacherSegment&&window.setTeacherSegment('debt')" class="shrink-0 bg-white dark:bg-[#1e1e1e] text-gray-500 dark:text-gray-400 border border-gray-200 dark:border-[#2c2c2c] rounded-xl px-3 py-1.5 text-[10px] font-black uppercase tracking-wide transition-colors">📚 Долги ДЗ <span data-segcnt="debt"></span></button>
-                    <button data-seg="new" onclick="window.setTeacherSegment&&window.setTeacherSegment('new')" class="shrink-0 bg-white dark:bg-[#1e1e1e] text-gray-500 dark:text-gray-400 border border-gray-200 dark:border-[#2c2c2c] rounded-xl px-3 py-1.5 text-[10px] font-black uppercase tracking-wide transition-colors">🆕 Новички <span data-segcnt="new"></span></button>
-                    <button data-seg="top" onclick="window.setTeacherSegment&&window.setTeacherSegment('top')" class="shrink-0 bg-white dark:bg-[#1e1e1e] text-gray-500 dark:text-gray-400 border border-gray-200 dark:border-[#2c2c2c] rounded-xl px-3 py-1.5 text-[10px] font-black uppercase tracking-wide transition-colors">🏆 Топ недели</button>
+                <div id="teacher-segments" class="tc-segments mb-2 shrink-0">
+                    <button data-seg="all" aria-pressed="true" onclick="window.setTeacherSegment&&window.setTeacherSegment('all')" class="tc-seg">Все <span data-segcnt="all"></span></button>
+                    <button data-seg="risk" aria-pressed="false" onclick="window.setTeacherSegment&&window.setTeacherSegment('risk')" class="tc-seg">🔴 Риск <span data-segcnt="risk"></span></button>
+                    <button data-seg="debt" aria-pressed="false" onclick="window.setTeacherSegment&&window.setTeacherSegment('debt')" class="tc-seg">📚 Долги ДЗ <span data-segcnt="debt"></span></button>
+                    <button data-seg="new" aria-pressed="false" onclick="window.setTeacherSegment&&window.setTeacherSegment('new')" class="tc-seg">🆕 Новички <span data-segcnt="new"></span></button>
+                    <button data-seg="top" aria-pressed="false" onclick="window.setTeacherSegment&&window.setTeacherSegment('top')" class="tc-seg">🏆 Топ недели</button>
                 </div>
                 <!-- Поиск + сортировка -->
-                <div class="mb-3 shrink-0">
-                    <input type="search" id="teacher-student-search" placeholder="🔍 Найти ученика: имя, ТГ-ID или код класса…" oninput="window.sortAndRenderStudents&&window.sortAndRenderStudents()" class="w-full bg-white dark:bg-[#1e1e1e] border border-gray-200 dark:border-[#2c2c2c] text-[11px] font-bold text-gray-700 dark:text-gray-300 rounded-xl px-3 py-2 outline-none">
+                <div class="mb-2 shrink-0">
+                    <input type="search" id="teacher-student-search" placeholder="🔍 Найти ученика: имя, ТГ-ID или код класса…" oninput="window.sortAndRenderStudents&&window.sortAndRenderStudents()" class="w-full bg-white dark:bg-[#1e1e1e] border border-gray-200 dark:border-[#2c2c2c] text-[13px] font-medium text-gray-700 dark:text-gray-300 rounded-xl px-3 py-2.5 outline-none">
                 </div>
                 <div class="flex items-center gap-2 mb-3 shrink-0">
-                    <span class="text-[10px] font-black text-gray-400 uppercase tracking-widest shrink-0">Сортировка:</span>
-                    <select id="teacher-sort-select" onchange="window.sortAndRenderStudents()" class="flex-1 bg-white dark:bg-[#1e1e1e] border border-gray-200 dark:border-[#2c2c2c] text-[11px] font-bold text-gray-700 dark:text-gray-300 rounded-xl px-3 py-2 outline-none">
+                    <span class="text-[12px] font-semibold text-gray-500 dark:text-gray-400 shrink-0">Сортировка</span>
+                    <select id="teacher-sort-select" onchange="window.sortAndRenderStudents()" class="flex-1 bg-white dark:bg-[#1e1e1e] border border-gray-200 dark:border-[#2c2c2c] text-[13px] font-medium text-gray-700 dark:text-gray-300 rounded-xl px-3 py-2.5 outline-none">
                         <option value="total">По решённым строкам</option>
                         <option value="weekly">По активности за неделю</option>
                         <option value="streak">По стрику</option>
@@ -1268,26 +1257,20 @@
                     </select>
                 </div>
                 <!-- Аналитика класса -->
-                <details class="mb-3 shrink-0 bg-white dark:bg-[#1e1e1e] border border-blue-200 dark:border-blue-900/40 rounded-xl overflow-hidden">
-                    <summary class="px-3 py-2.5 flex items-center gap-2 cursor-pointer text-[11px] font-black text-blue-700 dark:text-blue-400 uppercase tracking-wide select-none">
-                        <span>📊</span> Аналитика класса
-                        <span class="ml-auto text-[9px] font-bold text-gray-400">нажми чтобы раскрыть</span>
-                    </summary>
-                    <div id="teacher-class-analytics" class="px-3 pb-3 pt-1 border-t border-blue-100 dark:border-blue-900/30"></div>
+                <details class="tc-details mb-3 shrink-0">
+                    <summary>📊 Аналитика класса</summary>
+                    <div id="teacher-class-analytics" class="px-3 pb-3 pt-1 border-t border-gray-200 dark:border-[#2c2c2c]"></div>
                 </details>
                 <!-- Дедупликация аккаунтов -->
-                <details class="mb-3 shrink-0 bg-white dark:bg-[#1e1e1e] border border-amber-200 dark:border-amber-900/40 rounded-xl overflow-hidden">
-                    <summary class="px-3 py-2.5 flex items-center gap-2 cursor-pointer text-[11px] font-black text-amber-700 dark:text-amber-400 uppercase tracking-wide select-none">
-                        <span>🔀</span> Устранить дубли аккаунтов
-                        <span class="ml-auto text-[9px] font-bold text-gray-400">нажми чтобы раскрыть</span>
-                    </summary>
-                    <div class="px-3 pb-3 pt-1 border-t border-amber-100 dark:border-amber-900/30">
-                        <p class="text-[10px] text-gray-500 dark:text-gray-400 mb-2 leading-relaxed">Сканирует всех студентов, находит дубли (по email, ТГ-ID, имени) и автоматически объединяет их данные. Старые документы помечаются как поглощённые, не удаляются.</p>
+                <details class="tc-details mb-3 shrink-0">
+                    <summary>🔀 Устранить дубли аккаунтов</summary>
+                    <div class="px-3 pb-3 pt-2 border-t border-gray-200 dark:border-[#2c2c2c]">
+                        <p class="text-[12px] text-gray-600 dark:text-gray-400 mb-2.5 leading-relaxed">Сканирует всех студентов, находит дубли (по email, ТГ-ID, имени) и автоматически объединяет их данные. Старые документы помечаются как поглощённые, не удаляются.</p>
                         <button id="dedup-btn" onclick="window.runDeduplication&&window.runDeduplication()"
-                            class="w-full bg-amber-500 hover:bg-amber-600 active:scale-95 transition-all text-white text-[11px] font-black uppercase tracking-wide rounded-xl px-4 py-2.5 disabled:opacity-50 disabled:cursor-not-allowed">
+                            class="tc-btn is-grow w-full disabled:opacity-50 disabled:cursor-not-allowed">
                             ▶ Запустить дедупликацию
                         </button>
-                        <div id="dedup-log" class="mt-2 max-h-36 overflow-y-auto bg-gray-50 dark:bg-[#181818] rounded-lg p-2 text-[10px] text-gray-500 hidden"></div>
+                        <div id="dedup-log" class="mt-2 max-h-36 overflow-y-auto bg-gray-50 dark:bg-[#181818] rounded-lg p-2 text-[11px] text-gray-600 dark:text-gray-400 hidden"></div>
                     </div>
                 </details>
                 <div id="teacher-class-stats" class="flex flex-col gap-3 w-full"></div>
@@ -1295,7 +1278,7 @@
              
              <!-- ВКЛАДКА: ТОП НЕДЕЛИ -->
              <div class="flex-grow p-3 sm:p-4 overflow-y-auto overflow-x-hidden custom-scroll hidden flex-col bg-gray-50 dark:bg-[#121212] relative w-full" id="teacher-tab-weekly">
-                <div class="text-center mb-6 shrink-0"><h3 class="font-black text-xl sm:text-2xl text-emerald-600 dark:text-emerald-400 uppercase tracking-widest">🔥 Топ за неделю</h3><p class="text-[10px] text-gray-400 mt-1 uppercase">По количеству решённых строк задания №4 (с понедельника)</p></div>
+                <div class="text-center mb-5 shrink-0"><h3 class="font-black text-xl text-gray-800 dark:text-gray-200">🔥 Топ за неделю</h3><p class="text-[12px] font-medium text-gray-500 dark:text-gray-400 mt-1">По решённым строкам задания №4, с понедельника</p></div>
                 <div id="weekly-class-stats" class="flex flex-col gap-3 w-full"></div>
              </div>
              
@@ -1397,11 +1380,11 @@
     <!-- jsPDF грузится лениво (см. loadJsPDFOnDemand в cloud-sync.js) — не нужен при старте -->
 
     <!-- === PWA + first-party cloud sync loader === -->
-    <script src="pwa.js?v=20260726-4" defer></script>
+    <script src="pwa.js?v=20260726-8" defer></script>
 
     <!-- Ядро (факты, ~659 КБ): нужно для лобби и заданий. Приложение ОТКРЫВАЕТСЯ сразу
          после него — defer парсит HTML параллельно, порядок выполнения гарантирован. -->
-    <script src="data.js?v=20260726-4" defer></script>
+    <script src="data.js?v=20260726-8" defer></script>
     <!-- app:ready диспатчит инлайн-вотчер готовности в начале <body> (см. watchBoot):
          отдельный boot-ready.js убран — свежий файл не лежал в старом SW-кэше и на
          моргнувшей сети вис, не давая снять заставку. -->

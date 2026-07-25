@@ -1,13 +1,13 @@
 {
   "updated": "2026-07-25",
   "counts": {
-    "radius": 161,
-    "font-too-small": 264,
-    "shadow-literal": 77
+    "radius": 153,
+    "font-too-small": 210,
+    "shadow-literal": 76
   },
   "byFile": {
     "radius": {
-      "cloud-sync.js": 22,
+      "cloud-sync.js": 14,
       "cram.html": 7,
       "exam-mode.js": 15,
       "index.html": 2,
@@ -47,9 +47,9 @@
       "vov-mode.js": 4
     },
     "font-too-small": {
-      "cloud-sync.js": 73,
+      "cloud-sync.js": 43,
       "exam-mode.js": 7,
-      "index.html": 115,
+      "index.html": 91,
       "match-mode.js": 3,
       "modes.js": 10,
       "styles.css": 11,
@@ -59,7 +59,7 @@
       "vov-mode.js": 4
     },
     "shadow-literal": {
-      "cloud-sync.js": 2,
+      "cloud-sync.js": 1,
       "cram.html": 12,
       "exam-mode.js": 10,
       "index.html": 2,
