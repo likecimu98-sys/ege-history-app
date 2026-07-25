@@ -3,7 +3,7 @@
   "counts": {
     "radius": 161,
     "font-too-small": 280,
-    "shadow-literal": 83
+    "shadow-literal": 77
   },
   "byFile": {
     "radius": {
@@ -63,7 +63,7 @@
       "cram.html": 12,
       "exam-mode.js": 10,
       "index.html": 2,
-      "styles.css": 25,
+      "styles.css": 19,
       "swipe-mode.js": 2,
       "theme-classic.css": 10,
       "tools-and-docs/tools/fipi-parser/constructor.js": 1,

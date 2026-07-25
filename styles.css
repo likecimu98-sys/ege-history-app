@@ -172,29 +172,40 @@ body.in-game {
 .dnd-slot:hover { border-color: #64748b; background-color: #f1f5f9; }
 .dark .dnd-slot:hover { border-color: #52525b; background-color: #27272a; }
 
-.dnd-slot.has-item { border: 2px solid var(--c-brand); background-color: white; box-shadow: none; padding: 0; }
+/* ── СОСТОЯНИЯ ОТВЕТА: сплошная рамка и заливка, без полупрозрачных ореолов ──
+   Было: у каждого состояния сверху висел `box-shadow: 0 0 0 3px rgba(цвет,.3)`.
+   Полупрозрачный ореол на светлом фоне не читается как рамка — он читается как
+   грязь вокруг элемента («выделяется чем-то мутным»). Хуже того, ореол вылезает
+   за границу ячейки, а у `td` стоит `overflow: hidden` — снизу его срезало, и
+   рамка выглядела незакрытой.
+   Стало: цвет несут РАМКА и ЗАЛИВКА (они внутри border-box и не срезаются),
+   объём — тень из системы (--e-2 = «поднято»), а не цветное свечение. */
+.dnd-slot.has-item { border: 2px solid var(--c-brand); background-color: #ffffff; box-shadow: none; padding: 0; }
 .dark .dnd-slot.has-item { border-color: var(--c-brand); background-color: #18181b; }
 
 /* Слоты-результаты (верно/неверно). Высокая специфичность (html body … = 0,3,2),
    чтобы перебить скины (например constructivism), задающие рамку слота чёрной
    с !important. Это ЕДИНСТВЕННАЯ авторитетная копия — раньше она дублировалась
    в inline-<style> внутри index.html, и правки здесь не действовали. */
-html body .dnd-slot.correct-slot, html body .dnd-slot.has-item.correct-slot { border-color: var(--c-success) !important; border-width: 2px !important; background-color: #d1fae5 !important; box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.3) !important; pointer-events: none; }
-html.dark body .dnd-slot.correct-slot, html.dark body .dnd-slot.has-item.correct-slot { border-color: var(--c-success-soft) !important; background-color: rgba(16, 185, 129, 0.22) !important; box-shadow: 0 0 0 3px rgba(52, 211, 153, 0.4) !important; }
-html body .dnd-slot.incorrect-slot, html body .dnd-slot.has-item.incorrect-slot { border-color: var(--c-danger) !important; border-width: 2px !important; background-color: #ffe4e6 !important; box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.35) !important; animation: shake 0.4s ease-in-out; }
+html body .dnd-slot.correct-slot, html body .dnd-slot.has-item.correct-slot { border-color: var(--c-success) !important; border-width: 2px !important; background-color: #d1fae5 !important; box-shadow: none !important; pointer-events: none; }
+html.dark body .dnd-slot.correct-slot, html.dark body .dnd-slot.has-item.correct-slot { border-color: var(--c-success-soft) !important; background-color: rgba(16, 185, 129, 0.22) !important; box-shadow: none !important; }
+html body .dnd-slot.incorrect-slot, html body .dnd-slot.has-item.incorrect-slot { border-color: var(--c-danger) !important; border-width: 2px !important; background-color: #ffe4e6 !important; box-shadow: none !important; animation: shake 0.4s ease-in-out; }
 html body .dnd-slot.incorrect-slot > * { color: #b91c1c !important; }
-html.dark body .dnd-slot.incorrect-slot, html.dark body .dnd-slot.has-item.incorrect-slot { border-color: #fb7185 !important; background-color: rgba(244, 63, 94, 0.34) !important; box-shadow: 0 0 0 3px rgba(251, 113, 133, 0.55) !important; }
+html.dark body .dnd-slot.incorrect-slot, html.dark body .dnd-slot.has-item.incorrect-slot { border-color: #fb7185 !important; background-color: rgba(244, 63, 94, 0.34) !important; box-shadow: none !important; }
 html.dark body .dnd-slot.incorrect-slot > * { color: #fecaca !important; }
 
 .dnd-slot.revealed-slot { border-color: var(--c-warn); background-color: #fffbeb; pointer-events: none; }
 .dark .dnd-slot.revealed-slot { border-color: #ea580c; background-color: rgba(234, 88, 12, 0.05); }
 
-.slot-ready { 
-    border-color: var(--c-brand) !important; 
-    background-color: #eff6ff !important; 
-    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.2) !important; 
-    transform: scale(1.01); 
+/* Слот, готовый принять выбранную фишку. scale(1.01) убран: доля процента
+   размера не читается как подсветка, зато размывает текст в ячейке таблицы. */
+.slot-ready {
+    border-color: var(--c-brand) !important;
+    border-style: solid !important;
+    background-color: #eff6ff !important;
+    box-shadow: none !important;
 }
+.dark .slot-ready { background-color: rgba(59, 130, 246, 0.16) !important; }
 
 /* --- ФИШКИ (CHIPS) --- */
 .dnd-chip { 
@@ -208,10 +219,20 @@ html.dark body .dnd-slot.incorrect-slot > * { color: #fecaca !important; }
     box-shadow: 0 2px 4px 0 rgba(0, 0, 0, 0.05); 
     transition: transform 0.1s ease, background-color 0.1s, border-color 0.1s; 
     user-select: none; 
-    color: #1e293b; 
-    text-align: center; 
-    touch-action: manipulation; 
-    will-change: transform, opacity; 
+    color: #1e293b;
+    text-align: center;
+    touch-action: manipulation;
+    will-change: transform, opacity;
+    /* Узкая колонка таблицы + длинное слово («присоединение») = текст вылезал за
+       рамку, и та переставала читаться как рамка.
+       `break-word` тут не спасает: текст внутри фишки — анонимный флекс-элемент,
+       его минимальная ширина равна самому длинному слову, и слово выезжает
+       наружу. Ширину ужимает только `anywhere`. Чтобы он не рвал слова где
+       попало («Московском/у»), рядом стоит `hyphens: auto` — переносы по слогам
+       имеют приоритет над аварийным разрывом (<html lang="ru">). */
+    overflow-wrap: anywhere;
+    hyphens: auto;
+    min-width: 0;
 }
 
 .dark .dnd-chip { background-color: #27272a; border-color: #3f3f46; color: #e4e4e7; }
@@ -219,16 +240,20 @@ html.dark body .dnd-slot.incorrect-slot > * { color: #fecaca !important; }
     .dnd-chip { font-size: 0.9rem; padding: 0.4rem 0.6rem; } 
 }
 
-.dnd-chip.selected { 
-    border-color: var(--c-brand); 
-    background-color: #eff6ff; 
-    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.3); 
-    transform: translateY(-2px); 
+/* Выбранная фишка. Цвет несут рамка, заливка и текст — три сигнала внутри
+   границ элемента. Тень только для объёма («поднял пальцем»), не цветная. */
+.dnd-chip.selected {
+    border-color: var(--c-brand);
+    background-color: #dbeafe;
+    color: #1e3a8a;
+    box-shadow: var(--e-2);
+    transform: translateY(-2px);
 }
-.dark .dnd-chip.selected { 
-    border-color: var(--c-brand); 
-    background-color: rgba(59, 130, 246, 0.15); 
-    box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2); 
+.dark .dnd-chip.selected {
+    border-color: #60a5fa;
+    background-color: rgba(59, 130, 246, 0.28);
+    color: #eff6ff;
+    box-shadow: var(--e-2);
 }
 
 .dnd-chip.in-slot { 

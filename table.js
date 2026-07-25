@@ -1356,7 +1356,7 @@ function renderEmbeddedFipiTask(task) {
             tr.dataset.index = String(rowIndex);
             sourceRow.forEach((cell, cellIndex) => {
                 const td = document.createElement('td');
-                td.className = 'p-1 sm:p-3 py-1.5 align-middle text-center overflow-hidden border-l border-gray-100 dark:border-[#2c2c2c] first:border-l-0';
+                td.className = 'p-1 sm:p-3 py-2 align-middle text-center overflow-hidden border-l border-gray-100 dark:border-[#2c2c2c] first:border-l-0';
                 if (Number.isInteger(cell.slot)) {
                     td.appendChild(makeSlot(optionForSlot(cell.slot), letters[cell.slot], cell.slot));
                 } else {
@@ -1398,7 +1398,7 @@ function renderEmbeddedFipiTask(task) {
             label.textContent = `${target.label || letters[index] || '?'}) ${target.text || ''}`;
             labelCell.appendChild(label);
             const slotCell = document.createElement('td');
-            slotCell.className = 'p-1 sm:p-3 py-1.5 align-middle text-center overflow-hidden';
+            slotCell.className = 'p-1 sm:p-3 py-2 align-middle text-center overflow-hidden';
             slotCell.appendChild(makeSlot(expected, target.label || letters[index], index));
             tr.append(labelCell, slotCell);
             body.appendChild(tr);
@@ -1585,7 +1585,7 @@ function generateTwoColumnTable() {
 
         const chipClass = task === 'task7' ? 'task7-chip' : '';
         tr.innerHTML = `<td class="p-1.5 sm:p-3 py-1.5 align-middle text-left border-r border-gray-100 dark:border-[#2c2c2c]"><span class="text-[12px] sm:text-[14px] font-bold text-gray-800 dark:text-gray-300 leading-relaxed block">${letters[idx] || '?'}) ${row[displayField]}</span></td>` +
-            `<td class="p-1 sm:p-3 py-1.5 align-middle text-center overflow-hidden"><div class="dnd-slot relative ${chipClass ? '' : ''}" data-expected="${String(row[hiddenField]).replace(/"/g, '&quot;')}" data-letter="?"></div></td>`;
+            `<td class="p-1 sm:p-3 py-2 align-middle text-center overflow-hidden"><div class="dnd-slot relative ${chipClass ? '' : ''}" data-expected="${String(row[hiddenField]).replace(/"/g, '&quot;')}" data-letter="?"></div></td>`;
         trFrag.appendChild(tr);
     });
     $('task-table-body').appendChild(trFrag);
@@ -1669,7 +1669,7 @@ function generateTask4Table() {
 
         ['geo', 'event', 'year'].forEach(key => {
             const td = document.createElement('td');
-            td.className = "p-1 sm:p-3 py-1.5 align-middle text-center overflow-hidden border-l border-gray-100 dark:border-[#2c2c2c] first:border-l-0";
+            td.className = "p-1 sm:p-3 py-2 align-middle text-center overflow-hidden border-l border-gray-100 dark:border-[#2c2c2c] first:border-l-0";
             if (chosen.includes(key)) {
                 td.innerHTML = `<div class="dnd-slot relative" data-expected="${String(row[key]).replace(/"/g, '&quot;')}" data-letter="${letters[lIdx] || '?'}"></div>`;
                 lIdx++;

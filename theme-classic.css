@@ -45,9 +45,23 @@ body.skin-classic #bottom-nav { background: rgba(255,255,255,.97) !important; bo
 body.skin-classic [data-action="quickStartGame"],
 body.skin-classic [data-action="pickTaskForMode"] { background: #ffffff !important; }
 
-body.skin-classic .dnd-slot { background-color: #f8fafc !important; border-color: #cbd5e1 !important; }
+/* ⚠️ УДАЛЕНО 26.07.2026 — не возвращать:
+     body.skin-classic .dnd-slot { background-color:#f8fafc!important; border-color:#cbd5e1!important }
+     body.skin-classic .dnd-chip { background:#fff!important; border-color:#cbd5e1!important; color:#1e293b!important }
+   (и такие же строки ниже по файлу для .dnd-slot и тёмной темы)
 
-body.skin-classic .dnd-chip { background: #ffffff !important; border-color: #cbd5e1 !important; color: #1e293b !important; }
+   Это наследство авроры: её неоновая база красила фишки глобально, и скин
+   классики возвращал их к светлому виду встречным !important. Аврора удалена,
+   базовые правила в styles.css дают ровно эти же цвета — но !important бил и по
+   СОСТОЯНИЯМ, у которых важности нет:
+     .dnd-chip.selected     — выбранная фишка оставалась белой с серой рамкой,
+                              от выделения жил только полупрозрачный ореол
+                              box-shadow 0 0 0 3px rgba(59,130,246,.3). Отсюда
+                              ощущение «выделяется чем-то мутным».
+     .dnd-slot.has-item     — слот с ответом выглядел как пустой: синяя рамка и
+                              белая заливка не доживали до экрана.
+   В тёмной теме .selected был прописан отдельно с !important и работал —
+   поэтому баг видно только на светлой. */
 
 html.dark body.skin-classic {
   --a-bg:     #121212;
@@ -88,11 +102,6 @@ body.skin-classic #pool-panel {
 
 body.skin-classic #table-head {
   background: var(--a-s3) !important;
-}
-
-body.skin-classic .dnd-slot {
-  background-color: var(--a-s2) !important;
-  border-color: var(--a-border) !important;
 }
 
 body.skin-classic #check-btn-sure {
@@ -142,6 +151,6 @@ body.skin-classic [data-action="finishOnboarding"].bg-emerald-500 {
   box-shadow: 0 4px 16px rgba(0,0,0,.15) !important;
 }
 
-html.dark body.skin-classic .dnd-chip:not(.in-slot) { background:#27272a !important; border-color:#3f3f46 !important; color:#e4e4e7 !important; }
-
-html.dark body.skin-classic .dnd-chip.selected:not(.in-slot) { background:rgba(59,130,246,.22) !important; border-color:#3b82f6 !important; color:#f1f5f9 !important; }
+/* Тёмные правила для .dnd-chip тоже удалены 26.07.2026: они дублировали
+   `.dark .dnd-chip` и `.dark .dnd-chip.selected` из styles.css. Состояния фишек
+   живут в одном месте — в styles.css, рядом с базовым `.dnd-chip`. */
