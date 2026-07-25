@@ -1790,6 +1790,69 @@ details.lobby-acc[open] .acc-chev { transform: rotate(180deg); }
 #lobby-side .side-kpi b { display: block; font-size: 19px; font-weight: 800; color: var(--c-text); font-variant-numeric: tabular-nums; line-height: 1.1; }
 #lobby-side .side-kpi i { display: block; font-style: normal; font-size: var(--t-micro); color: var(--c-muted-2); margin-top: 2px; }
 
+/* ══════════════════════════════════════════════════════════════════════════
+   ЦИФРЫ: статистика и кабинет
+   ──────────────────────────────────────────────────────────────────────────
+   Замер до правки (модалка «Статистика», 375px): 4 показателя — 4 разных
+   цвета цифр (синий, розовый, индиго, зелёный) и 4 подписи капсом в разрядку
+   по 10px, две из которых переносятся на вторую строку. «8 ч 43 м» разрывалось
+   между «43» и «м». Ноль процентов был выкрашен зелёным — цветом успеха.
+
+   Правила этого блока:
+   · подпись — обычным регистром, 12px: КАПС В РАЗРЯДКУ читается на 15-20%
+     медленнее, а кириллица теряет ещё и восходящие/нисходящие элементы букв;
+   · цифра — всегда одного размера и цвета текста. Цвет = смысл (ошибки —
+     красный), а не украшение. Ноль не красим успехом;
+   · цифры моноширинные (tabular-nums) и не переносятся.
+   ══════════════════════════════════════════════════════════════════════════ */
+.stat-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+/* Флекс-колонка, а не блок: карточки в ряду одной высоты (так сетка читается
+   сеткой), но подпись прижата к низу — иначе под коротким числом зияет дыра. */
+.stat-card {
+    display: flex; flex-direction: column; width: 100%; text-align: left;
+    background: var(--c-card); border: 1px solid var(--c-border);
+    border-radius: var(--r-md); box-shadow: var(--e-1);
+    padding: 12px 14px;
+}
+.stat-card > .k {
+    display: block;
+    font-size: var(--t-caption); font-weight: 600;
+    color: var(--c-muted-2); line-height: 1.25;
+}
+.stat-card > .v {
+    display: block; margin-top: 5px;
+    font-size: 25px; font-weight: 800; line-height: 1.1;
+    color: var(--c-text);
+    font-variant-numeric: tabular-nums; white-space: nowrap;
+}
+.stat-card > .s {
+    display: block; margin-top: auto; padding-top: 4px;
+    font-size: var(--t-micro); font-weight: 600; color: var(--c-muted-2);
+}
+/* Единственный цветной показатель: ошибки — то, ради чего сюда заходят. */
+.stat-card.is-danger > .v { color: var(--c-danger); }
+button.stat-card { cursor: pointer; transition: border-color .15s, transform .1s; }
+button.stat-card:active { transform: scale(.985); }
+button.stat-card:hover { border-color: var(--c-border-2); }
+
+/* Строка «по заданиям»: имя · полоса · время · процент */
+.stat-row { display: flex; align-items: center; gap: 10px; }
+.stat-row + .stat-row { margin-top: 9px; }
+.stat-row > .nm { flex: 0 0 52px; font-size: var(--t-label); font-weight: 700; color: var(--c-text); }
+.stat-row > .bar { flex: 1; height: 6px; border-radius: var(--r-full); background: var(--c-card-2); overflow: hidden; }
+.stat-row > .bar > span { display: block; height: 100%; border-radius: var(--r-full); background: var(--a, var(--c-brand)); transition: width .5s ease; }
+.stat-row > .tm { flex: 0 0 62px; text-align: right; font-size: var(--t-caption); font-weight: 600; color: var(--c-muted-2); font-variant-numeric: tabular-nums; }
+.stat-row > .pc { flex: 0 0 38px; text-align: right; font-size: var(--t-label); font-weight: 700; color: var(--c-text); font-variant-numeric: tabular-nums; }
+/* Ноль — это не достижение: гасим до приглушённого, чтобы взгляд шёл к ненулям */
+.stat-row > .pc[data-zero="1"] { color: var(--c-muted-3); font-weight: 600; }
+
+/* Заголовок раздела внутри модалки */
+.stat-h3 {
+    font-size: var(--t-label); font-weight: 700;
+    color: var(--c-text); margin: 0 0 12px;
+    letter-spacing: 0; text-transform: none;
+}
+
 /* ── Служебное ───────────────────────────────────────────────────────────── */
 /* Только для скринридера: сохраняем поля, которые читает/пишет старый JS
    (например progress-text-taskN из state.js), не показывая их глазу. */

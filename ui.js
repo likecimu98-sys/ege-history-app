@@ -2185,7 +2185,13 @@ function updateGlobalUI() {
             learnedAll += r.learned; totalAll += r.total;
             const pct = r.total ? Math.round(r.learned * 100 / r.total) : 0;
             if ($('stat-row-time-' + t)) updateText($('stat-row-time-' + t), fmtDur(tbt[t] || 0));
-            if ($('stat-row-pct-' + t)) updateText($('stat-row-pct-' + t), pct + '%');
+            const pctEl = $('stat-row-pct-' + t);
+            if (pctEl) {
+                updateText(pctEl, pct + '%');
+                // Ноль гасим до приглушённого: взгляд должен идти к ненулям, а не
+                // спотыкаться о пять одинаковых зелёных «0%».
+                if (pct) pctEl.removeAttribute('data-zero'); else pctEl.dataset.zero = '1';
+            }
             const bar = $('stat-row-bar-' + t);
             if (bar) bar.style.width = pct + '%';
         });
@@ -2263,37 +2269,38 @@ window.openStatsModal = function() {
         const _egeR = estimateEGEScore(window.state.stats);
         let _attempts = 0;
         Object.values(window.state.stats.eraStats || {}).forEach(t => Object.values(t || {}).forEach(e => { _attempts += (e && e.total) || 0; }));
-        let eH = `<div onclick="window.openEGEModal&&window.openEGEModal()" class="flex items-center justify-between bg-yellow-50 dark:bg-yellow-900/15 border border-yellow-200 dark:border-yellow-900/40 rounded-xl p-3 mb-3 cursor-pointer active:scale-[0.98] transition-transform">
-            <div>
-                <div class="text-[10px] font-black text-yellow-700 dark:text-yellow-400 uppercase tracking-widest">🎯 Прогноз ЕГЭ</div>
-                <div class="text-[10px] font-bold text-gray-400 mt-0.5">${_attempts >= 300 ? 'нажми — из чего складывается' : 'пока копим данные — реши ещё ' + Math.max(0, 300 - _attempts) + ' строк для точности'}</div>
+        let eH = `<div onclick="window.openEGEModal&&window.openEGEModal()" class="flex items-center justify-between gap-3 bg-yellow-50 dark:bg-yellow-900/15 border border-yellow-200 dark:border-yellow-900/40 rounded-xl p-3 mb-3 cursor-pointer active:scale-[0.98] transition-transform">
+            <div class="min-w-0">
+                <div class="text-[13px] font-bold text-yellow-800 dark:text-yellow-400">🎯 Прогноз ЕГЭ</div>
+                <div class="text-[11px] font-medium text-gray-500 dark:text-gray-400 mt-0.5">${_attempts >= 300 ? 'нажми — из чего складывается' : 'пока копим данные — реши ещё ' + Math.max(0, 300 - _attempts) + ' строк для точности'}</div>
             </div>
-            <div class="text-2xl font-black ${_attempts >= 300 ? 'text-yellow-600 dark:text-yellow-400' : 'text-gray-300 dark:text-gray-600'}">${_attempts >= 300 ? _egeR.score : '~' + _egeR.score}</div>
+            <div class="text-2xl font-black shrink-0 tabular-nums ${_attempts >= 300 ? 'text-yellow-700 dark:text-yellow-400' : 'text-gray-400 dark:text-gray-600'}">${_attempts >= 300 ? _egeR.score : '~' + _egeR.score}</div>
         </div>`;
         tasks.forEach(({ key, label, color }) => {
             const taskEra = (window.state.stats.eraStats || {})[key] || {};
             const totalAttempts = Object.values(taskEra).reduce((s, e) => s + (e.total || 0), 0);
             if (!totalAttempts) return;
-            eH += `<div class="mb-3"><div class="text-[10px] font-black ${color} uppercase tracking-widest mb-2 px-1">${label}</div>`;
+            eH += `<div class="mb-3"><div class="text-[13px] font-bold ${color} mb-2 px-1">${label}</div>`;
             for (const [eKey, eName] of Object.entries(TASK_EPOCH_NAMES)) {
                 const e = taskEra[eKey] || { correct: 0, total: 0 };
                 if (!e.total) continue;
                 const pc = Math.round((e.correct / e.total) * 100);
-                const pcColor = pc > 80 ? 'text-emerald-500' : pc > 50 ? 'text-yellow-500' : 'text-rose-500';
+                // Цвет — только на процентной ленте: она и есть оценка. Само число
+                // держим цветом текста, иначе строка превращается в светофор.
                 const barColor = pc > 80 ? 'var(--c-success)' : pc > 50 ? 'var(--c-warn)' : 'var(--c-danger-soft)';
                 eH += `<div class="flex items-center gap-3 bg-gray-50 dark:bg-[#181818] p-2.5 rounded-xl border border-gray-100 dark:border-[#2c2c2c] mb-1.5">
-                    <span class="text-[10px] font-black text-gray-500 dark:text-gray-400 min-w-[90px]">${eName}</span>
+                    <span class="text-[12px] font-semibold text-gray-600 dark:text-gray-400 min-w-[92px]">${eName}</span>
                     <div class="flex-1 h-1.5 bg-gray-200 dark:bg-[#2c2c2c] rounded-full overflow-hidden">
                         <div style="width:${pc}%;background:${barColor}" class="h-full rounded-full"></div>
                     </div>
-                    <span class="text-xs font-black ${pcColor} min-w-[42px] text-right">${pc}% <span class="text-gray-400 font-normal text-[10px]">(${e.correct}/${e.total})</span></span>
+                    <span class="text-[13px] font-bold text-gray-800 dark:text-gray-200 min-w-[70px] text-right tabular-nums">${pc}%<span class="text-gray-500 dark:text-gray-400 font-medium text-[11px]"> (${e.correct}/${e.total})</span></span>
                 </div>`;
             }
             eH += '</div>';
         });
-        $('stats-era-container').innerHTML = eH || '<p class="text-[11px] font-bold text-gray-400 uppercase tracking-widest text-center py-4">Ещё нет данных</p>';
+        $('stats-era-container').innerHTML = eH || '<p class="text-[12px] font-medium text-gray-500 text-center py-4">Ещё нет данных</p>';
     }
-    if ($('stats-daily-container')) { const dStat = window.state.stats.dailyStats || {}; const dts = Object.keys(dStat).sort((a,b) => new Date(b) - new Date(a)).slice(0, 7); if (dts.length > 0) { let dH = ''; dts.forEach(d => { const day = dStat[d]; const mins = Math.floor((day.timeSpent || 0) / 60); const t1 = day.solvedTask1 || 0; const t3 = day.solvedTask3 || 0; const t4 = day.solvedTask4 || 0; const t5 = day.solvedTask5 || 0; const t7 = day.solvedTask7 || 0; const total = day.solved || 0; const taskParts = []; if (t1) taskParts.push(`<span class="text-cyan-600 dark:text-cyan-400">⏳${t1}</span>`); if (t3) taskParts.push(`<span class="text-emerald-500">🔗${t3}</span>`); if (t4) taskParts.push(`<span class="text-blue-500">📍${t4}</span>`); if (t5) taskParts.push(`<span class="text-purple-500">👤${t5}</span>`); if (t7) taskParts.push(`<span class="text-amber-500">🎨${t7}</span>`); const taskStr = taskParts.length > 0 ? taskParts.join(' ') : `<span class="text-examBlue dark:text-blue-400">${total}</span>`; dH += `<div class="bg-gray-50 dark:bg-[#181818] p-3 rounded-xl border border-gray-100 dark:border-[#2c2c2c]"><div class="flex justify-between items-center"><span class="text-[11px] font-black text-gray-500 dark:text-gray-400 uppercase tracking-widest">${new Date(d).toLocaleDateString('ru-RU', {day:'2-digit', month:'2-digit'})}</span><span class="font-bold text-yellow-600 dark:text-yellow-500 text-[11px]">⏱ ${mins} мин</span></div><div class="flex gap-3 mt-1.5 text-[11px] font-black">${taskStr}<span class="text-gray-400 ml-auto">Всего: ${total}</span></div></div>`; }); $('stats-daily-container').innerHTML = dH; } else $('stats-daily-container').innerHTML = '<p class="text-[11px] font-bold text-gray-500 text-center py-4 uppercase tracking-widest">Пока нет данных.</p>'; }
+    if ($('stats-daily-container')) { const dStat = window.state.stats.dailyStats || {}; const dts = Object.keys(dStat).sort((a,b) => new Date(b) - new Date(a)).slice(0, 7); if (dts.length > 0) { let dH = ''; dts.forEach(d => { const day = dStat[d]; const mins = Math.floor((day.timeSpent || 0) / 60); const t1 = day.solvedTask1 || 0; const t3 = day.solvedTask3 || 0; const t4 = day.solvedTask4 || 0; const t5 = day.solvedTask5 || 0; const t7 = day.solvedTask7 || 0; const total = day.solved || 0; const taskParts = []; if (t1) taskParts.push(`<span class="text-cyan-600 dark:text-cyan-400">⏳${t1}</span>`); if (t3) taskParts.push(`<span class="text-emerald-500">🔗${t3}</span>`); if (t4) taskParts.push(`<span class="text-blue-500">📍${t4}</span>`); if (t5) taskParts.push(`<span class="text-purple-500">👤${t5}</span>`); if (t7) taskParts.push(`<span class="text-amber-500">🎨${t7}</span>`); const taskStr = taskParts.length > 0 ? taskParts.join(' ') : `<span class="text-examBlue dark:text-blue-400">${total}</span>`; dH += `<div class="bg-gray-50 dark:bg-[#181818] p-3 rounded-xl border border-gray-100 dark:border-[#2c2c2c]"><div class="flex justify-between items-center"><span class="text-[13px] font-bold text-gray-700 dark:text-gray-300 tabular-nums">${new Date(d).toLocaleDateString('ru-RU', {day:'2-digit', month:'2-digit'})}</span><span class="font-semibold text-gray-500 dark:text-gray-400 text-[12px] tabular-nums">⏱ ${mins} мин</span></div><div class="flex gap-3 mt-1.5 text-[12px] font-bold tabular-nums">${taskStr}<span class="text-gray-500 dark:text-gray-400 ml-auto font-medium">Всего: ${total}</span></div></div>`; }); $('stats-daily-container').innerHTML = dH; } else $('stats-daily-container').innerHTML = '<p class="text-[12px] font-medium text-gray-500 text-center py-4">Пока нет данных</p>'; }
     showModal('stats-modal');
 };
 
