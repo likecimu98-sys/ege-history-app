@@ -1629,6 +1629,89 @@ details.lobby-acc[open] .acc-chev { transform: rotate(180deg); }
     .la-grid-2 { gap: 12px; }
 }
 
+/* ══════════════════════════════════════════════════════════════════════════
+   ПК КАК ОТДЕЛЬНОЕ УСТРОЙСТВО, а не растянутый телефон
+   ──────────────────────────────────────────────────────────────────────────
+   Замер до правки: в проекте 235 брейкпоинтов sm:, 13 lg: и НИ ОДНОГО xl:.
+   Контент упирался в max-w-5xl (1024px), на экране 1280 по бокам простаивало
+   288px пустоты — это и есть «растянутый мобайл».
+
+   Растягивать ширину — тупик: строка длиннее ~75 знаков читается хуже, а сетка
+   в шесть колонок превращается в панель управления самолётом. Разница между
+   телефоном и ПК не в ширине, а в том, ЧТО МОЖНО ПОКАЗАТЬ ОДНОВРЕМЕННО.
+   Поэтому пустоту забирает постоянная навигация и панель прогресса, а сам
+   контент остаётся узким.
+   ══════════════════════════════════════════════════════════════════════════ */
+
+/* До ПК панель прогресса не нужна: на телефоне это модалка «Статистика». */
+#lobby-side { display: none; }
+
+@media (min-width: 1100px) {
+    /* Ширину даём КОНТЕЙНЕРУ, а не тексту: под рельс и панель. */
+    main.no-print { max-width: 1340px; }
+
+    #lobby-area {
+        display: grid;
+        grid-template-columns: 216px minmax(0, 1fr) 296px;
+        grid-template-areas:
+            "nav main side"
+            "nav panels side";
+        align-content: start;
+        gap: 20px 24px;
+    }
+    #lobby-main   { grid-area: main; }
+    #lobby-nav    { grid-area: nav; position: sticky; top: 16px; }
+    #lobby-panels { grid-area: panels; margin-top: 0; }
+    #lobby-side   { grid-area: side; display: block; position: sticky; top: 16px; }
+
+    /* Вкладки разворачиваются в вертикальный рельс. Тот же компонент, та же
+       разметка и тот же JS — меняется только направление флекса. */
+    .la-tabs { flex-direction: column; gap: 4px; overflow: visible; }
+    .la-tab  { width: 100%; justify-content: space-between; }
+
+    /* Плиток в ряд больше, но сами плитки не раздуваются. */
+    .la-grid-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+
+    /* Игровой экран НЕ растягиваем. Карточка задания от ширины понятнее не
+       становится — держим комфортную меру строки и центрируем. */
+    #game-container { max-width: 780px; margin-left: auto; margin-right: auto; }
+
+    /* Номер варианта для клавиатуры. Показываем только на ПК: на телефоне
+       клавиатуры нет, и бейдж был бы шумом. Номер закрепляется за вариантом
+       на всё задание (data-kbd вешает обработчик в ui.js). */
+    #pool-container .dnd-chip[data-kbd] { position: relative; }
+    #pool-container .dnd-chip[data-kbd]::before {
+        content: attr(data-kbd);
+        position: absolute; top: -6px; left: -6px;
+        min-width: 16px; height: 16px; padding: 0 3px;
+        border-radius: var(--r-full);
+        background: var(--c-card-2); border: 1px solid var(--c-border-2);
+        color: var(--c-muted-2); font-size: var(--t-micro); font-weight: 700;
+        line-height: 14px; text-align: center; pointer-events: none;
+    }
+}
+
+/* Панель прогресса */
+#lobby-side .side-card {
+    background: var(--c-card); border: 1px solid var(--c-border);
+    border-radius: var(--r-md); box-shadow: var(--e-1); padding: 14px;
+}
+#lobby-side h3 {
+    font-size: var(--t-micro); font-weight: var(--t-micro-w);
+    letter-spacing: .12em; text-transform: uppercase;
+    color: var(--c-muted-2); margin: 0 0 10px;
+}
+#lobby-side .side-row { display: flex; align-items: center; gap: 8px; margin-bottom: 9px; }
+#lobby-side .side-row:last-child { margin-bottom: 0; }
+#lobby-side .side-row .nm { font-size: var(--t-caption); font-weight: 700; color: var(--c-text); flex: 0 0 62px; }
+#lobby-side .side-row .bar { flex: 1; height: 6px; border-radius: var(--r-full); background: var(--c-card-2); overflow: hidden; }
+#lobby-side .side-row .bar > span { display: block; height: 100%; border-radius: var(--r-full); background: var(--a, var(--c-indigo)); transition: width .5s ease; }
+#lobby-side .side-row .pc { font-size: var(--t-micro); font-weight: 700; color: var(--c-muted-2); flex: 0 0 34px; text-align: right; font-variant-numeric: tabular-nums; }
+#lobby-side .side-kpi { display: flex; gap: 8px; margin-bottom: 12px; }
+#lobby-side .side-kpi > div { flex: 1; background: var(--c-card-2); border-radius: var(--r-sm); padding: 9px 10px; }
+#lobby-side .side-kpi b { display: block; font-size: 19px; font-weight: 800; color: var(--c-text); font-variant-numeric: tabular-nums; line-height: 1.1; }
+#lobby-side .side-kpi i { display: block; font-style: normal; font-size: var(--t-micro); color: var(--c-muted-2); margin-top: 2px; }
+
 /* ── Служебное ───────────────────────────────────────────────────────────── */
 /* Только для скринридера: сохраняем поля, которые читает/пишет старый JS
    (например progress-text-taskN из state.js), не показывая их глазу. */

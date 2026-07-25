@@ -986,6 +986,10 @@ function getTaskProgress(task) {
     return { learned, total: total || 1 };
 }
 
+// Панели прогресса на ПК (renderLobbySide в ui.js) нужен тот же расчёт, что и
+// плиткам, — экспортируем, чтобы не заводить вторую реализацию, которая разъедется.
+window.getTaskProgress = getTaskProgress;
+
 function updateProgressBars() {
     TASK_LIST.forEach(task => {
         const info = getTaskProgress(task);

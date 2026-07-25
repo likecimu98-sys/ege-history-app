@@ -1921,6 +1921,120 @@ function renderMainAction() {
 }
 window.renderMainAction = renderMainAction;
 
+// ── Панель прогресса (только ПК, ≥1100px) ───────────────────────────────────
+// На телефоне это модалка «Статистика»: там нет места, и прятать её правильно.
+// На большом экране прятать нечего — 288px по бокам всё равно простаивали.
+// Показываем то, за чем иначе надо лезть в модалку: стрик, выучено, разбивку
+// по заданиям. Считаем через window.getTaskProgress (state.js) — тот же расчёт,
+// что у плиток, чтобы цифры не разъехались между панелью и лобби.
+const _SIDE_ACCENT = { task1: 'a-task1', task3: 'a-task3', task4: 'a-task4', task5: 'a-task5', task7: 'a-task7' };
+function renderLobbySide() {
+    const box = document.getElementById('lobby-side');
+    if (!box || !window.getTaskProgress) return;
+    // Панель скрыта до 1100px — не тратим такты на невидимое.
+    if (!box.offsetParent) return;
+    // ВАЖНО: TASK_CONFIG объявлен в config.js через `const`, а в обычном (не
+    // модульном) скрипте const НЕ попадает в window. Обращаться надо голым
+    // идентификатором — window.TASK_CONFIG всегда undefined, и проверка на него
+    // молча гасила всю панель.
+    if (typeof TASK_CONFIG === 'undefined') return;
+
+    const list = (typeof TASK_LIST !== 'undefined' && TASK_LIST) || Object.keys(_SIDE_ACCENT);
+    let learnedAll = 0, totalAll = 0;
+    const rows = list.map(task => {
+        const info = window.getTaskProgress(task);
+        learnedAll += info.learned; totalAll += info.total;
+        const pct = Math.min(100, Math.round((info.learned / info.total) * 100));
+        const cfg = TASK_CONFIG[task] || {};
+        const name = cfg.shortLabel || task.replace('task', '№');
+        return `<div class="side-row" style="--a:var(--${_SIDE_ACCENT[task] || 'c-indigo'})">
+            <span class="nm">${name}</span>
+            <span class="bar"><span style="width:${pct}%"></span></span>
+            <span class="pc">${pct}%</span>
+        </div>`;
+    }).join('');
+
+    const st = (window.state && window.state.stats) || {};
+    const pctAll = totalAll ? Math.round((learnedAll / totalAll) * 100) : 0;
+    box.innerHTML = `
+        <div class="side-card">
+            <div class="side-kpi">
+                <div><b>${st.streak || 0}</b><i>дней подряд</i></div>
+                <div><b>${pctAll}%</b><i>фактов выучено</i></div>
+            </div>
+            <h3>По заданиям</h3>
+            ${rows}
+        </div>`;
+}
+window.renderLobbySide = renderLobbySide;
+
+// ── Клавиатура в задании (ПК) ───────────────────────────────────────────────
+// Того, чего на телефоне нет вообще. Ученик, который час решает вариант, мышью
+// работает кратно медленнее. Раскладка: 1-9 — поставить вариант из пула,
+// Enter — «Уверен», Shift+Enter — «Сомневаюсь», → — «Дальше», Esc — в лобби.
+// Никаких своих обработчиков ответа: жмём те же кнопки, что и палец, — иначе
+// логика разъедется между вводом с клавиатуры и тапом.
+(function initGameHotkeys() {
+    const clickIfLive = el => {
+        if (!el || el.classList.contains('hidden') || el.disabled) return false;
+        if (!el.offsetParent) return false;
+        el.click();
+        return true;
+    };
+    document.addEventListener('keydown', e => {
+        // Не мешаем печатать: поля ввода, редактируемые области, модалки.
+        const t = e.target;
+        if (t && (/^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName) || t.isContentEditable)) return;
+        if (e.ctrlKey || e.metaKey || e.altKey) return;
+        const game = document.getElementById('game-container');
+        if (!game || game.classList.contains('hidden')) return;
+        // Если открыт какой-нибудь оверлей поверх игры — он главнее.
+        const overlay = document.querySelector('.fixed.inset-0:not(.hidden)');
+        if (overlay && getComputedStyle(overlay).display !== 'none' && +getComputedStyle(overlay).zIndex > 5000) return;
+
+        if (e.key === 'Escape') {
+            if (window.backToLobby) { e.preventDefault(); window.backToLobby(); }
+            return;
+        }
+        if (e.key === 'Enter') {
+            const btn = e.shiftKey ? 'check-btn-doubt' : 'check-btn-sure';
+            if (clickIfLive(document.getElementById(btn))) { e.preventDefault(); return; }
+            if (clickIfLive(document.getElementById('next-btn'))) e.preventDefault();
+            return;
+        }
+        if (e.key === 'ArrowRight') {
+            if (clickIfLive(document.getElementById('next-btn'))) e.preventDefault();
+            return;
+        }
+        if (/^[1-9]$/.test(e.key)) {
+            // Пул нумеруется как показан. Клик по чипу его только ВЫБИРАЕТ
+            // (window.state.selectedChip) — поставить может лишь клик по слоту.
+            // Поэтому цифра делает оба шага: берёт вариант N и кладёт его в первый
+            // пустой слот. Порядок слотов А→Б→В→Г совпадает с порядком чтения, так
+            // что «смотрю на А, жму номер даты» — естественный ритм решения.
+            // Номера обязаны быть СТАБИЛЬНЫМИ. Если каждый раз брать N-й чип из
+            // текущего пула, то после первой же постановки нумерация съезжает и
+            // печатать «не глядя» невозможно — проверено, из четырёх нажатий
+            // срабатывали три. Поэтому номер закрепляется за вариантом один раз
+            // на задание (data-kbd) и не меняется, пока не сменится вопрос.
+            const pool = document.querySelectorAll('#pool-container .dnd-chip');
+            if (pool.length && !pool[0].dataset.kbd) {
+                pool.forEach((c, i) => { if (i < 9) c.dataset.kbd = String(i + 1); });
+            }
+            const chip = document.querySelector('#pool-container .dnd-chip[data-kbd="' + e.key + '"]:not(.crossed-out)');
+            if (!chip) return;
+            const slot = Array.prototype.find.call(
+                document.querySelectorAll('.dnd-slot'),
+                s => !s.querySelector('.dnd-chip')
+            );
+            if (!slot) return;
+            e.preventDefault();
+            chip.click();
+            slot.click();
+        }
+    });
+})();
+
 // ── Вкладки разделов лобби ──────────────────────────────────────────────────
 // Пришли на смену гармошкам. Гармошка прячет содержимое и заставляет спрашивать
 // «что там внутри», а её заголовок был высотой 16px при норме пальца 44. Вкладки
@@ -1965,6 +2079,7 @@ else initLobbyTabs();
 
 function updateGlobalUI() {
     renderMainAction();
+    renderLobbySide();
     const now = Date.now();
     let totalL = 0, freshL = 0;
     Object.values(window.state.stats.factStreaks || {}).forEach(d => {
