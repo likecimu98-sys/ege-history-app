@@ -5,7 +5,12 @@
   "description": "Тренажёр ЕГЭ по истории — PWA / Telegram Mini App",
   "scripts": {
     "build:css": "tailwindcss -i ./input.css -o ./output.css",
-    "watch:css": "tailwindcss -i ./input.css -o ./output.css --watch"
+    "watch:css": "tailwindcss -i ./input.css -o ./output.css --watch",
+    "lint:design": "node tools-and-docs/design-lint.js",
+    "lint:design:list": "node tools-and-docs/design-lint.js --list",
+    "lint:design:update": "node tools-and-docs/design-lint.js --update",
+    "test:sw": "node tools-and-docs/service-worker.selftest.js",
+    "check": "npm run test:sw && npm run lint:design"
   },
   "devDependencies": {
     "tailwindcss": "^3.4.17"
