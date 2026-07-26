@@ -1834,7 +1834,12 @@ window.onChipClick = function(chip, e) {
    после постановки.
    ══════════════════════════════════════════════════════════════════════════ */
 (function initChipDrag() {
-    const MOVE_THRESHOLD = 8;   // px — меньше этого палец просто дрожит, это тап
+    // Порог, после которого нажатие превращается в перенос. У пальца он должен быть
+    // заметно больше: палец при обычном тапе почти всегда смещается на несколько
+    // пикселей, и при пороге мыши каждый тап начинал микро-перенос — вариант
+    // «дёргался», а выбор тут же снимался. Мышь ходит точно, ей хватает малого.
+    const THRESHOLD = { touch: 14, pen: 12, mouse: 6 };
+    const thresholdFor = type => THRESHOLD[type] || THRESHOLD.mouse;
     const EDGE = 56;            // px от края прокручиваемой области, где включается автопрокрутка
     const EDGE_STEP = 12;
 
@@ -1888,7 +1893,6 @@ window.onChipClick = function(chip, e) {
         ghost.classList.remove('selected');
         ghost.style.width = rect.width + 'px';
         ghost.style.height = rect.height + 'px';
-        document.body.appendChild(ghost);
 
         chip.classList.add('is-dragging');
         drag = {
@@ -1897,7 +1901,10 @@ window.onChipClick = function(chip, e) {
             scroller: scrollableAncestor(chip),
             target: null
         };
+        // Позицию задаём ДО вставки в документ: иначе есть кадр, где клон лежит в
+        // позиции 0,0, и глаз ловит рывок из угла экрана.
         moveGhost(x, y);
+        document.body.appendChild(ghost);
         if (typeof haptic === 'function') haptic('light');
         return true;
     }
@@ -1951,7 +1958,7 @@ window.onChipClick = function(chip, e) {
         // Зачёркнутый вариант не таскаем: по нему тапом снимают отсев.
         if (chip.classList.contains('crossed-out')) return;
         if (chip.classList.contains('in-slot') && isLocked(chip.parentElement)) return;
-        pending = { chip, x: event.clientX, y: event.clientY, id: event.pointerId };
+        pending = { chip, x: event.clientX, y: event.clientY, id: event.pointerId, limit: thresholdFor(event.pointerType) };
     }, true);
 
     document.addEventListener('pointermove', event => {
@@ -1966,7 +1973,7 @@ window.onChipClick = function(chip, e) {
             return;
         }
         if (!pending || event.pointerId !== pending.id) return;
-        if (Math.hypot(event.clientX - pending.x, event.clientY - pending.y) < MOVE_THRESHOLD) return;
+        if (Math.hypot(event.clientX - pending.x, event.clientY - pending.y) < pending.limit) return;
         const chip = pending.chip;
         pending = null;
         if (beginDrag(chip, event.clientX, event.clientY)) event.preventDefault();

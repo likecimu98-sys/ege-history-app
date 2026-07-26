@@ -287,6 +287,12 @@ html.dark body .dnd-slot.incorrect-slot > * { color: #fecaca !important; }
     opacity: .95; box-shadow: var(--e-3);
     border-color: var(--c-brand);
     transform-origin: center;
+    /* ⚠️ Обязательно. Клон наследует от .dnd-chip `transition: transform .1s`,
+       а стартует в позиции 0,0 — и первый же перенос выглядел так, будто вариант
+       прилетает из левого верхнего угла экрана. Призрак не анимируется никогда:
+       он обязан быть ровно под пальцем с первого кадра. */
+    transition: none !important;
+    animation: none !important;
 }
 /* Исходная фишка на время переноса гаснет — видно, что она «в руке». */
 .dnd-chip.is-dragging { opacity: .3; }
