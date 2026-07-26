@@ -1815,3 +1815,167 @@ window.onChipClick = function(chip, e) {
     }
     updateSlotGlow();
 };
+
+/* ══════════════════════════════════════════════════════════════════════════
+   ПЕРЕТАСКИВАНИЕ ВАРИАНТОВ — мышью и пальцем
+   ──────────────────────────────────────────────────────────────────────────
+   Pointer Events, а НЕ нативный HTML5 drag-and-drop: последний не работает на
+   тач-экранах, а приложение в первую очередь телефонное. Один код на мышь,
+   палец и стилус.
+
+   Главное правило: перетаскивание НЕ содержит своей логики ответа. Оно лишь
+   доводит фишку до слота и зовёт тот же handleSlotClick(), что и тап. Иначе
+   поведение разъедется между вводом пальцем и вводом мышью — и чинить придётся
+   дважды, каждый раз забывая про вторую половину.
+
+   Тап остаётся тапом: пока палец не сместился дальше порога, это обычный клик,
+   и его обрабатывает прежний onChipClick. Перетаскивание начинается только
+   после порога, и тогда следующий click гасится, чтобы выбор не отменился сразу
+   после постановки.
+   ══════════════════════════════════════════════════════════════════════════ */
+(function initChipDrag() {
+    const MOVE_THRESHOLD = 8;   // px — меньше этого палец просто дрожит, это тап
+    const EDGE = 56;            // px от края прокручиваемой области, где включается автопрокрутка
+    const EDGE_STEP = 12;
+
+    let pending = null;   // нажали на фишку, но ещё не решили: тап или перенос
+    let drag = null;      // идёт перенос
+
+    /* Гасим ОДИН клик сразу после переноса — тот, который браузер синтезирует
+       следом за pointerup. Без этого onChipClick тут же снял бы выбор.
+       Раньше здесь стоял простой флаг `swallowClick = true`, и это был баг:
+       после переноса пальцем браузер клик НЕ синтезирует (жест не похож на тап),
+       флаг оставался поднятым и съедал следующий настоящий тап. Ловушка живёт
+       не дольше 400 мс и снимается после первого же клика. */
+    function swallowNextClick() {
+        const handler = event => { event.stopPropagation(); event.preventDefault(); cleanup(); };
+        const cleanup = () => { document.removeEventListener('click', handler, true); clearTimeout(timer); };
+        const timer = setTimeout(cleanup, 400);
+        document.addEventListener('click', handler, true);
+    }
+
+    const isLocked = slot => !slot || slot.classList.contains('correct-slot') || slot.classList.contains('revealed-slot');
+
+    function scrollableAncestor(node) {
+        for (let el = node; el && el !== document.body; el = el.parentElement) {
+            const style = getComputedStyle(el);
+            if (/(auto|scroll)/.test(style.overflowY) && el.scrollHeight > el.clientHeight + 4) return el;
+        }
+        return null;
+    }
+
+    function beginDrag(chip, x, y) {
+        // Фишка, лежащая в слоте, сначала честно оттуда вынимается — тем же путём,
+        // что и по тапу. Иначе слот остался бы с классом has-item, но пустой.
+        if (chip.classList.contains('in-slot')) {
+            const slot = chip.parentElement;
+            if (isLocked(slot)) return false;
+            chip.classList.remove('in-slot', 'selected');
+            $('pool-container').appendChild(chip);
+            slot.innerHTML = '';
+            slot.classList.remove('has-item', 'incorrect-slot');
+        }
+        if (window.state.selectedChip && window.state.selectedChip !== chip) {
+            window.state.selectedChip.classList.remove('selected');
+        }
+        window.state.selectedChip = chip;
+        chip.classList.add('selected');
+        updateSlotGlow();
+
+        const rect = chip.getBoundingClientRect();
+        const ghost = chip.cloneNode(true);
+        ghost.classList.add('dnd-ghost');
+        ghost.classList.remove('selected');
+        ghost.style.width = rect.width + 'px';
+        ghost.style.height = rect.height + 'px';
+        document.body.appendChild(ghost);
+
+        chip.classList.add('is-dragging');
+        drag = {
+            chip, ghost,
+            dx: rect.left - x, dy: rect.top - y,
+            scroller: scrollableAncestor(chip),
+            target: null
+        };
+        moveGhost(x, y);
+        if (typeof haptic === 'function') haptic('light');
+        return true;
+    }
+
+    function moveGhost(x, y) {
+        drag.ghost.style.transform = `translate(${x + drag.dx}px, ${y + drag.dy}px)`;
+    }
+
+    function setTarget(slot) {
+        if (drag.target === slot) return;
+        if (drag.target) drag.target.classList.remove('drop-target');
+        drag.target = slot;
+        if (slot) slot.classList.add('drop-target');
+    }
+
+    function autoScroll(y) {
+        const box = drag.scroller;
+        if (box) {
+            const rect = box.getBoundingClientRect();
+            if (y < rect.top + EDGE) box.scrollTop -= EDGE_STEP;
+            else if (y > rect.bottom - EDGE) box.scrollTop += EDGE_STEP;
+            return;
+        }
+        if (y < EDGE) window.scrollBy(0, -EDGE_STEP);
+        else if (y > window.innerHeight - EDGE) window.scrollBy(0, EDGE_STEP);
+    }
+
+    function endDrag(drop) {
+        if (!drag) return;
+        const { chip, ghost, target } = drag;
+        ghost.remove();
+        chip.classList.remove('is-dragging');
+        if (target) target.classList.remove('drop-target');
+        drag = null;
+        swallowNextClick();
+
+        if (drop && target && !isLocked(target)) {
+            handleSlotClick(target);          // ← ровно тот же путь, что и у тапа
+        } else {
+            // Бросили мимо — снимаем выбор, чтобы фишка не осталась «в руке».
+            chip.classList.remove('selected');
+            if (window.state.selectedChip === chip) window.state.selectedChip = null;
+            updateSlotGlow();
+        }
+    }
+
+    document.addEventListener('pointerdown', event => {
+        if (event.button !== undefined && event.button !== 0) return;
+        const chip = event.target.closest && event.target.closest('.dnd-chip');
+        if (!chip) return;
+        // Зачёркнутый вариант не таскаем: по нему тапом снимают отсев.
+        if (chip.classList.contains('crossed-out')) return;
+        if (chip.classList.contains('in-slot') && isLocked(chip.parentElement)) return;
+        pending = { chip, x: event.clientX, y: event.clientY, id: event.pointerId };
+    }, true);
+
+    document.addEventListener('pointermove', event => {
+        if (drag) {
+            event.preventDefault();
+            moveGhost(event.clientX, event.clientY);
+            autoScroll(event.clientY);
+            // Призрак не должен закрывать цель от поиска — он pointer-events: none.
+            const under = document.elementFromPoint(event.clientX, event.clientY);
+            const slot = under && under.closest ? under.closest('.dnd-slot') : null;
+            setTarget(slot && !isLocked(slot) ? slot : null);
+            return;
+        }
+        if (!pending || event.pointerId !== pending.id) return;
+        if (Math.hypot(event.clientX - pending.x, event.clientY - pending.y) < MOVE_THRESHOLD) return;
+        const chip = pending.chip;
+        pending = null;
+        if (beginDrag(chip, event.clientX, event.clientY)) event.preventDefault();
+    }, { passive: false });
+
+    document.addEventListener('pointerup', event => {
+        if (drag) { endDrag(true); event.preventDefault(); }
+        pending = null;
+    }, { passive: false });
+
+    document.addEventListener('pointercancel', () => { endDrag(false); pending = null; });
+})();

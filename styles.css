@@ -220,7 +220,11 @@ html.dark body .dnd-slot.incorrect-slot > * { color: #fecaca !important; }
     user-select: none; 
     color: #1e293b;
     text-align: center;
-    touch-action: manipulation;
+    /* none, а не manipulation: пока браузер сам решает, что вертикальное движение
+       по фишке — это прокрутка, перетаскивание пальцем невозможно (жест уходит
+       скроллу и приходит pointercancel). Прокрутка остаётся везде, кроме самих
+       фишек, а внутри игры страница почти не прокручивается. */
+    touch-action: none;
     will-change: transform, opacity;
     /* Узкая колонка таблицы + длинное слово («присоединение») = текст вылезал за
        рамку, и та переставала читаться как рамка.
@@ -273,6 +277,27 @@ html.dark body .dnd-slot.incorrect-slot > * { color: #fecaca !important; }
 @media (min-width: 768px) {
     .dnd-chip.in-slot { font-size: 0.9rem; }
 }
+
+/* ── Перетаскивание ──────────────────────────────────────────────────────── */
+/* Призрак под пальцем. pointer-events: none обязательны: иначе elementFromPoint
+   находил бы сам призрак и цель никогда бы не определялась. */
+.dnd-ghost {
+    position: fixed; top: 0; left: 0; z-index: 10200;
+    pointer-events: none; margin: 0;
+    opacity: .95; box-shadow: var(--e-3);
+    border-color: var(--c-brand);
+    transform-origin: center;
+}
+/* Исходная фишка на время переноса гаснет — видно, что она «в руке». */
+.dnd-chip.is-dragging { opacity: .3; }
+/* Слот под пальцем. Единственная подсветка на поле: подсвечиваем ОДНУ цель, а
+   не все пустые слоты сразу (см. .slot-ready выше). */
+.dnd-slot.drop-target {
+    border-color: var(--c-brand) !important;
+    border-style: solid !important;
+    background-color: #eff6ff !important;
+}
+.dark .dnd-slot.drop-target { background-color: rgba(59, 130, 246, .16) !important; }
 
 /* Фишка задания 7 в слоте — текст слева (длинные характеристики) */
 .task7-chip.in-slot { justify-content: flex-start !important; text-align: left !important; padding: 0.25rem 0.4rem !important; }
