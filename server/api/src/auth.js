@@ -143,17 +143,32 @@ async function createSession(userId, req) {
   return { token, csrf };
 }
 
+// ВНИМАНИЕ: 'None', а не 'Lax'. В браузерном Telegram мини-апп живёт в iframe на
+// web.telegram.org, то есть запросы к нашему API — кросс-сайтовые. При 'Lax' браузер
+// НЕ сохраняет куку сессии -> /auth/session отдаёт 401 -> клиент падает в гостя ->
+// у гостя нет telegram-identity -> /api/v1/teacher/classes = 403 -> кабинет учителя
+// не открывается вообще. Это разбиралось по логам 25.07.2026 (8x200/8x401 на
+// auth/session, 20/20 отказов на teacher/classes) и правилось руками на бою.
+// НЕ возвращай 'Lax' — сломается браузерный Telegram.
+//
+// Почему 'None' здесь безопасен: кука не является единственным доказательством
+// намерения. Мутации требуют CSRF double-submit (ege_csrf читается JS и повторяется
+// заголовком, см. requireCsrf) плюс проверка Origin. Чужой сайт может отправить
+// куку, но не может прочитать её значение из-за same-origin policy, поэтому
+// заголовок подделать не сможет.
+const SESSION_SAME_SITE = 'None';
+
 function sessionCookies(session) {
   return [
-    cookie(env.sessionCookie, session.token, { maxAge: SESSION_SECONDS, httpOnly: true, secure: true, sameSite: 'Lax' }),
-    cookie(env.csrfCookie, session.csrf, { maxAge: SESSION_SECONDS, httpOnly: false, secure: true, sameSite: 'Lax' }),
+    cookie(env.sessionCookie, session.token, { maxAge: SESSION_SECONDS, httpOnly: true, secure: true, sameSite: SESSION_SAME_SITE }),
+    cookie(env.csrfCookie, session.csrf, { maxAge: SESSION_SECONDS, httpOnly: false, secure: true, sameSite: SESSION_SAME_SITE }),
   ];
 }
 
 function clearSessionCookies() {
   return [
-    cookie(env.sessionCookie, '', { maxAge: 0, httpOnly: true, secure: true, sameSite: 'Lax' }),
-    cookie(env.csrfCookie, '', { maxAge: 0, httpOnly: false, secure: true, sameSite: 'Lax' }),
+    cookie(env.sessionCookie, '', { maxAge: 0, httpOnly: true, secure: true, sameSite: SESSION_SAME_SITE }),
+    cookie(env.csrfCookie, '', { maxAge: 0, httpOnly: false, secure: true, sameSite: SESSION_SAME_SITE }),
   ];
 }
 
