@@ -7,14 +7,14 @@
             signInWithCredential, signOut, initializeFirestore, collection, doc, setDoc, getDoc,
             getDocs, addDoc, updateDoc, deleteDoc, deleteField, onSnapshot, query, where,
             orderBy, limit, runTransaction, arrayUnion, arrayRemove, vpsApiFetch, refreshVpsAuth
-        } from "./vps-sync-compat.js?v=20260726-16";
+        } from "./vps-sync-compat.js?v=20260726-17";
 
         // jsPDF грузился с cdnjs.cloudflare.com без SRI — то есть посторонний скрипт
         // исполнялся с полными правами страницы, а при недоступности CDN (у части
         // нашей аудитории это обычное дело) экспорт PDF просто не работал. Довод тот
         // же, что и для telegram-web-app.js: своя копия с того же origin.
         // Версия совпадает с прежней CDN-ной — 2.5.1, лежит в vendor/.
-        const VENDOR_JSPDF = 'vendor/jspdf.umd.min.js?v=20260726-16';
+        const VENDOR_JSPDF = 'vendor/jspdf.umd.min.js?v=20260726-17';
 
         const cloudConfig = { projectId: 'vps-postgresql' };
         
@@ -211,6 +211,41 @@
             window._identitySwitching = true; // блокируем фоновые load/sync до перезагрузки
             _wipeDeviceIdentity();
             try { localStorage.removeItem('ege_onboarding_done'); } catch (e) {}
+            try { await signOut(auth); } catch (e) {}
+            location.reload();
+        };
+
+        // Удаление аккаунта по требованию субъекта данных (право заявлено в
+        // политике обработки ПД, значит обязано иметь рабочую кнопку).
+        // Подтверждение двойное: первое — что человек понял последствия, второе —
+        // ввод слова, чтобы случайное касание не стёрло год работы.
+        window.deleteAccount = async function () {
+            const warned = await _uiConfirm2(
+                'Удалить аккаунт и ВСЕ данные? Пропадут прогресс, ошибки, достижения, ' +
+                'результаты пробников и связь с учителем. Это необратимо и восстановлению не подлежит.');
+            if (!warned) return;
+            const typed = window.prompt('Чтобы подтвердить, введи заглавными буквами: УДАЛИТЬ');
+            if (String(typed || '').trim().toUpperCase() !== 'УДАЛИТЬ') {
+                showToast('ℹ️', 'Удаление отменено', 'bg-blue-500', 'border-blue-700');
+                return;
+            }
+            window._identitySwitching = true; // глушим фоновые синки, иначе они воскресят документ
+            try {
+                await vpsApiFetch('/api/v1/me', {
+                    method: 'DELETE',
+                    body: JSON.stringify({ confirm: 'DELETE' }),
+                });
+            } catch (e) {
+                window._identitySwitching = false;
+                console.error('[Account] delete', e);
+                showToast('❌', 'Не удалось удалить — проверь связь', 'bg-rose-500', 'border-rose-700');
+                return;
+            }
+            // Локальные следы тоже убираем: иначе при следующем входе устройство
+            // попыталось бы синхронизировать уже удалённый профиль обратно.
+            _wipeDeviceIdentity();
+            try { localStorage.removeItem('ege_onboarding_done'); } catch (e) {}
+            try { localStorage.removeItem('ege_final_storage_v4'); } catch (e) {}
             try { await signOut(auth); } catch (e) {}
             location.reload();
         };
@@ -3234,7 +3269,9 @@
             'matchBestMs','matchGames','vovLearned','mockExams','mockExamMistakes',
             // Круг по банку ФИПИ. Без записи в этом списке поле не уезжает в облако
             // вовсе — и ротация работала бы только на одном устройстве.
-            'examSolved'
+            'examSolved',
+            // Согласие на обработку ПД — см. SAVE_FIELDS в state.js.
+            'consent'
         ];
 
         function applyMergedState(merged) {

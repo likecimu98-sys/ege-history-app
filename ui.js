@@ -615,7 +615,7 @@ function loadQrLib() {
     if (!_qrLibPromise) {
         _qrLibPromise = new Promise((resolve, reject) => {
             const sc = document.createElement('script');
-            sc.src = 'vendor/qrcode.js?v=20260726-16';
+            sc.src = 'vendor/qrcode.js?v=20260726-17';
             sc.onload = () => resolve(window.qrcode);
             sc.onerror = () => { _qrLibPromise = null; reject(new Error('qr_lib_failed')); };
             document.head.appendChild(sc);
@@ -669,11 +669,45 @@ window.nextOnbStep = function(step) {
         }
     }
 };
+// Версия текста согласия. Меняешь смысл политики — подними номер, иначе нельзя
+// будет отличить, на какую редакцию человек соглашался.
+window.CONSENT_VERSION = 1;
+
+// Кнопка старта включается только после галочки согласия. Слушатель вешается
+// один раз: «Пропустить» из этого слайда убрана намеренно — пропуск означал бы
+// сохранение данных несовершеннолетнего без согласия, то есть ровно то, чего
+// экран и должен не допустить.
+document.addEventListener('app:ready', function initConsentGate() {
+    const box = $('onb-consent'), btn = $('onb-start-btn');
+    if (!box || !btn) return;
+    const sync = () => { btn.disabled = !box.checked; };
+    box.addEventListener('change', sync);
+    sync();
+});
+
 window.finishOnboarding = function() {
+    // Защита на случай, если кнопку всё же нажали мимо блокировки.
+    const consentBox = $('onb-consent');
+    if (consentBox && !consentBox.checked) {
+        showToast('⚠️', 'Отметь согласие, чтобы продолжить', 'bg-amber-500', 'border-amber-700');
+        return;
+    }
     haptic('medium');
     // Класс назначает учитель по ссылке-приглашению; ученик вводит только имя.
     const onbName = $('onb-name-input') ? $('onb-name-input').value.trim() : '';
     const assignedClass = localStorage.getItem('student_class_code') || '';
+    if (consentBox) {
+        // byGuardian: за несовершеннолетнего соглашается законный представитель.
+        // Одной галочкой их не различить, поэтому пишем честно — «подтверждено
+        // через общий экран»; отдельный вопрос о возрасте добавляй, если юрист
+        // скажет, что этого недостаточно.
+        window.state.stats.consent = {
+            version: window.CONSENT_VERSION,
+            acceptedAt: Date.now(),
+            byGuardian: true,
+        };
+        if (window.saveProgress) window.saveProgress();
+    }
     if (onbName) { localStorage.setItem('student_manual_name', onbName); localStorage.setItem('student_manual_name_at', String(Date.now())); }
     localStorage.setItem('ege_onboarding_done', '1');
     $('onboarding-overlay').classList.add('hidden');

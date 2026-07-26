@@ -1,0 +1,69 @@
+/* Стили юридических страниц. Намеренно отдельный маленький файл, а не output.css:
+   документы должны открываться у человека без аккаунта, с плохой сети и жить
+   отдельно от версионирования приложения. */
+:root {
+    --l-bg: #ffffff;
+    --l-fg: #1f2937;
+    --l-muted: #6b7280;
+    --l-line: #e5e7eb;
+    --l-brand: #2563eb;
+    --l-warn-bg: #fef3c7;
+    --l-warn-fg: #92400e;
+    --l-warn-line: #fbbf24;
+}
+@media (prefers-color-scheme: dark) {
+    :root {
+        --l-bg: #141414;
+        --l-fg: #e5e7eb;
+        --l-muted: #9ca3af;
+        --l-line: #2c2c2c;
+        --l-brand: #60a5fa;
+        --l-warn-bg: #3f2d0a;
+        --l-warn-fg: #fcd34d;
+        --l-warn-line: #a16207;
+    }
+}
+* { box-sizing: border-box; }
+body {
+    margin: 0;
+    padding: 24px 18px 64px;
+    background: var(--l-bg);
+    color: var(--l-fg);
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    font-size: 15px;
+    line-height: 1.6;
+    -webkit-text-size-adjust: 100%;
+}
+main { max-width: 720px; margin: 0 auto; }
+a { color: var(--l-brand); }
+h1 { font-size: 24px; line-height: 1.25; margin: 0 0 4px; text-wrap: balance; }
+h2 { font-size: 18px; margin: 32px 0 8px; text-wrap: balance; }
+h3 { font-size: 15px; margin: 20px 0 6px; }
+.updated { color: var(--l-muted); font-size: 13px; margin: 0 0 24px; }
+.draft {
+    background: var(--l-warn-bg);
+    color: var(--l-warn-fg);
+    border: 1px solid var(--l-warn-line);
+    border-radius: 14px;
+    padding: 12px 14px;
+    font-size: 13px;
+    margin-bottom: 24px;
+}
+.draft b { display: block; margin-bottom: 4px; }
+.fill {
+    background: var(--l-warn-bg);
+    color: var(--l-warn-fg);
+    border-radius: 8px;
+    padding: 0 5px;
+    font-weight: 700;
+    white-space: nowrap;
+}
+table { border-collapse: collapse; width: 100%; font-size: 14px; }
+.scroll { overflow-x: auto; margin: 12px 0; }
+th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--l-line); vertical-align: top; }
+th { font-weight: 700; }
+ul { padding-left: 22px; }
+li { margin-bottom: 6px; }
+footer { margin-top: 48px; padding-top: 16px; border-top: 1px solid var(--l-line); font-size: 13px; color: var(--l-muted); }
+footer a { margin-right: 14px; }
+.back { display: inline-block; margin-bottom: 20px; font-size: 14px; }

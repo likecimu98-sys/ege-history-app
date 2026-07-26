@@ -405,7 +405,11 @@ const SAVE_FIELDS = [
     'matchBestMs', 'matchGames', 'vovLearned', 'mockExams', 'mockExamMistakes',
     // Круг по банку ФИПИ: id верно решённых заданий (и 'g:<groupId>' для карт 9–12).
     // Без записи здесь ротация обнулялась бы при каждой перезагрузке страницы.
-    'examSolved'
+    'examSolved',
+    // Согласие на обработку персональных данных: {version, acceptedAt, byGuardian}.
+    // Пользователи несовершеннолетние, поэтому факт согласия обязан переживать
+    // переустановку приложения и смену устройства — иначе он ничего не значит.
+    'consent'
 ];
 
 const MAX_MISTAKES_POOL = 200;

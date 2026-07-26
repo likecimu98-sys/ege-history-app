@@ -730,6 +730,7 @@ const ACTION_HANDLERS = {
     closeGameOverModal:     () => window.closeGameOverModal?.(),
     signInWithGoogle:       () => window.signInWithGoogle?.(),
     logoutAccount:          () => window.logoutAccount?.(),
+    deleteAccount:          () => window.deleteAccount?.(),
     saveProfileName:        () => window.saveProfileName?.(),
     saveTeacherClassCode:   () => window.saveTeacherClassCode?.(),
     switchTeacherTab:       (a) => window.switchTeacherTab?.(a),

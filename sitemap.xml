@@ -10,4 +10,17 @@
     <changefreq>monthly</changefreq>
     <priority>0.6</priority>
   </url>
+  <url>
+    <loc>https://reshay-istoriyu.ru/legal/privacy.html</loc>
+    <changefreq>yearly</changefreq>
+    <priority>0.3</priority>
+  </url>
+  <url>
+    <loc>https://reshay-istoriyu.ru/legal/terms.html</loc>
+    <changefreq>yearly</changefreq>
+    <priority>0.3</priority>
+  </url>
+  <!-- Оферта в карту сайта НЕ добавлена намеренно: пока это незаполненный
+       черновик без реквизитов, индексировать его нельзя. Добавь запись здесь
+       после того, как документ будет заполнен и утверждён. -->
 </urlset>

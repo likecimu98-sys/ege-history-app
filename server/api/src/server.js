@@ -3,9 +3,9 @@
 const http = require('http');
 const { WebSocket, WebSocketServer } = require('ws');
 const { env } = require('./env');
-const { pool, runMigrations } = require('./db');
+const { pool, tx, runMigrations } = require('./db');
 const { verifyInitData } = require('./initdata');
-const { timingSafeEqualText, randomToken } = require('./crypto');
+const { timingSafeEqualText, randomToken, sha256 } = require('./crypto');
 const { json, redirect, readJson, requestIp, safeReturnTo } = require('./http');
 const {
   resolveIdentity, loadUser, createSession, sessionCookies, clearSessionCookies, getSession,
@@ -431,6 +431,60 @@ async function handle(req, res) {
       return json(res, 200, {
         documents: found.rows.map(row => ({ id: row.doc_id, data: row.data, version: Number(row.version) })),
       });
+    }
+    // Удаление аккаунта по требованию субъекта данных. Без этого политика
+    // обработки ПД — фикция: заявить право на удаление и не дать способа им
+    // воспользоваться нельзя.
+    //
+    // ⚠️ ПОЧЕМУ ЗДЕСЬ ЯВНЫЕ DELETE, А НЕ ПРОСТО `DELETE FROM app_users`.
+    // Почти все таблицы ссылаются на app_users через ON DELETE SET NULL, а не
+    // CASCADE (см. 001_initial.sql). Удаление пользователя ОСТАВИЛО БЫ его
+    // student_profiles и student_states в базе с user_id = NULL — то есть ФИО,
+    // @username и весь прогресс никуда бы не делись, просто стали бы
+    // «ничейными». Поэтому документы стираются по своим doc_id.
+    if (req.method === 'DELETE' && url.pathname === '/api/v1/me') {
+      requireMutationAuth(req, session);
+      const body = await readJson(req, 1024).catch(() => ({}));
+      // Подтверждение обязательно и должно приходить с клиента осознанно:
+      // случайный DELETE не должен стирать человеку год работы.
+      if (String(body.confirm || '') !== 'DELETE') {
+        throw Object.assign(new Error('confirmation_required'), { statusCode: 400 });
+      }
+      const ctx = await accessContext(session);
+      const docIds = [...ctx.docIds];
+      const deleted = await tx(async client => {
+        // Запись в журнал ДО удаления, иначе actor_user_id обнулится. Сами
+        // идентификаторы не храним — doc_id это Telegram ID; кладём его хеш,
+        // чтобы можно было подтвердить факт удаления, не удерживая ПД.
+        await client.query(
+          'INSERT INTO audit_events(actor_user_id,action,target,details) VALUES($1,$2,$3,$4)',
+          [session.userId, 'account.delete', '', { documents: docIds.map(id => sha256(id).slice(0, 16)) }]);
+
+        const counts = {};
+        const profiles = await client.query(
+          'DELETE FROM student_profiles WHERE user_id=$1 OR doc_id=ANY($2::text[]) RETURNING doc_id',
+          [session.userId, docIds]);
+        counts.profiles = profiles.rowCount;
+        const states = await client.query(
+          'DELETE FROM student_states WHERE user_id=$1 OR doc_id=ANY($2::text[]) RETURNING doc_id',
+          [session.userId, docIds]);
+        counts.states = states.rowCount;
+        // Матчи содержат имя и uid игрока — стираем те, где он участвовал.
+        const matches = await client.query(
+          `DELETE FROM duel_matches
+           WHERE data->'player1'->>'uid' = ANY($1::text[])
+              OR data->'player2'->>'uid' = ANY($1::text[]) RETURNING doc_id`, [docIds]);
+        counts.matches = matches.rowCount;
+        const jobs = await client.query(
+          "DELETE FROM notification_jobs WHERE data->>'studentId' = ANY($1::text[]) RETURNING id", [docIds]);
+        counts.notifications = jobs.rowCount;
+        // Остальное уходит каскадом по user_id: user_identities, user_sessions,
+        // student_assignments, usage_counters.
+        await client.query('DELETE FROM app_users WHERE id=$1', [session.userId]);
+        return counts;
+      });
+      log('warn', 'account.deleted', { ...deleted });
+      return json(res, 200, { ok: true, deleted }, { 'Set-Cookie': clearSessionCookies() });
     }
     if (req.method === 'GET' && url.pathname === '/api/v1/quota') {
       requireSession(session);
