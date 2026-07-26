@@ -1,8 +1,8 @@
 {
-  "updated": "2026-07-25",
+  "updated": "2026-07-26",
   "counts": {
     "radius": 153,
-    "font-too-small": 210,
+    "font-too-small": 209,
     "shadow-literal": 76
   },
   "byFile": {
@@ -54,7 +54,7 @@
       "modes.js": 10,
       "styles.css": 11,
       "swipe-mode.js": 2,
-      "ui.js": 37,
+      "ui.js": 36,
       "visual-trainer.js": 2,
       "vov-mode.js": 4
     },

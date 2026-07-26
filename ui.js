@@ -2336,11 +2336,40 @@ window.openMistakesListModal = function() {
         }
         if (pool.length) {
             ht += `<div><div class="flex items-center justify-between mb-2 px-1"><div class="text-[11px] font-black text-gray-500 uppercase tracking-widest">Ошибки основных тренажёров</div><div class="text-[10px] font-black text-gray-400">${pool.length} сейчас в повторении</div></div><div class="flex flex-col gap-2">`;
+            // ⚠️ 26.07.2026. Раньше здесь было две ловушки, из-за которых в разборе
+            // появлялись строки вида «📍 ЗАДАНИЕ 4 · 1630» — год без события и без места,
+            // повторить по которому нельзя ничего.
+            //   1) Заголовок собирался цепочкой тернарников, где ПОСЛЕДНЯЯ ветка была
+            //      «Задание 4». Любое неизвестное или потерянное значение m.task молча
+            //      подписывалось четвёртым заданием.
+            //   2) Поля брались жёстким списком под каждое задание. Если запись пришла
+            //      с другой формой факта (старый формат из облака, слияние с ФИПИ), из
+            //      трёх ключей совпадал один — и от карточки оставалось одно число.
+            // Теперь: неизвестное задание так и называется неизвестным, а если по
+            // ожидаемым ключам собралось меньше двух частей, показываем всё, что в
+            // факте реально есть. Пустая подсказка хуже честного «данных не хватило».
+            const TASK_TITLES = {
+                task1: '⏳ Задание 1', task3: '🔗 Задание 3', task4: '📍 Задание 4',
+                task5: '👤 Задание 5', task7: '🎨 Задание 7'
+            };
+            const TASK_FIELDS = {
+                task1: ['event', 'year'], task3: ['process', 'fact'], task4: ['geo', 'year', 'event'],
+                task5: ['person', 'event'], task7: ['culture', 'trait']
+            };
             pool.forEach((m, idx) => {
                 const fact = m.fact || {};
-                const mTitle = m.task === 'task7' ? '🎨 Задание 7' : (m.task === 'task5' ? '👤 Задание 5' : (m.task === 'task3' ? '🔗 Задание 3' : (m.task === 'task1' ? '⏳ Задание 1' : '📍 Задание 4')));
-                const parts = m.task === 'task7' ? [fact.culture, fact.trait] : m.task === 'task5' ? [fact.person, fact.event] : m.task === 'task3' ? [fact.process, fact.fact] : m.task === 'task1' ? [fact.event, fact.year] : [fact.geo, fact.year, fact.event];
-                ht += `<div class="bg-white dark:bg-[#1e1e1e] p-3 rounded-xl border border-rose-100 dark:border-rose-900/30 shadow-sm flex gap-3 text-sm"><div class="font-black text-rose-300 w-4 text-right shrink-0">${idx + 1}.</div><div class="flex flex-col"><span class="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1">${mTitle}</span><span class="font-medium text-gray-800 dark:text-gray-300 leading-tight">${parts.filter(Boolean).map(esc).join(' ➡️ ')}</span></div></div>`;
+                const mTitle = TASK_TITLES[m.task] || '❔ Задание не определено';
+                let parts = (TASK_FIELDS[m.task] || []).map(k => fact[k]).filter(Boolean);
+                if (parts.length < 2) {
+                    // Запасной путь: любые непустые текстовые поля факта, кроме служебных.
+                    parts = Object.keys(fact)
+                        .filter(k => k !== 'c' && k[0] !== '_' && typeof fact[k] !== 'object')
+                        .map(k => fact[k]).filter(Boolean);
+                }
+                const body = parts.length
+                    ? parts.map(esc).join(' ➡️ ')
+                    : '<i class="text-gray-400">данных по этой ошибке не сохранилось — она уйдёт из списка после следующего верного ответа</i>';
+                ht += `<div class="bg-white dark:bg-[#1e1e1e] p-3 rounded-xl border border-rose-100 dark:border-rose-900/30 shadow-sm flex gap-3 text-sm"><div class="font-black text-rose-300 w-4 text-right shrink-0">${idx + 1}.</div><div class="flex flex-col"><span class="text-[11px] font-bold text-gray-500 dark:text-gray-400 mb-1">${mTitle}</span><span class="font-medium text-gray-800 dark:text-gray-300 leading-tight">${body}</span></div></div>`;
             });
             ht += '</div></div>';
         }

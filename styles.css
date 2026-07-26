@@ -197,15 +197,14 @@ html.dark body .dnd-slot.incorrect-slot > * { color: #fecaca !important; }
 .dnd-slot.revealed-slot { border-color: var(--c-warn); background-color: #fffbeb; pointer-events: none; }
 .dark .dnd-slot.revealed-slot { border-color: #ea580c; background-color: rgba(234, 88, 12, 0.05); }
 
-/* Слот, готовый принять выбранную фишку. scale(1.01) убран: доля процента
-   размера не читается как подсветка, зато размывает текст в ячейке таблицы. */
-.slot-ready {
-    border-color: var(--c-brand) !important;
-    border-style: solid !important;
-    background-color: #eff6ff !important;
-    box-shadow: none !important;
-}
-.dark .slot-ready { background-color: rgba(59, 130, 246, 0.16) !important; }
+/* Слот, готовый принять выбранную фишку — НЕ подсвечиваем.
+   26.07.2026: подсветка была синей, и слот с уже поставленным ответом — тоже
+   синий. Синим становилось всё поле, и различать было нечего: ровно та ошибка,
+   когда выделяют не одно, а всё сразу.
+   Сигнал «я держу вариант» несёт сама фишка: она поднимается, заливается и
+   меняет рамку. Второй раз сообщать то же самое всей таблицей незачем.
+   Правила нет намеренно — класс .slot-ready по-прежнему вешает и снимает
+   table.js, он нужен как состояние в разметке, но рисовать его не надо. */
 
 /* --- ФИШКИ (CHIPS) --- */
 .dnd-chip { 

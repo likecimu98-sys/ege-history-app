@@ -2,7 +2,7 @@
 (function() {
     'use strict';
 
-    const BANK_SRC = 'exam-bank.generated.js?v=20260726-10';
+    const BANK_SRC = 'exam-bank.generated.js?v=20260726-11';
     const ORDERED_KIMS = new Set([1, 2, 3, 4, 5, 7]);
     const CHOICE_KIMS = new Set([6, 12]);
     const TASK_ICONS = Object.freeze({ 1: '⏳', 2: '🗓️', 3: '🔗', 4: '📍', 5: '👤', 6: '📜', 7: '🎨', 8: '🪙', 9: '🗺️', 10: '🗺️', 11: '🗺️', 12: '🗺️' });
@@ -507,7 +507,8 @@
     function reviewSummary(task, value, scoreResult) {
         if (!scoreResult) return '';
         const warningKinds = Array.isArray(scoreResult.warningKinds) ? scoreResult.warningKinds : [];
-        const warningLabels = { typo: 'Опечатка', spacing: 'Пробелы или знаки', case: 'Регистр', normalized: 'Форма записи' };
+        // 'case' убран 26.07.2026 вместе с самой проверкой: регистр на ЕГЭ не критерий.
+        const warningLabels = { typo: 'Опечатка', spacing: 'Пробелы или знаки', normalized: 'Форма записи' };
         const warning = scoreResult.acceptedWithWarning ? `<div class="em-exam-warning"><b>⚠️ Балл засчитан в учебном режиме.</b><br>На реальном ЕГЭ ответ нужно записать без опечаток, пробелов и лишних знаков, печатными заглавными буквами по образцу бланка №1.<div class="em-warning-tags">${warningKinds.map(kind => `<span class="em-warning-tag">${warningLabels[kind] || 'Форма записи'}</span>`).join('')}</div></div>` : '';
         const statusClass = scoreResult.acceptedWithWarning ? 'warning' : scoreResult.points === scoreResult.max ? 'full' : scoreResult.points > 0 ? 'part' : 'zero';
         const statusText = scoreResult.acceptedWithWarning ? '⚠️ Балл засчитан, но запись нужно исправить' : scoreResult.points === scoreResult.max ? '✓ Верно' : scoreResult.points > 0 ? '◐ Частично верно' : '✕ Ошибка';
