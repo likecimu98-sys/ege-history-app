@@ -1884,10 +1884,11 @@ function renderMainAction() {
     }
     // Чипов под кнопкой было четыре, и они спорили с самой кнопкой: «Повтор» и «Слабое» —
     // ровно то, что computeMainAction() и так выбирает сам (kind 'review' / 'weak'), а ДЗ
-    // теперь живёт отдельной строкой-делом выше. Остались только «Ошибки»: единственный
-    // вход, которого нет в лестнице главной кнопки. И он появляется, лишь когда ошибки есть.
-    const chip = (label, val, act) => `
-        <button type="button" class="la-chip" onclick="window.mainActionGo('${act}')">${label}${val != null ? ` <span class="n">${val}</span>` : ''}</button>`;
+    // живёт отдельной строкой-делом выше.
+    // 26.07: последний чип «Ошибки» тоже уехал в строку-дело. Он остался чипом просто
+    // потому, что был последним выжившим из четырёх, — а по смыслу это ровно то же, что
+    // «Домашка» и «Повторение»: задача со счётчиком, которую можно пойти сделать. Три
+    // одинаковые по смыслу вещи не должны выглядеть двумя разными способами.
     box.innerHTML = `
         <div onclick="window.mainActionGo()" style="background:${m.bg};border-radius:var(--r-md);padding:16px 18px;cursor:pointer;color:#fff;box-shadow:var(--e-2)" class="active:scale-[0.98] transition-transform">
             <div style="display:flex;align-items:center;gap:14px">
@@ -1898,18 +1899,19 @@ function renderMainAction() {
                 </div>
                 <div style="font-size:20px;opacity:.8;flex-shrink:0">›</div>
             </div>
-        </div>
-        ${a.mistakes.total ? `<div style="display:flex;gap:var(--gap-tap);margin-top:8px">${chip('🔧 Работа над ошибками', a.mistakes.total, 'mistakes')}</div>` : ''}`;
+        </div>`;
 
-    // Строка «Повторение» (тип 3): дело со сроком, показываем только когда память
-    // реально просит. Пустая строка «0 к повторению» — это шум, а не информация.
-    const rev = document.getElementById('lobby-review-row');
-    if (rev) {
-        const n = (a.due && a.due.total) || 0;
-        rev.classList.toggle('hidden', n === 0);
-        const cnt = document.getElementById('lobby-review-count');
+    // Строки-дела (тип 3): показываем только когда есть что делать. Пустая строка
+    // «0 к повторению» — это шум, а не информация.
+    const fillRow = (rowId, cntId, n) => {
+        const row = document.getElementById(rowId);
+        if (!row) return;
+        row.classList.toggle('hidden', !n);
+        const cnt = document.getElementById(cntId);
         if (cnt) cnt.textContent = n;
-    }
+    };
+    fillRow('lobby-review-row', 'lobby-review-count', (a.due && a.due.total) || 0);
+    fillRow('lobby-mistakes-row', 'lobby-mistakes-count', (a.mistakes && a.mistakes.total) || 0);
     // Живой статус дуэли: собственный рейтинг честнее статичной плашки «Online»,
     // которая висела на старом баннере независимо от того, есть ли кто-то в сети.
     const elo = document.getElementById('lobby-duel-elo');

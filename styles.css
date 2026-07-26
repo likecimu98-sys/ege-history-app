@@ -1508,19 +1508,10 @@ details.lobby-acc[open] .acc-chev { transform: rotate(180deg); }
    местах: подложка иконки (14%), полоса прогресса, рамка активного состояния.
    ══════════════════════════════════════════════════════════════════════════ */
 
-/* ── Чип действия под главной кнопкой ──────────────────────────────────── */
-.la-chip {
-    min-height: var(--tap-min);
-    display: inline-flex; align-items: center; justify-content: center; gap: 5px;
-    padding: 0 14px; border-radius: var(--r-full);
-    background: var(--c-card); border: 1px solid var(--c-border-2);
-    font-size: var(--t-label); font-weight: var(--t-label-w); color: var(--c-text-soft);
-    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-    cursor: pointer; transition: transform .12s ease, background .12s ease;
-}
-.la-chip:active { transform: scale(.96); }
-.la-chip:focus-visible { outline: 2px solid var(--c-indigo); outline-offset: 2px; }
-.la-chip .n { font-variant-numeric: tabular-nums; opacity: .75; }
+/* .la-chip удалён 26.07.2026: последний его носитель — «Работа над ошибками» —
+   переехал в строку-дело `.card-row`, к «Домашке» и «Повторению». Оставлять
+   компонент «на будущее» нельзя: неиспользуемый тип карточки — это приглашение
+   развести четвёртый визуальный язык, ровно с чего начинался весь этот разбор. */
 
 /* ── Вкладки разделов. На ПК тот же компонент разворачивается в рельс ──── */
 .la-tabs {
