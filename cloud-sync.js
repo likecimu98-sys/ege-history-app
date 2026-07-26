@@ -877,6 +877,16 @@
         // Слушаем такие матчи и показываем всем баннер «Принять вызов».
         let _challengeUnsub = null;
         let _autoAccepting = false;
+        // «Этот игрок — я?» Матч приходит в двух видах, и оба надо понимать:
+        //  • свой матч сервер отдаёт целиком, с uid — там поля self НЕТ;
+        //  • чужой приходит проекцией без uid (это Telegram ID), но с self.
+        // Проверять только self — хозяин перестанет узнавать собственный вызов и
+        // попробует состыковаться сам с собой; только uid — сломается для чужих.
+        function _isMyDuelPlayer(player, myUid) {
+            if (!player) return false;
+            if (player.self === true) return true;
+            return !!(myUid && player.uid && String(player.uid) === String(myUid));
+        }
         function _ddbg() { try { if (localStorage.getItem('ege_duel_debug')) console.log('[Duel]', ...arguments); } catch (e) {} }
         function startChallengeListener() {
             if (!db) { _ddbg('listener: нет db'); return; }
@@ -902,8 +912,8 @@
                 let best = null;
                 snap.forEach(docSnap => {
                     const d = docSnap.data();
-                    if (!d.player1 || !d.player1.uid) return;
-                    if (myUid && d.player1.uid === myUid) return;     // не свой вызов
+                    if (!d.player1) return;
+                    if (_isMyDuelPlayer(d.player1, myUid)) return;    // не свой вызов
                     if (d.player2) return;                            // слот уже занят
                     if (now - (d.createdAt || 0) > 28000) return;     // протух
                     const id = docSnap.id;
@@ -950,7 +960,7 @@
                     const snap = await transaction.get(ref);
                     if (!snap.exists()) throw new Error('match_gone');
                     const d = snap.data();
-                    if (d.status !== 'waiting' || d.player2 !== null || (d.player1 && d.player1.uid === myUid)) throw new Error('slot_taken');
+                    if (d.status !== 'waiting' || d.player2 !== null || _isMyDuelPlayer(d.player1, myUid)) throw new Error('slot_taken');
                     transaction.update(ref, { status: 'playing', player2: { uid: myUid, name: myName, score: 0, combo: 0, elo: _myDuelElo() }, startTime: Date.now() + 4000 });
                 });
                 window.state.duel.matchId = matchId;
@@ -1006,7 +1016,7 @@
                     // иначе очередь разрастается и ломает выборку у всех.
                     if (data.player2 == null && age > 45000) { staleIds.push(docSnap.id); return; }
                     if ((data.mode || 'classic') !== mode) return; // стыкуем только одинаковые режимы
-                    if (data.player1 && data.player1.uid !== myUid && age < 30000) {
+                    if (data.player1 && !_isMyDuelPlayer(data.player1, myUid) && age < 30000) {
                         candidateIds.push(docSnap.id);
                     }
                 });
@@ -2412,59 +2422,16 @@
             lc.classList.remove('hidden');
             ll.innerHTML = '<div class="text-center text-xs text-gray-400 py-2">⏳ Загрузка...</div>';
             try {
-                // Берём всех студентов по totalSolved (этот индекс точно есть),
-                // затем вычисляем weeklyScore клиентски — это надёжнее чем orderBy weeklyScore,
-                // который пропускает документы без этого поля.
-                const studentsCol = collection(db, 'artifacts', appId, 'public', 'data', 'students');
-                // ✅ FIX: Корректный расчёт понедельника (воскресенье = 7, не 0)
-                const monday = new Date();
-                const dayOfWeek = monday.getDay() || 7;
-                monday.setDate(monday.getDate() - dayOfWeek + 1);
-                monday.setHours(0,0,0,0);
-                const monStr = monday.toISOString().split('T')[0];
-
                 // Пробуем взять из кэша loadClassProgress если учитель уже загрузил данные
                 let students = window._cachedStudents || [];
 
                 if (!students.length) {
-                    // ✅ FIX: Сначала пробуем weeklyScore (ловит активных игроков вне топ-100 totalSolved)
-                    try {
-                        const weeklyQ = query(studentsCol, orderBy('weeklyScore', 'desc'), limit(50));
-                        const weeklySnap = await getDocs(weeklyQ);
-                        const weeklyStudents = weeklySnap.docs.map(d => {
-                            const raw = d.data();
-                            // Валидируем что weeklyScore относится к текущей неделе
-                            const isCurrentWeek = raw.weekStartStr === monStr;
-                            const wScore = isCurrentWeek ? (raw.weeklyScore || 0) : 0;
-                            return { name: raw.name || 'Без имени', wScore };
-                        }).filter(s => s.wScore > 0);
-                        if (weeklyStudents.length > 0) students = weeklyStudents;
-                    } catch(weeklyErr) {
-                        console.warn('[Leaderboard] weeklyScore index missing, fallback to totalSolved');
-                    }
-                    // Fallback: totalSolved + клиентский подсчёт
-                    if (!students.length) {
-                        const q = query(studentsCol, orderBy('totalSolved', 'desc'), limit(100));
-                        const snap = await getDocs(q);
-                        students = snap.docs.map(d => {
-                            const raw = d.data();
-                            let wScore = raw.weeklyScore || 0;
-                            try {
-                                const st = JSON.parse(raw.fullStateJson || '{}');
-                                const ds = (st.stats || st).dailyStats || {};
-                                let computed = 0;
-                                for (const day in ds) {
-                                    if (day >= monStr) {
-                                        const perTask = (ds[day].solvedTask1||0)+(ds[day].solvedTask4||0)+(ds[day].solvedTask3||0)
-                                                  + (ds[day].solvedTask5||0)+(ds[day].solvedTask7||0);
-                                        computed += perTask > 0 ? perTask : (ds[day].solved||0);
-                                    }
-                                }
-                                if (computed > 0) wScore = computed;
-                            } catch(e2) {}
-                            return { name: raw.name || 'Без имени', wScore };
-                        });
-                    }
+                    // Недельный рейтинг считает сервер: сверка с меткой недели, сортировка
+                    // и урезка — в SQL. Прежний путь вычитывал сотню профилей вместе с
+                    // fullStateJson (сотни килобайт состояния на каждого) и разбирал их
+                    // в браузере — ради десяти строк таблицы.
+                    const { rows } = await vpsApiFetch('/api/v1/leaderboards?type=weekly&limit=50');
+                    students = rows.map(row => ({ name: row.displayName || 'Без имени', wScore: row.weeklyScore || 0 }));
                 } else {
                     // Используем уже загруженные данные учителя
                     students = students.map(s => ({ name: s.name || 'Без имени', wScore: s.wScore || 0, wEge: s.wEgePoints || 0 }));
@@ -2505,10 +2472,10 @@
             try {
                 // ── Вкладка «Рейтинг дуэлей» (Elo) ──
                 if (tab === 'duel') {
-                    const studentsCol = collection(db, 'artifacts', appId, 'public', 'data', 'students');
-                    const qD = await getDocs(query(studentsCol, orderBy('duelRating', 'desc'), limit(20)));
-                    const rows = [];
-                    qD.forEach(dS => { const d = dS.data(); if ((d.duelGames || 0) > 0) rows.push(d); });
+                    // Рейтинг приходит с сервера уже отсортированным и урезанным.
+                    // Раньше клиент ради двадцати строк вычитывал коллекцию students
+                    // целиком — вместе с ФИО, @username и кодами классов всех учеников.
+                    const { rows } = await vpsApiFetch('/api/v1/leaderboards?type=duel&limit=20');
                     const s0 = window.state && window.state.stats;
                     const myLine = (s0 && (s0.duelGames || 0) > 0)
                         ? `<div style="text-align:center;font-size:11px;font-weight:900;color:#7c3aed;margin-bottom:8px">Твой рейтинг: 🏅${Number(s0.duelElo) || 1000} · ${s0.duelWins || 0}П/${s0.duelLosses || 0}Пр${s0.duelDraws ? '/' + s0.duelDraws + 'Н' : ''}</div>`
@@ -2517,7 +2484,7 @@
                     rows.forEach((s, idx) => {
                         ht += `<div class="bg-white dark:bg-[#1e1e1e] rounded-xl p-3 shadow-sm border border-gray-100 dark:border-[#2c2c2c] flex justify-between items-center">
                             <div class="flex items-center gap-3"><span class="text-xl sm:text-2xl drop-shadow-sm font-black">${idx===0?'🥇':(idx===1?'🥈':(idx===2?'🥉':`<span class="text-gray-400 w-5 inline-block text-center text-base">${idx+1}</span>`))}</span>
-                            <div class="flex flex-col"><span class="font-black text-xs sm:text-sm text-gray-800 dark:text-gray-300 leading-tight">${escTop(s.name || 'Аноним')}</span>
+                            <div class="flex flex-col"><span class="font-black text-xs sm:text-sm text-gray-800 dark:text-gray-300 leading-tight">${escTop(s.displayName || 'Аноним')}</span>
                             <span class="text-[9px] font-bold text-gray-400 leading-tight">${s.duelWins || 0} побед · ${s.duelLosses || 0} пораж. · матчей: ${s.duelGames || 0}</span></div></div>
                             <span class="text-sm font-black text-purple-600 dark:text-purple-400 bg-purple-50 dark:bg-purple-900/30 px-2 py-0.5 rounded-lg border border-purple-100 dark:border-purple-800/50">🏅${s.duelRating || 1000}</span></div>`;
                     });
@@ -2526,34 +2493,18 @@
                     cont.innerHTML = tabs + myLine + ht;
                     return;
                 }
-                // ✅ FIX: Сначала пробуем кэш-документ (leaderboards/global) —
-                // 1 чтение вместо 20 чтений. Если кэша нет — делаем прямой запрос.
-                const lbCacheRef = doc(db, 'artifacts', appId, 'public', 'data', 'leaderboards', 'global');
-                let tL = [];
-                let fromCache = false;
-                let cacheUpdatedAt = 0;
-                try {
-                    const cacheSnap = await getDoc(lbCacheRef);
-                    if (cacheSnap.exists() && cacheSnap.data().top && cacheSnap.data().updatedAt > Date.now() - 15 * 60 * 1000) {
-                        tL = cacheSnap.data().top;
-                        cacheUpdatedAt = cacheSnap.data().updatedAt || 0;
-                        fromCache = true;
-                    }
-                } catch(cacheErr) { /* Кэша нет — идём напрямую */ }
-
-                if (!fromCache) {
-                    // ✅ Уменьшен limit: 50 → 20 (снижает стоимость в 2.5 раза)
-                    const studentsCol = collection(db, 'artifacts', appId, 'public', 'data', 'students');
-                    const topQuery = query(studentsCol, orderBy('totalSolved', 'desc'), limit(20));
-                    const qS = await getDocs(topQuery);
-                    qS.forEach(docSnap => { tL.push(docSnap.data()); });
-                }
+                // Кэш-документ leaderboards/global больше не читаем: он хранил
+                // копии профилей целиком, то есть был вторым путём к тем же ФИО и
+                // @username. Сортировкой и урезкой занимается сервер, ответ один.
+                const { rows: tL } = await vpsApiFetch('/api/v1/leaderboards?type=solved&limit=20');
 
                 let ht = '<div class="flex flex-col gap-2">';
-                tL.forEach((s, idx) => { 
-                    ht += `<div class="bg-white dark:bg-[#1e1e1e] rounded-xl p-3 shadow-sm border border-gray-100 dark:border-[#2c2c2c] flex justify-between items-center transition-transform hover:-translate-y-0.5"><div class="flex items-center gap-3"><span class="text-xl sm:text-2xl drop-shadow-sm font-black">${idx===0?'🥇':(idx===1?'🥈':(idx===2?'🥉':`<span class="text-gray-400 w-5 inline-block text-center text-base">${idx+1}</span>`))}</span><div class="flex flex-col"><span class="font-black text-xs sm:text-sm text-gray-800 dark:text-gray-300 leading-tight">${String(s.name || 'Аноним').replace(/[<>&]/g, c => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;' }[c]))}</span>${s.username ? `<span class="text-[9px] font-bold text-blue-500 block leading-tight">@${String(s.username).replace(/[<>&]/g, c => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;' }[c]))}</span>` : ''}</div></div><div class="text-right flex flex-col items-end"><span class="text-sm font-black text-examBlue dark:text-blue-400 bg-blue-50 dark:bg-blue-900/30 px-2 py-0.5 rounded-lg border border-blue-100 dark:border-blue-800/50">${s.totalSolved || 0}</span></div></div>`; 
+                tL.forEach((s, idx) => {
+                    // @username убран намеренно: показывать посторонним телеграм-контакт
+                    // школьника нельзя. Имя приходит уже сокращённым («Иван И.»).
+                    ht += `<div class="bg-white dark:bg-[#1e1e1e] rounded-xl p-3 shadow-sm border border-gray-100 dark:border-[#2c2c2c] flex justify-between items-center transition-transform hover:-translate-y-0.5"><div class="flex items-center gap-3"><span class="text-xl sm:text-2xl drop-shadow-sm font-black">${idx===0?'🥇':(idx===1?'🥈':(idx===2?'🥉':`<span class="text-gray-400 w-5 inline-block text-center text-base">${idx+1}</span>`))}</span><div class="flex flex-col"><span class="font-black text-xs sm:text-sm text-gray-800 dark:text-gray-300 leading-tight">${escTop(s.displayName || 'Аноним')}</span></div></div><div class="text-right flex flex-col items-end"><span class="text-sm font-black text-examBlue dark:text-blue-400 bg-blue-50 dark:bg-blue-900/30 px-2 py-0.5 rounded-lg border border-blue-100 dark:border-blue-800/50">${s.totalSolved || 0}</span></div></div>`;
                 });
-                if (fromCache) ht += `<div class="text-center text-[9px] text-gray-400 pt-1">Обновлено ${new Date(cacheUpdatedAt).toLocaleTimeString('ru-RU', {hour:'2-digit',minute:'2-digit'})}</div>`;
+                if (!tL.length) ht += '<p class="text-[11px] font-bold text-gray-500 text-center py-4">Пока пусто — реши первое задание! 📚</p>';
                 ht += '</div>'; cont.innerHTML = tabs + ht;
             } catch (e) {
                 console.error(e);
@@ -3504,19 +3455,21 @@
                     } catch(e) { console.warn(`[Sync] Ошибка чтения ${id}:`, e); }
                 }
 
-                // 1б. По email — ВСЕГДА (ловит ТГ-документ из браузерной сессии)
-                const gEmail = localStorage.getItem('google_email') || fbUser.email || '';
-                if (gEmail) {
-                    try {
-                        const emailSnap = await getDocs(query(studentsCol, where('googleEmail', '==', gEmail), limit(5)));
-                        emailSnap.forEach(docSnap => {
-                            if (!allFound.has(docSnap.id) && !docSnap.data()._mergedInto) {
-                                allFound.set(docSnap.id, docSnap.data());
-                                console.log(`[Sync] Email ${gEmail}: doc ${docSnap.id} (${docSnap.data().totalSolved||0} задач)`);
-                            }
-                        });
-                    } catch(e) { console.warn('[Sync] Email search error:', e); }
-                }
+                // 1б. По email — ВСЕГДА (ловит ТГ-документ из браузерной сессии).
+                // Почту больше не передаём: раньше здесь стоял запрос
+                // where('googleEmail','==', <строка из localStorage>) прямо в коллекцию
+                // students, то есть искать можно было по ЛЮБОМУ чужому адресу и получать
+                // чужой профиль. Теперь сервер берёт почту из проверенной личности
+                // сессии и отдаёт только документы, которые ей соответствуют.
+                try {
+                    const { documents } = await vpsApiFetch('/api/v1/me/linked-documents');
+                    (documents || []).forEach(entry => {
+                        if (!entry || !entry.id || !entry.data) return;
+                        if (allFound.has(entry.id) || entry.data._mergedInto) return;
+                        allFound.set(entry.id, entry.data);
+                        console.log(`[Sync] Google-почта: doc ${entry.id} (${entry.data.totalSolved || 0} задач)`);
+                    });
+                } catch(e) { console.warn('[Sync] Email search error:', e); }
 
                 // 1в. По имени — ОТКЛЮЧЕНО: слишком рискованно (все "Ученик" сольются)
                 // Имя используется только в ручной дедупликации с дополнительными проверками
@@ -3838,41 +3791,15 @@
                 return; // Не обновляем кэш если основная запись упала
             }
 
-            // ── Кэш лидерборда ────────────────────────────────────────────────
-            // ✅ Клиентская стратегия: тот, кто синхронизируется, попутно обновляет
-            // кэш-документ leaderboards/global. Это даёт свежий кэш без Cloud Functions.
-            // Защита: не чаще 1 раза в 10 минут на устройство (localStorage throttle).
-            // При 1000 активных игроков — максимум 6 обновлений кэша в минуту,
-            // что стоит 6 записей × 20 чтений = 126 операций/мин (безопасно).
-            const CACHE_TTL = 10 * 60 * 1000; // 10 минут
-            const lastCacheUpdate = parseInt(localStorage.getItem('_lbCacheUpdatedAt') || '0');
-            if (nw - lastCacheUpdate > CACHE_TTL) {
-                try {
-                    const topQuery = query(
-                        studentsCol,
-                        orderBy('totalSolved', 'desc'),
-                        limit(20)
-                    );
-                    const topSnap = await getDocs(topQuery);
-                    const topData = [];
-                    topSnap.forEach(d => {
-                        const sd = d.data();
-                        // Храним только нужные поля — не весь документ
-                        topData.push({
-                            name:        sd.name        || 'Аноним',
-                            username:    sd.username    || '',
-                            totalSolved: sd.totalSolved || 0
-                        });
-                    });
-                    const lbCacheRef = doc(db, 'artifacts', appId, 'public', 'data', 'leaderboards', 'global');
-                    await setDoc(lbCacheRef, { top: topData, updatedAt: nw });
-                    localStorage.setItem('_lbCacheUpdatedAt', String(nw));
-                    console.log(`[Cache] Лидерборд обновлён: ${topData.length} игроков`);
-                } catch(cacheErr) {
-                    // Не критично — кэш обновится при следующей синхронизации
-                    console.warn('[Cache] Ошибка обновления кэша лидерборда:', cacheErr);
-                }
-            }
+            // ⚠️ УДАЛЕНО 26.07.2026 — кэш лидерборда, который вёл сам клиент.
+            // Каждое устройство раз в 10 минут вычитывало топ-20 профилей и клало их
+            // в документ leaderboards/global ВМЕСТЕ С @username. Получался второй,
+            // неочевидный путь к тем же персональным данным: даже закрыв коллекцию
+            // students, реестр можно было собирать из кэша.
+            // Вдобавок запись всё это время молча падала — authorizeWrite запрещает
+            // писать в leaderboards кому угодно, кроме сервера, — так что кэш давно
+            // жил только на чтении устаревших данных.
+            // Теперь сортирует и урезает PostgreSQL в GET /api/v1/leaderboards.
         };
 
         // ─── Инструмент дедупликации для учителя ────────────────────────────────

@@ -2,7 +2,7 @@
   "updated": "2026-07-26",
   "counts": {
     "radius": 153,
-    "font-too-small": 209,
+    "font-too-small": 207,
     "shadow-literal": 76
   },
   "byFile": {
@@ -47,7 +47,7 @@
       "vov-mode.js": 4
     },
     "font-too-small": {
-      "cloud-sync.js": 43,
+      "cloud-sync.js": 41,
       "exam-mode.js": 7,
       "index.html": 91,
       "match-mode.js": 3,

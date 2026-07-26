@@ -20,10 +20,37 @@ const COLLECTIONS = Object.freeze({
   leaderboards: 'leaderboards',
 });
 
+// ⚠️ ИСТОРИЧЕСКОЕ. Этот перечень назывался «публичным», но публичным он быть не
+// может: name + username + classCode — это персональные данные несовершеннолетних.
+// До 26.07.2026 любая гостевая сессия одним query получала по нему весь реестр
+// учеников. Теперь посторонний не получает строку НИ В КАКОМ режиме (см.
+// authorizeRead, case 'students'), а перечень остался только как проекция для
+// внутренних нужд. Публичный рейтинг отдаёт отдельный серверный эндпоинт
+// GET /api/v1/leaderboards со своей, более узкой проекцией — без username и
+// без classCode. Не расширяй этот набор и не возвращай его в открытое чтение.
 const PUBLIC_STUDENT_FIELDS = new Set([
   'name', 'username', 'classCode', 'totalSolved', 'egePoints', 'weeklyScore', 'weeklyEgePoints',
   'weekStartStr', 'duelRating', 'duelElo', 'duelGames', 'duelWins', 'duelLosses', 'duelDraws', 'lastActive'
 ]);
+
+// Матч в списке ожидания виден всем — иначе некого вызывать на дуэль. Но uid
+// игрока — это Telegram ID, и раздавать его посторонним нельзя. Клиенту от чужого
+// матча нужны только имя, рейтинг и ответ на вопрос «это мой собственный вызов?»,
+// который сервер считает сам (поле self) — см. publicMatch.
+const PUBLIC_MATCH_FIELDS = ['status', 'mode', 'createdAt', 'startTime', 'swipeSections'];
+
+// Документ класса читает и учитель, и УЧЕНИК этого класса: в нём лежит журнал ДЗ
+// (pullClassAssignments), граница «дошли до года» и признак безлимита. Поэтому
+// «читать может только учитель» было бы тихой поломкой всей выдачи домашних
+// заданий. Ученику отдаём только эти поля, всё остальное — учителю класса.
+const STUDENT_VISIBLE_CLASS_FIELDS = new Set([
+  'assignments', 'revokedAssignments', 'revokeBefore', 'currentUpto', 'currentPeriod', 'unlimited', 'updatedAt'
+]);
+
+// Совпадает с _classDocId в cloud-sync.js: код класса и есть id документа.
+function classDocId(raw) {
+  return String(raw == null ? '' : raw).trim().replace(/[/#?%]/g, '_');
+}
 const TEACHER_STUDENT_WRITE_FIELDS = new Set([
   'pendingAssignments', 'revokedAssignments', 'inviteClassCode', 'inviteAt', 'leftClassAt', 'classCode',
   '_mergedInto', '_mergedAt', '_mergedFrom'
@@ -109,6 +136,40 @@ function publicStudent(data) {
   return out;
 }
 
+function publicMatch(data, ctx) {
+  const out = {};
+  for (const key of PUBLIC_MATCH_FIELDS) if (data && data[key] !== undefined) out[key] = data[key];
+  for (const key of ['player1', 'player2']) {
+    if (!data || data[key] === undefined) continue;
+    const player = data[key];
+    // null сохраняем как null: клиент по «player2 === null» понимает, что слот свободен.
+    if (!player) { out[key] = null; continue; }
+    out[key] = {
+      name: String(player.name || ''),
+      elo: Number(player.elo) || 1000,
+      // Раньше клиент отличал свой вызов сравнением player1.uid с собственным uid.
+      // Ответ на этот вопрос сервер знает и без выдачи чужого Telegram ID.
+      self: ownMatchActor(ctx, player),
+    };
+  }
+  return out;
+}
+
+function studentClassView(data) {
+  const out = {};
+  for (const key of STUDENT_VISIBLE_CLASS_FIELDS) if (data && data[key] !== undefined) out[key] = data[key];
+  return out;
+}
+
+// Проекция по коллекции. Возвращает null там, где урезанного вида не существует —
+// такой документ посторонний не получает вовсе.
+function projectDocument(collection, data, ctx) {
+  if (collection === 'students') return publicStudent(data);
+  if (collection === 'matches') return publicMatch(data, ctx);
+  if (collection === 'classes') return studentClassView(data);
+  return null;
+}
+
 function classCodes(raw) {
   return (Array.isArray(raw) ? raw : []).map(value => typeof value === 'string' ? value : value && value.code).filter(Boolean).map(String);
 }
@@ -135,7 +196,25 @@ async function accessContext(session, client = pool) {
     const peers = await client.query("SELECT data FROM teacher_profiles WHERE data->>'orgId'=$1", [orgId]);
     for (const peer of peers.rows) for (const code of classCodes(peer.data.classes)) classes.add(code);
   }
-  return { userId: session.userId, user: session.user, docIds, telegramIds, teacher, admin, role, classes, orgId };
+
+  // Классы, в которых состоит сам пользователь как УЧЕНИК. Нужны, чтобы он мог
+  // прочитать журнал ДЗ своего класса и не мог — чужого. inviteClassCode учитываем
+  // наравне с classCode: между приглашением учителя и первой синхронизацией
+  // ученика код живёт именно там, и без этого первый вход остался бы без домашки.
+  const ownClasses = new Set();
+  if (docIds.size) {
+    const profiles = await client.query(
+      `SELECT data->>'classCode' AS code, data->>'inviteClassCode' AS invite
+       FROM student_profiles WHERE user_id=$1 OR doc_id=ANY($2::text[])`,
+      [session.userId, [...docIds]]);
+    for (const row of profiles.rows) {
+      if (row.code) ownClasses.add(classDocId(row.code));
+      if (row.invite) ownClasses.add(classDocId(row.invite));
+    }
+  }
+  ownClasses.delete('');
+
+  return { userId: session.userId, user: session.user, docIds, telegramIds, teacher, admin, role, classes, ownClasses, orgId };
 }
 
 async function targetStudent(client, docId) {
@@ -156,7 +235,12 @@ async function authorizeRead(client, ref, ctx, row, { query = false } = {}) {
     case 'students':
       if (ctx.docIds.has(ref.docId) || row?.user_id === ctx.userId) return { ok: true, full: true };
       if (teacherCanSeeStudent(ctx, row)) return { ok: true, full: true };
-      return query ? { ok: true, full: false } : { ok: false };
+      // ⚠️ Здесь стояло `return query ? { ok: true, full: false } : { ok: false }`.
+      // То есть в режиме query посторонняя строка отдавалась как «публичная», и
+      // любой гость одним запросом получал весь реестр учеников с ФИО, @username
+      // и кодом класса. Посторонний не получает строку НИ В КАКОМ режиме.
+      // Публичный рейтинг живёт в GET /api/v1/leaderboards, а не здесь.
+      return { ok: false };
     case 'state': {
       if (ctx.docIds.has(ref.docId) || row?.user_id === ctx.userId) return { ok: true, full: true };
       return { ok: teacherCanSeeStudent(ctx, await targetStudent(client, ref.docId)), full: true };
@@ -173,14 +257,42 @@ async function authorizeRead(client, ref, ctx, row, { query = false } = {}) {
       return { ok: false };
     case 'loginSessions':
       return { ok: row?.user_id === ctx.userId, full: true };
-    case 'classes':
-    case 'matches':
+    case 'classes': {
+      // Полный документ — учителю этого класса (условие как в authorizeWrite).
+      if (!!ctx.teacher && (ctx.classes.has(ref.docId) || ctx.role === 'org_owner')) return { ok: true, full: true };
+      // Ученику своего класса — только журнал ДЗ и границы потока (studentClassView).
+      if (ctx.ownClasses.has(ref.docId)) return { ok: true, full: false };
+      return { ok: false };
+    }
+    case 'matches': {
+      // Полный документ (с uid игроков) — только участникам матча.
+      const data = row?.data || {};
+      if (ownMatchActor(ctx, data.player1) || ownMatchActor(ctx, data.player2)) return { ok: true, full: true };
+      // Остальным — карточка вызова без uid, чтобы было кого вызвать на дуэль.
+      return { ok: true, full: false };
+    }
     case 'config':
+      // Настройки приложения: лимиты, ссылка на клуб, тексты. ПД не содержат,
+      // запись запрещена всем (authorizeWrite) — читать может кто угодно.
+      return { ok: true, full: true };
     case 'leaderboards':
+      // Пишет только сервер (authorizeWrite запрещает запись всем).
       return { ok: true, full: true };
     default:
       return { ok: false };
   }
+}
+
+// Право ПЕРЕЧИСЛИТЬ коллекцию — отдельно от права прочитать строку. Построчная
+// фильтрация вернула бы постороннему пустой список, и это выглядело бы как «просто
+// нет данных»; для реестра детей честнее ответить отказом. Ученику перечисление
+// не нужно ни для чего: рейтинг отдаёт GET /api/v1/leaderboards, свои документы
+// читаются по id, связывание аккаунтов — GET /api/v1/me/linked-documents.
+function authorizeCollectionQuery(ref, ctx) {
+  if (!ctx) return false;
+  if (ctx.admin) return true;
+  if (ref.collection === 'students') return !!ctx.teacher;
+  return true;
 }
 
 function ownMatchActor(ctx, player) {
@@ -318,7 +430,13 @@ class DocumentStore extends EventEmitter {
     const ctx = options.context || await accessContext(session, client);
     const access = options.internal ? { ok: true, full: true } : await authorizeRead(client, ref, ctx, row);
     if (!access.ok) throw Object.assign(new Error('forbidden'), { statusCode: 403 });
-    return { exists: true, id: ref.docId, data: access.full ? row.data : publicStudent(row.data), version: Number(row.version) };
+    if (access.full) return { exists: true, id: ref.docId, data: row.data, version: Number(row.version) };
+    // Проекция была жёстко зашита на publicStudent, поэтому урезанное чтение любой
+    // другой коллекции молча отдавало бы студенческие поля. Теперь вид выбирается
+    // по коллекции, а её отсутствие — это отказ, а не пустой объект.
+    const projected = projectDocument(ref.collection, row.data, ctx);
+    if (!projected) throw Object.assign(new Error('forbidden'), { statusCode: 403 });
+    return { exists: true, id: ref.docId, data: projected, version: Number(row.version) };
   }
 
   async query(path, constraints, session, options = {}) {
@@ -326,14 +444,22 @@ class DocumentStore extends EventEmitter {
     const client = options.client || pool;
     const ctx = options.context || await accessContext(session, client);
     if (!ctx && !options.internal) throw Object.assign(new Error('unauthorized'), { statusCode: 401 });
+    if (!options.internal && !authorizeCollectionQuery(ref, ctx)) {
+      throw Object.assign(new Error('forbidden'), { statusCode: 403 });
+    }
     const result = await client.query(`SELECT doc_id,user_id,data,version FROM ${ref.table}`);
     const rows = [];
     for (const row of result.rows) {
       const rowRef = { ...ref, docId: row.doc_id };
       const access = options.internal ? { ok: true, full: true } : await authorizeRead(client, rowRef, ctx, row, { query: true });
       if (!access.ok) continue;
-      if (ref.collection === 'students' && !access.full) rows.push({ ...row, doc_id: `public_${sha256(row.doc_id).slice(0, 20)}`, data: publicStudent(row.data) });
-      else rows.push(row);
+      if (access.full) { rows.push(row); continue; }
+      const projected = projectDocument(ref.collection, row.data, ctx);
+      if (!projected) continue;
+      // id матча нужен, чтобы к нему присоединиться, и сам по себе он случайный.
+      // А вот id ученика — это Telegram ID, его подменяем на непрослеживаемый.
+      const docId = ref.collection === 'students' ? `public_${sha256(row.doc_id).slice(0, 20)}` : row.doc_id;
+      rows.push({ ...row, doc_id: docId, data: projected });
     }
     return applyConstraints(rows, constraints).map(row => ({ id: row.doc_id, data: row.data, version: Number(row.version) }));
   }
@@ -435,5 +561,8 @@ class DocumentStore extends EventEmitter {
 
 module.exports = {
   DocumentStore, parsePath, collectionFromPath, applyPatch, mergeMatchData,
-  protectTeacherClassAssignment, accessContext, publicStudent, COLLECTIONS
+  protectTeacherClassAssignment, accessContext, publicStudent, COLLECTIONS,
+  // Экспортируются ради регрессионных тестов доступа (test/store-access.test.js):
+  // права на чтение — самая дорогая ошибка в этом файле, они обязаны быть покрыты.
+  authorizeRead, authorizeCollectionQuery, publicMatch, studentClassView, projectDocument, classDocId
 };

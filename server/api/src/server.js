@@ -40,6 +40,70 @@ function requireSession(session) {
   return session;
 }
 
+// В рейтинге человека видят посторонние, поэтому полное имя туда уходить не должно.
+// Ученики вводят «Фамилия Имя» (плейсхолдер онбординга — «Иванов Иван, 11 'А'»),
+// класс иногда дописывают через запятую. Показываем имя и инициал фамилии: «Иван И.».
+function leaderboardName(raw) {
+  const cleaned = String(raw == null ? '' : raw).split(',')[0].trim().replace(/\s+/g, ' ');
+  if (!cleaned) return 'Аноним';
+  const parts = cleaned.split(' ').filter(Boolean);
+  // Одно слово — это обычно ник («Ученик»), а не фамилия; сокращать нечего.
+  if (parts.length < 2) return parts[0].slice(0, 32);
+  return `${parts[1].slice(0, 32)} ${parts[0][0].toUpperCase()}.`;
+}
+
+function mondayStr(now = new Date()) {
+  const day = now.getDay() || 7;
+  const monday = new Date(now.getFullYear(), now.getMonth(), now.getDate() - day + 1);
+  const pad = value => String(value).padStart(2, '0');
+  return `${monday.getFullYear()}-${pad(monday.getMonth() + 1)}-${pad(monday.getDate())}`;
+}
+
+// Единственный публичный источник рейтинга. Раньше клиент сам ходил в коллекцию
+// students через store.query — то есть ради двадцати строк таблицы вычитывал реестр
+// целиком, а вместе с ним ФИО, @username и коды классов. Здесь выборку и сортировку
+// делает PostgreSQL, а наружу уходят только пять полей.
+async function leaderboardRows(type, limit) {
+  // Слитые дубликаты аккаунтов в рейтинге показывать нельзя — это один и тот же человек.
+  const notMerged = "data->>'_mergedInto' IS NULL";
+  let sql;
+  let params = [limit];
+  if (type === 'duel') {
+    sql = `SELECT data FROM student_profiles
+           WHERE ${notMerged} AND COALESCE((data->>'duelGames')::numeric, 0) > 0
+           ORDER BY COALESCE((data->>'duelRating')::numeric, 0) DESC LIMIT $1`;
+  } else if (type === 'weekly') {
+    // Прошлонедельный weeklyScore не сбрасывается сам — сверяем с меткой недели.
+    sql = `SELECT data FROM student_profiles
+           WHERE ${notMerged} AND data->>'weekStartStr' = $2
+             AND COALESCE((data->>'weeklyScore')::numeric, 0) > 0
+           ORDER BY COALESCE((data->>'weeklyScore')::numeric, 0) DESC LIMIT $1`;
+    params = [limit, mondayStr()];
+  } else {
+    // Выражение сортировки повторяет student_profiles_total_idx дословно —
+    // иначе planner индекс не возьмёт.
+    sql = `SELECT data FROM student_profiles
+           WHERE ${notMerged} AND COALESCE((data->>'totalSolved')::numeric, 0) > 0
+           ORDER BY ((data->>'totalSolved')::numeric) DESC LIMIT $1`;
+  }
+  const result = await pool.query(sql, params);
+  return result.rows.map((row, index) => {
+    const data = row.data || {};
+    return {
+      rank: index + 1,
+      displayName: leaderboardName(data.name),
+      totalSolved: Number(data.totalSolved) || 0,
+      egePoints: Number(data.egePoints) || 0,
+      weeklyScore: Number(data.weeklyScore) || 0,
+      duelRating: Number(data.duelRating) || Number(data.duelElo) || 0,
+      // Счёт побед — не персональные данные, а часть самой таблицы дуэлей.
+      duelGames: Number(data.duelGames) || 0,
+      duelWins: Number(data.duelWins) || 0,
+      duelLosses: Number(data.duelLosses) || 0,
+    };
+  });
+}
+
 function requireMutationAuth(req, session) {
   requireSession(session);
   if (!csrfValid(req, session)) throw Object.assign(new Error('csrf_failed'), { statusCode: 403 });
@@ -324,14 +388,37 @@ async function handle(req, res) {
       const allowed = Object.fromEntries(Object.entries(body).filter(([key]) => ['name', 'classCode', 'username'].includes(key)));
       return json(res, 200, await store.write(studentPath(session.user.canonicalDocId), allowed, 'merge', session));
     }
+    // Поиск «моих» документов по Google-почте. Раньше это делал клиент запросом
+    // where('googleEmail','==',<строка из localStorage>) прямо в коллекцию students,
+    // то есть искать можно было по ЛЮБОМУ чужому адресу. Здесь почта берётся из
+    // проверенной личности сессии, а не из запроса, — подставить чужую нельзя.
+    // ⚠️ Остаточный риск (был и раньше, не создан этой правкой): googleEmail лежит
+    // в документе ученика, и ученик может записать туда чужой адрес, чтобы
+    // подцепиться к слиянию. Отдельная задача — перенести почту в user_identities,
+    // где её пишет только сервер.
+    if (req.method === 'GET' && url.pathname === '/api/v1/me/linked-documents') {
+      requireSession(session);
+      const emails = [...new Set((session.user.identities || [])
+        .filter(identity => identity.provider === 'google' && identity.email)
+        .map(identity => String(identity.email).trim().toLowerCase())
+        .filter(Boolean))];
+      if (!emails.length) return json(res, 200, { documents: [] });
+      const found = await pool.query(
+        `SELECT doc_id, data, version FROM student_profiles
+         WHERE lower(data->>'googleEmail') = ANY($1::text[]) LIMIT 10`, [emails]);
+      return json(res, 200, {
+        documents: found.rows.map(row => ({ id: row.doc_id, data: row.data, version: Number(row.version) })),
+      });
+    }
     if (req.method === 'GET' && url.pathname === '/api/v1/me/assignments') {
       const profile = await store.get(studentPath(session.user.canonicalDocId), session);
       return json(res, 200, { assignments: profile.data?.pendingAssignments || [] });
     }
     if (req.method === 'GET' && url.pathname === '/api/v1/leaderboards') {
-      const field = url.searchParams.get('type') === 'duel' ? 'duelRating' : 'totalSolved';
-      const docs = await store.query(`artifacts/${APP}/public/data/students`, [{ type: 'orderBy', field, direction: 'desc' }, { type: 'limit', count: 20 }], session);
-      return json(res, 200, { rows: docs });
+      requireSession(session);
+      const type = String(url.searchParams.get('type') || 'solved');
+      const limit = Math.min(50, Math.max(1, Number(url.searchParams.get('limit')) || 20));
+      return json(res, 200, { rows: await leaderboardRows(type, limit) });
     }
     if (req.method === 'GET' && url.pathname === '/api/v1/teacher/classes') {
       const ctx = await accessContext(session);
@@ -386,9 +473,16 @@ wss.on('connection', (ws, req) => {
           const document = await store.get(path, ws.session);
           if (!document.exists) throw new Error('subscription_not_found');
         } else if (segments.length === 5) {
-          if (!['students', 'classes', 'matches', 'config', 'leaderboards'].includes(segments[4])) {
-            throw new Error('subscription_forbidden');
-          }
+          // ⚠️ Раньше проверкой служил store.query(..., limit 1): считалось, что он
+          // бросит для чужой коллекции. Он не бросает — он возвращает пустой список,
+          // поэтому подписаться на students мог кто угодно и получать поток путей,
+          // а путь ученика — это его Telegram ID. Права проверяем явно.
+          const collection = segments[4];
+          const ctx = await accessContext(ws.session);
+          const allowed = collection === 'matches' || collection === 'config' || collection === 'leaderboards'
+            ? true
+            : !!(ctx && (ctx.admin || ctx.teacher));
+          if (!allowed) throw new Error('subscription_forbidden');
           await store.query(path, [{ type: 'limit', count: 1 }], ws.session);
         } else throw new Error('invalid_subscription');
         ws.subscriptions.add(path);
@@ -434,4 +528,4 @@ async function start() {
 
 if (require.main === module) start().catch(error => { log('error', 'server.start.failed', { message: error.message }); process.exit(1); });
 
-module.exports = { server, store, handle, start };
+module.exports = { server, store, handle, start, leaderboardName, mondayStr };
