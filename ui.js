@@ -586,23 +586,63 @@ window.pcwHasAccount = async function() {
         return;
     }
     if (img) {
-        const qrSrc = 'https://api.qrserver.com/v1/create-qr-code/?size=240x240&margin=10&data=' + encodeURIComponent(link);
+        // ⚠️ Раньше картинка бралась у api.qrserver.com, а в QR зашита ссылка входа
+        // с ОДНОРАЗОВЫМ ТОКЕНОМ СЕССИИ (loginSessions, живёт 15 минут). То есть
+        // токен входа уезжал стороннему сервису в строке запроса и оседал в его
+        // логах. Теперь код рисуется на месте, наружу не уходит ничего.
+        // Заодно снимается зависимость от доступности чужого домена.
         img.innerHTML = '';
-        const el = document.createElement('img');
-        el.width = 210; el.height = 210; el.alt = 'QR';
-        el.style.cssText = 'border-radius:12px;background:#fff;padding:8px';
-        el.src = qrSrc;
-        el.onerror = () => {
-            // QR-сервис недоступен — показываем ссылку кликом (открыть в этом же браузере нельзя,
-            // т.к. это t.me; но можно скопировать). Правильнее — воспользоваться /pc из подсказки ниже.
+        const el = await renderLocalQr(link, 210);
+        if (el) {
+            img.appendChild(el);
+        } else {
+            // Не удалось нарисовать — показываем ссылку текстом (открыть её в этом же
+            // браузере нельзя, это t.me, но можно скопировать). Правильнее —
+            // воспользоваться /pc из подсказки ниже.
             const a = document.createElement('a');
-            a.href = link; a.target = '_blank'; a.textContent = link;
+            a.href = link; a.target = '_blank'; a.rel = 'noopener'; a.textContent = link;
             a.style.cssText = 'font-size:11px;word-break:break-all;color:#2563eb';
             img.innerHTML = ''; img.appendChild(a);
-        };
-        img.appendChild(el);
+        }
     }
 };
+
+// QR рисуется локально. Библиотека грузится лениво — только когда пользователь
+// действительно открыл вход по коду, чтобы не утяжелять первую загрузку.
+let _qrLibPromise = null;
+function loadQrLib() {
+    if (window.qrcode) return Promise.resolve(window.qrcode);
+    if (!_qrLibPromise) {
+        _qrLibPromise = new Promise((resolve, reject) => {
+            const sc = document.createElement('script');
+            sc.src = 'vendor/qrcode.js?v=20260726-16';
+            sc.onload = () => resolve(window.qrcode);
+            sc.onerror = () => { _qrLibPromise = null; reject(new Error('qr_lib_failed')); };
+            document.head.appendChild(sc);
+        });
+    }
+    return _qrLibPromise;
+}
+async function renderLocalQr(text, sizePx) {
+    try {
+        const qrcode = await loadQrLib();
+        if (!qrcode) return null;
+        // typeNumber 0 = подобрать минимальный размер под длину строки,
+        // 'M' — стандартный уровень коррекции ошибок.
+        const qr = qrcode(0, 'M');
+        qr.addData(String(text));
+        qr.make();
+        const wrap = document.createElement('div');
+        wrap.style.cssText = `width:${sizePx}px;height:${sizePx}px;border-radius:12px;background:#fff;padding:8px;box-sizing:border-box`;
+        wrap.innerHTML = qr.createSvgTag({ scalable: true, margin: 0 });
+        const svg = wrap.querySelector('svg');
+        if (svg) { svg.setAttribute('width', '100%'); svg.setAttribute('height', '100%'); }
+        return wrap;
+    } catch (e) {
+        console.warn('[QR] локальная отрисовка не удалась:', e && e.message);
+        return null;
+    }
+}
 window.pcwNewUser = function() {
     haptic('light');
     if (window.cancelPcLoginSession) window.cancelPcLoginSession();
@@ -2240,7 +2280,21 @@ function renderTopBar({ daysLeft, sc, egePoints, totalL, totalSolved, hwMode }) 
 }
 
 let toastTimeout = null;
-function showToast(emoji, text, bg, border) { const t = $('joke-toast'), c = $('toast-content'); c.innerHTML = `<span>${emoji}</span><span>${text}</span>`; c.className = `${bg} ${border} text-slate-50 font-bold text-xs sm:text-sm px-4 py-2 rounded-l-lg shadow-lg flex items-center gap-2 border-y-2 border-l-2`; t.classList.remove('translate-x-full'); if (toastTimeout) clearTimeout(toastTimeout); toastTimeout = setTimeout(() => t.classList.add('translate-x-full'), 2000); }
+// Текст уведомления собирается через textContent, а не innerHTML: сюда регулярно
+// попадают имена учеников и названия классов из БД (например «Выбран: <имя>»),
+// а имя ученик задаёт себе сам. Разметку в текст тоста никто не передаёт —
+// проверено по всем вызовам, — так что ничего не теряется.
+function showToast(emoji, text, bg, border) {
+    const t = $('joke-toast'), c = $('toast-content');
+    c.textContent = '';
+    const emojiSpan = document.createElement('span'); emojiSpan.textContent = String(emoji ?? '');
+    const textSpan = document.createElement('span'); textSpan.textContent = String(text ?? '');
+    c.appendChild(emojiSpan); c.appendChild(textSpan);
+    c.className = `${bg} ${border} text-slate-50 font-bold text-xs sm:text-sm px-4 py-2 rounded-l-lg shadow-lg flex items-center gap-2 border-y-2 border-l-2`;
+    t.classList.remove('translate-x-full');
+    if (toastTimeout) clearTimeout(toastTimeout);
+    toastTimeout = setTimeout(() => t.classList.add('translate-x-full'), 2000);
+}
 
 function endGame() {
     clearInterval(window.state.timerInterval); $('modal-score').innerText = window.state.stats.streak;
@@ -2481,7 +2535,18 @@ window.populateTeacherGroups = function() {
 
     if (groups.length) {
         const cur = localStorage.getItem('teacher_class_code') || groups[0].code;
-        sel.innerHTML = groups.map(g => `<option value="${(g.code||'').replace(/"/g,'&quot;')}">${(g.name||g.code)}</option>`).join('');
+        // Название группы задаёт учитель и приходит из БД. Раньше оно подставлялось
+        // в разметку как есть (экранировалась только кавычка в value), то есть класс
+        // с именем вида `<img onerror=...>` исполнял бы скрипт в чужом кабинете.
+        // Собираем через DOM: textContent не интерпретирует разметку в принципе,
+        // поэтому экранировать нечего и забыть об этом нельзя.
+        sel.innerHTML = '';
+        groups.forEach(g => {
+            const option = document.createElement('option');
+            option.value = g.code || '';
+            option.textContent = g.name || g.code || '';
+            sel.appendChild(option);
+        });
         const chosen = groups.some(g => g.code === cur) ? cur : groups[0].code;
         sel.value = chosen;
         // Сохранённый код мог устареть (не входит в группы) — синхронизируем на выбранную группу,

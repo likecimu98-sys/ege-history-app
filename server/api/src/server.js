@@ -236,6 +236,27 @@ async function handle(req, res) {
 
   try {
     if (url.pathname.startsWith('/internal/')) return await handleInternal(req, res, url);
+    // Приёмник нарушений CSP. Нужен, чтобы сутки в режиме Report-Only имели
+    // смысл: иначе нарушения остаются в консолях чужих телефонов и мы их не
+    // увидим. Без сессии и без CSRF — браузер шлёт отчёт сам, без наших кук.
+    // Пишем в лог процесса (pm2 logs hist-api), ничего не храним.
+    if (req.method === 'POST' && url.pathname === '/api/v1/csp-report') {
+      if (!limiter.take(`${ip}:csp`, 30).ok) return json(res, 429, { error: 'rate_limited' });
+      let report = {};
+      try {
+        const body = await readJson(req, 16384);
+        report = body['csp-report'] || body || {};
+      } catch (_) { /* кривой отчёт не повод отвечать ошибкой браузеру */ }
+      log('warn', 'csp.violation', {
+        // Только то, что нужно для разбора. URL страницы может нести query
+        // с чувствительным содержимым, поэтому режем до пути.
+        directive: String(report['effective-directive'] || report['violated-directive'] || '').slice(0, 100),
+        blocked: String(report['blocked-uri'] || '').slice(0, 300),
+        document: String(report['document-uri'] || '').split('?')[0].slice(0, 200),
+      });
+      res.writeHead(204).end();
+      return;
+    }
     if (req.method === 'GET' && url.pathname === '/api/v1/health') {
       const check = await pool.query('SELECT now() AS now');
       return json(res, 200, { ok: true, database: true, now: check.rows[0].now, version: '1.0.0' });

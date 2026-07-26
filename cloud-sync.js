@@ -7,7 +7,14 @@
             signInWithCredential, signOut, initializeFirestore, collection, doc, setDoc, getDoc,
             getDocs, addDoc, updateDoc, deleteDoc, deleteField, onSnapshot, query, where,
             orderBy, limit, runTransaction, arrayUnion, arrayRemove, vpsApiFetch, refreshVpsAuth
-        } from "./vps-sync-compat.js?v=20260726-15";
+        } from "./vps-sync-compat.js?v=20260726-16";
+
+        // jsPDF грузился с cdnjs.cloudflare.com без SRI — то есть посторонний скрипт
+        // исполнялся с полными правами страницы, а при недоступности CDN (у части
+        // нашей аудитории это обычное дело) экспорт PDF просто не работал. Довод тот
+        // же, что и для telegram-web-app.js: своя копия с того же origin.
+        // Версия совпадает с прежней CDN-ной — 2.5.1, лежит в vendor/.
+        const VENDOR_JSPDF = 'vendor/jspdf.umd.min.js?v=20260726-16';
 
         const cloudConfig = { projectId: 'vps-postgresql' };
         
@@ -1860,7 +1867,7 @@
             // jsPDF + кириллический шрифт (как в отчёте ученика)
             if (typeof window.jspdf === 'undefined') {
                 showToast('⏳','Загружаем PDF-модуль…','bg-blue-500','border-blue-700');
-                try { await new Promise((res,rej)=>{const sc=document.createElement('script');sc.src='https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js';sc.onload=res;sc.onerror=()=>rej();document.head.appendChild(sc);}); }
+                try { await new Promise((res,rej)=>{const sc=document.createElement('script');sc.src=VENDOR_JSPDF;sc.onload=res;sc.onerror=()=>rej();document.head.appendChild(sc);}); }
                 catch(e){ showToast('❌','Ошибка загрузки PDF','bg-rose-500','border-rose-700'); return; }
             }
             const { jsPDF } = window.jspdf;
@@ -1992,7 +1999,7 @@
                 try {
                     await new Promise((resolve, reject) => {
                         const sc = document.createElement('script');
-                        sc.src = 'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js';
+                        sc.src = VENDOR_JSPDF;
                         sc.onload = resolve;
                         sc.onerror = () => reject(new Error('jsPDF load failed'));
                         document.head.appendChild(sc);
@@ -3995,6 +4002,10 @@
                 window._mergeSelectionA = null;
                 document.querySelectorAll('[data-student-uid]').forEach(el => el.style.outline = '');
 
+                // Имена и uid приходят из БД, а имя ученик задаёт себе сам —
+                // в разметку они без экранирования попадать не должны даже здесь,
+                // хотя диалог и виден только админу.
+                const escM = t => String(t == null ? '' : t).replace(/[<>&"]/g, c => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;', '"': '&quot;' }[c]));
                 const overlayId = 'merge-confirm-overlay';
                 let ov = document.getElementById(overlayId);
                 if (!ov) { ov = document.createElement('div'); ov.id = overlayId; document.body.appendChild(ov); }
@@ -4006,14 +4017,14 @@
                   <div style="display:flex;flex-direction:column;gap:8px;margin-bottom:16px">
                     <div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:10px;padding:10px 12px">
                       <div style="font-size:9px;color:#6b7280;font-weight:700;text-transform:uppercase;margin-bottom:2px">Аккаунт A (главный)</div>
-                      <div style="font-size:13px;font-weight:900;color:#1d4ed8">${A.name}</div>
-                      <div style="font-size:9px;color:#9ca3af;margin-top:1px;word-break:break-all">${A.uid}</div>
+                      <div style="font-size:13px;font-weight:900;color:#1d4ed8">${escM(A.name)}</div>
+                      <div style="font-size:9px;color:#9ca3af;margin-top:1px;word-break:break-all">${escM(A.uid)}</div>
                     </div>
                     <div style="text-align:center;font-size:18px">+</div>
                     <div style="background:#fef9c3;border:1px solid var(--c-accent);border-radius:10px;padding:10px 12px">
                       <div style="font-size:9px;color:#6b7280;font-weight:700;text-transform:uppercase;margin-bottom:2px">Аккаунт B (поглощается)</div>
-                      <div style="font-size:13px;font-weight:900;color:#854d0e">${B.name}</div>
-                      <div style="font-size:9px;color:#9ca3af;margin-top:1px;word-break:break-all">${B.uid}</div>
+                      <div style="font-size:13px;font-weight:900;color:#854d0e">${escM(B.name)}</div>
+                      <div style="font-size:9px;color:#9ca3af;margin-top:1px;word-break:break-all">${escM(B.uid)}</div>
                     </div>
                   </div>
                   <div style="font-size:10px;color:#9ca3af;margin-bottom:14px;line-height:1.5">
