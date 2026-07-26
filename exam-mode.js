@@ -2,7 +2,7 @@
 (function() {
     'use strict';
 
-    const BANK_SRC = 'exam-bank.generated.js?v=20260726-11';
+    const BANK_SRC = 'exam-bank.generated.js?v=20260726-12';
     const ORDERED_KIMS = new Set([1, 2, 3, 4, 5, 7]);
     const CHOICE_KIMS = new Set([6, 12]);
     const TASK_ICONS = Object.freeze({ 1: '⏳', 2: '🗓️', 3: '🔗', 4: '📍', 5: '👤', 6: '📜', 7: '🎨', 8: '🪙', 9: '🗺️', 10: '🗺️', 11: '🗺️', 12: '🗺️' });
@@ -79,22 +79,95 @@
         return Math.floor(Math.random() * length);
     }
 
+    /* ── Ротация: решённое верно уходит из пула этого ученика ──────────────────
+       Раньше каждое задание бралось случайно из всего пула, без памяти. При
+       банке в 23 задания по восьмому номеру это давало 33% шанс повтора уже за
+       десять пробников — и ученик справедливо считал, что ему «одно и то же».
+
+       Правила:
+       · из пула уходит только ВЕРНО решённое. Ошибка оставляет задание в игре —
+         в этом весь смысл, с ним нужно встретиться снова;
+       · карты 9–12 приходят комплектом, поэтому и отметка на комплект: он
+         считается пройденным, только если все четыре задания сделаны на полный
+         балл;
+       · когда по номеру не осталось невиденных — круг закрыт, отметки ПО ЭТОМУ
+         номеру сбрасываются и всё начинается заново. Пустого экрана быть не
+         может ни при каком состоянии прогресса.
+       Ключи храним в stats.examSolved: id задания либо 'g:<groupId>' для карт. */
+    const GROUP_KEY = groupId => 'g:' + groupId;
+
+    function solvedKeys() {
+        const stats = window.state && window.state.stats;
+        if (!stats) return new Set();
+        if (!Array.isArray(stats.examSolved)) stats.examSolved = [];
+        return new Set(stats.examSolved);
+    }
+
+    function markSolved(keys) {
+        const stats = window.state && window.state.stats;
+        if (!stats || !keys || !keys.length) return;
+        if (!Array.isArray(stats.examSolved)) stats.examSolved = [];
+        const set = new Set(stats.examSolved);
+        const before = set.size;
+        keys.forEach(key => key && set.add(key));
+        if (set.size === before) return;
+        stats.examSolved = [...set];
+        if (typeof window.saveProgress === 'function') window.saveProgress();
+    }
+
+    function resetCircle(keysToDrop) {
+        const stats = window.state && window.state.stats;
+        if (!stats || !Array.isArray(stats.examSolved) || !keysToDrop.size) return;
+        stats.examSolved = stats.examSolved.filter(key => !keysToDrop.has(key));
+        if (typeof window.saveProgress === 'function') window.saveProgress();
+    }
+
+    // Невиденное из пула; если невиденного нет — закрываем круг и отдаём пул целиком.
+    function freshPool(pool, keyOf) {
+        const solved = solvedKeys();
+        const fresh = pool.filter(item => !solved.has(keyOf(item)));
+        if (fresh.length) return fresh;
+        resetCircle(new Set(pool.map(keyOf)));
+        return pool;
+    }
+
+    function mapGroupsOf(bank) {
+        const groups = new Map();
+        (bank.tasks || []).filter(task => task.kim >= 9 && task.kim <= 12).forEach(task => {
+            if (!groups.has(task.groupId)) groups.set(task.groupId, []);
+            groups.get(task.groupId).push(task);
+        });
+        return [...groups.values()].filter(group => group.length === 4);
+    }
+
     function createVariant(bank) {
         const chosen = [];
         for (let kim = 1; kim <= 8; kim++) {
             const pool = bank.tasks.filter(task => task.kim === kim);
             if (!pool.length) throw new Error(`Пустой пул задания ${kim}`);
-            chosen.push(pool[randomIndex(pool.length)]);
+            const fresh = freshPool(pool, task => task.id);
+            chosen.push(fresh[randomIndex(fresh.length)]);
         }
-        const mapGroups = new Map();
-        bank.tasks.filter(task => task.kim >= 9 && task.kim <= 12).forEach(task => {
-            if (!mapGroups.has(task.groupId)) mapGroups.set(task.groupId, []);
-            mapGroups.get(task.groupId).push(task);
-        });
-        const groups = [...mapGroups.values()].filter(group => group.length === 4);
+        const groups = mapGroupsOf(bank);
         if (!groups.length) throw new Error('Нет полных комплектов заданий 9–12');
-        chosen.push(...groups[randomIndex(groups.length)].sort((a, b) => a.kim - b.kim));
+        const freshGroups = freshPool(groups, group => GROUP_KEY(group[0].groupId));
+        chosen.push(...freshGroups[randomIndex(freshGroups.length)].sort((a, b) => a.kim - b.kim));
         return chosen.sort((a, b) => a.kim - b.kim);
+    }
+
+    // Сколько пройдено по каждому номеру — иначе повтор после закрытия круга
+    // выглядит как поломка. Отдаём наружу для экрана пробника.
+    function examCoverage(bank) {
+        if (!bank || !bank.tasks) return null;
+        const solved = solvedKeys();
+        const rows = [];
+        for (let kim = 1; kim <= 8; kim++) {
+            const pool = bank.tasks.filter(task => task.kim === kim);
+            if (pool.length) rows.push({ kim, done: pool.filter(t => solved.has(t.id)).length, total: pool.length });
+        }
+        const groups = mapGroupsOf(bank);
+        if (groups.length) rows.push({ kim: '9–12', done: groups.filter(g => solved.has(GROUP_KEY(g[0].groupId))).length, total: groups.length });
+        return rows;
     }
 
     function taskMap() {
@@ -199,6 +272,7 @@
           .em-btn{border:0;border-radius:12px;padding:10px 15px;font-weight:900;cursor:pointer;background:#e5e7eb;color:#374151;transition:.15s transform,.15s background}
           .em-btn:hover{transform:translateY(-1px)}.em-btn:active{transform:scale(.97)}.em-btn.primary{background:#2563eb;color:#fff}.em-btn.finish{background:#dc2626;color:#fff}.em-btn.ghost{background:transparent}.em-btn.danger{background:#fee2e2;color:#b91c1c}
           .dark .em-btn{background:#2c2c2c;color:#e5e7eb}.dark .em-btn.danger{background:#4c1d1d;color:#fecaca}
+          .em-coverage-row{display:flex;align-items:center;gap:10px;margin-bottom:7px}.em-coverage-row .nm{flex:0 0 44px;font-size:13px;font-weight:700;color:#374151}.dark .em-coverage-row .nm{color:#d1d5db}.em-coverage-row .bar{flex:1;height:6px;border-radius:999px;background:#e5e7eb;overflow:hidden}.dark .em-coverage-row .bar{background:#2c2c2c}.em-coverage-row .bar>span{display:block;height:100%;border-radius:999px;background:#2563eb}.em-coverage-row .pc{flex:0 0 62px;text-align:right;font-size:12px;font-weight:600;color:#6b7280;font-variant-numeric:tabular-nums}.dark .em-coverage-row .pc{color:#9ca3af}
           .em-dashboard{height:100%;overflow:auto;padding:22px 16px 55px}.em-dashboard-inner{max-width:1000px;margin:auto}.em-hero{background:#fff;border:1px solid #e5e7eb;border-radius:20px;padding:22px;box-shadow:0 4px 14px rgba(15,23,42,.05)}.dark .em-hero{background:#1e1e1e;border-color:#2c2c2c}.em-hero h2{font-size:24px;margin:0 0 8px;font-weight:1000;color:#1f2937}.dark .em-hero h2{color:#e5e7eb}.em-hero p{margin:0;max-width:720px;line-height:1.55;color:#6b7280;font-weight:700}.em-hero-actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:18px}.em-hero .em-btn{background:#2563eb;color:#fff}.em-hero .em-btn.secondary{background:#eef2ff;color:#4338ca;border:1px solid #c7d2fe}
           .em-card{background:#fff;border:1px solid #e5e7eb;border-radius:18px;padding:17px;margin-top:16px;box-shadow:0 3px 12px rgba(15,23,42,.04)}.dark .em-card{background:#1e1e1e;border-color:#2c2c2c}.em-card h3{margin:0 0 12px;font-size:16px;font-weight:950}.em-progress{height:8px;border-radius:999px;background:#e5e7eb;overflow:hidden}.em-progress span{display:block;height:100%;background:#22c55e;border-radius:inherit}.em-active-row,.em-history-row{display:flex;align-items:center;gap:12px}.em-active-info,.em-history-info{flex:1;min-width:0}.em-muted{font-size:12px;color:#6b7280;font-weight:700}.em-history-list{display:grid;gap:9px}.em-history-row{padding:12px;border-radius:14px;background:#f9fafb;border:1px solid #e5e7eb}.dark .em-history-row{background:#181818;border-color:#2c2c2c}.em-score-pill{font-size:18px;font-weight:1000;color:#2563eb;white-space:nowrap}
           .em-workspace{display:flex;flex-direction:column;height:calc(100vh - 58px);min-height:0}.em-nav{flex:0 0 auto;display:flex;gap:7px;padding:9px 14px;background:#fff;border-bottom:1px solid #e5e7eb;overflow-x:auto}.dark .em-nav{background:#1e1e1e;border-color:#2c2c2c}.em-nav-btn{width:35px;height:35px;flex:0 0 35px;border-radius:10px;border:1px solid #d1d5db;background:#fff;font-weight:950;color:#4b5563;cursor:pointer}.dark .em-nav-btn{background:#27272a;border-color:#3f3f46;color:#d1d5db}.em-nav-btn.answered,.em-nav-btn.review-full{background:#dcfce7;border-color:#86efac;color:#166534}.dark .em-nav-btn.answered,.dark .em-nav-btn.review-full{background:#143b2a;border-color:#24744d;color:#86efac}.em-nav-btn.review-part,.em-nav-btn.review-warning{background:#fef3c7;border-color:#fbbf24;color:#92400e}.dark .em-nav-btn.review-part,.dark .em-nav-btn.review-warning{background:#422006;border-color:#b45309;color:#fde68a}.em-nav-btn.review-zero{background:#fee2e2;border-color:#fca5a5;color:#b91c1c}.dark .em-nav-btn.review-zero{background:#450a0a;border-color:#991b1b;color:#fecaca}.em-nav-btn.current{background:#2563eb;border-color:#2563eb;color:#fff;box-shadow:0 0 0 3px rgba(37,99,235,.12)}.em-nav-btn.partial{box-shadow:inset 0 -3px #f59e0b}.em-review-toolbar{display:flex;align-items:center;gap:8px;padding:8px 14px;background:#f8fafc;border-bottom:1px solid #e5e7eb}.dark .em-review-toolbar{background:#181818;border-color:#2c2c2c}.em-review-toolbar-label{margin-left:auto;font-size:11px;font-weight:900;color:#6b7280}.em-filter-btn{border:1px solid #d1d5db;background:#fff;color:#4b5563;border-radius:999px;padding:7px 11px;font-size:11px;font-weight:900;cursor:pointer}.dark .em-filter-btn{background:#27272a;border-color:#3f3f46;color:#d1d5db}.em-filter-btn.active{background:#2563eb;border-color:#2563eb;color:#fff}
@@ -263,10 +337,17 @@
         const history = state.history.slice().sort((a, b) => (b.completedAt || 0) - (a.completedAt || 0));
         const historyHtml = history.length ? `<div class="em-card"><h3>Результаты пробников</h3><div class="em-history-list">${history.slice(0, 20).map(item => `
           <div class="em-history-row"><div class="em-history-info"><div style="font-weight:900">${formatDate(item.completedAt)}</div><div class="em-muted">${formatDuration(item.durationMs)} · ответы сохранены</div></div><div class="em-score-pill">${item.score}/20</div><button class="em-btn" data-em-action="open-history" data-id="${item.id}">Открыть</button></div>`).join('')}</div></div>` : '<div class="em-card"><h3>Результаты пробников</h3><div class="em-muted">Здесь появятся завершённые попытки.</div></div>';
+        // Пройденное по кругу. Без этой таблички повтор после закрытия круга
+        // читается как поломка отбора, а не как «банк закончился».
+        const coverage = examCoverage(window.EGE_EXAM_BANK);
+        const coverageHtml = coverage && coverage.length ? `<div class="em-card"><h3>Пройдено из банка</h3><div class="em-muted" style="margin-bottom:10px">Верно решённое не повторяется, пока не закончится круг по этому номеру. Ошибочное остаётся — с ним нужно встретиться снова.</div><div class="em-coverage">${coverage.map(row => {
+            const pct = row.total ? Math.round(row.done * 100 / row.total) : 0;
+            return `<div class="em-coverage-row"><span class="nm">№${row.kim}</span><span class="bar"><span style="width:${pct}%"></span></span><span class="pc">${row.done}/${row.total}</span></div>`;
+        }).join('')}</div></div>` : '';
         overlay.innerHTML = topBar('Пробник ЕГЭ', 'Тестовая часть · задания 1–12 · максимум 20 первичных баллов', false) + `
           <div class="em-dashboard"><div class="em-dashboard-inner">
             <div class="em-hero"><h2>Честный пробник 1–12</h2><p>По одному случайному заданию каждого типа. Задания 9–12 берутся единым блоком к одной карте. Правильные ответы появятся только после сдачи.</p><div class="em-hero-actions"><button class="em-btn" data-em-action="new">${state.active ? 'Начать заново' : 'Начать пробник'}</button>${state.active ? '<button class="em-btn secondary" data-em-action="resume">Продолжить текущий</button>' : ''}${errorCount ? `<button class="em-btn secondary" data-em-action="open-error-pool">Ошибки пробников · ${errorCount}</button>` : ''}</div></div>
-            ${activeHtml}${historyHtml}
+            ${activeHtml}${coverageHtml}${historyHtml}
           </div></div>`;
     }
 
@@ -676,7 +757,10 @@
             const kim = Number(String(taskKey || '').replace(/\D/g, ''));
             const pool = (bank.tasks || []).filter(task => task.kim === kim && (!taskId || task.id === taskId));
             if (!pool.length) throw new Error(`В банке нет задания №${kim}`);
-            trainingTask = pool[randomIndex(pool.length)];
+            // taskId задан — открываем именно его (разбор ошибки), иначе берём из
+            // невиденных: тот же круг ротации, что и у пробника.
+            const trainingPool = taskId ? pool : freshPool(pool, task => task.id);
+            trainingTask = trainingPool[randomIndex(trainingPool.length)];
             trainingAnswer = ORDERED_KIMS.has(kim) ? normalizedOrderedAnswer(trainingTask, []) : '';
             trainingScore = null;
             trainingSourceTask = `task${kim}`;
@@ -713,7 +797,8 @@
         const kim = Number(taskKey.replace(/\D/g, ''));
         const pool = (window.EGE_EXAM_BANK.tasks || []).filter(task => task.kim === kim);
         if (!pool.length || typeof window.renderEmbeddedFipiTask !== 'function') return false;
-        return window.renderEmbeddedFipiTask(pool[randomIndex(pool.length)]) !== false;
+        const fresh = freshPool(pool, task => task.id);
+        return window.renderEmbeddedFipiTask(fresh[randomIndex(fresh.length)]) !== false;
     }
 
     function finishTrainingTask() {
@@ -725,6 +810,10 @@
         trainingScore = window.EgeScoring.scoreTask(trainingTask, trainingAnswer);
         if (trainingScore.points < trainingScore.max || trainingScore.acceptedWithWarning) {
             recordExamMistake(trainingTask, trainingAnswer, trainingScore, { source: 'trainer' });
+        } else if (trainingTask.kim <= 8) {
+            // Одиночное задание из банка засчитываем в тот же круг, что и пробник:
+            // иначе тренажёр продолжал бы подсовывать то, что уже сделано верно.
+            markSolved([trainingTask.id]);
         }
         if (typeof window.creditNorm === 'function') window.creditNorm(1, trainingSourceTask);
         if (window.state?.stats) window.state.stats.egePoints = (Number(window.state.stats.egePoints) || 0) + (trainingScore.points || 0);
@@ -887,6 +976,17 @@
                 createdAt: completedAt
             });
         });
+
+        // Ротация пула: верно решённое уходит, ошибочное остаётся. Карты 9–12 —
+        // комплектом: одна ошибка внутри блока оставляет всю карту в игре.
+        const isFull = task => {
+            const item = score.byKim[task.kim];
+            return item && item.points === item.max && !item.acceptedWithWarning;
+        };
+        const solvedNow = tasks.filter(task => task.kim <= 8 && isFull(task)).map(task => task.id);
+        const mapTasks = tasks.filter(task => task.kim >= 9 && task.kim <= 12);
+        if (mapTasks.length === 4 && mapTasks.every(isFull)) solvedNow.push(GROUP_KEY(mapTasks[0].groupId));
+        markSolved(solvedNow);
         state.active = null;
         state.history = [...state.history.filter(item => item.id !== record.id), record].slice(-50);
         saveExam();

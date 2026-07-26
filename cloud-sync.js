@@ -7,7 +7,7 @@
             signInWithCredential, signOut, initializeFirestore, collection, doc, setDoc, getDoc,
             getDocs, addDoc, updateDoc, deleteDoc, deleteField, onSnapshot, query, where,
             orderBy, limit, runTransaction, arrayUnion, arrayRemove, vpsApiFetch, refreshVpsAuth
-        } from "./vps-sync-compat.js?v=20260726-11";
+        } from "./vps-sync-compat.js?v=20260726-12";
 
         const cloudConfig = { projectId: 'vps-postgresql' };
         
@@ -3097,6 +3097,18 @@
                     if (g > bestGames) { bestGames = g; st.duelElo = Number(s.stats.duelElo) || 1000; }
                 });
             }
+            // Круг по банку ФИПИ (stats.examSolved): ОБЪЕДИНЕНИЕ, а не max и не «чья
+            // копия свежее». Решил на телефоне — не должно всплыть снова на ноутбуке.
+            // Сброс круга при этом безопасен: он затирает отметки на ОБОИХ устройствах
+            // только после следующей синхронизации, а до неё лишний пропуск задания
+            // безвреден — в отличие от повтора уже сделанного.
+            {
+                const examSolved = new Set();
+                states.forEach(s => {
+                    if (Array.isArray(s.stats?.examSolved)) s.stats.examSolved.forEach(id => id && examSolved.add(String(id)));
+                });
+                if (examSolved.size) st.examSolved = [...examSolved];
+            }
             st.solvedByTask = { task1: 0, task3: 0, task4: 0, task5: 0, task7: 0 };
             states.forEach(s => {
                 const sbt = s.stats?.solvedByTask || {};
@@ -3261,7 +3273,10 @@
             'bestSpeedrunScore','dailyStats','achievements','achievementsData','egePoints',
             'visualArchitectureProgress','visualArchitectureSolved','visualPaintingProgress','visualPaintingSolved',
             'duelElo','duelGames','duelWins','duelLosses','duelDraws',
-            'matchBestMs','matchGames','vovLearned','mockExams','mockExamMistakes'
+            'matchBestMs','matchGames','vovLearned','mockExams','mockExamMistakes',
+            // Круг по банку ФИПИ. Без записи в этом списке поле не уезжает в облако
+            // вовсе — и ротация работала бы только на одном устройстве.
+            'examSolved'
         ];
 
         function applyMergedState(merged) {

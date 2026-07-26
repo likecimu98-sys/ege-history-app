@@ -31,6 +31,7 @@ window.state = {
         vovLearned: {},                  // режим «ВОВ» (задание 8, старый образец): id задания → true (выучено)
         mockExams: { active: null, history: [] }, // пробник 1–12: незавершённая попытка + история
         mockExamMistakes: [],            // долговечная история ошибок в пробниках и цельных заданиях ФИПИ
+        examSolved: [],                  // круг по банку ФИПИ: id верно решённых (и 'g:<groupId>' для карт)
         visualArchitectureProgress: {},
         visualArchitectureSolved: 0,
         visualPaintingProgress: {},
@@ -401,7 +402,10 @@ const SAVE_FIELDS = [
     'visualPaintingProgress', 'visualPaintingSolved',
     'bestSpeedrunScore', 'dailyStats', 'achievements', 'achievementsData',
     'duelElo', 'duelGames', 'duelWins', 'duelLosses', 'duelDraws',
-    'matchBestMs', 'matchGames', 'vovLearned', 'mockExams', 'mockExamMistakes'
+    'matchBestMs', 'matchGames', 'vovLearned', 'mockExams', 'mockExamMistakes',
+    // Круг по банку ФИПИ: id верно решённых заданий (и 'g:<groupId>' для карт 9–12).
+    // Без записи здесь ротация обнулялась бы при каждой перезагрузке страницы.
+    'examSolved'
 ];
 
 const MAX_MISTAKES_POOL = 200;
