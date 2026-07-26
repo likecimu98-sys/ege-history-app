@@ -481,19 +481,50 @@ window.syncNow = syncNow;
 // ─── Дневной лимит строк (настройки грузит refreshDailyLimit в cloud-sync.js) ───
 // 0/отсутствие лимита = безлимит. Считаем по dailyStats[today].solved — тому же
 // счётчику, что и вся статистика, поэтому лимит един для таблиц и карточек.
+// Что НЕ расходует дневную квоту. Условие было размазано по трём файлам
+// (app.js, swipe-mode.js, match-mode.js) — теперь одно место, иначе при любой
+// правке одна из копий отстанет.
+// ⚠️ Это утверждение КЛИЕНТА: «сейчас идёт домашка» сервер проверить не может.
+// Серверными фактами остаются сам тариф, премиум и безлимит класса.
+window.isQuotaExempt = function() {
+    const s = window.state || {};
+    return s.currentMode === 'duel' || !!s.isHomeworkMode || !!s.activeHw;
+};
+
+// Остаток берётся из ответа сервера (window._dailyLimitInfo, обновляет
+// refreshDailyLimit / consumeDailyQuota в cloud-sync.js). Раньше здесь
+// считалось dailyStats[today].solved из localStorage — то есть лимит снимался
+// правкой одного числа в DevTools. Функция синхронная намеренно: её зовут
+// прямо из checkAnswers, ждать сеть там нельзя.
 window.canSolveMore = function() {
     const info = window._dailyLimitInfo || { limit: 0 };
     const limit = Number(info.limit) || 0;
     if (limit <= 0) return { ok: true, left: Infinity, limit: 0 };
-    const today = getTodayString();
-    const solved = (window.state.stats.dailyStats[today] || {}).solved || 0;
-    return { ok: solved < limit, left: Math.max(0, limit - solved), limit };
+    const left = info.left == null || info.left === Infinity
+        ? Math.max(0, limit - (Number(info.used) || 0))
+        : Number(info.left) || 0;
+    return { ok: left > 0, left: Math.max(0, left), limit };
 };
 
 // --- Статистика ---
 function updateScoreAndStats(linesCount, isPerfectHw, egePointsToAdd) {
     isPerfectHw = isPerfectHw || false;
     egePointsToAdd = egePointsToAdd || 0;
+
+    // Списание квоты на сервере. Делается здесь, потому что это единственное
+    // место, где строки реально засчитываются, — и значит ни один режим не
+    // забудет расплатиться. Не ждём ответа: подсчёт статистики не должен
+    // упираться в сеть, а показ экрана лимита берёт на себя consumeDailyQuota.
+    // Оптимистично уменьшаем остаток сразу, чтобы canSolveMore не пропустила
+    // лишний раунд, пока ответ в пути.
+    if (linesCount > 0 && !window.isQuotaExempt() && window.consumeDailyQuota) {
+        const info = window._dailyLimitInfo;
+        if (info && Number(info.limit) > 0 && Number.isFinite(Number(info.left))) {
+            info.left = Math.max(0, Number(info.left) - linesCount);
+        }
+        window.consumeDailyQuota(linesCount);
+    }
+
     const s = window.state.stats;
     const curTask = window.state.currentTask || 'task4';
     s.totalSolvedEver += linesCount;

@@ -3394,29 +3394,62 @@
         // ставит бот/админ) → premiumDaily; ученик безлимитной группы (unlimited на
         // документе класса, тумблер в /admin) и сам учитель → всегда безлимит.
         window._dailyLimitInfo = { limit: 0 };
+        // Лимит и расход теперь считает сервер (GET /api/v1/quota). Прежняя версия
+        // собирала тариф на клиенте из конфига, флага premium и признака класса,
+        // а израсходованное брала из localStorage — то есть весь платный контур
+        // снимался правкой одного числа в DevTools.
+        // Здесь остался только СНИМОК ответа: canSolveMore() синхронна и вызывается
+        // прямо в checkAnswers, ждать сеть ей нельзя.
         window.refreshDailyLimit = async function() {
             try {
-                if (!db) return;
-                const cfgSnap = await getDoc(doc(db, 'artifacts', appId, 'public', 'data', 'config', 'limits'));
-                if (!cfgSnap.exists()) { window._dailyLimitInfo = { limit: 0 }; return; }
-                const cfg = cfgSnap.data() || {};
-                const free = Math.max(0, Number(cfg.freeDaily) || 0);
-                const prem = Math.max(0, Number(cfg.premiumDaily) || 0);
-                let classUnlimited = false;
-                const code = localStorage.getItem('student_class_code') || '';
-                if (code) {
-                    try {
-                        const cs = await getDoc(doc(db, 'artifacts', appId, 'public', 'data', 'classes', _classDocId(code)));
-                        classUnlimited = !!(cs.exists() && cs.data().unlimited);
-                    } catch (e) {}
-                }
-                const premium = !!window._studentPremium;
-                const limit = (classUnlimited || window.state?.isTeacherAdmin) ? 0 : (premium ? prem : free);
+                const quota = await vpsApiFetch('/api/v1/quota');
                 window._dailyLimitInfo = {
-                    limit, premium, classUnlimited,
-                    clubUrl: String(cfg.clubUrl || ''), message: String(cfg.message || '')
+                    limit: Number(quota.limit) || 0,
+                    used: Number(quota.used) || 0,
+                    left: quota.left == null ? Infinity : Number(quota.left),
+                    premium: !!quota.premium,
+                    classUnlimited: !!quota.classUnlimited,
+                    resetAt: Number(quota.resetAt) || 0,
+                    clubUrl: String(quota.clubUrl || ''),
+                    message: String(quota.message || ''),
                 };
-            } catch (e) { console.warn('[limits]', e && e.message); }
+            } catch (e) {
+                console.warn('[limits]', e && e.message);
+                // Сеть недоступна — не запираем ученика: без ответа сервера
+                // считаем безлимит. Расход всё равно спишется при следующем
+                // успешном consume, а держать человека взаперти из-за обрыва
+                // связи хуже, чем отдать несколько лишних строк.
+                if (!window._dailyLimitInfo) window._dailyLimitInfo = { limit: 0, left: Infinity };
+            }
+        };
+
+        // Списать расход. Вызывается ПОСЛЕ засчитанных строк (state.js).
+        // Возвращает true, если можно продолжать.
+        window.consumeDailyQuota = async function(amount) {
+            const n = Math.max(1, Math.trunc(Number(amount) || 1));
+            try {
+                const quota = await vpsApiFetch('/api/v1/quota/consume', {
+                    method: 'POST',
+                    body: JSON.stringify({ kind: 'lines', amount: n }),
+                });
+                window._dailyLimitInfo = Object.assign(window._dailyLimitInfo || {}, {
+                    limit: Number(quota.limit) || 0,
+                    used: Number(quota.used) || 0,
+                    left: quota.left == null ? Infinity : Number(quota.left),
+                    resetAt: Number(quota.resetAt) || 0,
+                });
+                return true;
+            } catch (e) {
+                if (e && e.status === 429) {
+                    window._dailyLimitInfo = Object.assign(window._dailyLimitInfo || {}, {
+                        left: 0, used: e.details?.used, limit: e.details?.limit || (window._dailyLimitInfo || {}).limit,
+                    });
+                    if (window.showDailyLimitModal) window.showDailyLimitModal();
+                    return false;
+                }
+                console.warn('[limits] consume', e && e.message);
+                return true; // обрыв связи не должен запирать ученика
+            }
         };
 
         window.loadProgressFromCloud = async function() {

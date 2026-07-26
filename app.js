@@ -326,7 +326,7 @@ function checkAnswers(isSure, auto) {
     isSure = isSure !== false;
     // Дневной лимит строк: обычная тренировка блокируется по достижении лимита.
     // Дуэли (нельзя бросать соперника на середине) и домашка от репетитора — без лимита.
-    if (window.canSolveMore && window.state.currentMode !== 'duel' && !window.state.isHomeworkMode && !window.state.activeHw) {
+    if (window.canSolveMore && !window.isQuotaExempt()) {
         const lim = window.canSolveMore();
         if (!lim.ok) { if (window.showDailyLimitModal) window.showDailyLimitModal(); return; }
     }

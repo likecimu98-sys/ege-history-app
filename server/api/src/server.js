@@ -14,6 +14,7 @@ const {
 const { mergeStateValues } = require('./state-merge');
 const { DocumentStore, accessContext } = require('./store');
 const { MemoryRateLimiter } = require('./rate-limit');
+const { quotaState, consumeQuota, clampAmount } = require('./quota');
 const { startFirebaseMirror } = require('./firebase-mirror');
 
 const store = new DocumentStore();
@@ -431,6 +432,18 @@ async function handle(req, res) {
         documents: found.rows.map(row => ({ id: row.doc_id, data: row.data, version: Number(row.version) })),
       });
     }
+    if (req.method === 'GET' && url.pathname === '/api/v1/quota') {
+      requireSession(session);
+      return json(res, 200, await quotaState(session, await accessContext(session)));
+    }
+    if (req.method === 'POST' && url.pathname === '/api/v1/quota/consume') {
+      requireMutationAuth(req, session);
+      const body = await readJson(req, 4096);
+      const kind = String(body.kind || 'lines').slice(0, 32);
+      const result = await consumeQuota(session, await accessContext(session), clampAmount(body.amount), { kind });
+      if (!result.ok) return json(res, 429, { error: 'daily_limit_reached', ...result });
+      return json(res, 200, result);
+    }
     if (req.method === 'GET' && url.pathname === '/api/v1/me/assignments') {
       const profile = await store.get(studentPath(session.user.canonicalDocId), session);
       return json(res, 200, { assignments: profile.data?.pendingAssignments || [] });
@@ -536,6 +549,8 @@ async function start() {
     pool.query("DELETE FROM login_tokens WHERE COALESCE((data->>'exp')::bigint,0)<$1", [Date.now()]),
     pool.query("DELETE FROM login_sessions WHERE COALESCE((data->>'exp')::bigint,0)<$1", [Date.now()]),
     pool.query("DELETE FROM notification_jobs WHERE status IN ('delivered','failed') AND updated_at<now()-interval '30 days'"),
+    // Счётчики нужны только за сегодня; неделя хранения — запас на разбор жалоб.
+    pool.query("DELETE FROM usage_counters WHERE day < (now() AT TIME ZONE 'Europe/Moscow')::date - 7"),
   ]).catch(error => log('warn', 'maintenance.cleanup.failed', { message: error.message }));
   await cleanupAuthAndQueues();
   setInterval(cleanupAuthAndQueues, 60 * 60 * 1000).unref();
