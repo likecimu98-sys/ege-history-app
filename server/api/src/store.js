@@ -465,26 +465,36 @@ function translatableValue(value) {
 // заведомо шире: точную проверку всё равно делает authorizeRead построчно.
 function rightsPrefilter(ref, ctx, params) {
   if (!ctx || ctx.admin) return null;
-  const own = [];
-  if (ctx.docIds.size) {
-    params.push([...ctx.docIds]);
-    own.push(`doc_id = ANY($${params.length}::text[])`);
-  }
-  params.push(ctx.userId);
-  own.push(`user_id = $${params.length}`);
 
+  // ⚠️ Параметры попадают в params ТОЛЬКО если мы действительно вернём условие.
+  // Раньше они добавлялись сразу, а для коллекций, где сужать права нечем
+  // (матчи, конфиг), функция возвращала null — и запрос уезжал в PostgreSQL с
+  // параметрами, которых нет в тексте запроса. Вывести их тип база не может и
+  // отвечает 42P18 «could not determine data type of parameter $1», роняя запрос
+  // целиком. Так поиск соперника в дуэлях пролежал шесть часов 27.07.2026.
+  const staged = [];
+  const bind = value => { staged.push(value); return `$${params.length + staged.length}`; };
+
+  const own = [];
+  if (ctx.docIds.size) own.push(`doc_id = ANY(${bind([...ctx.docIds])}::text[])`);
+  own.push(`user_id = ${bind(ctx.userId)}`);
+
+  let predicate = null;
   if (ref.collection === 'students') {
     // Учитель видит свой класс И свои собственные документы — второе легко
     // потерять, если оставить только фильтр по классу.
     if (ctx.classes && ctx.classes.size) {
-      params.push([...ctx.classes]);
-      own.push(`data->>'classCode' = ANY($${params.length}::text[])`);
+      own.push(`data->>'classCode' = ANY(${bind([...ctx.classes])}::text[])`);
     }
-    return `(${own.join(' OR ')})`;
+    predicate = `(${own.join(' OR ')})`;
+  } else if (ref.collection === 'state') {
+    predicate = `(${own.join(' OR ')})`;
   }
-  if (ref.collection === 'state') return `(${own.join(' OR ')})`;
   // Матчи и конфиг читаются всеми (с проекцией) — сужать нечем.
-  return null;
+
+  if (!predicate) return null;
+  params.push(...staged);
+  return predicate;
 }
 
 function buildQueryPlan(ref, ctx, constraints, internal) {

@@ -152,3 +152,77 @@ test('applyConstraints по-прежнему источник правды и о
   ]);
   assert.deepEqual(out.map(r => r.doc_id), ['b', 'a', 'd'], 'числовая сортировка и null в конце');
 });
+
+// ── параметры обязаны сходиться с текстом запроса ──
+//
+// 🔴 Регрессия на боевой инцидент 27.07.2026. rightsPrefilter добавлял параметры
+// в массив ДО того, как решал, вернёт ли он условие. Для коллекций, где сужать
+// права нечем (матчи, конфиг), он возвращал null — и запрос уезжал в PostgreSQL
+// с двумя параметрами, которых нет в тексте. Тип вывести не из чего, база
+// отвечает 42P18 «could not determine data type of parameter $1», падает ВЕСЬ
+// запрос. Поиск соперника в дуэлях не работал шесть часов.
+//
+// ⚠️ Почему прежние 13 тестов это пропустили: все они проверяли ТЕКСТ SQL —
+// правильные ли поля, не склеено ли значение в строку, тот ли LIMIT. Текст был
+// безупречен. Несходились текст и params, а на это не смотрел никто.
+// Проверка ниже смотрит именно на связь между ними и потому не зависит от того,
+// какой набор коллекций и ограничений придумают дальше.
+
+function assertParamsMatchSql(plan, label) {
+  const used = new Set([...plan.sql.matchAll(/\$(\d+)/g)].map(m => Number(m[1])));
+  const highest = used.size ? Math.max(...used) : 0;
+  assert.equal(plan.params.length, highest,
+    `${label}: параметров ${plan.params.length}, а в запросе задействовано ${highest} — лишний уедет в базу без типа (42P18)`);
+  for (let i = 1; i <= highest; i++) {
+    assert.ok(used.has(i), `${label}: $${i} пропущен в тексте запроса, нумерация разъехалась`);
+  }
+}
+
+test('в каждом плане параметров ровно столько, сколько задействовано в SQL', () => {
+  const collections = [
+    ['students', 'student_profiles'],
+    ['state', 'student_states'],
+    ['matches', 'duel_matches'],   // ← та самая коллекция, что падала на бою
+    ['classes', 'classes'],
+    ['config', 'app_config'],
+    ['leaderboards', 'leaderboards'],
+  ];
+  const contexts = [
+    ['гость', context({ docIds: ['111'] })],
+    ['гость без документов', context({ docIds: [] })],
+    ['учитель', context({ teacher: {}, classes: ['7A'] })],
+    ['админ', context({ admin: true })],
+  ];
+  const constraintSets = [
+    ['без ограничений', []],
+    ['where', [{ type: 'where', field: 'status', op: '==', value: 'waiting' }]],
+    ['where+limit', [{ type: 'where', field: 'status', op: '==', value: 'waiting' }, { type: 'limit', count: 50 }]],
+    ['orderBy', [{ type: 'orderBy', field: 'totalSolved', direction: 'desc' }, { type: 'limit', count: 10 }]],
+    ['непереводимое where', [{ type: 'where', field: 'x', op: '>=', value: 5 }]],
+    ['where+orderBy', [
+      { type: 'where', field: 'classCode', op: '==', value: '7A' },
+      { type: 'orderBy', field: 'totalSolved', direction: 'desc' },
+    ]],
+  ];
+  for (const [collection, table] of collections) {
+    for (const [ctxName, ctx] of contexts) {
+      for (const [csName, cs] of constraintSets) {
+        for (const internal of [false, true]) {
+          const plan = buildQueryPlan(ref(collection, table), ctx, cs, internal);
+          assertParamsMatchSql(plan, `${collection}/${ctxName}/${csName}${internal ? '/internal' : ''}`);
+        }
+      }
+    }
+  }
+});
+
+test('матчи с where не тащат за собой параметры прав', () => {
+  // Точное воспроизведение боевого запроса: клиент ищет соперника через
+  // where('status','==','waiting') на коллекции матчей (cloud-sync.js:942).
+  const plan = buildQueryPlan(ref('matches', 'duel_matches'), context(), [
+    { type: 'where', field: 'status', op: '==', value: 'waiting' },
+  ], false);
+  assert.ok(!/WHERE.*user_id|doc_id = ANY/.test(plan.sql), 'права по матчам не сужаются — это не изменилось');
+  assert.deepEqual(plan.params, ['status', 'waiting'], 'в базу уезжает ровно два параметра, оба использованы');
+  assert.match(plan.sql, /WHERE data->>\$1 = \$2 LIMIT 500/);
+});
