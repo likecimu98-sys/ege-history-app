@@ -391,6 +391,111 @@ async function authorizeWrite(client, ref, ctx, current, patch, mode, { internal
   }
 }
 
+// ── Трансляция ограничений в SQL ────────────────────────────────────────────
+//
+// Раньше query() делал `SELECT * FROM <table>` БЕЗ WHERE и LIMIT, тянул все
+// строки в Node, проверял права по каждой и только потом фильтровал и резал.
+// Замер на проде: 1201 профиль — 928 мс, из них ~500 мс работы в однопоточном
+// event loop, то есть на это время сервер не отвечал никому. Индексы
+// student_profiles_class_idx и student_profiles_total_idx не использовались ни разу.
+//
+// ⚠️ ГЛАВНЫЙ ИНВАРИАНТ, не нарушай его при правках:
+// SQL-условие здесь — это ПРЕДФИЛЬТР, а не проверка прав. Оно обязано быть
+// НЕ СТРОЖЕ, чем authorizeRead, который по-прежнему выполняется для каждой
+// вернувшейся строки. Пока это так, ошибка в трансляции может стоить лишнего
+// чтения из базы, но не может отдать лишние данные. Сделаешь предфильтр строже
+// — молча потеряешь строки, и никакой тест этого не заметит.
+//
+// По той же причине applyConstraints НЕ убран: он прогоняется поверх результата
+// и остаётся источником правды по семантике. Всё, что не переводится точно,
+// просто не переводится — и отрабатывает по-старому, в JS.
+
+// Поля, о которых точно известно, что они числовые. Нужны для ORDER BY:
+// data->>'field' — это ТЕКСТ, и сортировка по нему лексикографическая, где '9'
+// больше '10'. Приводить к numeric вслепую нельзя — на нечисловом значении
+// запрос упадёт целиком. Поэтому перечень закрытый, остальное сортируется в JS.
+const NUMERIC_SORT_FIELDS = new Set([
+  'totalSolved', 'egePoints', 'weeklyScore', 'weeklyEgePoints', 'lastActive',
+  'duelRating', 'duelElo', 'duelGames', 'duelWins', 'duelLosses', 'duelDraws',
+  'createdAt', 'updatedAt', 'startTime', 'revokeBefore', 'currentUpto',
+]);
+
+// Переводим только скаляры. null и undefined исключены намеренно: `data->>'f'`
+// для JSON-null даёт SQL NULL, а `NULL = 'null'` — это NULL, то есть строка
+// выпала бы, тогда как sameValue(null, null) её оставляет. Предфильтр стал бы
+// строже проверки — ровно то, чего нельзя.
+function translatableValue(value) {
+  const type = typeof value;
+  return value !== null && (type === 'string' || type === 'number' || type === 'boolean');
+}
+
+// Предфильтр по правам. Повторяет ветки authorizeRead, но в виде SQL и
+// заведомо шире: точную проверку всё равно делает authorizeRead построчно.
+function rightsPrefilter(ref, ctx, params) {
+  if (!ctx || ctx.admin) return null;
+  const own = [];
+  if (ctx.docIds.size) {
+    params.push([...ctx.docIds]);
+    own.push(`doc_id = ANY($${params.length}::text[])`);
+  }
+  params.push(ctx.userId);
+  own.push(`user_id = $${params.length}`);
+
+  if (ref.collection === 'students') {
+    // Учитель видит свой класс И свои собственные документы — второе легко
+    // потерять, если оставить только фильтр по классу.
+    if (ctx.classes && ctx.classes.size) {
+      params.push([...ctx.classes]);
+      own.push(`data->>'classCode' = ANY($${params.length}::text[])`);
+    }
+    return `(${own.join(' OR ')})`;
+  }
+  if (ref.collection === 'state') return `(${own.join(' OR ')})`;
+  // Матчи и конфиг читаются всеми (с проекцией) — сужать нечем.
+  return null;
+}
+
+function buildQueryPlan(ref, ctx, constraints, internal) {
+  const params = [];
+  const where = [];
+
+  if (!internal) {
+    const rights = rightsPrefilter(ref, ctx, params);
+    if (rights) where.push(rights);
+  }
+
+  for (const constraint of constraints || []) {
+    if (constraint.type !== 'where' || constraint.op !== '==') continue;
+    if (!constraint.field || !translatableValue(constraint.value)) continue;
+    params.push(String(constraint.field));
+    const field = `$${params.length}`;
+    params.push(String(constraint.value));
+    // Имя поля тоже параметр — в SQL из запроса клиента не попадает ни байта.
+    where.push(`data->>${field} = $${params.length}`);
+  }
+
+  const order = (constraints || []).find(c => c.type === 'orderBy');
+  const limit = Math.min(5000, Math.max(0, Number((constraints || []).find(c => c.type === 'limit')?.count) || 500));
+
+  let orderSql = '';
+  let limitSql = '';
+  if (order && NUMERIC_SORT_FIELDS.has(order.field)) {
+    params.push(String(order.field));
+    // NULLS LAST в обе стороны — так же, как сортирует applyConstraints.
+    orderSql = ` ORDER BY (data->>$${params.length})::numeric ${order.direction === 'asc' ? 'ASC' : 'DESC'} NULLS LAST`;
+    limitSql = ` LIMIT ${limit}`;
+  } else if (!order) {
+    limitSql = ` LIMIT ${limit}`;
+  }
+  // Есть orderBy по нетабличному полю — сортировать и резать будет JS, иначе
+  // LIMIT отрезал бы не те строки.
+
+  const sql = `SELECT doc_id,user_id,data,version FROM ${ref.table}`
+    + (where.length ? ` WHERE ${where.join(' AND ')}` : '')
+    + orderSql + limitSql;
+  return { sql, params };
+}
+
 function filterValue(value, op, expected) {
   if (op === '==') return sameValue(value, expected);
   if (op === '>=') return value >= expected;
@@ -447,7 +552,8 @@ class DocumentStore extends EventEmitter {
     if (!options.internal && !authorizeCollectionQuery(ref, ctx)) {
       throw Object.assign(new Error('forbidden'), { statusCode: 403 });
     }
-    const result = await client.query(`SELECT doc_id,user_id,data,version FROM ${ref.table}`);
+    const plan = buildQueryPlan(ref, ctx, constraints, options.internal);
+    const result = await client.query(plan.sql, plan.params);
     const rows = [];
     for (const row of result.rows) {
       const rowRef = { ...ref, docId: row.doc_id };
@@ -564,5 +670,6 @@ module.exports = {
   protectTeacherClassAssignment, accessContext, publicStudent, COLLECTIONS,
   // Экспортируются ради регрессионных тестов доступа (test/store-access.test.js):
   // права на чтение — самая дорогая ошибка в этом файле, они обязаны быть покрыты.
-  authorizeRead, authorizeCollectionQuery, publicMatch, studentClassView, projectDocument, classDocId
+  authorizeRead, authorizeCollectionQuery, publicMatch, studentClassView, projectDocument, classDocId,
+  buildQueryPlan, applyConstraints
 };
