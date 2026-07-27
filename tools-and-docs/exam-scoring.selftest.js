@@ -67,4 +67,35 @@ assert.strictEqual(conceptConflict.points, 0);
 assert.strictEqual(conceptConflict.matchType, 'known-answer-conflict');
 assert.strictEqual(scoring.scoreTask({ kim: 10, answer: 'Севастополь' }, 'севастопль').points, 1);
 
+// ── Форма записи ответа ──────────────────────────────────────────────────────
+//
+// ⚠️ Это регрессия на баг, живший в проде. Флаг acceptedWithWarning красит ответ
+// как неверный, кладёт задание в работу над ошибками и не выпускает его из
+// ротации пробника. До 27.07.2026 его ставила ЛЮБАЯ разница в знаках: точка в
+// конце, запятая, кавычки, двойной или неразрывный пробел — то есть полностью
+// верный ответ выглядел небрежным.
+// На бланке ЕГЭ знаки препинания не вводят вообще; значимо только различие
+// ВНУТРИ слова — пропущенный дефис. Именно эту границу и проверяем.
+function formNoise(kim, expected, typed) {
+  const result = scoring.scoreTask({ kim, answer: expected }, typed);
+  assert.strictEqual(result.points, 1, `должно быть засчитано: ${JSON.stringify(typed)}`);
+  assert.ok(!result.acceptedWithWarning,
+    `предупреждение о форме записи здесь лишнее: ${JSON.stringify(typed)} при эталоне ${JSON.stringify(expected)}`);
+}
+
+formNoise(10, 'Санкт-Петербург', 'Санкт-Петербург.');
+formNoise(10, 'Санкт-Петербург', 'Санкт-Петербург,');
+formNoise(10, 'Санкт-Петербург', '«Санкт-Петербург»');
+formNoise(10, 'Санкт-Петербург', 'Санкт-Петербург!');
+formNoise(9, 'Ярослав Мудрый', 'Ярослав  Мудрый');
+formNoise(9, 'Ярослав Мудрый', 'Ярослав Мудрый');
+formNoise(10, 'Сталинград', ' Сталинград ');
+formNoise(10, 'Сталинград', 'сталинград');
+
+// А вот здесь предупреждение обязано остаться: пропущенный дефис — это другая
+// запись слова, а не оформление.
+const missingHyphen = scoring.scoreTask({ kim: 10, answer: 'Санкт-Петербург' }, 'Санкт Петербург');
+assert.strictEqual(missingHyphen.points, 1, 'ответ всё-таки верный, балл ставится');
+assert.ok(missingHyphen.acceptedWithWarning, 'пропущенный дефис должен предупреждать');
+
 console.log('exam-scoring: ok');
