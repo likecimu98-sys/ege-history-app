@@ -10,7 +10,34 @@ function csrfToken() {
   try { return decodeURIComponent(item.slice(item.indexOf('=') + 1)); } catch (_) { return ''; }
 }
 
+// Схлопывание ОДНОВРЕМЕННЫХ GET-запросов по одному адресу. На холодном старте
+// несколько независимых веток загрузки (авторизация, слияние аккаунтов, подписки
+// на ДЗ, синхронизация) стартуют почти одновременно и каждая идёт в сеть сама:
+// замер до правки — 31 обращение к API у гостя, ничего не нажавшего, из них
+// один и тот же документ читался до шести раз.
+//
+// ⚠️ Схлопывается только запрос В ПОЛЁТЕ, а не результат: как только ответ
+// пришёл, запись выбрасывается. Кэшировать ответы НЕЛЬЗЯ — на свежести этих
+// документов держатся слияние аккаунтов, приглашение в класс и выдача ДЗ,
+// и устаревшая копия уже приводила к потере класса при первом входе (журнал за
+// 22.07). Дедупликация в полёте такого класса ошибок не создаёт: она отдаёт
+// ровно то же, что вернул бы параллельный запрос.
+// Только GET: мутации схлопывать нельзя, две записи — это две записи.
+const inflightGets = new Map();
+
 async function apiFetch(path, options = {}) {
+  const method = (options.method || 'GET').toUpperCase();
+  if (method === 'GET') {
+    const running = inflightGets.get(path);
+    if (running) return running;
+    const request = apiFetchRaw(path, options).finally(() => inflightGets.delete(path));
+    inflightGets.set(path, request);
+    return request;
+  }
+  return apiFetchRaw(path, options);
+}
+
+async function apiFetchRaw(path, options = {}) {
   const headers = new Headers(options.headers || {});
   if (options.body && !headers.has('Content-Type')) headers.set('Content-Type', 'application/json');
   if (options.method && !['GET', 'HEAD', 'OPTIONS'].includes(options.method.toUpperCase())) {
@@ -225,16 +252,11 @@ class VpsQuerySnapshot {
 }
 
 export async function getDoc(ref) {
-  if (/\/public\/data\/leaderboards\/global$/.test(ref.path)) {
-    const payload = await apiFetch(`${API}/leaderboards`);
-    const top = (payload.rows || []).map(row => ({ ...(row.data || {}), id: row.id }));
-    return new VpsDocSnapshot(ref, {
-      exists: true,
-      id: ref.id,
-      data: { top, updatedAt: Date.now() },
-      version: 0,
-    });
-  }
+  // Ветка leaderboards/global удалена 27.07.2026 вместе с клиентским кэшем
+  // лидерборда: он складывал топ-20 профилей с @username в общий документ.
+  // Рейтинг отдаёт GET /api/v1/leaderboards, и форма ответа у него другая —
+  // оставшаяся ветка молча отдавала бы пустые строки.
+  // Одновременные чтения одного адреса схлопывает apiFetch.
   const payload = await apiFetch(`${API}/store/doc?path=${encodeURIComponent(ref.path)}`);
   documentVersions.set(ref.path, Number(payload.version) || 0);
   return new VpsDocSnapshot(ref, payload);

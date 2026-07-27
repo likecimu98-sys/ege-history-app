@@ -6,7 +6,7 @@ const { env } = require('./env');
 const { pool, tx, runMigrations } = require('./db');
 const { verifyInitData } = require('./initdata');
 const { timingSafeEqualText, randomToken, sha256 } = require('./crypto');
-const { json, redirect, readJson, requestIp, safeReturnTo } = require('./http');
+const { json, redirect, readJson, requestIp, safeReturnTo, parseCookies } = require('./http');
 const {
   resolveIdentity, loadUser, createSession, sessionCookies, clearSessionCookies, getSession,
   revokeSession, csrfValid, userForClient, createGuest, createGoogleStart, finishGoogle, claimLegacyDocument,
@@ -232,8 +232,23 @@ async function handle(req, res) {
   const started = Date.now();
   const url = new URL(req.url, env.publicOrigin);
   const ip = requestIp(req);
-  const bucket = limiter.take(`${ip}:all`, 300);
+  // ⚠️ Общий лимит считается по ПАРЕ сессия+IP, а не по одному IP.
+  // Почему: за школьным NAT весь класс приходит с одного адреса, и лимит 300/мин
+  // на IP выжигался ещё на входе — 25 человек по 25 обращений холодного старта
+  // это 625 запросов в первую же минуту урока. Ровно этот механизм сработал
+  // 23.07 в кабинете учителя. По IP остаётся только грубый потолок от ботов,
+  // заведомо выше, чем может дать живой класс.
+  //
+  // ⚠️ Счётчики живут в памяти ОДНОГО процесса (MemoryRateLimiter). Сейчас это
+  // верно: pm2 запускает hist-api в режиме fork, instances: 1 (ecosystem.config.cjs).
+  // Включишь кластер — лимит расползётся по процессам и перестанет держать;
+  // тогда счётчики надо унести в общее хранилище.
+  const sessionKey = parseCookies(req.headers.cookie)[env.sessionCookie] || '';
+  const scope = sessionKey ? `s:${sha256(sessionKey).slice(0, 24)}` : `ip:${ip}`;
+  const bucket = limiter.take(`${scope}:all`, 300);
   if (!bucket.ok) return json(res, 429, { error: 'rate_limited' }, { 'Retry-After': String(Math.ceil((bucket.resetAt - Date.now()) / 1000)) });
+  const ipCeiling = limiter.take(`${ip}:ceiling`, 3000);
+  if (!ipCeiling.ok) return json(res, 429, { error: 'rate_limited' }, { 'Retry-After': String(Math.ceil((ipCeiling.resetAt - Date.now()) / 1000)) });
 
   try {
     if (url.pathname.startsWith('/internal/')) return await handleInternal(req, res, url);

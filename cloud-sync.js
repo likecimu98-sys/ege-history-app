@@ -3307,9 +3307,47 @@
             return normalized;
         }
 
+        // Память на результат проверки роли. Ключ — uid: при смене личности
+        // (гость → вход через Telegram) ответ обязан перезапрашиваться, иначе
+        // учитель, вошедший поверх гостевой сессии, останется «учеником».
+        let _roleMemo = null; // {uid, at, promise}
+        const ROLE_MEMO_MS = 2 * 60 * 1000;
+
         // Роль учителя подтверждает только серверная сессия. localStorage/known_tg_id —
         // лишь клиентская подсказка для синхронизации и никогда не источник прав.
-        window.checkTeacherRole = async function() {
+        //
+        // Обёртка нужна вот зачем. Функцию зовут из четырёх мест (смена состояния
+        // авторизации, синхронизация прогресса, открытие кабинета ×2), и на холодном
+        // старте это давало ЧЕТЫРЕ запроса /api/v1/teacher/classes, у гостя все
+        // четыре — заведомые 403. У гостя роли быть не может в принципе: она лежит
+        // в teacher_profiles по Telegram ID, которого у него нет.
+        window.checkTeacherRole = function(force) {
+            const uid = fbUser ? String(fbUser.uid || '') : '';
+
+            // Гость: не спрашиваем сервер вовсе. Ответ известен заранее.
+            if (fbUser && fbUser.isAnonymous) {
+                window.state.isTeacherAdmin = false;
+                window._isGlobalAdmin = false;
+                window._teacherRole = 'student';
+                window._teacherOrgId = null;
+                window._teacherGroups = [];
+                window._teacherRoleVerifiedAt = 0;
+                return Promise.resolve(false);
+            }
+
+            const fresh = !force && _roleMemo && _roleMemo.uid === uid
+                && Date.now() - _roleMemo.at < ROLE_MEMO_MS;
+            if (fresh) return _roleMemo.promise;
+
+            const promise = _checkTeacherRoleUncached().catch(err => {
+                _roleMemo = null; // неудачу не запоминаем — иначе учитель залипнет учеником
+                throw err;
+            });
+            _roleMemo = { uid, at: Date.now(), promise };
+            return promise;
+        };
+
+        async function _checkTeacherRoleUncached() {
             window.state.isTeacherAdmin = false;
             window._isGlobalAdmin = false;
             window._teacherRole = 'student';
