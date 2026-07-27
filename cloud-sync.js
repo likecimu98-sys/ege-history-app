@@ -7,14 +7,14 @@
             signInWithCredential, signOut, initializeFirestore, collection, doc, setDoc, getDoc,
             getDocs, addDoc, updateDoc, deleteDoc, deleteField, onSnapshot, query, where,
             orderBy, limit, runTransaction, arrayUnion, arrayRemove, vpsApiFetch, refreshVpsAuth
-        } from "./vps-sync-compat.js?v=20260727-2";
+        } from "./vps-sync-compat.js?v=20260727-3";
 
         // jsPDF грузился с cdnjs.cloudflare.com без SRI — то есть посторонний скрипт
         // исполнялся с полными правами страницы, а при недоступности CDN (у части
         // нашей аудитории это обычное дело) экспорт PDF просто не работал. Довод тот
         // же, что и для telegram-web-app.js: своя копия с того же origin.
         // Версия совпадает с прежней CDN-ной — 2.5.1, лежит в vendor/.
-        const VENDOR_JSPDF = 'vendor/jspdf.umd.min.js?v=20260727-2';
+        const VENDOR_JSPDF = 'vendor/jspdf.umd.min.js?v=20260727-3';
 
         const cloudConfig = { projectId: 'vps-postgresql' };
         
@@ -475,11 +475,7 @@
                 const storedName = localStorage.getItem('student_manual_name') || gName;
                 if (storedName && !nameEl.value) nameEl.value = storedName;
             }
-            const classEl = $('profile-class-code');
-            if (classEl) {
-                const storedClass = localStorage.getItem('student_class_code') || '';
-                if (storedClass && !classEl.value) classEl.value = storedClass;
-            }
+            if (window.renderProfileClass) window.renderProfileClass();
         }
 
         // ─── Main auth bootstrap ─────────────────────────────────────────────────
@@ -793,9 +789,8 @@
                 
                 // Update UI with loaded name/class
                 const nameEl = $('profile-name-input');
-                const classEl = $('profile-class-code');
                 if (nameEl && localStorage.getItem('student_manual_name')) nameEl.value = localStorage.getItem('student_manual_name');
-                if (classEl && localStorage.getItem('student_class_code')) classEl.value = localStorage.getItem('student_class_code');
+                if (window.renderProfileClass) window.renderProfileClass();
                 // Update Google status UI
                 if (googleProvider) {
                     const statusEl = $('profile-google-status');
@@ -2638,10 +2633,77 @@
             return String(code || '').trim().replace(/[\/#?%]/g, '_');
         }
         // Догрузить старые ДЗ своего класса (вызывается при входе и при выборе класса). Идемпотентно по id.
+        // ─── Своя группа: показать и выйти ──────────────────────────────────
+        // Поле ручного ввода кода убрали 20.07.2026, когда вступление перевели на
+        // ссылки-приглашения. Взамен не показали ничего: человек не видел, в какой он
+        // группе, и выйти не мог вовсе. Вылезло на учителе, который случайно открыл
+        // ссылку собственной группы и застрял в ней вместе со всеми её ДЗ.
+        window.renderProfileClass = function() {
+            const block = document.getElementById('profile-class-block');
+            if (!block) return;
+            const code = localStorage.getItem('student_class_code') || '';
+            if (!code) { block.classList.add('hidden'); return; }
+            block.classList.remove('hidden');
+            const label = document.getElementById('profile-class-name');
+            if (label) {
+                // Имя группы знаем не всегда (код приходит раньше документа класса) —
+                // тогда честно показываем код, а не пустое место.
+                const known = (window._teacherGroups || []).find(g => g && _classDocId(g.code) === _classDocId(code));
+                label.textContent = (known && known.name) || window._classDisplayName || code;
+            }
+        };
+
+        window.leaveClass = async function() {
+            const code = localStorage.getItem('student_class_code') || '';
+            if (!code) return;
+            if (!confirm(`Выйти из группы «${code}»?\n\nЗадания группы больше приходить не будут. Вернуться можно по ссылке преподавателя.`)) return;
+            try {
+                // Локальное состояние чистим ПЕРВЫМ: даже если запись в облако не
+                // пройдёт (офлайн), человек уже вышел и ДЗ группы не подтянутся.
+                localStorage.removeItem('student_class_code');
+                localStorage.removeItem('class_current_upto');
+                localStorage.removeItem('class_current_period');
+                const canonicalId = fbUser ? resolveUserId(fbUser) : '';
+                if (canonicalId && db) {
+                    // leftClassAt — тот же признак, которым учитель выпускает ученика:
+                    // сервер по нему понимает, что пустой classCode это осознанный
+                    // выход, а не потерянное при синхронизации значение.
+                    await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'students', canonicalId),
+                        { classCode: '', inviteClassCode: '', leftClassAt: Date.now() }, { merge: true });
+                }
+                window.renderProfileClass();
+                if (window.refreshHwState) window.refreshHwState();
+                if (window.updateHwNavBadge) window.updateHwNavBadge();
+                if (window.updateGlobalUI) window.updateGlobalUI();
+                showToast('🎓', 'Ты вышел из группы', 'bg-blue-500', 'border-blue-700');
+            } catch (e) {
+                console.error('leaveClass error:', e);
+                showToast('⚠️', 'Не удалось сохранить выход — попробуй ещё раз', 'bg-rose-500', 'border-rose-700');
+            }
+        };
+
         window.pullClassAssignments = async function(rawCode) {
             if (!db) return;
             const code = _classDocId(rawCode);
             if (!code) return;
+
+            // Учителю собственной группы её ДЗ как свои не подтягиваем.
+            //
+            // Он попадал сюда, случайно открыв ссылку-приглашение своей же группы, и
+            // получал ВСЕ её задания в свою домашку. Причину чиним в боте (он больше
+            // не записывает преподавателя учеником), но здесь нужна вторая линия: у
+            // тех, кто уже залип, ДЗ подтягивались при каждом входе заново.
+            //
+            // Роль ждём с потолком по времени и при таймауте подтягиваем как раньше:
+            // ученик без домашки — реальная поломка, учитель с лишней домашкой на
+            // пару секунд — косметика. Ошибаться надо в эту сторону.
+            try {
+                if (window.checkTeacherRole) {
+                    await Promise.race([window.checkTeacherRole(), new Promise(r => setTimeout(r, 3000))]);
+                }
+                if ((window._teacherGroups || []).some(g => g && _classDocId(g.code) === code)) return;
+            } catch (e) { /* роль не выяснилась — ведём себя как раньше */ }
+
             try {
                 const ref = doc(db, 'artifacts', appId, 'public', 'data', 'classes', code);
                 const snap = await getDoc(ref);
@@ -3447,8 +3509,7 @@
             const previousCode = localStorage.getItem('student_class_code') || '';
             if (inviteCode) localStorage.setItem('student_class_code', inviteCode);
             else localStorage.removeItem('student_class_code');
-            const classInput = document.getElementById('profile-class-code');
-            if (classInput) classInput.value = inviteCode;
+            if (window.renderProfileClass) window.renderProfileClass();
 
             if (notify) {
                 const lastConsumed = Number(localStorage.getItem('consumed_invite_at') || 0);
@@ -3701,8 +3762,7 @@
                 }
                 if (bestData?.classCode && !localStorage.getItem('student_class_code')) {
                     localStorage.setItem('student_class_code', bestData.classCode);
-                    const classEl = document.getElementById('profile-class-code');
-                    if (classEl) classEl.value = bestData.classCode;
+                    if (window.renderProfileClass) window.renderProfileClass();
                 }
                 if (bestData?.tgId && /^\d+$/.test(String(bestData.tgId))) localStorage.setItem('known_tg_id', String(bestData.tgId));
                 if (bestData?.knownTgId && /^\d+$/.test(String(bestData.knownTgId))) localStorage.setItem('known_tg_id', String(bestData.knownTgId));

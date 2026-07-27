@@ -729,6 +729,7 @@ const ACTION_HANDLERS = {
     shareTelegram:          () => window.shareTelegram?.(),
     closeGameOverModal:     () => window.closeGameOverModal?.(),
     signInWithGoogle:       () => window.signInWithGoogle?.(),
+    leaveClass:             () => window.leaveClass?.(),
     logoutAccount:          () => window.logoutAccount?.(),
     deleteAccount:          () => window.deleteAccount?.(),
     saveProfileName:        () => window.saveProfileName?.(),

@@ -99,15 +99,15 @@
     <link rel="manifest" href="manifest.webmanifest">
     <link rel="icon" type="image/png" href="assets/icons/icon-192.png">
     <link rel="apple-touch-icon" href="assets/icons/icon-180.png">
-    <link rel="stylesheet" href="tokens.css?v=20260727-2">
-    <link rel="stylesheet" href="output.css?v=20260727-2">
-    <link rel="stylesheet" href="theme-classic.css?v=20260727-2">
-    <link rel="stylesheet" href="styles.css?v=20260727-2">
+    <link rel="stylesheet" href="tokens.css?v=20260727-3">
+    <link rel="stylesheet" href="output.css?v=20260727-3">
+    <link rel="stylesheet" href="theme-classic.css?v=20260727-3">
+    <link rel="stylesheet" href="styles.css?v=20260727-3">
     
     <!-- Самохостинг telegram-web-app.js: telegram.org часто недоступен (сеть/VPN),
          тогда window.Telegram не создавался → known_tg_id не считывался → случайный id «через раз».
          Локальная копия отдаётся с того же origin и кэшируется service worker'ом. -->
-    <script src="vendor/telegram-web-app.js?v=20260727-2" defer></script>
+    <script src="vendor/telegram-web-app.js?v=20260727-3" defer></script>
 
     <style>
         /* Этот inline-блок намеренно МИНИМАЛЕН: только то, что должно сработать на
@@ -333,7 +333,7 @@
 
     <script>
       (function() {
-        var BOOT_RELEASE = '20260727-2';
+        var BOOT_RELEASE = '20260727-3';
         var bootT0 = Date.now();
         function bootSignal(phase, detail) {
           try {
@@ -527,24 +527,24 @@
     <!-- Телеметрия идёт ПЕРВОЙ и ни от чего не зависит: если приложение сломается
          на старте, именно она должна об этом сообщить. Не defer — обработчики
          ошибок обязаны стоять до выполнения остальных скриптов. Файл крошечный. -->
-    <script src="telemetry.js?v=20260727-2"></script>
+    <script src="telemetry.js?v=20260727-3"></script>
 
     <!-- JS разбит на модули: config → utils → state → table → ui → modes → app -->
     <!-- Порядок defer гарантирован браузером: выполняются строго по порядку в DOM -->
-    <script src="config.js?v=20260727-2" defer></script>
-    <script src="utils.js?v=20260727-2" defer></script>
-    <script src="exam-scoring.js?v=20260727-2" defer></script>
-    <script src="state.js?v=20260727-2" defer></script>
-    <script src="table.js?v=20260727-2" defer></script>
-    <script src="ui.js?v=20260727-2" defer></script>
-    <script src="modes.js?v=20260727-2" defer></script>
-    <script src="swipe-data.js?v=20260727-2" defer></script>
-    <script src="swipe-mode.js?v=20260727-2" defer></script>
-    <script src="match-mode.js?v=20260727-2" defer></script>
-    <script src="vov-mode.js?v=20260727-2" defer></script>
-    <script src="visual-trainer.js?v=20260727-2" defer></script>
-    <script src="exam-mode.js?v=20260727-2" defer></script>
-    <script src="app.js?v=20260727-2" defer></script>
+    <script src="config.js?v=20260727-3" defer></script>
+    <script src="utils.js?v=20260727-3" defer></script>
+    <script src="exam-scoring.js?v=20260727-3" defer></script>
+    <script src="state.js?v=20260727-3" defer></script>
+    <script src="table.js?v=20260727-3" defer></script>
+    <script src="ui.js?v=20260727-3" defer></script>
+    <script src="modes.js?v=20260727-3" defer></script>
+    <script src="swipe-data.js?v=20260727-3" defer></script>
+    <script src="swipe-mode.js?v=20260727-3" defer></script>
+    <script src="match-mode.js?v=20260727-3" defer></script>
+    <script src="vov-mode.js?v=20260727-3" defer></script>
+    <script src="visual-trainer.js?v=20260727-3" defer></script>
+    <script src="exam-mode.js?v=20260727-3" defer></script>
+    <script src="app.js?v=20260727-3" defer></script>
 
     <!-- ШАПКА -->
     <header id="main-header" class="sticky top-0 z-50 no-print transition-colors duration-400 pt-2 pb-2 sm:pt-3 sm:pb-3 px-4">
@@ -1333,6 +1333,22 @@
                 </button>
             </div>
             <div class="shrink-0"><label class="block text-[10px] font-black text-gray-500 uppercase tracking-widest mb-1.5 px-1">Имя и Фамилия</label><input type="text" id="profile-name-input" placeholder="Иванов Иван, 11 'А'" class="w-full p-3.5 border border-gray-200 rounded-2xl dark:bg-[#181818] dark:border-[#2c2c2c] dark:text-gray-300 outline-none font-bold shadow-inner text-sm"></div>
+            <!-- Группа. Поле ручного ввода кода убрали 20.07 вместе с переходом на
+                 ссылки-приглашения, но взамен не показали НИЧЕГО: человек не видел, в
+                 какой он группе, и не мог из неё выйти. Здесь только показ и выход —
+                 вступление по-прежнему через ссылку учителя. -->
+            <div id="profile-class-block" class="shrink-0 hidden">
+                <label class="block font-black text-gray-500 uppercase tracking-widest mb-1.5 px-1" style="font-size:var(--t-micro)">Группа</label>
+                <div class="flex items-center gap-2 w-full p-3 border border-gray-200 rounded-2xl dark:bg-[#181818] dark:border-[#2c2c2c] shadow-inner">
+                    <span class="text-base leading-none">🎓</span>
+                    <span id="profile-class-name" class="flex-1 min-w-0 truncate font-black text-sm text-gray-700 dark:text-gray-300"></span>
+                    <!-- Размеры инлайном, а не классами Tailwind: output.css собран
+                         заранее, и произвольные значения вроде min-h-[44px] в него не
+                         попадают без пересборки — кнопка молча выходила 40px. -->
+                    <button type="button" data-action="leaveClass" class="shrink-0 px-3 -my-1 font-black text-rose-600 dark:text-rose-400 active:scale-95 transition-transform" style="font-size:var(--t-label);min-height:var(--tap-min,44px)">Выйти</button>
+                </div>
+                <div id="profile-class-hint" class="mt-1.5 px-1 font-bold text-gray-400 leading-snug" style="font-size:var(--t-micro)">Задания группы приходят от преподавателя. Вернуться можно по его ссылке.</div>
+            </div>
             <!-- Выбор темы удалён (2026-07-18): единственная тема — классика (skin-classic на body) -->
             <!-- PIN -->
             <div class="shrink-0 bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-200 dark:border-indigo-800/40 rounded-2xl p-3 flex flex-col gap-2">
@@ -1353,7 +1369,9 @@
             <!-- Документы и удаление аккаунта. Право на удаление, заявленное в
                  политике, обязано иметь кнопку — иначе политика фикция. -->
             <div class="shrink-0 flex flex-col gap-2 pt-1">
-                <div class="flex flex-wrap gap-x-3 gap-y-1 px-1">
+                <!-- Отступ инлайном: gap-x-3/gap-y-1 в собранном output.css отсутствуют,
+                     и ссылки склеивались в «Обработка данныхПравила». -->
+                <div class="flex flex-wrap px-1" style="gap:4px 12px">
                     <a href="/legal/privacy.html" target="_blank" rel="noopener" class="text-[11px] font-bold text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 underline">Обработка данных</a>
                     <a href="/legal/terms.html" target="_blank" rel="noopener" class="text-[11px] font-bold text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 underline">Правила</a>
                 </div>
@@ -1420,11 +1438,11 @@
     <!-- jsPDF грузится лениво (см. loadJsPDFOnDemand в cloud-sync.js) — не нужен при старте -->
 
     <!-- === PWA + first-party cloud sync loader === -->
-    <script src="pwa.js?v=20260727-2" defer></script>
+    <script src="pwa.js?v=20260727-3" defer></script>
 
     <!-- Ядро (факты, ~659 КБ): нужно для лобби и заданий. Приложение ОТКРЫВАЕТСЯ сразу
          после него — defer парсит HTML параллельно, порядок выполнения гарантирован. -->
-    <script src="data.js?v=20260727-2" defer></script>
+    <script src="data.js?v=20260727-3" defer></script>
     <!-- app:ready диспатчит инлайн-вотчер готовности в начале <body> (см. watchBoot):
          отдельный boot-ready.js убран — свежий файл не лежал в старом SW-кэше и на
          моргнувшей сети вис, не давая снять заставку. -->
