@@ -1,7 +1,7 @@
 'use strict';
 
 const { OAuth2Client } = require('google-auth-library');
-const { env } = require('./env');
+const { env, originAllowed } = require('./env');
 const { pool, tx } = require('./db');
 const { randomToken, sha256, base64url } = require('./crypto');
 const { parseCookies, cookie, requestIp } = require('./http');
@@ -196,7 +196,7 @@ async function revokeSession(req) {
 function csrfValid(req, session) {
   if (!session) return false;
   const origin = String(req.headers.origin || '');
-  if (origin && origin !== env.publicOrigin) return false;
+  if (!originAllowed(origin)) return false;
   const raw = String(req.headers['x-csrf-token'] || '');
   return !!raw && sha256(raw) === session.csrfHash && raw === session.cookies[env.csrfCookie];
 }

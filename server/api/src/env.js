@@ -48,6 +48,17 @@ const env = {
   host: value('API_HOST', '127.0.0.1'),
   port: integer('API_PORT', 8792),
   publicOrigin: value('PUBLIC_ORIGIN', 'https://reshay-istoriyu.ru').replace(/\/$/, ''),
+  // Дополнительные origin, с которых принимаются мутации. Список ЗАКРЫТЫЙ и
+  // задаётся вручную: проверка Origin — половина защиты от CSRF, подстановочные
+  // маски тут недопустимы.
+  //
+  // Зачем появился (27.07.2026): www.reshay-istoriyu.ru переведён в режим
+  // DNS-only и ходит прямо на сервер мимо Cloudflare — это запасной адрес для
+  // тех, у кого основной домен не открывается. Страница под ним грузилась, но
+  // ЛЮБАЯ запись падала с csrf_failed: браузер шлёт Origin с www, а сверялись
+  // мы ровно с одним значением. То есть человек занимался, а прогресс не
+  // сохранялся — молча, потому что ошибка видна только в консоли.
+  extraOrigins: value('EXTRA_ORIGINS', '').split(',').map(s => s.trim().replace(/\/$/, '')).filter(Boolean),
   databaseUrl: value('DATABASE_URL'),
   databaseSsl: bool('DATABASE_SSL'),
   dbPoolMax: Math.min(50, Math.max(2, integer('DB_POOL_MAX', 10))),
@@ -72,4 +83,17 @@ const env = {
   guestCleanupDays: Math.max(7, integer('GUEST_CLEANUP_DAYS', 30)),
 };
 
-module.exports = { env, readEnvFile };
+// Единственное место, где решается «принимаем ли мутацию с этого origin».
+// Раньше сравнение было рассыпано тремя копиями `origin !== env.publicOrigin`
+// (auth.js и два места в server.js), и добавление запасного адреса требовало
+// вспомнить про все три. Пропустишь одну — часть запросов молча отвергается.
+const allowedOrigins = new Set([env.publicOrigin, ...env.extraOrigins]);
+function originAllowed(origin) {
+  // Пустой Origin пропускаем: его не шлют не-CORS запросы и часть WebView.
+  // Защита от подделки держится на втором множителе — CSRF-токене из куки,
+  // который чужой сайт прочитать не может.
+  if (!origin) return true;
+  return allowedOrigins.has(String(origin).replace(/\/$/, ''));
+}
+
+module.exports = { env, readEnvFile, originAllowed, allowedOrigins };

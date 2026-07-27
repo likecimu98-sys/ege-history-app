@@ -2,7 +2,7 @@
 
 const http = require('http');
 const { WebSocket, WebSocketServer } = require('ws');
-const { env } = require('./env');
+const { env, originAllowed } = require('./env');
 const { pool, tx, runMigrations } = require('./db');
 const { verifyInitData } = require('./initdata');
 const { timingSafeEqualText, randomToken, sha256 } = require('./crypto');
@@ -531,7 +531,7 @@ async function handle(req, res) {
       // портить метрики. Отсутствующий Origin допускаем: sendBeacon при уходе
       // со страницы его иногда не ставит.
       const origin = String(req.headers.origin || '');
-      if (origin && origin !== env.publicOrigin) throw Object.assign(new Error('origin_forbidden'), { statusCode: 403 });
+      if (!originAllowed(origin)) throw Object.assign(new Error('origin_forbidden'), { statusCode: 403 });
       if (!limiter.take(`${scope}:telemetry`, MAX_EVENTS_PER_MINUTE).ok) {
         return json(res, 429, { error: 'rate_limited' });
       }
@@ -600,7 +600,7 @@ server.on('upgrade', async (req, socket, head) => {
   try {
     const url = new URL(req.url, env.publicOrigin);
     if (url.pathname !== '/api/v1/duels/ws' && url.pathname !== '/api/v1/store/ws') throw new Error('not_found');
-    if (String(req.headers.origin || '') !== env.publicOrigin) throw new Error('origin_forbidden');
+    if (!originAllowed(String(req.headers.origin || ''))) throw new Error('origin_forbidden');
     const session = await getSession(req, { touch: false });
     if (!session) throw new Error('unauthorized');
     req.vpsSession = session;
