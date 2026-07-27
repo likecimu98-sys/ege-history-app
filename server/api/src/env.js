@@ -65,6 +65,11 @@ const env = {
   firebaseServiceAccount: value('FIREBASE_SERVICE_ACCOUNT', '/root/bot/serviceAccount.json'),
   firebaseAppId: value('FIREBASE_APP_ID', 'ege-history-bot'),
   mirrorFirebase: bool('MIRROR_FIREBASE'),
+  // Уборка брошенных гостевых аккаунтов. ВЫКЛЮЧЕНА по умолчанию намеренно:
+  // это удаление данных, и включать его должен человек, посмотрев на число
+  // затрагиваемых записей. Включается GUEST_CLEANUP=1 в /etc/ege-history/api.env.
+  guestCleanup: bool('GUEST_CLEANUP'),
+  guestCleanupDays: Math.max(7, integer('GUEST_CLEANUP_DAYS', 30)),
 };
 
 module.exports = { env, readEnvFile };

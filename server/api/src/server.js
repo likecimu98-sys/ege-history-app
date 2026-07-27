@@ -16,6 +16,7 @@ const { DocumentStore, accessContext } = require('./store');
 const { MemoryRateLimiter } = require('./rate-limit');
 const { quotaState, consumeQuota, clampAmount } = require('./quota');
 const { recordClientError, recordEvents, metricsSummary, MAX_EVENTS_PER_MINUTE } = require('./telemetry');
+const { countStaleGuests, deleteStaleGuests } = require('./guest-cleanup');
 const { startFirebaseMirror } = require('./firebase-mirror');
 
 const store = new DocumentStore();
@@ -650,6 +651,18 @@ async function start() {
     pool.query("DELETE FROM notification_jobs WHERE status IN ('delivered','failed') AND updated_at<now()-interval '30 days'"),
     // Счётчики нужны только за сегодня; неделя хранения — запас на разбор жалоб.
     pool.query("DELETE FROM usage_counters WHERE day < (now() AT TIME ZONE 'Europe/Moscow')::date - 7"),
+    // ⚠️ Уборка гостей — единственное здесь, что удаляет ПОЛЬЗОВАТЕЛЕЙ, поэтому
+    // она под флагом и по умолчанию выключена. Число затронутых записей
+    // логируется всегда, даже когда удаление отключено, — чтобы можно было
+    // посмотреть на цифру до того, как включать.
+    (async () => {
+      const days = env.guestCleanupDays;
+      const candidates = await countStaleGuests(days);
+      if (!candidates) return;
+      if (!env.guestCleanup) { log('info', 'guests.cleanup.dry', { candidates, days }); return; }
+      const removed = await deleteStaleGuests(days);
+      log('warn', 'guests.cleanup.done', { removed, candidates, days });
+    })(),
   ]).catch(error => log('warn', 'maintenance.cleanup.failed', { message: error.message }));
   await cleanupAuthAndQueues();
   setInterval(cleanupAuthAndQueues, 60 * 60 * 1000).unref();
