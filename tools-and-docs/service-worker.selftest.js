@@ -182,7 +182,34 @@ function bootHtmlIsOneAtomicRelease() {
     }
 }
 
+// Кэш картинок не должен зависеть от версии приложения.
+//
+// Инвариант введён 27.07.2026. До него ASSET_CACHE звался
+// `ege-history-assets-${APP_VERSION}`, а cleanupOldCaches сносит любой кэш вне
+// CACHE_NAMES — то есть каждый бамп версии выбрасывал весь кэш картинок, и
+// пользователи заново качали 41 МБ (244 файла), хотя ни один не менялся.
+// Проверка стоит здесь, потому что глазом такое не видно вообще: приложение
+// работает, просто у людей молча уходит мобильный трафик.
+function assetCacheIsIndependentOfAppVersion() {
+    const assetCacheLine = source.match(/const ASSET_CACHE = [^\n]+/);
+    assert.ok(assetCacheLine, 'ASSET_CACHE не найден');
+    assert.ok(
+        !/APP_VERSION/.test(assetCacheLine[0]),
+        'имя кэша картинок снова завязано на APP_VERSION — каждый релиз будет стоить пользователю 41 МБ'
+    );
+    assert.match(assetCacheLine[0], /ASSET_MANIFEST_VERSION/,
+        'кэш картинок должен версионироваться составом набора, а не версией приложения');
+    assert.match(source, /const ASSET_MANIFEST_VERSION = '[^']+'/,
+        'ASSET_MANIFEST_VERSION должен быть объявлен явной строкой');
+    // Статический кэш кода, наоборот, ОБЯЗАН зависеть от версии приложения:
+    // иначе новый релиз собрался бы из старых файлов.
+    const staticCacheLine = source.match(/const STATIC_CACHE = [^\n]+/);
+    assert.match(staticCacheLine[0], /APP_VERSION/,
+        'кэш кода обязан версионироваться версией приложения');
+}
+
 (async () => {
+    assetCacheIsIndependentOfAppVersion();
     await coldCodeDoesNotWaitForCacheStorage();
     await exactReleaseHitAvoidsNetwork();
     await activationKeepsPreviousReleaseAlive();

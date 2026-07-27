@@ -2,8 +2,21 @@
 
 const APP_VERSION = '2026-07-26-vps-41';
 const RELEASE_ASSET_VERSION = '20260726-17';
+// ⚠️ Версия НАБОРА КАРТИНОК, а не версия приложения. Поднимай её ТОЛЬКО когда
+// меняется состав offline-assets.json — добавились, удалились или переснялись
+// файлы. От бампа APP_VERSION она не зависит и зависеть не должна.
+//
+// Зачем разделили (27.07.2026): ASSET_CACHE звался
+// `ege-history-assets-${APP_VERSION}`, а cleanupOldCaches сносит любой кэш, не
+// перечисленный в CACHE_NAMES. То есть КАЖДЫЙ бамп версии приложения выбрасывал
+// весь кэш картинок, и пользователи заново качали 41 МБ (244 файла), хотя ни
+// один из них не менялся. Бампов к этому дню было уже 41 — то есть в среднем
+// каждый, кто пользуется приложением, скачал эти сорок мегабайт не по разу.
+// Для мобильного трафика это самая дорогая строчка во всём проекте.
+const ASSET_MANIFEST_VERSION = 'assets-1';
+
 const STATIC_CACHE = `ege-history-static-${APP_VERSION}`;
-const ASSET_CACHE = `ege-history-assets-${APP_VERSION}`;
+const ASSET_CACHE = `ege-history-assets-${ASSET_MANIFEST_VERSION}`;
 const CACHE_NAMES = [STATIC_CACHE, ASSET_CACHE];
 const ASSET_WARMUP_PAUSE_MS = 300;
 // Железное правило после серии iOS-инцидентов: НИ ОДИН ответ страницы не должен ждать
@@ -180,6 +193,13 @@ async function cleanupOldCaches() {
     await Promise.all(names.map((name) => {
         if (CACHE_NAMES.includes(name)) return null;
         if (!name.startsWith('ege-history-')) return null;
+        // ⚠️ Ассет-кэш сюда больше не попадает на каждом релизе: его имя
+        // построено на ASSET_MANIFEST_VERSION, а не на APP_VERSION, и от бампа
+        // версии приложения не меняется. Правка именно в имени — здесь ничего
+        // особенного делать не нужно, и не надо «чинить» этот метод обратно.
+        // Единственный раз, когда старый ассет-кэш придёт сюда, — переход на
+        // новую схему имён: тогда легаси-копия удаляется, и это осознанная
+        // разовая цена (одна перекачка вместо перекачки на каждом релизе).
         return caches.delete(name);
     }));
 }
