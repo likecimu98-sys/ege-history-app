@@ -109,6 +109,38 @@ function protectTeacherClassAssignment(currentData, patch, isSelfWrite) {
   return next;
 }
 
+// Поля документа ученика, которые ДАЮТ ПРАВА, а не описывают прогресс. Ставить их
+// имеет право только бот (`internal`) или админ.
+//
+// ⚠️ Зачем это существует. `authorizeWrite`, case 'students' на свой документ
+// отвечает безусловным `true` — то есть до этой правки ученик мог одним запросом
+// PUT со своим же docId записать себе `premium: true`, а `quota.js` читает премиум
+// ровно оттуда (`student_profiles.data.premium || premiumAuto`). Дневной лимит
+// обходился без DevTools и без правки JS, а любая будущая биллинг-интеграция,
+// сверяющаяся с этим же флагом, обходилась бы вместе с ним.
+//
+// Почему СПИСОК ЗАПРЕЩЁННЫХ, а не разрешённых: клиент пишет в свой профиль
+// открытый и растущий набор полей (`syncProgressToCloud`, слияние личностей,
+// tombstone `_mergedInto`, `syncPin` для входа с компьютера). Белый список,
+// отставший от клиента на одно поле, молча перестал бы сохранять прогресс — а это
+// та самая тихая потеря данных, которая дороже самой дыры. Запрет узкий и точный.
+//
+// Поля не отвергаются с 403, а ВЫРЕЗАЮТСЯ из патча: обычный клиент их не шлёт
+// вовсе, так что 403 означал бы подделку, но ценой был бы отказ всей записи
+// прогресса. Молча выкинуть лишнее — безопаснее для честного пользователя.
+const PRIVILEGED_STUDENT_FIELDS = ['premium', 'premiumAuto', 'unlimited', 'role', 'isAdmin'];
+
+function stripPrivilegedFields(patch, isSelfWrite) {
+  if (!isSelfWrite || !patch) return patch;
+  let next = null;
+  for (const field of PRIVILEGED_STUDENT_FIELDS) {
+    if (!Object.prototype.hasOwnProperty.call(patch, field)) continue;
+    if (!next) next = { ...patch };
+    delete next[field];
+  }
+  return next || patch;
+}
+
 function applyPatch(current, patch, merge) {
   const target = merge ? { ...(current || {}) } : {};
   for (const [key, raw] of Object.entries(patch || {})) {
@@ -579,7 +611,8 @@ class DocumentStore extends EventEmitter {
       const actualMode = current ? mode : 'create';
       const selfStudentWrite = ref.collection === 'students' && !options.internal && !ctx?.admin && !!ctx
         && (ctx.docIds.has(ref.docId) || (!!current?.user_id && current.user_id === ctx.userId));
-      const effectivePatch = protectTeacherClassAssignment(current?.data || null, patch, selfStudentWrite);
+      const effectivePatch = stripPrivilegedFields(
+        protectTeacherClassAssignment(current?.data || null, patch, selfStudentWrite), selfStudentWrite);
       if (!await authorizeWrite(client, ref, ctx, current, effectivePatch, actualMode, options)) {
         throw Object.assign(new Error('forbidden'), { statusCode: 403 });
       }
@@ -667,7 +700,8 @@ class DocumentStore extends EventEmitter {
 
 module.exports = {
   DocumentStore, parsePath, collectionFromPath, applyPatch, mergeMatchData,
-  protectTeacherClassAssignment, accessContext, publicStudent, COLLECTIONS,
+  protectTeacherClassAssignment, stripPrivilegedFields, PRIVILEGED_STUDENT_FIELDS,
+  accessContext, publicStudent, COLLECTIONS,
   // Экспортируются ради регрессионных тестов доступа (test/store-access.test.js):
   // права на чтение — самая дорогая ошибка в этом файле, они обязаны быть покрыты.
   authorizeRead, authorizeCollectionQuery, publicMatch, studentClassView, projectDocument, classDocId,

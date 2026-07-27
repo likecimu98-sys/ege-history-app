@@ -19,6 +19,21 @@ const { recordClientError, recordEvents, metricsSummary, MAX_EVENTS_PER_MINUTE }
 const { countStaleGuests, deleteStaleGuests } = require('./guest-cleanup');
 const { startFirebaseMirror } = require('./firebase-mirror');
 
+// Метка выката, которую отдаёт /api/v1/health. Раньше здесь стояла константа
+// '1.0.0', и по ответу нельзя было понять, доехал ли деплой API: у статики версия
+// видна (APP_VERSION в service-worker.js), у сервера не было ничего. Файл RELEASE
+// кладёт deploy-api.ps1 рядом с package.json; если его нет (локальный запуск,
+// ручная распаковка) — так и пишем, а не выдаём выдуманную версию.
+let _releaseTag = null;
+function releaseTag() {
+  if (_releaseTag === null) {
+    try {
+      _releaseTag = require('fs').readFileSync(require('path').join(__dirname, '..', 'RELEASE'), 'utf8').trim() || 'unknown';
+    } catch (_) { _releaseTag = 'dev'; }
+  }
+  return _releaseTag;
+}
+
 const store = new DocumentStore();
 const limiter = new MemoryRateLimiter();
 const APP = env.firebaseAppId;
@@ -277,7 +292,7 @@ async function handle(req, res) {
     }
     if (req.method === 'GET' && url.pathname === '/api/v1/health') {
       const check = await pool.query('SELECT now() AS now');
-      return json(res, 200, { ok: true, database: true, now: check.rows[0].now, version: '1.0.0' });
+      return json(res, 200, { ok: true, database: true, now: check.rows[0].now, version: releaseTag() });
     }
 
     let session = await getSession(req);

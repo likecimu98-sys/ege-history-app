@@ -95,6 +95,12 @@ tar --warning=no-timestamp -xzf /root/ege-history-api.tar.gz -C "$NEW"
 test -f "$NEW/src/server.js"
 test -f "$NEW/package-lock.json"
 
+# Stamp the release so /api/v1/health can answer "which build is actually live".
+# Without this the endpoint reported a hardcoded version and there was no way to
+# tell whether a deploy of the API had landed - only the static client carried a
+# visible version. GIT_SHA is substituted by the PowerShell side before upload.
+printf '%s %s\n' "$STAMP" "@@GIT_SHA@@" > "$NEW/RELEASE"
+
 cd "$NEW"
 npm ci --omit=dev --no-audit --no-fund
 # Tests are pure units: they set a dummy DATABASE_URL and never open a connection,
@@ -130,6 +136,12 @@ fi
 ls -1dt "$LIVE".prev-* 2>/dev/null | tail -n +4 | xargs -r rm -rf
 echo "api release $STAMP healthy on port $PORT"
 '@
+    # Substitute the commit via a placeholder rather than interpolating into the
+    # here-string: @'...'@ is literal on purpose, and switching it to @"..."@ would
+    # expand every $VAR the bash script relies on.
+    $gitSha = (& git -C $repoRoot rev-parse --short HEAD)
+    if ($LASTEXITCODE -ne 0) { throw 'git rev-parse failed' }
+    $remote = $remote -replace '@@GIT_SHA@@', $gitSha
     $remoteScript = Join-Path ([IO.Path]::GetTempPath()) ("ege-api-deploy-$([guid]::NewGuid().ToString('N')).sh")
     [IO.File]::WriteAllText($remoteScript, ($remote -replace "`r`n", "`n"), (New-Object Text.UTF8Encoding $false))
     try {

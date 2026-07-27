@@ -7,14 +7,14 @@
             signInWithCredential, signOut, initializeFirestore, collection, doc, setDoc, getDoc,
             getDocs, addDoc, updateDoc, deleteDoc, deleteField, onSnapshot, query, where,
             orderBy, limit, runTransaction, arrayUnion, arrayRemove, vpsApiFetch, refreshVpsAuth
-        } from "./vps-sync-compat.js?v=20260727-1";
+        } from "./vps-sync-compat.js?v=20260727-2";
 
         // jsPDF грузился с cdnjs.cloudflare.com без SRI — то есть посторонний скрипт
         // исполнялся с полными правами страницы, а при недоступности CDN (у части
         // нашей аудитории это обычное дело) экспорт PDF просто не работал. Довод тот
         // же, что и для telegram-web-app.js: своя копия с того же origin.
         // Версия совпадает с прежней CDN-ной — 2.5.1, лежит в vendor/.
-        const VENDOR_JSPDF = 'vendor/jspdf.umd.min.js?v=20260727-1';
+        const VENDOR_JSPDF = 'vendor/jspdf.umd.min.js?v=20260727-2';
 
         const cloudConfig = { projectId: 'vps-postgresql' };
         
@@ -824,10 +824,12 @@
                 const canonicalId = resolveUserId(u);
                 if (!hwIds.includes(canonicalId)) hwIds.push(canonicalId);
 
-                // ── ДИАГНОСТИКА ВЫРАВНИВАНИЯ AUTH (см. AUTH.md) ──────────────────
+                // ── ДИАГНОСТИКА ВЫРАВНИВАНИЯ AUTH ────────────────────────────────
                 // Включается флагом: localStorage.setItem('ege_auth_debug','1') + перезагрузка.
-                // Показывает, совпадает ли request.auth.uid с ID документа ученика —
-                // от этого зависит, можно ли включать строгие правила владения Firestore.
+                // Показывает, совпадает ли uid сессии с ID документа ученика.
+                // Наследие вопроса «можно ли включать строгие правила владения Firestore» —
+                // сам вопрос снят миграцией на PostgreSQL (права теперь в store.js), но
+                // расхождение uid ↔ docId живо и по сей день ломает слияние аккаунтов.
                 // Безопасно: только console.log за флагом, ничего не пишет и не меняет.
                 if (localStorage.getItem('ege_auth_debug')) {
                     console.log('[AuthDiag]', JSON.stringify({

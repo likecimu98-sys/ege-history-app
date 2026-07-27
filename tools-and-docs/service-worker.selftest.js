@@ -170,10 +170,18 @@ function bootHtmlIsOneAtomicRelease() {
         bootAssets.push(asset);
     }
     assert.ok(bootAssets.length >= 20, 'boot asset list was unexpectedly short');
+    // Версию берём из service-worker.js, а НЕ пишем сюда строкой. Раньше номер
+    // релиза был захардкожен в самой проверке, и каждый выкат требовал править
+    // ещё и тест — то есть проверка ловила не рассинхрон index.html и SW, а факт
+    // «агент забыл обновить тест». Теперь SW — единственный источник версии, и
+    // тест падает ровно тогда, когда файл в index.html реально отстал.
+    const releaseMatch = source.match(/const RELEASE_ASSET_VERSION = '([^']+)'/);
+    assert.ok(releaseMatch, 'RELEASE_ASSET_VERSION не найден в service-worker.js');
+    const release = releaseMatch[1];
     assert.deepEqual(
-        bootAssets.filter((asset) => !/[?&]v=20260727-1(?:&|$)/.test(asset)),
+        bootAssets.filter((asset) => !asset.includes(`v=${release}`)),
         [],
-        'a boot JS/CSS file is not tied to the release URL'
+        `boot-файл не привязан к текущему релизу ${release}`
     );
 
     for (const match of indexSource.matchAll(/<script([^>]*)>([\s\S]*?)<\/script>/gi)) {
