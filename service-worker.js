@@ -1,7 +1,7 @@
 'use strict';
 
-const APP_VERSION = '2026-07-27-vps-44';
-const RELEASE_ASSET_VERSION = '20260727-3';
+const APP_VERSION = '2026-07-27-vps-45';
+const RELEASE_ASSET_VERSION = '20260727-4';
 // ⚠️ Версия НАБОРА КАРТИНОК, а не версия приложения. Поднимай её ТОЛЬКО когда
 // меняется состав offline-assets.json — добавились, удалились или переснялись
 // файлы. От бампа APP_VERSION она не зависит и зависеть не должна.
@@ -15,7 +15,8 @@ const RELEASE_ASSET_VERSION = '20260727-3';
 // Для мобильного трафика это самая дорогая строчка во всём проекте.
 const ASSET_MANIFEST_VERSION = 'assets-1';
 
-const STATIC_CACHE = `ege-history-static-${APP_VERSION}`;
+const STATIC_CACHE_PREFIX = 'ege-history-static-';
+const STATIC_CACHE = `${STATIC_CACHE_PREFIX}${APP_VERSION}`;
 const ASSET_CACHE = `ege-history-assets-${ASSET_MANIFEST_VERSION}`;
 const CACHE_NAMES = [STATIC_CACHE, ASSET_CACHE];
 const ASSET_WARMUP_PAUSE_MS = 300;
@@ -189,10 +190,30 @@ async function cacheOfflineAssets() {
     return warmAssetsPromise;
 }
 
+// HTML из кэша ПРЕДЫДУЩЕГО релиза. Живёт отдельной функцией, а не внутри
+// networkFirstNavigation, чтобы её вызов оставался под общим таймаутом чтения
+// кэша: iOS-инвариант «ответ страницы не ждёт CacheStorage» здесь не нарушается —
+// это ветка ФОЛБЭКА, сеть по-прежнему отвечает первой и никого не ждёт.
+async function previousReleaseHtml(cacheKey) {
+    const names = (await caches.keys())
+        .filter((name) => name.startsWith(STATIC_CACHE_PREFIX) && name !== STATIC_CACHE)
+        .reverse(); // caches.keys() отдаёт в порядке создания — начинаем со свежего
+    for (const name of names) {
+        const cache = await caches.open(name);
+        const hit = (await cache.match(cacheKey)) || (await cache.match(scopedRequest('./index.html')));
+        if (hit) return hit;
+    }
+    return null;
+}
+
 async function cleanupOldCaches() {
     const names = await caches.keys();
+    // Кэш ОДНОГО предыдущего релиза оставляем намеренно — это страховка выше.
+    // Раньше сносились все, и сразу после бампа офлайн-копии не было ни у кого.
+    const keepStatic = names.filter((name) => name.startsWith(STATIC_CACHE_PREFIX) && name !== STATIC_CACHE).pop();
     await Promise.all(names.map((name) => {
         if (CACHE_NAMES.includes(name)) return null;
+        if (name === keepStatic) return null;
         if (!name.startsWith('ege-history-')) return null;
         // ⚠️ Ассет-кэш сюда больше не попадает на каждом релизе: его имя
         // построено на ASSET_MANIFEST_VERSION, а не на APP_VERSION, и от бампа
@@ -231,6 +252,16 @@ async function networkFirstNavigation(request) {
     // Чтение кэша тоже под защитой: если CacheStorage залип, сеть всё равно приедет.
     const cachedLookup = caches.open(STATIC_CACHE)
         .then((cache) => cache.match(cacheKey).then((hit) => hit || cache.match(scopedRequest('./index.html'))))
+        // Последняя страховка — HTML ПРЕДЫДУЩЕГО релиза. Без неё сразу после
+        // каждого бампа версии человек оставался вообще без офлайн-копии: имя
+        // STATIC_CACHE построено на APP_VERSION, поэтому бамп создаёт ПУСТОЙ кэш,
+        // а прежний удаляется. Пока страница хоть раз не загрузилась по сети,
+        // упавшая сеть означала Response.error() — то есть «не открывается», и
+        // при этом ни строчки в логах сервера, потому что запрос не дошёл.
+        // 27.07.2026 мы выкатили четыре релиза за день: четыре таких окна.
+        // Устаревший HTML тут заведомо лучше ошибки: index.html сам сверяет
+        // BOOT_RELEASE и чинится (см. watchBoot), а из ошибки выхода нет.
+        .then((hit) => hit || previousReleaseHtml(cacheKey))
         .catch(() => null);
 
     // Быстрая сеть → сразу свежий HTML. Медленная сеть, но есть кэш → отдаём кэш через

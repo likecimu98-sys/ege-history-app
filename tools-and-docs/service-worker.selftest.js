@@ -218,6 +218,7 @@ function assetCacheIsIndependentOfAppVersion() {
 
 (async () => {
     assetCacheIsIndependentOfAppVersion();
+    previousReleaseHtmlSurvivesVersionBump();
     await coldCodeDoesNotWaitForCacheStorage();
     await exactReleaseHitAvoidsNetwork();
     await activationKeepsPreviousReleaseAlive();
@@ -228,3 +229,36 @@ function assetCacheIsIndependentOfAppVersion() {
     console.error(error);
     process.exitCode = 1;
 });
+
+// Офлайн-страховка при смене версии не должна пропадать.
+//
+// 🔴 Инцидент 27.07.2026. STATIC_CACHE называется по APP_VERSION, поэтому бамп
+// версии создаёт ПУСТОЙ кэш, а cleanupOldCaches сносил прежний. До первой
+// успешной загрузки по сети у человека не оставалось офлайн-копии вообще: сеть
+// моргнула — Response.error(), «не открывается», и ни строчки в логах сервера,
+// потому что запрос до него не дошёл. В тот день выкатили четыре релиза — четыре
+// таких окна, и жалобы пришли именно оттуда.
+//
+// ⚠️ Проверка смотрит на ДВА условия сразу: фолбэк на прошлый релиз существует И
+// прошлый кэш переживает уборку. Починить одно без другого бесполезно.
+function previousReleaseHtmlSurvivesVersionBump() {
+    assert.match(source, /function previousReleaseHtml/,
+        'нет фолбэка на HTML прошлого релиза — после бампа версии офлайн-копии не будет');
+    assert.match(source, /\|\| previousReleaseHtml\(/,
+        'фолбэк объявлен, но не подключён к поиску кэша при навигации');
+
+    const cleanup = source.match(/async function cleanupOldCaches\(\)[\s\S]*?\n}/);
+    assert.ok(cleanup, 'cleanupOldCaches не найден');
+    // ⚠️ Проверяем именно ВЕТКУ ПРОПУСКА, а не упоминание переменной. Первая
+    // редакция этой проверки искала просто /keepStatic/ и прошла на коде, где
+    // объявление осталось, а `return null` для него удалили — то есть тест
+    // «зелёный», кэш сносится, страховки нет. Ищи то, что делает работу.
+    assert.match(cleanup[0], /if \(name === keepStatic\) return null;/,
+        'уборка снова сносит ВСЕ прошлые статик-кэши — страховка исчезнет при следующем же релизе');
+    assert.match(cleanup[0], /const keepStatic = /, 'keepStatic не вычисляется');
+
+    // Имя строится от префикса: иначе фильтр в фолбэке разъедется с именем кэша
+    // и перестанет что-либо находить — молча, без единой ошибки.
+    assert.match(source, /const STATIC_CACHE_PREFIX = 'ege-history-static-';/);
+    assert.match(source, /const STATIC_CACHE = `\$\{STATIC_CACHE_PREFIX\}\$\{APP_VERSION\}`;/);
+}
