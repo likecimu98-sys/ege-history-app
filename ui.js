@@ -615,7 +615,7 @@ function loadQrLib() {
     if (!_qrLibPromise) {
         _qrLibPromise = new Promise((resolve, reject) => {
             const sc = document.createElement('script');
-            sc.src = 'vendor/qrcode.js?v=20260726-17';
+            sc.src = 'vendor/qrcode.js?v=20260727-1';
             sc.onload = () => resolve(window.qrcode);
             sc.onerror = () => { _qrLibPromise = null; reject(new Error('qr_lib_failed')); };
             document.head.appendChild(sc);
