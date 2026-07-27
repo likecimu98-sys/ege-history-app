@@ -142,8 +142,18 @@ fi
 
     Write-Host 'Verifying...'
     $cb = [DateTimeOffset]::UtcNow.ToUnixTimeSeconds()
-    $code = (& curl.exe -s -o /dev/null -w '%{http_code}' "https://reshay-istoriyu.ru/?cb=$cb")
+    $verifyUrl = "https://reshay-istoriyu.ru/?cb=$cb"
+    $code = ''
+    for ($attempt = 1; $attempt -le 3; $attempt++) {
+        $code = (& curl.exe -4 -sS -o NUL -w '%{http_code}' --connect-timeout 8 --max-time 20 $verifyUrl)
+        if ($LASTEXITCODE -eq 0 -and $code -eq '200') { break }
+        Write-Warning "Verification attempt $attempt failed: HTTP $code"
+        if ($attempt -lt 3) { Start-Sleep -Seconds (2 * $attempt) }
+    }
     Write-Host "https://reshay-istoriyu.ru/ -> HTTP $code"
+    if ($code -ne '200') {
+        throw "Production verification failed. Quick rollback: bash /root/ege-app-static-rollback.sh"
+    }
     Write-Host 'Done. Remember: git push origin master (GitHub is the backup mirror).'
 }
 finally {
