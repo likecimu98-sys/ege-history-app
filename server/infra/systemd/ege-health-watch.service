@@ -1,0 +1,12 @@
+[Unit]
+Description=EGE History API liveness watchdog
+After=network-online.target
+
+[Service]
+Type=oneshot
+User=root
+# Код возврата 1 означает «API лежит», а не «сторож сломался»: тревога уже
+# отправлена, и systemd не должен помечать юнит failed из-за штатной ситуации.
+SuccessExitStatus=0 1
+ExecStart=/usr/local/sbin/ege-history-health-watch
+Nice=10

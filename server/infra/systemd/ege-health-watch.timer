@@ -1,0 +1,11 @@
+[Unit]
+Description=Check EGE History API liveness every two minutes
+
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec=2min
+# Persistent здесь НЕ нужен: догонять пропущенные проверки живости бессмысленно,
+# состояние важно только текущее.
+
+[Install]
+WantedBy=timers.target
