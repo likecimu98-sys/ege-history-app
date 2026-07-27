@@ -71,10 +71,28 @@ find "$NEW" -type f -exec chmod 644 {} +
 # Git archive timestamps come from the workstation clock. Normalize them to the
 # VPS clock so Nginx never emits future Last-Modified validators to browsers.
 find "$NEW" -type f -exec touch -c {} +
-mv /var/www/ege-app "/var/www/ege-app.prev-$STAMP"
-mv "$NEW" /var/www/ege-app
-ls -1dt /var/www/ege-app.prev-* 2>/dev/null | tail -n +4 | xargs -r rm -rf
-echo "deployed release $STAMP"
+LIVE="/var/www/ege-app"
+# Swap the webroot by renaming a SYMLINK. There used to be two consecutive mv
+# calls here, leaving a fraction of a second where /var/www/ege-app did not
+# exist at all - a request landing in that window got an error. Renaming a
+# symlink is a single atomic rename(2), so the window disappears.
+# Bonus: rollback becomes instant too - just repoint the link at the previous
+# release directory, no moving involved.
+if [ -L "$LIVE" ]; then
+    ln -sfn "$NEW" "$LIVE.swap"
+    mv -Tf "$LIVE.swap" "$LIVE"
+else
+    # One-time migration from the old scheme, where the webroot was a real dir.
+    mv "$LIVE" "/var/www/ege-app.prev-$STAMP"
+    ln -s "$NEW" "$LIVE"
+fi
+
+# Keep the three most recent release directories - rollback points at them.
+# Migration snapshots ege-app.rollback-* / *.client-rollback-* are NOT touched:
+# they are the 60-day cutover insurance, different name and different lifetime.
+ls -1dt /var/www/ege-app.release-* 2>/dev/null | tail -n +4 | xargs -r rm -rf
+ls -1dt /var/www/ege-app.prev-* 2>/dev/null | tail -n +3 | xargs -r rm -rf
+echo "deployed release $STAMP -> $(readlink -f "$LIVE")"
 '@
     Invoke-Native { & ssh @sshOptions $Vps $remote } 'Remote unpack/swap failed'
 

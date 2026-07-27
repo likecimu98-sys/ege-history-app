@@ -1,0 +1,46 @@
+# Проверки на каждый push и pull request.
+#
+# До 27.07.2026 автоматических проверок у проекта не было вообще: всё держалось
+# на том, что агент не забудет прогнать npm run check руками перед деплоем.
+# Забыть ровно один раз достаточно — так в прод уехал баг оценивания, из-за
+# которого все 215 текстовых заданий банка считались ошибочными у всех решавших,
+# и нашли его через недели.
+#
+# Тесты здесь ровно те же, что гоняются перед выкаткой:
+#   npm run check  — самопроверка Service Worker, оценивание, банк, дизайн-линтер
+#   node --test    — серверные тесты API (права чтения, квота, слияние состояний)
+name: check
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+
+jobs:
+  client:
+    name: Клиент и дизайн-система
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      # Своего package-lock.json у корня нет, ставим только devDependencies,
+      # которые реально нужны проверкам.
+      - run: npm install --no-audit --no-fund
+      - run: npm run check
+
+  api:
+    name: Серверные тесты API
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      # Тесты чистые: подставляют фиктивный DATABASE_URL и соединение не
+      # открывают, поэтому PostgreSQL в CI не нужен.
+      - run: npm ci --omit=dev --no-audit --no-fund
+        working-directory: server/api
+      - run: node --test test/*.test.js
+        working-directory: server/api
