@@ -2469,6 +2469,8 @@ window.openMistakesListModal = function() {
 // ─── Модалка «лимит на сегодня исчерпан» (пейволл клуба) ─────────────────
 window.showDailyLimitModal = function() {
     if (document.getElementById('limit-overlay')) return;
+    // Сколько людей упирается в лимит — ключевая цифра для разговора о тарифе.
+    if (window.trackEvent) window.trackEvent('limit_reached');
     const info = window._dailyLimitInfo || {};
     const esc = (s) => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
     const msg = info.message || `Ты решил сегодня максимум — ${info.limit} строк. Мозгу нужен отдых, возвращайся завтра!`;

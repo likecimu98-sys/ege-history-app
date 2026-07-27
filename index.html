@@ -372,6 +372,12 @@
           el.addEventListener('transitionend', function() { el.remove(); }, { once: true });
         }
         document.addEventListener('app:ready', dismissSkeleton);
+        // Открытие приложения — база для DAU и возврата D1/D7. Считаем именно по
+        // app:ready, а не по загрузке страницы: интересует, что приложение
+        // действительно ОТКРЫЛОСЬ, а не что человек увидел заставку.
+        document.addEventListener('app:ready', function () {
+            if (window.trackEvent) window.trackEvent('app_open');
+        }, { once: true });
 
         async function repairAppBoot() {
           var button = document.getElementById('app-boot-repair');
@@ -517,6 +523,11 @@
 
       })();
     </script>
+
+    <!-- Телеметрия идёт ПЕРВОЙ и ни от чего не зависит: если приложение сломается
+         на старте, именно она должна об этом сообщить. Не defer — обработчики
+         ошибок обязаны стоять до выполнения остальных скриптов. Файл крошечный. -->
+    <script src="telemetry.js?v=20260726-17"></script>
 
     <!-- JS разбит на модули: config → utils → state → table → ui → modes → app -->
     <!-- Порядок defer гарантирован браузером: выполняются строго по порядку в DOM -->

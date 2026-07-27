@@ -44,6 +44,7 @@ const CORE_URLS = [
     './manifest.webmanifest',
     `./pwa.js?v=${RELEASE_ASSET_VERSION}`,
     `./vendor/telegram-web-app.js?v=${RELEASE_ASSET_VERSION}`,
+    `./telemetry.js?v=${RELEASE_ASSET_VERSION}`,
     `./config.js?v=${RELEASE_ASSET_VERSION}`,
     `./utils.js?v=${RELEASE_ASSET_VERSION}`,
     `./exam-scoring.js?v=${RELEASE_ASSET_VERSION}`,

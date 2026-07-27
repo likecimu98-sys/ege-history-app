@@ -15,6 +15,7 @@ const { mergeStateValues } = require('./state-merge');
 const { DocumentStore, accessContext } = require('./store');
 const { MemoryRateLimiter } = require('./rate-limit');
 const { quotaState, consumeQuota, clampAmount } = require('./quota');
+const { recordClientError, recordEvents, metricsSummary, MAX_EVENTS_PER_MINUTE } = require('./telemetry');
 const { startFirebaseMirror } = require('./firebase-mirror');
 
 const store = new DocumentStore();
@@ -500,6 +501,35 @@ async function handle(req, res) {
       });
       log('warn', 'account.deleted', { ...deleted });
       return json(res, 200, { ok: true, deleted }, { 'Set-Cookie': clearSessionCookies() });
+    }
+    // Телеметрия: ошибки клиента и продуктовые события. Без CSRF — это не
+    // мутация пользовательских данных, а запись в свой журнал; сессия при этом
+    // нужна, чтобы события можно было считать по людям (DAU, возврат).
+    // ⚠️ Всё, что приходит из браузера, проходит чистку в telemetry.js: там
+    // могут оказаться имя ученика, код класса или кусок его состояния.
+    if (req.method === 'POST' && url.pathname === '/api/v1/telemetry') {
+      // ⚠️ CSRF-токен здесь не требуется (браузер шлёт это через sendBeacon,
+      // заголовки к нему не приложить), поэтому Origin проверяем сами. Куки у
+      // нас SameSite=None ради мини-аппа в iframe Telegram — без этой проверки
+      // чужая страница могла бы сыпать события от имени вошедшего ученика и
+      // портить метрики. Отсутствующий Origin допускаем: sendBeacon при уходе
+      // со страницы его иногда не ставит.
+      const origin = String(req.headers.origin || '');
+      if (origin && origin !== env.publicOrigin) throw Object.assign(new Error('origin_forbidden'), { statusCode: 403 });
+      if (!limiter.take(`${scope}:telemetry`, MAX_EVENTS_PER_MINUTE).ok) {
+        return json(res, 429, { error: 'rate_limited' });
+      }
+      const body = await readJson(req, 16384).catch(() => ({}));
+      if (body.error) await recordClientError(body.error, req.headers['user-agent']).catch(() => {});
+      if (session && body.events) await recordEvents(session.userId, body.events).catch(() => {});
+      res.writeHead(204).end();
+      return;
+    }
+    if (req.method === 'GET' && url.pathname === '/api/v1/admin/metrics') {
+      requireSession(session);
+      const ctx = await accessContext(session);
+      if (!ctx.admin) throw Object.assign(new Error('admin_required'), { statusCode: 403 });
+      return json(res, 200, await metricsSummary());
     }
     if (req.method === 'GET' && url.pathname === '/api/v1/quota') {
       requireSession(session);

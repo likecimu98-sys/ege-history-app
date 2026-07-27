@@ -531,6 +531,9 @@ function updateScoreAndStats(linesCount, isPerfectHw, egePointsToAdd) {
 
     const s = window.state.stats;
     const curTask = window.state.currentTask || 'task4';
+    // Активация: дошёл ли человек вообще до первой решённой строки.
+    // Считаем ДО инкремента, иначе событие никогда не сработает.
+    if (linesCount > 0 && !s.totalSolvedEver && window.trackEvent) window.trackEvent('first_task_solved', { task: curTask });
     s.totalSolvedEver += linesCount;
     if (!s.solvedByTask) s.solvedByTask = { task1: 0, task3: 0, task4: 0, task5: 0, task7: 0 };
     s.solvedByTask[curTask] = (s.solvedByTask[curTask] || 0) + linesCount;
