@@ -14,6 +14,8 @@ $repoRoot = (Resolve-Path -LiteralPath $PSScriptRoot).Path
 $archive = Join-Path ([IO.Path]::GetTempPath()) ("ege-static-$([guid]::NewGuid().ToString('N')).tar.gz")
 $remoteUploading = '/root/ege-app-static.tar.gz.uploading'
 $remoteArchive = '/root/ege-app-static.tar.gz'
+$remoteRunnerUploading = '/root/ege-app-static-deploy.sh.uploading'
+$remoteRunner = '/root/ege-app-static-deploy.sh'
 
 function Invoke-Native([scriptblock]$Command, [string]$Failure) {
     & $Command
@@ -94,7 +96,23 @@ ls -1dt /var/www/ege-app.release-* 2>/dev/null | tail -n +4 | xargs -r rm -rf
 ls -1dt /var/www/ege-app.prev-* 2>/dev/null | tail -n +3 | xargs -r rm -rf
 echo "deployed release $STAMP -> $(readlink -f "$LIVE")"
 '@
-    Invoke-Native { & ssh @sshOptions $Vps $remote } 'Remote unpack/swap failed'
+    # The remote script travels as a FILE, not as an ssh argument.
+    # WARNING - learned the hard way on 2026-07-27: PowerShell 5.1 mangles nested quotes
+    # when handing a string to native ssh. The line
+    #     echo "... $(readlink -f "$LIVE")"
+    # came out broken, bash executed readlink's OUTPUT as a command and the deploy
+    # died with "Is a directory" - AFTER the webroot had already been swapped.
+    # deploy-api.ps1 was written this way from the start; this script was not.
+    # Written with explicit LF: CRLF would make bash choke on "\r" in every line.
+    $remoteScript = Join-Path ([IO.Path]::GetTempPath()) ("ege-static-deploy-$([guid]::NewGuid().ToString('N')).sh")
+    [IO.File]::WriteAllText($remoteScript, ($remote -replace "`r`n", "`n"), (New-Object Text.UTF8Encoding $false))
+    try {
+        Invoke-Native { & scp @sshOptions $remoteScript "${Vps}:$remoteRunnerUploading" } 'Runner upload failed'
+        Invoke-Native { & ssh @sshOptions $Vps "mv -- '$remoteRunnerUploading' '$remoteRunner' && bash '$remoteRunner'" } 'Remote unpack/swap failed'
+    }
+    finally {
+        Remove-Item -LiteralPath $remoteScript -Force -ErrorAction SilentlyContinue
+    }
 
     Write-Host 'Verifying...'
     $cb = [DateTimeOffset]::UtcNow.ToUnixTimeSeconds()
