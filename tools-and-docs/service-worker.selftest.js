@@ -306,6 +306,50 @@ function bootHtmlIsOneAtomicRelease() {
     }
 }
 
+function slowCoreStillDismissesRecoveryScreen() {
+    const watchBootSource = indexSource.match(
+        /\(function watchBoot\(\) \{[\s\S]*?\n        \}\)\(\);/
+    );
+    assert.ok(watchBootSource, 'watchBoot не найден в index.html');
+
+    const scheduled = [];
+    const dispatched = [];
+    let dismissed = 0;
+    let recoveryVisible = false;
+    const windowObject = {};
+    const context = vm.createContext({
+        window: windowObject,
+        document: {
+            readyState: 'complete',
+            getElementById(id) {
+                if (id !== 'app-boot-recovery') return null;
+                return { classList: { add() { recoveryVisible = true; } } };
+            },
+            querySelector() { return { textContent: '' }; },
+            dispatchEvent(event) { dispatched.push(event.type); }
+        },
+        Date: { now: () => 13001 },
+        bootT0: 0,
+        isIosTelegramLaunch: () => false,
+        sessionStorage: { removeItem: () => undefined, getItem: () => null, setItem: () => undefined },
+        dismissSkeleton: () => { dismissed++; },
+        bootSignal: () => undefined,
+        navigator: {},
+        Event: function Event(type) { this.type = type; },
+        setTimeout(callback) { scheduled.push(callback); return scheduled.length; }
+    });
+
+    vm.runInContext(watchBootSource[0], context, { filename: 'watch-boot.inline.js' });
+    assert.equal(recoveryVisible, true, 'slow load did not show the recovery screen');
+    assert.equal(scheduled.length, 1,
+        'watchBoot stopped forever after 12 seconds instead of waiting for the late core');
+
+    windowObject.quickStartGame = () => undefined;
+    scheduled.shift()();
+    assert.ok(dispatched.includes('app:ready'), 'late core never emitted app:ready');
+    assert.equal(dismissed, 1, 'recovery screen stayed over the already loaded app');
+}
+
 // Кэш картинок не должен зависеть от версии приложения.
 //
 // Инвариант введён 27.07.2026. До него ASSET_CACHE звался
@@ -344,6 +388,7 @@ function assetCacheIsIndependentOfAppVersion() {
     await iosTelegramDoesNotInstallInterceptingWorker();
     await wwwFallbackDoesNotInstallInterceptingWorker();
     bootHtmlIsOneAtomicRelease();
+    slowCoreStillDismissesRecoveryScreen();
     console.log('service-worker.selftest: ok');
 })().catch((error) => {
     console.error(error);
