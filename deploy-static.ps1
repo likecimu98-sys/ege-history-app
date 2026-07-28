@@ -41,12 +41,16 @@ $sshOptions = @(
 )
 
 try {
-    $dirty = & git -C $repoRoot status --porcelain
+    # The workspace can be owned by another local Windows profile. Trust only
+    # this resolved repository for these two commands; do not weaken Git's
+    # global ownership protection.
+    $gitTrust = "safe.directory=$($repoRoot -replace '\\', '/')"
+    $dirty = & git -c $gitTrust -C $repoRoot status --porcelain
     if ($LASTEXITCODE -ne 0) { throw 'git status failed' }
     if ($dirty) { throw 'Commit changes before deploying static.' }
 
     Write-Host 'Packing HEAD...'
-    Invoke-Native { git -C $repoRoot archive --format=tar.gz -o $archive HEAD } 'git archive failed'
+    Invoke-Native { git -c $gitTrust -C $repoRoot archive --format=tar.gz -o $archive HEAD } 'git archive failed'
 
     $entries = & tar -tzf $archive
     if ($LASTEXITCODE -ne 0) { throw 'Cannot read archive.' }
