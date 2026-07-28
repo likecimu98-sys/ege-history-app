@@ -11,6 +11,10 @@ const BOT_TOKEN = process.env.BOT_TOKEN;
 const BOT_USERNAME = process.env.BOT_USERNAME || 'Reshay_istoriyu_bot';
 const APP_URL = process.env.APP_URL || 'https://likecimu98-sys.github.io/ege-history-app/';
 const RECOVERY_URL = process.env.RECOVERY_URL || 'https://reshay-istoriyu.ru/sw-recover';
+// A newly opened Telegram WebView still shares Service Worker registrations
+// with the WebView that was just closed. Recovery therefore must reopen the
+// app on a different origin, where the broken root-origin worker cannot run.
+const RECOVERY_APP_URL = process.env.RECOVERY_APP_URL || 'https://www.reshay-istoriyu.ru/?recovery=1';
 const ADMIN_ID = Number(process.env.ADMIN_ID || 0);
 const FB_APP_ID = process.env.FB_APP_ID || 'ege-history-bot';
 const HISTORY_API_URL = process.env.HISTORY_API_URL || 'http://127.0.0.1:8792';
@@ -158,7 +162,7 @@ const appKb = () => new InlineKeyboard().webApp('🚀 Открыть трена�
 const repairKb = () => new InlineKeyboard()
     .webApp('1. 🛟 Исправить загрузку', RECOVERY_URL)
     .row()
-    .webApp('2. 🚀 Открыть тренажёр заново', APP_URL);
+    .webApp('2. 🚀 Открыть тренажёр заново', RECOVERY_APP_URL);
 const sleep = (ms) => new Promise(r => setTimeout(r, ms));
 // ожидание ввода названия группы после нажатия кнопки «Новая группа»
 const awaitingInput = new Map(); // userId -> { type, ts }

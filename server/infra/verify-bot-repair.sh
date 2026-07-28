@@ -11,7 +11,7 @@ test -n "${BOT_TOKEN:-}"
 test -n "${ADMIN_ID:-}"
 grep -q "bot.command('repair'" ./bot.js
 grep -q "webApp('1. 🛟 Исправить загрузку', RECOVERY_URL)" ./bot.js
-grep -q "webApp('2. 🚀 Открыть тренажёр заново', APP_URL)" ./bot.js
+grep -q "webApp('2. 🚀 Открыть тренажёр заново', RECOVERY_APP_URL)" ./bot.js
 
 response="$(
     curl -fsS --max-time 15 \
@@ -37,7 +37,7 @@ require('dotenv').config({ path: '/root/bot/.env' });
 const token = process.env.BOT_TOKEN;
 const chatId = Number(process.env.ADMIN_ID || 0);
 const recoveryUrl = process.env.RECOVERY_URL || 'https://reshay-istoriyu.ru/sw-recover';
-const appUrl = process.env.APP_URL || 'https://reshay-istoriyu.ru/';
+const recoveryAppUrl = process.env.RECOVERY_APP_URL || 'https://www.reshay-istoriyu.ru/?recovery=1';
 
 async function call(method, payload) {
     const response = await fetch(`https://api.telegram.org/bot${token}/${method}`, {
@@ -65,7 +65,7 @@ async function call(method, payload) {
                 }],
                 [{
                     text: '2. 🚀 Открыть тренажёр заново',
-                    web_app: { url: appUrl }
+                    web_app: { url: recoveryAppUrl }
                 }]
             ]
         }

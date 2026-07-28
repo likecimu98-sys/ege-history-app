@@ -15,7 +15,11 @@ assert.match(
 );
 assert.match(
     source,
-    /new InlineKeyboard\(\)[\s\S]*?\.webApp\('1\. 🛟 Исправить загрузку', RECOVERY_URL\)[\s\S]*?\.row\(\)[\s\S]*?\.webApp\('2\. 🚀 Открыть тренажёр заново', APP_URL\)/
+    /const RECOVERY_APP_URL = process\.env\.RECOVERY_APP_URL \|\| 'https:\/\/www\.reshay-istoriyu\.ru\/\?recovery=1';/
+);
+assert.match(
+    source,
+    /new InlineKeyboard\(\)[\s\S]*?\.webApp\('1\. 🛟 Исправить загрузку', RECOVERY_URL\)[\s\S]*?\.row\(\)[\s\S]*?\.webApp\('2\. 🚀 Открыть тренажёр заново', RECOVERY_APP_URL\)/
 );
 
 const menuEntries = source.match(/\{ command: 'repair', description: '🛟 Исправить загрузку' \}/g) || [];
