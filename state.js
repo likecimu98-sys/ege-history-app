@@ -723,6 +723,49 @@ function completeAssignment(a) {
     try { window._notifyHwDone && window._notifyHwDone(a); } catch (e) {}
 }
 
+// ── Локальная память об отозванных ДЗ ────────────────────────────────────────
+// Ключи аккаунт-зависимые: при смене пользователя на общем ПК их обязательно
+// стирать, поэтому они добавлены в IDENTITY_WIPE_KEYS (cloud-sync.js).
+const REVOKED_IDS_KEY = 'ege_revoked_hw_ids';
+const REVOKED_BEFORE_KEY = 'ege_revoked_hw_before';
+
+function localRevokedSet() {
+    if (window._classRevoked instanceof Set && window._classRevoked.size) return window._classRevoked;
+    try {
+        const raw = JSON.parse(localStorage.getItem(REVOKED_IDS_KEY) || '[]');
+        return new Set(Array.isArray(raw) ? raw : []);
+    } catch (e) { return new Set(); }
+}
+
+function localRevokedBefore() {
+    return Math.max(Number(window._classRevokeBefore) || 0, Number(localStorage.getItem(REVOKED_BEFORE_KEY)) || 0);
+}
+
+// Сданное не трогаем никогда: отметка и достижение остаются за учеником, даже
+// если учитель потом снял задание. Убираем только незавершённое.
+function revokedLocally(a) {
+    if (!a || a.status === 'done') return false;
+    if (localRevokedSet().has(a.id)) return true;
+    const before = localRevokedBefore();
+    return !!before && Number(a.assignedAt || 0) < before;
+}
+
+window.rememberRevokedHw = function(ids, sweepTs) {
+    try {
+        if (Array.isArray(ids) && ids.length) {
+            const merged = new Set(localRevokedSet());
+            ids.forEach(id => merged.add(id));
+            // Держим хвост ограниченным: список только растёт, а нужен он лишь
+            // чтобы пережить одну загрузку до ответа сервера.
+            localStorage.setItem(REVOKED_IDS_KEY, JSON.stringify([...merged].slice(-500)));
+        }
+        const ts = Number(sweepTs) || 0;
+        if (ts > (Number(localStorage.getItem(REVOKED_BEFORE_KEY)) || 0)) {
+            localStorage.setItem(REVOKED_BEFORE_KEY, String(ts));
+        }
+    } catch (e) { /* переполнение хранилища не повод ронять загрузку */ }
+};
+
 // Пересчитать статусы этапов/ДЗ (learned-этапы — живьём), обновить зеркало, проверить ачивки.
 function refreshHwState() {
     const s = window.state.stats;
@@ -731,6 +774,15 @@ function refreshHwState() {
     // они «воскресали» из зеркала/облака и висели неудаляемым долгом. Сданные оставляем.
     const assignmentsBeforeCleanup = s.assignments.length;
     s.assignments = s.assignments.filter(a => a && !(a.status === 'active' && String(a.id || '').indexOf('legacy_') === 0));
+    // Отозванное учителем ДЗ не должно мелькать при загрузке.
+    //
+    // Набор отозванных id и метка «снято оптом» приходят с сервера и раньше жили
+    // ТОЛЬКО в памяти. Значит на каждом входе первые пару секунд рисовался старый
+    // список — ученик видел уже удалённые строки, потом они пропадали. Выглядит
+    // как глюк и подрывает доверие к домашке сильнее, чем сама задержка.
+    // Теперь набор сохраняется локально и применяется ЗДЕСЬ, до первой отрисовки;
+    // сервер по-прежнему остаётся источником правды и дополняет его.
+    s.assignments = s.assignments.filter(a => !revokedLocally(a));
     const removedLegacy = assignmentsBeforeCleanup - s.assignments.length;
     let anyCompleted = false;
     s.assignments.forEach(a => {
@@ -807,7 +859,11 @@ window.HwNotify = (function () {
     function seen() { try { return new Set(JSON.parse(localStorage.getItem('seenHwIds') || '[]')); } catch (e) { return new Set(); } }
     function save(set) { try { localStorage.setItem('seenHwIds', JSON.stringify([...set].slice(-300))); } catch (e) {} }
     function mark(ids) { const s = seen(); ids.forEach(id => s.add(id)); save(s); }
-    function ding() { const now = Date.now(); if (now - lastDing < 3000) return; lastDing = now; try { window.Sfx && window.Sfx.play('dun'); } catch (e) {} }
+    // Громкость 0.5 — сигнал «пришла домашка» звучал заметно громче остальных
+    // звуков приложения и пугал, когда телефон лежит рядом. Уведомление должно
+    // обращать на себя внимание, а не вздрагивать человека.
+    const HW_DING_VOLUME = 0.5;
+    function ding() { const now = Date.now(); if (now - lastDing < 3000) return; lastDing = now; try { window.Sfx && window.Sfx.play('dun', HW_DING_VOLUME); } catch (e) {} }
 
     function onIngest(rec) {
         if (!rec || !rec.id || rec.status === 'done') return;

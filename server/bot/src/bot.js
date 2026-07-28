@@ -159,6 +159,16 @@ bot.use(async (ctx, next) => {
 });
 
 const appKb = () => new InlineKeyboard().webApp('🚀 Открыть тренажёр', APP_URL);
+
+// Клавиатура вызова на дуэль. Второй кнопкой — выключить эти уведомления.
+//
+// Зачем: зовём ВСЕХ, у кого включены уведомления, и при большой школе это сотни
+// сообщений в день. Человек, которому дуэли не нужны, раньше должен был знать
+// про /menu → настройки; на практике он просто отключал бота целиком или уходил.
+// Отказ в один тап дешевле потерянного ученика.
+const duelKb = () => new InlineKeyboard()
+    .webApp('⚔️ Принять вызов', APP_URL).row()
+    .text('🔕 Не звать на дуэли', 'duel_off');
 const repairKb = () => new InlineKeyboard()
     .webApp('1. 🛟 Исправить загрузку', RECOVERY_URL)
     .row()
@@ -714,6 +724,23 @@ bot.callbackQuery(Object.keys(TOGGLE_COLS), async (ctx) => {
     try { await ctx.editMessageReplyMarkup({ reply_markup: settingsKb(ctx.from.id) }); } catch (e) {}
 });
 
+// Отказ от вызовов на дуэль прямо из уведомления.
+//
+// ⚠️ Именно ВЫКЛЮЧАЕТ, а не переключает: человек жмёт «не звать» в конкретном
+// сообщении, и повторное нажатие (случайное, или по старому сообщению в истории)
+// не должно включить рассылку обратно. Переключатель живёт в /menu → настройки,
+// там он и остаётся двусторонним.
+bot.callbackQuery('duel_off', async (ctx) => {
+    db.prepare('UPDATE users SET notify_duel = 0 WHERE id = ?').run(ctx.from.id);
+    await ctx.answerCallbackQuery('Больше не зовём на дуэли');
+    // Само сообщение убираем: оно уже неактуально, а в истории чата такие вызовы
+    // копятся сотнями. Не вышло удалить (старше 48 часов) — гасим кнопки.
+    try { await ctx.deleteMessage(); }
+    catch (e) {
+        try { await ctx.editMessageText('🔕 Вызовы на дуэль отключены. Вернуть: /menu → ⚙️ Настройки.'); } catch (e2) {}
+    }
+});
+
 // ---------- Кнопки меню ----------
 bot.callbackQuery('m_newclass', async (ctx) => {
     await ctx.answerCallbackQuery();
@@ -1117,7 +1144,7 @@ function watchDuels() {
                 const candidates = db.prepare('SELECT id FROM users WHERE notify_duel = 1').all();
                 for (const { id } of candidates) {
                     if (String(id) === seekerUid) continue;
-                    const sent = await sendSafe(id, `⚔️ ${seekerName} ищет соперника (${modeLabel})!\nПрими вызов, пока место свободно 👇`, { reply_markup: appKb() });
+                    const sent = await sendSafe(id, `⚔️ ${seekerName} ищет соперника (${modeLabel})!\nПрими вызов, пока место свободно 👇`, { reply_markup: duelKb() });
                     if (sent) saveMsg.run(matchId, id, sent.message_id, now);
                     await sleep(60);
                 }

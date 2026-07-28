@@ -1595,6 +1595,16 @@ window.openEGEModal = function() {
 
 const DAILY_GOAL_LINES = 30; // дневная норма нового материала (≈10 заданий)
 
+// Русское склонение после числа: 1 день, 2 дня, 5 дней. Своя копия, а не общая с
+// ботом — клиент и бот не делят код, а «5 день подряд» в интерфейсе выглядит так,
+// будто продукт делали наспех.
+function plural(n, one, few, many) {
+    const m10 = n % 10, m100 = n % 100;
+    if (m10 === 1 && m100 !== 11) return one;
+    if (m10 >= 2 && m10 <= 4 && (m100 < 10 || m100 >= 20)) return few;
+    return many;
+}
+
 // Сколько фактов «к повтору» (SRS: level>0, nextReview прошёл) по заданиям таблицы.
 // Зубрёжка (cram:) и визуальные (vp_/va_/vm_) сюда не входят — у них свои тренажёры.
 function _dueReviewCounts() {
@@ -2205,7 +2215,24 @@ function updateGlobalUI() {
             goalRing.style.stroke = goalPct >= 1 ? '#fbbf24' : '#34d399'; // выполнено — золото
         }
         // Дневной стрик (дни подряд с решёнными строками), НЕ серия верных ответов
-        if (goalEl) updateText(goalEl, `🔥${(window.computeDayStreak && window.computeDayStreak()) || 0}`);
+        const streakDays = (window.computeDayStreak && window.computeDayStreak()) || 0;
+        if (goalEl) updateText(goalEl, `🔥${streakDays}`);
+
+        // Подсказка с КОНКРЕТНЫМ числом. Раньше здесь было общее «цель дня и стрик»,
+        // и на вопрос «сколько мне сегодня решить, чтобы огонёк не погас» приложение
+        // не отвечало нигде. Норма записана одной константой (DAILY_GOAL_LINES),
+        // поэтому подсказка не разъедется с кольцом.
+        const ringBtn = goalRing && goalRing.closest('button');
+        if (ringBtn) {
+            const left = Math.max(0, DAILY_GOAL_LINES - doneToday);
+            const goalLine = left > 0
+                ? `Сегодня решено ${doneToday} из ${DAILY_GOAL_LINES} — осталось ${left}`
+                : `Цель дня выполнена: ${doneToday} из ${DAILY_GOAL_LINES}`;
+            const streakLine = streakDays > 0
+                ? `Серия: ${streakDays} ${plural(streakDays, 'день', 'дня', 'дней')} подряд. Чтобы не прервать — решай хотя бы одну строку в день.`
+                : 'Реши хотя бы одну строку сегодня, чтобы начать серию.';
+            ringBtn.title = `${goalLine}\n${streakLine}`;
+        }
     }
     // Дни до ЕГЭ — только когда их ≤150: раньше это шум, ближе к экзамену — мотивация.
     const daysBox = $('stat-days-box');

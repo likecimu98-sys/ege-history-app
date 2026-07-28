@@ -196,6 +196,9 @@
             'teacher_class_code', 'teacher_filter_class', 'teacher_hw_deadline',
             'class_current_upto', 'class_current_period',
             'consumed_invite_at', 'seenHwIds',
+            // Память об отозванных ДЗ — она про конкретного ученика и его группу.
+            // Не стереть при смене аккаунта = чужие задания молча пропадут у нового.
+            'ege_revoked_hw_ids', 'ege_revoked_hw_before',
             'ege_final_storage_v4', 'ege_pending_cloud_sync', 'ege_last_cloud_sync',
             'ege_sync_identity_warning', 'was_telegram_device', '_lbCacheUpdatedAt',
             'ege_last_task', 'ege_last_period', 'ege_period_chosen'
@@ -2616,6 +2619,9 @@
         function _mergeRevoked(ids) {
             if (!(window._classRevoked instanceof Set)) window._classRevoked = new Set();
             (ids || []).forEach(id => window._classRevoked.add(id));
+            // Сохраняем локально: без этого на следующем входе отозванное ДЗ снова
+            // мелькнёт до ответа сервера (см. revokedLocally в state.js).
+            if (window.rememberRevokedHw) window.rememberRevokedHw(ids, 0);
             return window._classRevoked;
         }
 
@@ -2663,6 +2669,24 @@
                 localStorage.removeItem('student_class_code');
                 localStorage.removeItem('class_current_upto');
                 localStorage.removeItem('class_current_period');
+
+                // Убираем НЕсданные задания этой группы. Без этого выход снимал
+                // только принадлежность, а домашка группы оставалась висеть долгом
+                // навсегда — именно так учитель, случайно попавший в собственную
+                // группу, продолжал видеть чужое ДЗ уже после выхода.
+                // Сданные не трогаем: отметка и достижение остаются за человеком.
+                try {
+                    const snap = await getDoc(doc(db, 'artifacts', appId, 'public', 'data', 'classes', _classDocId(code)));
+                    const journal = snap.exists() && Array.isArray(snap.data().assignments) ? snap.data().assignments : [];
+                    const ids = journal.map(rec => rec && rec.id).filter(Boolean);
+                    if (ids.length && window.reconcileRevokedAssignments) {
+                        const removed = window.reconcileRevokedAssignments(ids);
+                        // Запоминаем локально, иначе на следующем входе облачное
+                        // состояние вернёт их обратно до ответа сервера.
+                        if (window.rememberRevokedHw) window.rememberRevokedHw(ids, 0);
+                        if (removed > 0 && window.recomputeHwMirror) window.recomputeHwMirror();
+                    }
+                } catch (e) { console.warn('[leaveClass] журнал группы не прочитан:', e && e.message); }
                 const canonicalId = fbUser ? resolveUserId(fbUser) : '';
                 if (canonicalId && db) {
                     // leftClassAt — тот же признак, которым учитель выпускает ученика:
@@ -2727,6 +2751,7 @@
                 const sweepTs = Number(data.revokeBefore) || 0;
                 if (sweepTs) {
                     window._classRevokeBefore = Math.max(Number(window._classRevokeBefore) || 0, sweepTs);
+                    if (window.rememberRevokedHw) window.rememberRevokedHw([], sweepTs);
                     const asg = window.state && window.state.stats && window.state.stats.assignments;
                     if (Array.isArray(asg)) {
                         const before = asg.length;
