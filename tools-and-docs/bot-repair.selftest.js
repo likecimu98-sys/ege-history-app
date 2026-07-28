@@ -15,7 +15,7 @@ assert.match(
 );
 assert.match(
     source,
-    /new InlineKeyboard\(\)\.webApp\('🛟 Исправить загрузку', RECOVERY_URL\)/
+    /new InlineKeyboard\(\)[\s\S]*?\.webApp\('1\. 🛟 Исправить загрузку', RECOVERY_URL\)[\s\S]*?\.row\(\)[\s\S]*?\.webApp\('2\. 🚀 Открыть тренажёр заново', APP_URL\)/
 );
 
 const menuEntries = source.match(/\{ command: 'repair', description: '🛟 Исправить загрузку' \}/g) || [];
@@ -26,6 +26,8 @@ const catchAllAt = source.indexOf("bot.on('message'");
 assert.ok(commandAt >= 0, 'Missing /repair handler');
 assert.ok(catchAllAt > commandAt, '/repair must be registered before the catch-all message handler');
 assert.match(source.slice(commandAt, catchAllAt), /reply_markup: repairKb\(\)/);
+assert.match(source.slice(commandAt, catchAllAt), /Если окно не закрылось само — закрой его крестиком/);
+assert.match(source.slice(commandAt, catchAllAt), /Затем нажми «Открыть тренажёр заново»/);
 assert.match(source.slice(commandAt, catchAllAt), /Аккаунт и прогресс сохранятся/);
 
 console.log('Bot repair command self-test passed');

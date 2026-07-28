@@ -10,7 +10,8 @@ set +a
 test -n "${BOT_TOKEN:-}"
 test -n "${ADMIN_ID:-}"
 grep -q "bot.command('repair'" ./bot.js
-grep -q "webApp('🛟 Исправить загрузку', RECOVERY_URL)" ./bot.js
+grep -q "webApp('1. 🛟 Исправить загрузку', RECOVERY_URL)" ./bot.js
+grep -q "webApp('2. 🚀 Открыть тренажёр заново', APP_URL)" ./bot.js
 
 response="$(
     curl -fsS --max-time 15 \
@@ -36,6 +37,7 @@ require('dotenv').config({ path: '/root/bot/.env' });
 const token = process.env.BOT_TOKEN;
 const chatId = Number(process.env.ADMIN_ID || 0);
 const recoveryUrl = process.env.RECOVERY_URL || 'https://reshay-istoriyu.ru/sw-recover';
+const appUrl = process.env.APP_URL || 'https://reshay-istoriyu.ru/';
 
 async function call(method, payload) {
     const response = await fetch(`https://api.telegram.org/bot${token}/${method}`, {
@@ -56,10 +58,16 @@ async function call(method, payload) {
         text: 'Проверка кнопки восстановления',
         disable_notification: true,
         reply_markup: {
-            inline_keyboard: [[{
-                text: '🛟 Исправить загрузку',
-                web_app: { url: recoveryUrl }
-            }]]
+            inline_keyboard: [
+                [{
+                    text: '1. 🛟 Исправить загрузку',
+                    web_app: { url: recoveryUrl }
+                }],
+                [{
+                    text: '2. 🚀 Открыть тренажёр заново',
+                    web_app: { url: appUrl }
+                }]
+            ]
         }
     });
     console.log('WEB_APP_BUTTON_SEND=YES');

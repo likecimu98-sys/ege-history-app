@@ -39,6 +39,21 @@
     var finished = false;
     var status = document.getElementById('status');
 
+    function telegramPost(eventType, eventData) {
+        try {
+            if (window.TelegramWebviewProxy && typeof window.TelegramWebviewProxy.postEvent === 'function') {
+                window.TelegramWebviewProxy.postEvent(eventType, JSON.stringify(eventData || {}));
+                return true;
+            }
+        } catch (error) {}
+        return false;
+    }
+
+    function isTelegramMiniApp() {
+        return !!(window.TelegramWebviewProxy ||
+            /(?:^|[?#&])tgWebApp(?:Data|Version|Platform)=/.test(location.href));
+    }
+
     function destination() {
         var next = new URL('/', location.origin);
         new URLSearchParams(location.search).forEach(function (value, key) {
@@ -49,9 +64,24 @@
         return next.toString();
     }
 
-    function openApp() {
+    function finishRecovery() {
         if (finished) return;
         finished = true;
+
+        if (isTelegramMiniApp()) {
+            if (status) {
+                status.textContent = 'Готово. Если окно не закрылось само, закройте его крестиком. Затем нажмите «2. Открыть тренажёр заново» в сообщении бота.';
+            }
+            // unregister() does not release the current controlled WebView. It
+            // becomes free only after that WebView is destroyed. Redirecting
+            // this same window would let the legacy worker intercept / again.
+            telegramPost('web_app_ready', {});
+            setTimeout(function () {
+                telegramPost('web_app_close', {});
+            }, 900);
+            return;
+        }
+
         if (status) status.textContent = 'Готово. Открываем тренажёр…';
         setTimeout(function () { location.replace(destination()); }, 120);
     }
@@ -88,11 +118,13 @@
             }
         } catch (error) {}
 
-        openApp();
+        finishRecovery();
     }
 
-    // Even a damaged browser storage implementation cannot leave this page hanging.
-    setTimeout(openApp, 5200);
+    // Hide Telegram's native loading placeholder before touching the damaged
+    // storage and always finish even if WebKit leaves one of those calls pending.
+    telegramPost('web_app_ready', {});
+    setTimeout(finishRecovery, 5200);
     recover();
 })();
 </script>

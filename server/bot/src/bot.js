@@ -155,7 +155,10 @@ bot.use(async (ctx, next) => {
 });
 
 const appKb = () => new InlineKeyboard().webApp('🚀 Открыть тренажёр', APP_URL);
-const repairKb = () => new InlineKeyboard().webApp('🛟 Исправить загрузку', RECOVERY_URL);
+const repairKb = () => new InlineKeyboard()
+    .webApp('1. 🛟 Исправить загрузку', RECOVERY_URL)
+    .row()
+    .webApp('2. 🚀 Открыть тренажёр заново', APP_URL);
 const sleep = (ms) => new Promise(r => setTimeout(r, ms));
 // ожидание ввода названия группы после нажатия кнопки «Новая группа»
 const awaitingInput = new Map(); // userId -> { type, ts }
@@ -418,8 +421,10 @@ bot.command('id', async (ctx) => { await ctx.reply(`Твой Telegram ID: \`${ct
 bot.command('repair', async (ctx) => {
     applyCommandMenu(ctx.from.id);
     await ctx.reply(
-        'Если тренажёр не начинает загружаться, нажми кнопку ниже.\n\n' +
-        'Она откроет восстановление именно внутри Telegram Mini App, удалит только старый кэш приложения и вернёт тебя в тренажёр. Аккаунт и прогресс сохранятся.',
+        'Если тренажёр не начинает загружаться:\n\n' +
+        '1. Нажми «Исправить загрузку». Если окно не закрылось само — закрой его крестиком.\n' +
+        '2. Затем нажми «Открыть тренажёр заново».\n\n' +
+        'Будет удалён только старый кэш приложения. Аккаунт и прогресс сохранятся.',
         { reply_markup: repairKb() }
     );
 });
