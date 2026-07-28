@@ -1158,7 +1158,39 @@ function watchDuels() {
     attach();
 }
 
-setInterval(() => { db.prepare('DELETE FROM duel_msgs WHERE created_at < ?').run(Date.now() - 48 * 3600 * 1000); }, 6 * 3600 * 1000);
+// Дожимаем удаление вызовов, которые не убрались по событию.
+//
+// 🔴 Замер 29.07.2026: в duel_msgs висело 4327 неудалённых записей за сутки, у
+// отдельных людей по 80 штук в чате. Причина: удаление запускалось РОВНО ОДИН РАЗ
+// — по событию «матч больше не ждёт». Бот перезапустился в этот момент (28.07
+// перезапусков было много) — и записи оставались навсегда. Повтора не было.
+//
+// ⚠️ Прежняя уборка здесь чистила таблицу через 48 часов, НЕ удаляя сами
+// сообщения. То есть она не лечила, а прятала: записи исчезали, вызовы у людей
+// оставались, и удалить их было уже нечем. Плюс Telegram и так не даёт удалять
+// сообщения старше 48 часов — то есть чистка срабатывала ровно тогда, когда
+// делать что-либо было поздно.
+//
+// Вызов актуален не дольше MAX_WAITING_AGE_MS (2 минуты), поэтому всё, что
+// заметно старше, можно удалять не спрашивая состояние матча.
+const DUEL_MSG_STALE_MS = 5 * 60 * 1000;
+const staleDuelMsgs = db.prepare('SELECT rowid AS rid, chat_id, message_id FROM duel_msgs WHERE created_at < ? LIMIT 300');
+const dropDuelMsg = db.prepare('DELETE FROM duel_msgs WHERE rowid = ?');
+let sweepingDuelMsgs = false;
+setInterval(async () => {
+    if (sweepingDuelMsgs) return; // проход может не уложиться в минуту — не наслаиваем
+    sweepingDuelMsgs = true;
+    try {
+        for (const row of staleDuelMsgs.all(Date.now() - DUEL_MSG_STALE_MS)) {
+            try { await bot.api.deleteMessage(row.chat_id, row.message_id); } catch (e) { /* уже удалено / слишком старое */ }
+            // Строку убираем в любом случае: повторять отказ Telegram бессмысленно,
+            // а копить записи — то, из-за чего и набралось четыре тысячи.
+            dropDuelMsg.run(row.rid);
+            await sleep(60);
+        }
+    } catch (e) { console.error('duel msg sweep:', e.message); }
+    finally { sweepingDuelMsgs = false; }
+}, 60 * 1000);
 setInterval(() => {
     db.prepare("DELETE FROM delivered_notify_recipients WHERE delivered_at < datetime('now','-90 days')").run();
     db.prepare("DELETE FROM delivered_notify_jobs WHERE delivered_at < datetime('now','-90 days')").run();
