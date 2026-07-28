@@ -1,0 +1,261 @@
+<!doctype html>
+<html lang="ru">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <title>Аудит генератора 862–1240</title>
+    <style>
+        :root { color-scheme: light; font-family: system-ui, -apple-system, Segoe UI, sans-serif; --r-sm: 8px; --r-md: 14px; --r-full: 999px; }
+        body { margin: 0; background: #f3f6fb; color: #172033; }
+        main { max-width: 920px; margin: auto; padding: 16px; }
+        button { border: 0; border-radius: var(--r-md); background: #2563eb; color: #fff; padding: 12px 18px; font-weight: 800; }
+        button:disabled { opacity: .55; }
+        #summary, section { background: #fff; border: 1px solid #dbe3ef; border-radius: var(--r-md); margin-top: 14px; padding: 14px; }
+        #summary.ok { border-color: #10b981; background: #ecfdf5; }
+        #summary.bad { border-color: #ef4444; background: #fff1f2; }
+        h1 { font-size: 22px; margin: 0 0 8px; }
+        h2 { font-size: 18px; margin: 0 0 10px; }
+        pre { white-space: pre-wrap; overflow-wrap: anywhere; font: 12px/1.45 ui-monospace, SFMono-Regular, Consolas, monospace; margin: 0; }
+        iframe { position: fixed; width: 375px; height: 812px; left: -10000px; top: 0; border: 0; }
+    </style>
+</head>
+<body>
+<main>
+    <h1>Аудит узкого периода 862–1240</h1>
+    <p>40 фактических генераций для каждого задания №1, №3, №4, №5 и №7.</p>
+    <button id="run" type="button">Запустить 200 генераций</button>
+    <div id="summary" aria-live="polite">Ожидание запуска.</div>
+    <div id="reports"></div>
+</main>
+<iframe id="app" title="Приложение для аудита" src="/index.html?_narrow_audit=1"></iframe>
+<script>
+'use strict';
+
+const TASKS = ['task1', 'task3', 'task4', 'task5', 'task7'];
+const ROUNDS = 40;
+const YEAR_START = 862;
+const YEAR_END = 1240;
+const runButton = document.getElementById('run');
+const summary = document.getElementById('summary');
+const reports = document.getElementById('reports');
+const appFrame = document.getElementById('app');
+
+function norm(value) {
+    return String(value ?? '')
+        .toLocaleLowerCase('ru-RU')
+        .replace(/ё/g, 'е')
+        .replace(/[«»„“”"'`]/g, '')
+        .replace(/[‐‑‒–—−]/g, '-')
+        .replace(/\s+/g, ' ')
+        .trim();
+}
+
+function yearOf(row) {
+    const direct = Number(row?.year);
+    if (Number.isFinite(direct)) return direct;
+    const match = String(row?.year || '').match(/\d{3,4}/);
+    return match ? Number(match[0]) : NaN;
+}
+
+function pairIssues(items, predicate, label) {
+    const issues = [];
+    for (let i = 0; i < items.length; i++) {
+        for (let j = i + 1; j < items.length; j++) {
+            if (predicate(items[i], items[j])) issues.push(`${label}: строки ${i + 1} и ${j + 1}`);
+        }
+    }
+    return issues;
+}
+
+function exactRelations(w, task, targets, pool) {
+    const sourceMap = {
+        task3: w.task3Data || [],
+        task5: w.task5Data || [],
+        task7: w.task7Data || []
+    };
+    const fields = {
+        task3: ['process', 'fact'],
+        task5: ['event', 'person'],
+        task7: ['culture', 'trait']
+    };
+    if (!sourceMap[task]) return [];
+    const [display, answer] = fields[task];
+    const relations = [];
+    targets.forEach((target, targetIndex) => {
+        const valid = pool.filter(option => sourceMap[task].some(row =>
+            norm(row[display]) === norm(target[display]) &&
+            (task === 'task7'
+                ? (typeof w.__tableAudit?.task7TraitVariants === 'function'
+                    ? w.__tableAudit.task7TraitVariants(row).some(v => norm(v) === norm(option))
+                    : norm(row[answer]) === norm(option))
+                : norm(row[answer]) === norm(option))
+        ));
+        if (new Set(valid.map(norm)).size > 1) {
+            relations.push(`по базе строка ${targetIndex + 1} принимает несколько вариантов: ${valid.join(' / ')}`);
+        }
+    });
+    return relations;
+}
+
+function inspectRound(w, task, round) {
+    const targets = (w.state.currentTargetData || []).map(row => ({ ...row }));
+    const pool = Array.from(w.document.querySelectorAll('#pool-container .dnd-chip'))
+        .map(node => String(node.dataset.pureText || node.textContent || '').trim());
+    const expected = Array.from(w.document.querySelectorAll('#task-table-body .dnd-slot'))
+        .map(node => String(node.dataset.expected || '').trim());
+    const issues = [];
+    const displayField = { task1: 'event', task3: 'process', task4: 'event', task5: 'event', task7: 'culture' }[task];
+    const answerField = { task1: 'year', task3: 'fact', task4: null, task5: 'person', task7: 'trait' }[task];
+
+    if (targets.length !== 4) issues.push(`строк ${targets.length}, ожидалось 4`);
+    const hiddenCountOk = task === 'task4'
+        ? expected.length >= 6 && expected.length <= 8
+        : expected.length === 4;
+    if (!hiddenCountOk) {
+        issues.push(`скрытых ячеек ${expected.length}, ожидалось ${task === 'task4' ? 'от 6 до 8' : 4}`);
+    }
+    if (typeof w.validateTable === 'function' && !w.validateTable()) issues.push('validateTable=false');
+    if (task === 'task5' && typeof w._task5GateOk === 'function' && !w._task5GateOk()) issues.push('_task5GateOk=false');
+
+    const duplicate = (values, label) => {
+        const normalized = values.map(norm).filter(Boolean);
+        if (new Set(normalized).size !== normalized.length) issues.push(`технический дубль: ${label}`);
+    };
+    duplicate(targets.map(row => row[displayField]), 'видимых строк');
+    duplicate(expected, 'скрытых ответов');
+    duplicate(pool, 'вариантов');
+    if (answerField) duplicate(targets.map(row => row[answerField]), 'ответов в target');
+
+    targets.forEach((row, index) => {
+        const year = yearOf(row);
+        if (!Number.isFinite(year) || year < YEAR_START || year > YEAR_END) {
+            issues.push(`строка ${index + 1} вышла за период: ${Number.isFinite(year) ? year : 'год не распознан'}`);
+        }
+    });
+
+    if (task === 'task3' && typeof w.__tableAudit?.task3Conflicts === 'function') {
+        issues.push(...pairIssues(targets, (a, b) => w.__tableAudit.task3Conflicts(a, b), 'смысловое пересечение процессов'));
+    }
+    if (task === 'task5' && typeof w.__tableAudit?.task5Interchangeable === 'function') {
+        issues.push(...pairIssues(targets, (a, b) => w.__tableAudit.task5Interchangeable(a, b), 'взаимозаменяемые личности'));
+    }
+    if (task === 'task7' && typeof w.__tableAudit?.task7CanUseAsTarget === 'function') {
+        const selected = [], cultures = new Set(), traits = new Set();
+        targets.forEach((row, index) => {
+            if (!w.__tableAudit.task7CanUseAsTarget(row, selected, cultures, traits)) {
+                issues.push(`смысловое пересечение культуры: строка ${index + 1}`);
+            } else if (typeof w.__tableAudit.task7RememberTarget === 'function') {
+                w.__tableAudit.task7RememberTarget(row, selected, cultures, traits);
+            }
+        });
+    }
+    issues.push(...exactRelations(w, task, targets, pool));
+
+    const targetLines = targets.map((row, index) => {
+        if (task === 'task4') {
+            return `${index + 1}. ${row.geo} — ${row.event} — ${row.year}`;
+        }
+        return `${index + 1}. ${row[displayField]} → ${row[answerField]} (${yearOf(row)})`;
+    });
+    return {
+        task,
+        round,
+        targets,
+        pool,
+        expected,
+        issues: [...new Set(issues)],
+        text: [
+            `Раунд ${String(round).padStart(2, '0')} ${issues.length ? '⚠ ' + [...new Set(issues)].join('; ') : '✓'}`,
+            ...targetLines,
+            `Варианты: ${pool.join(' | ')}`
+        ].join('\n')
+    };
+}
+
+function waitForApp(timeoutMs = 30000) {
+    const started = Date.now();
+    return new Promise((resolve, reject) => {
+        const poll = () => {
+            const w = appFrame.contentWindow;
+            if (w?.state && typeof w.generateTable === 'function' &&
+                w.document.getElementById('filter-task') && w.document.getElementById('task-table-body')) {
+                resolve(w);
+                return;
+            }
+            if (Date.now() - started > timeoutMs) {
+                reject(new Error('Приложение не загрузило генератор за 30 секунд'));
+                return;
+            }
+            setTimeout(poll, 100);
+        };
+        poll();
+    });
+}
+
+async function runAudit() {
+    runButton.disabled = true;
+    summary.className = '';
+    summary.textContent = 'Генерация 200 вариантов…';
+    reports.replaceChildren();
+    try {
+        const w = await waitForApp();
+        if (typeof w.__tableAudit?.task3Conflicts !== 'function' || !w.__tableAudit.task3Conflicts(
+            { process: 'развитие законодательства Древней Руси', fact: 'создание Устава Владимира Мономаха', year: 1113 },
+            { process: 'внутриполитическая деятельность князя Ярослава Мудрого', fact: 'ограничение кровной мести', year: 1016 }
+        )) {
+            throw new Error('загружена старая или неисправная защита смысловых пар задания №3');
+        }
+        if (typeof w.__tableAudit?.pickCompatibleTask7Target !== 'function') {
+            throw new Error('загружена старая версия подбора задания №7');
+        }
+        w.state.currentMode = 'normal';
+        w.state.isHomeworkMode = false;
+        w.state.activeHw = null;
+        w.state.mistakeFocus = false;
+        w.state.reviewFocus = false;
+        w.state.mistakesPool = [];
+        w.state.stats.factStreaks = {};
+        w.document.getElementById('filter-period').value = 'custom';
+        w.document.getElementById('custom-year-start').value = String(YEAR_START);
+        w.document.getElementById('custom-year-end').value = String(YEAR_END);
+        w.document.getElementById('filter-rows').value = '4';
+        const hideLearned = w.document.getElementById('toggle-hide-learned');
+        if (hideLearned) hideLearned.checked = false;
+
+        const all = [];
+        for (const task of TASKS) {
+            const taskResults = [];
+            w.state.currentTask = task;
+            w.document.getElementById('filter-task').value = task;
+            for (let round = 1; round <= ROUNDS; round++) {
+                w.generateTable();
+                taskResults.push(inspectRound(w, task, round));
+            }
+            all.push(...taskResults);
+            const section = document.createElement('section');
+            section.id = `report-${task}`;
+            const title = document.createElement('h2');
+            title.textContent = `${task.replace('task', 'Задание №')} — 40 раундов`;
+            const pre = document.createElement('pre');
+            pre.textContent = taskResults.map(result => result.text).join('\n\n');
+            section.append(title, pre);
+            reports.appendChild(section);
+        }
+        window.auditResults = all;
+        const bad = all.filter(result => result.issues.length);
+        summary.className = bad.length ? 'bad' : 'ok';
+        summary.textContent = bad.length
+            ? `Проверено ${all.length} вариантов. Проблемных раундов: ${bad.length}.`
+            : `Проверено ${all.length} вариантов: технические и формализованные смысловые дубли не найдены.`;
+    } catch (error) {
+        summary.className = 'bad';
+        summary.textContent = `Ошибка аудита: ${error.message}`;
+    } finally {
+        runButton.disabled = false;
+    }
+}
+
+runButton.addEventListener('click', runAudit);
+</script>
+</body>
+</html>

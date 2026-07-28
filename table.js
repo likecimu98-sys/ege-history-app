@@ -227,6 +227,26 @@ function _task3SemanticConflict(a, b) {
     if ((ua && ub) || (ua && sb) || (ub && sa)) return true;
     const lyu = /любечск/i, raspad = /распад древнерусск|раздроблен/i;
     if ((lyu.test(a.fact || '') && raspad.test(pb)) || (lyu.test(b.fact || '') && raspad.test(pa))) return true;
+    // Узкий период обнажает тематические «семьи», в которых разные формулировки
+    // процесса всё равно принимают факты друг друга. Например, Устав Мономаха
+    // подходит и к «развитию законодательства», и к «формированию Русской Правды»,
+    // а Любечский съезд и поход Игоря — к общей борьбе Руси с половцами.
+    // Такие строки по отдельности корректны, но рядом создают два защитимых ответа.
+    const semanticText = row => `${row?.process || ''} ${row?.fact || ''}`;
+    // В JavaScript \w не включает кириллицу, поэтому русские окончания задаём явно.
+    const law = row => /законодательств|русск[а-я]* правд|устав[а-я]* владимир|кровн[а-я]* мест|ростовщик/i.test(semanticText(row));
+    const polovtsy = row => /половц/i.test(semanticText(row));
+    const fragmentation = row => /распад|раздробленн|республиканск[а-я]*(?: форм[а-я]*)? правлен[а-я]* в новгород|разорен[а-я]* киев[а-я]*.*боголюб/i.test(semanticText(row));
+    const mongolConflict = row => /монгол|батый|батыев|калк|козельск|торжок|рек[а-я]* сити|разорен[а-я]* рязан/i.test(semanticText(row));
+    const earlyForeignPolicy = row => /внешнеполитическ[а-я]* деятельност[а-я]* первых русских княз|военн[а-я]* поход[а-я]* первых русских княз|поход[а-я]* княз[а-я]* святослав|внешн[а-я]* политик[а-я]* княз[а-я]* владимир|доростол|хазарск[а-я]* каганат|осад[а-я]* корсун|олег[а-я]*.*византи/i.test(semanticText(row));
+    const yaroslav = row => /ярослав[а-я]* мудр|правд[а-я]* ярослав|кровн[а-я]* мест|разгром[а-я]* печенег|софийск[а-я]* собор[а-я]* в киев|город[а-я]* юрьев|занят[а-я]* киевск[а-я]* престол[а-я]* ярослав/i.test(semanticText(row));
+    const christianization = row => /принят[а-я]* христианств|крещен[а-я]* руси|внешн[а-я]* политик[а-я]* княз[а-я]* владимир|осад[а-я]* корсун/i.test(semanticText(row));
+    if ((law(a) && law(b)) || (polovtsy(a) && polovtsy(b)) ||
+        (fragmentation(a) && fragmentation(b)) ||
+        (mongolConflict(a) && mongolConflict(b)) ||
+        (earlyForeignPolicy(a) && earlyForeignPolicy(b)) ||
+        (yaroslav(a) && yaroslav(b)) ||
+        (christianization(a) && christianization(b))) return true;
     return false;
 }
 function _task3Conflicts(a, b) {
@@ -317,8 +337,24 @@ function _task5PersonSpan() {
     });
     return (_t5Span = span);
 }
+function _task5PersonFitsEvent(person, event) {
+    const p = _tableIdentityKey(person);
+    const e = _tableIdentityKey(event);
+    // «Русская Правда» складывалась при Ярославе Мудром и была дополнена
+    // Уставом Владимира Мономаха. В строке с общей формулировкой «составление»
+    // обе личности выглядят защитимыми, поэтому вторую не пускаем в тот же пул.
+    if (/составлен.*русск[а-я]* правд/.test(e) &&
+        (/ярослав.*мудр/.test(p) || /владимир.*мономах/.test(p))) return true;
+    // Расцвет Владимиро-Суздальской земли связывают и с Андреем
+    // Боголюбским, и со Всеволодом Большое Гнездо. В одной таблице обе
+    // личности превращают общую формулировку в задание с двумя ответами.
+    if (/расцвет.*владимиро-суздальск/.test(e) &&
+        (/андрей.*боголюб/.test(p) || /всеволод.*большое.*гнездо/.test(p))) return true;
+    return false;
+}
 function _task5Interchangeable(a, b) {
     if (!a || !b || a.person === b.person) return false;
+    if (_task5PersonFitsEvent(a.person, b.event) || _task5PersonFitsEvent(b.person, a.event)) return true;
     if (typeof a.year !== 'number' || typeof b.year !== 'number') return false;
     // ВОВ (1941–1945): множество разнопрофильных современников — не блокируем друг от друга.
     if (a.year >= 1941 && a.year <= 1945 && b.year >= 1941 && b.year <= 1945) return false;
@@ -409,6 +445,32 @@ function pickTargetTask7(allowed, rowsCount) {
         picked.push(...pickFrom(ep['20th'], 1, usedC, usedT, selectedRows));
     }
     return picked.length === 4 ? shuffleArray(picked) : null;
+}
+
+// Узкий период не покрывает все четыре эпохи, поэтому схема 1+1+1+1 неприменима.
+// Обычный жадный fallback мог первым взять слишком общую характеристику
+// («создан в XII в.»), заблокировать почти весь остаток и отрисовать только 3 строки.
+// Ищем полноценную совместимую четвёрку с возвратом; для пользовательского пула это
+// максимум несколько сотен коротких проверок, зато неполного задания не бывает.
+function pickCompatibleTask7Target(allowed, rowsCount) {
+    const candidates = shuffleArray([...(allowed || [])]);
+    const search = (start, selectedRows, usedCultures, usedTraits) => {
+        if (selectedRows.length === rowsCount) return selectedRows;
+        if (selectedRows.length + (candidates.length - start) < rowsCount) return null;
+        for (let i = start; i < candidates.length; i++) {
+            const candidate = candidates[i];
+            if (!_task7CanUseAsTarget(candidate, selectedRows, usedCultures, usedTraits)) continue;
+            const nextRows = [...selectedRows];
+            const nextCultures = new Set(usedCultures);
+            const nextTraits = new Set(usedTraits);
+            _task7RememberTarget(candidate, nextRows, nextCultures, nextTraits);
+            const found = search(i + 1, nextRows, nextCultures, nextTraits);
+            if (found) return found;
+        }
+        return null;
+    };
+    const found = search(0, [], new Set(), new Set());
+    return found ? shuffleArray(found) : null;
 }
 
 const EPOCH_PICKERS = { task1: pickTargetTask1, task3: pickTargetTask3, task4: pickTargetTask4, task5: pickTargetTask5, task7: pickTargetTask7 };
@@ -888,6 +950,7 @@ function generateDistractors(task, target, missing) {
             //    своего правления (он сам — защитимый ответ). Только task5 (val = личность).
             if (task === 'task5' && typeof isReigningAuthority === 'function' &&
                 targetYears.some(ty => isReigningAuthority(val, ty))) return;
+            if (task === 'task5' && target.some(t => _task5PersonFitsEvent(val, t.event))) return;
             if (t3Procs && t3Procs.some(p => _task3YearInProcess(d.year, p))) return;
             // Обратная проверка: кандидат подходит как ответ для какого-то target.display?
             const myDisplays = fieldToDisplays[val] || new Set();
@@ -1289,6 +1352,11 @@ function generateTableOnce() {
 function validateTable() {
     const slots = $$('#task-table-body .dnd-slot');
     if (!slots.length) return true; // пустая таблица (напр. «ошибок нет») — не ошибка
+    const expectedRows = window.state.currentMode === 'duel'
+        ? 4
+        : (parseInt($('filter-rows')?.value, 10) || 4);
+    const renderedRows = $$('#task-table-body tr[data-index]');
+    if (renderedRows.length !== expectedRows) return false;
     const cfg = TASK_CONFIG[window.state.currentTask];
     const targets = window.state.currentTargetData || [];
     if (cfg && window.state.currentTask !== 'task4') {
@@ -1506,6 +1574,16 @@ function generateTable() {
 
 window.generateTableOnce = generateTableOnce;
 window.validateTable = validateTable;
+// Узкий QA-стенд читает эти чистые предикаты, не дублируя учебную логику.
+// Объект только для чтения и ничего не меняет в пользовательском режиме.
+window.__tableAudit = Object.freeze({
+    task3Conflicts: _task3Conflicts,
+    task5Interchangeable: _task5Interchangeable,
+    task7CanUseAsTarget: _task7CanUseAsTarget,
+    task7RememberTarget: _task7RememberTarget,
+    task7TraitVariants: _task7TraitVariants,
+    pickCompatibleTask7Target
+});
 
 // Task3/5/7 — единый генератор 2-колоночных таблиц
 function generateTwoColumnTable() {
@@ -1543,6 +1621,9 @@ function generateTwoColumnTable() {
         // Умный подбор работает если доступны все эпохи (all, или кастом покрывающий все)
         const coversAll = TASK_EPOCHS.every(e => allowed.some(f => f.c === e));
         if (coversAll && picker) target = picker(allowed, rowsCount) || [];
+        if (target.length === 0 && task === 'task7') {
+            target = pickCompatibleTask7Target(allowed, rowsCount) || [];
+        }
         if (target.length === 0) {
             // Fallback: случайный выбор с дедупликацией
             target = [];

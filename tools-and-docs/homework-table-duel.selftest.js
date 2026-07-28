@@ -22,6 +22,7 @@ const tableContext = {
   console,
   document: { addEventListener() {} },
   requestAnimationFrame() {},
+  shuffleArray(items) { return [...items]; },
   setTimeout,
   clearTimeout,
 };
@@ -65,6 +66,165 @@ assert.match(
   dataSource,
   /process: "борьба за власть между сыновьями Владимира Святого", fact: "убийство князей Бориса и Глеба"/
 );
+
+const lawRows = [
+  { process: 'развитие законодательства Древней Руси', fact: 'создание Устава Владимира Всеволодовича', year: 1113 },
+  { process: 'развитие законодательства в Древней Руси', fact: 'создание первой части Русской Правды', year: 1016 },
+  { process: 'формирование свода законов Русская Правда', fact: 'написание Устава Владимира Мономаха', year: 1113 },
+];
+for (let i = 0; i < lawRows.length; i++) {
+  for (let j = i + 1; j < lawRows.length; j++) {
+    assert.equal(
+      tableContext._task3Conflicts(lawRows[i], lawRows[j]),
+      true,
+      'Task 3 law-process variants must never share one table'
+    );
+  }
+}
+assert.equal(
+  tableContext._task3Conflicts(
+    { process: 'организация совместной обороны Руси против половцев', fact: 'Любечский съезд князей', year: 1097 },
+    { process: 'борьба Руси против половцев', fact: 'поход князя Игоря', year: 1185 }
+  ),
+  true,
+  'Task 3 Polovtsy processes must not create two defensible matches'
+);
+assert.equal(
+  tableContext._task3Conflicts(
+    { process: 'распад Древнерусского государства на самостоятельные княжества и земли', fact: 'разорение Киева войском Андрея Боголюбского', year: 1169 },
+    { process: 'распад Руси на самостоятельные земли', fact: 'установление республиканского правления в Новгороде', year: 1136 }
+  ),
+  true,
+  'Task 3 fragmentation processes must not create two defensible matches'
+);
+assert.equal(
+  tableContext._task3Conflicts(
+    { process: 'распад Древнерусского государства на самостоятельные княжества и земли', fact: 'разорение Киева войском Андрея Боголюбского', year: 1169 },
+    { process: 'установление республиканской формы правления в Новгороде', fact: 'изгнание князя Всеволода Мстиславича', year: 1136 }
+  ),
+  true,
+  'Task 3 republican-form wording must be recognized as the fragmentation family'
+);
+assert.equal(
+  tableContext._task3Conflicts(
+    { process: 'правление князя Ярослава Мудрого', fact: 'разгром печенегов', year: 1036 },
+    { process: 'развитие законодательства в Древней Руси', fact: 'создание первой части Русской Правды при Ярославе Мудром', year: 1016 }
+  ),
+  true,
+  'Task 3 broad Yaroslav process must not coexist with another Yaroslav fact'
+);
+assert.equal(
+  tableContext._task3Conflicts(
+    { process: 'борьба русских земель с монгольскими завоевателями', fact: 'двухнедельная оборона Торжка', year: 1238 },
+    { process: 'первое столкновение Руси с монгольским войском', fact: 'битва на реке Калке', year: 1223 }
+  ),
+  true,
+  'Task 3 Mongol-conflict processes must not accept each other’s facts'
+);
+assert.equal(
+  tableContext._task3Conflicts(
+    { process: 'внешнеполитическая деятельность первых русских князей', fact: 'поход князя Олега на Византию', year: 907 },
+    { process: 'внешняя политика князя Владимира Святославича', fact: 'осада Корсуни', year: 988 }
+  ),
+  true,
+  'Task 3 broad early foreign-policy process must not coexist with a specific ruler process'
+);
+assert.equal(
+  tableContext._task3Conflicts(
+    { process: 'принятие христианства на Руси', fact: 'крещение Руси при князе Владимире Святославиче', year: 988 },
+    { process: 'внешняя политика князя Владимира Святославича', fact: 'осада Корсуни русским войском', year: 988 }
+  ),
+  true,
+  'Task 3 Christianization and Korsun rows must not create two defensible matches'
+);
+assert.equal(
+  tableContext._task5Interchangeable(
+    { event: 'составление Русской Правды', person: 'Ярослав Мудрый', year: 1016 },
+    { event: 'законодательное ограничение произвола ростовщиков', person: 'Владимир Мономах', year: 1113 }
+  ),
+  true,
+  'Vladimir Monomakh must not be offered as a second defensible author of Russkaya Pravda'
+);
+assert.equal(
+  tableContext._task5Interchangeable(
+    { event: 'расцвет Владимиро-Суздальского княжества', person: 'Всеволод Большое Гнездо', year: 1176 },
+    { event: 'перенос столицы из Суздаля во Владимир', person: 'Андрей Боголюбский', year: 1157 }
+  ),
+  true,
+  'Andrei Bogolyubsky and Vsevolod must not both defend the broad principality-flourishing event'
+);
+assert.match(
+  dataSource,
+  /event: "окончательный разгром печенегов под Киевом", person: "Ярослав Мудрый"/,
+  'Task 5 Pecheneg event must identify Yaroslav’s specific victory'
+);
+assert.doesNotMatch(
+  dataSource,
+  /event: "борьба Руси с печенегами", person: "Ярослав Мудрый"/
+);
+assert.match(
+  dataSource,
+  /event: "заключение договора Руси с Византией в 944 г\.", person: "князь Игорь Старый"/,
+  'Task 5 treaty with Byzantium must distinguish Igor from Oleg'
+);
+assert.doesNotMatch(
+  dataSource,
+  /event: "заключение договора Руси с Византией", person: "князь Игорь Старый"/
+);
+assert.match(
+  stateSource,
+  /\/памятник культуры создан в \(\?:xi\|11\) в\/i, \[2, 3, 4, 5, 6, 166\]/,
+  'Task 7 generic XI-century trait must cover every applicable early object'
+);
+assert.match(
+  stateSource,
+  /ярослав\[а-я\]\* мудр\/i, \[2, 3, 4\]/,
+  'Task 7 Yaroslav-era monument trait must also cover Slovo o Zakone i Blagodati'
+);
+assert.match(
+  stateSource,
+  /новгородск\[а-я\]\* земл\/i, \[3, 14\]/,
+  'Task 7 Novgorod-land trait must cover both applicable churches'
+);
+assert.match(
+  stateSource,
+  /киево-печерск\[а-я\]\* монастыр\)\/i, \[6, 11, 166\]/,
+  'Task 7 Nestor traits must cover the chronicle and both Boris-and-Gleb titles'
+);
+assert.match(
+  stateSource,
+  /\/андрея боголюбского\/i, \[8, 9, 12\]/,
+  'Task 7 monuments created under Andrei Bogolyubsky must be one ambiguity group'
+);
+assert.match(
+  stateSource,
+  /\/современником владимира мономаха\/i, \[6, 10, 11\]/,
+  'Task 7 Monomakh-contemporary traits must be one ambiguity group'
+);
+assert.match(
+  stateSource,
+  /\/произведение создано в \(\?:xii\|12\) в\/i, \[7, 8, 9, 10, 11, 12, 13, 14\]/,
+  'Task 7 generic XII-century work trait must cover every applicable object'
+);
+const task7Rows = [
+  { id: 1, culture: 'Общий памятник', trait: 'Общая характеристика', appliesToIds: [1, 2, 3] },
+  { id: 2, culture: 'Памятник 2', trait: 'Характеристика 2', appliesToIds: [2] },
+  { id: 3, culture: 'Памятник 3', trait: 'Характеристика 3', appliesToIds: [3] },
+  { id: 4, culture: 'Памятник 4', trait: 'Характеристика 4', appliesToIds: [4] },
+  { id: 5, culture: 'Памятник 5', trait: 'Характеристика 5', appliesToIds: [5] },
+];
+const compatibleTask7 = tableContext.pickCompatibleTask7Target(task7Rows, 4);
+assert.equal(compatibleTask7.length, 4, 'Narrow task 7 must backtrack to a complete four-row table');
+for (let i = 0; i < compatibleTask7.length; i++) {
+  for (let j = i + 1; j < compatibleTask7.length; j++) {
+    const a = compatibleTask7[i], b = compatibleTask7[j];
+    assert.equal(
+      a.appliesToIds.includes(b.id) || b.appliesToIds.includes(a.id),
+      false,
+      'Backtracking task 7 selection must contain no cross-applicable traits'
+    );
+  }
+}
 
 assert.match(uiSource, /String\(a\.id \|\| ''\)\.indexOf\('legacy_'\) === 0/);
 assert.match(uiSource, /window\.refreshHwState\) window\.refreshHwState\(\);\s*if \(window\.updateHwNavBadge\)/);
