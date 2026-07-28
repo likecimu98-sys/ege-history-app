@@ -1,7 +1,7 @@
 'use strict';
 
-const APP_VERSION = '2026-07-27-vps-45';
-const RELEASE_ASSET_VERSION = '20260727-4';
+const APP_VERSION = '2026-07-27-vps-46';
+const RELEASE_ASSET_VERSION = '20260727-5';
 // ⚠️ Версия НАБОРА КАРТИНОК, а не версия приложения. Поднимай её ТОЛЬКО когда
 // меняется состав offline-assets.json — добавились, удалились или переснялись
 // файлы. От бампа APP_VERSION она не зависит и зависеть не должна.
@@ -227,6 +227,67 @@ async function cleanupOldCaches() {
 }
 
 const NAV_NETWORK_TIMEOUT_MS = 3000;
+const NAV_HARD_TIMEOUT_MS = 8000;
+
+function settleWithin(promise, timeoutMs, fallbackValue = null) {
+    return new Promise((resolve) => {
+        let finished = false;
+        const finish = (value) => {
+            if (finished) return;
+            finished = true;
+            clearTimeout(timer);
+            resolve(value);
+        };
+        const timer = setTimeout(() => finish(fallbackValue), timeoutMs);
+        Promise.resolve(promise).then(finish, () => finish(fallbackValue));
+    });
+}
+
+function emergencyNavigationResponse(requestUrl) {
+    const url = new URL(requestUrl);
+    const retryUrl = new URL(url.toString());
+    retryUrl.searchParams.set('_sw_retry', String(Date.now()));
+    const alternateHost = self.location.hostname === 'www.reshay-istoriyu.ru'
+        ? 'reshay-istoriyu.ru'
+        : 'www.reshay-istoriyu.ru';
+    const alternateUrl = new URL(url.toString());
+    alternateUrl.hostname = alternateHost;
+    alternateUrl.searchParams.set('_sw_retry', String(Date.now()));
+    const escapeAttribute = (value) => String(value)
+        .replace(/&/g, '&amp;')
+        .replace(/"/g, '&quot;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;');
+    const html = `<!doctype html>
+<html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Решай историю! ЕГЭ</title><style>
+html{color-scheme:light dark;font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
+body{margin:0;min-height:100vh;display:grid;place-items:center;background:#eef8ff;color:#152238}
+main{box-sizing:border-box;width:min(92vw,440px);padding:28px;border:1px solid #cfe3ef;border-radius:14px;background:#fff;text-align:center}
+h1{margin:0 0 12px;font-size:24px}p{margin:0 0 20px;line-height:1.5}
+a{display:block;margin-top:12px;padding:14px 18px;border-radius:14px;background:#2563eb;color:#fff;text-decoration:none;font-weight:700}
+a.secondary{background:#e7eef8;color:#17324d}
+@media(prefers-color-scheme:dark){body{background:#101622;color:#eef6ff}main{background:#182131;border-color:#33435a}a.secondary{background:#2a3850;color:#eef6ff}}
+</style></head><body><main><h1>Не удалось загрузить приложение</h1>
+<p>Мы остановили зависшую загрузку. Прогресс на устройстве не удалён.</p>
+<a href="${escapeAttribute(retryUrl)}">Повторить загрузку</a>
+<a class="secondary" href="${escapeAttribute(alternateUrl)}">Открыть запасной адрес</a>
+</main></body></html>`;
+    return new Response(html, {
+        status: 503,
+        headers: {
+            'Content-Type': 'text/html; charset=utf-8',
+            'Cache-Control': 'no-store'
+        }
+    });
+}
+
+async function lookupCachedNavigation(cacheKey) {
+    const cache = await caches.open(STATIC_CACHE);
+    const currentHit = (await cache.match(cacheKey))
+        || (await cache.match(scopedRequest('./index.html')));
+    return currentHit || previousReleaseHtml(cacheKey);
+}
 
 async function networkFirstNavigation(request) {
     // cram.html и другие под-страницы (iframe) кэшируем под их собственным URL,
@@ -246,35 +307,37 @@ async function networkFirstNavigation(request) {
             caches.open(STATIC_CACHE)
                 .then((cache) => putIfOk(cache, cacheKey, response.clone()))
                 .catch(() => {});
-            return response;
-        });
-
-    // Чтение кэша тоже под защитой: если CacheStorage залип, сеть всё равно приедет.
-    const cachedLookup = caches.open(STATIC_CACHE)
-        .then((cache) => cache.match(cacheKey).then((hit) => hit || cache.match(scopedRequest('./index.html'))))
-        // Последняя страховка — HTML ПРЕДЫДУЩЕГО релиза. Без неё сразу после
-        // каждого бампа версии человек оставался вообще без офлайн-копии: имя
-        // STATIC_CACHE построено на APP_VERSION, поэтому бамп создаёт ПУСТОЙ кэш,
-        // а прежний удаляется. Пока страница хоть раз не загрузилась по сети,
-        // упавшая сеть означала Response.error() — то есть «не открывается», и
-        // при этом ни строчки в логах сервера, потому что запрос не дошёл.
-        // 27.07.2026 мы выкатили четыре релиза за день: четыре таких окна.
-        // Устаревший HTML тут заведомо лучше ошибки: index.html сам сверяет
-        // BOOT_RELEASE и чинится (см. watchBoot), а из ошибки выхода нет.
-        .then((hit) => hit || previousReleaseHtml(cacheKey))
-        .catch(() => null);
-
-    // Быстрая сеть → сразу свежий HTML. Медленная сеть, но есть кэш → отдаём кэш через
-    // NAV_NETWORK_TIMEOUT_MS (не держим белый экран). Сеть упала → кэш, иначе Response.error().
-    return await Promise.race([
-        network.catch(async () => (await cachedLookup) || Response.error()),
-        new Promise((resolve) => {
-            setTimeout(async () => {
-                const cached = await cachedLookup;
-                if (cached) resolve(cached);
-            }, NAV_NETWORK_TIMEOUT_MS);
+            return { response };
         })
-    ]);
+        .catch(() => ({ response: null }));
+
+    // Ограничиваем ВСЮ цепочку чтения, включая caches.open(), caches.keys() и поиск
+    // прошлого релиза. Раньше таймаут был только в комментарии: ветка 3 секунд сама
+    // делала `await cachedLookup`, поэтому зависшие одновременно fetch и CacheStorage
+    // оставляли respondWith pending навсегда.
+    const cachedLookup = settleWithin(
+        lookupCachedNavigation(cacheKey),
+        CACHE_READ_TIMEOUT_MS,
+        null
+    );
+    const first = await settleWithin(network, NAV_NETWORK_TIMEOUT_MS, { timedOut: true });
+    if (!first.timedOut) {
+        if (first.response) return first.response;
+        return (await cachedLookup) || emergencyNavigationResponse(request.url);
+    }
+
+    const cached = await cachedLookup;
+    if (cached) return cached;
+
+    // Первая часть уже заняла не больше NAV_NETWORK_TIMEOUT_MS; чтение кэша
+    // стартовало одновременно и гарантированно завершилось за 1,5 секунды.
+    // Поэтому оставшийся таймаут даёт общий предел ровно NAV_HARD_TIMEOUT_MS.
+    const lateNetwork = await settleWithin(
+        network,
+        NAV_HARD_TIMEOUT_MS - NAV_NETWORK_TIMEOUT_MS,
+        { response: null, timedOut: true }
+    );
+    return lateNetwork.response || emergencyNavigationResponse(request.url);
 }
 
 async function cacheFirst(request, cacheName) {

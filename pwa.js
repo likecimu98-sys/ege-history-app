@@ -1,7 +1,7 @@
 (function () {
     'use strict';
 
-    const CLOUD_SYNC_MODULE = './cloud-sync.js?v=20260727-1';
+    const CLOUD_SYNC_MODULE = './cloud-sync.js?v=20260727-5';
     const APP_SHELL_CACHE_MESSAGE = { type: 'CACHE_APP_SHELL' };
     const OFFLINE_CACHE_MESSAGE = { type: 'CACHE_OFFLINE_ASSETS' };
     const APP_SHELL_WARMUP_DELAY_MS = 45000;
@@ -29,13 +29,17 @@
         return signedTelegram || launchParams || !!window.TelegramWebviewProxy;
     }
 
-    async function disableEmbeddedIosServiceWorkers() {
+    function isDirectFallbackHost() {
+        return location.hostname === 'www.reshay-istoriyu.ru';
+    }
+
+    async function unregisterServiceWorkers() {
         if (!('serviceWorker' in navigator)) return;
         try {
             const registrations = await navigator.serviceWorker.getRegistrations();
             await Promise.all(registrations.map((registration) => registration.unregister()));
         } catch (error) {
-            console.warn('[PWA] iOS Telegram service worker cleanup failed:', error);
+            console.warn('[PWA] Service worker cleanup failed:', error);
         }
     }
 
@@ -156,7 +160,16 @@
         // but do not install an intercepting worker in this embedded environment.
         if (isIosTelegramMiniApp()) {
             window.__egeServiceWorkerDisabledReason = 'ios-telegram-webview';
-            await disableEmbeddedIosServiceWorkers();
+            await unregisterServiceWorkers();
+            return;
+        }
+
+        // www — аварийный прямой вход. Он не должен зависеть от уже установленного
+        // Service Worker основного адреса: здесь важнее предсказуемая загрузка из
+        // сети, чем офлайн-режим. Основной домен и Safari/PWA офлайн-кэш сохраняют.
+        if (isDirectFallbackHost()) {
+            window.__egeServiceWorkerDisabledReason = 'direct-fallback-host';
+            await unregisterServiceWorkers();
             return;
         }
 
@@ -226,6 +239,7 @@
         loadFirebaseSync: loadCloudSync,
         syncAfterReconnect,
         flushBeforePause,
-        isIosTelegramMiniApp
+        isIosTelegramMiniApp,
+        isDirectFallbackHost
     };
 })();

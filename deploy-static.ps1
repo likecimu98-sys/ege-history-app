@@ -74,6 +74,7 @@ find "$NEW" -type f -exec chmod 644 {} +
 # VPS clock so Nginx never emits future Last-Modified validators to browsers.
 find "$NEW" -type f -exec touch -c {} +
 LIVE="/var/www/ege-app"
+OLD=""
 # Swap the webroot by renaming a SYMLINK. There used to be two consecutive mv
 # calls here, leaving a fraction of a second where /var/www/ege-app did not
 # exist at all - a request landing in that window got an error. Renaming a
@@ -81,6 +82,7 @@ LIVE="/var/www/ege-app"
 # Bonus: rollback becomes instant too - just repoint the link at the previous
 # release directory, no moving involved.
 if [ -L "$LIVE" ]; then
+    OLD="$(readlink -f "$LIVE")"
     ln -sfn "$NEW" "$LIVE.swap"
     mv -Tf "$LIVE.swap" "$LIVE"
 else
@@ -89,12 +91,32 @@ else
     ln -s "$NEW" "$LIVE"
 fi
 
+# Prepare one-command rollback to the exact release that was live before this
+# deploy. The target directory is retained by the three-release policy below.
+if [ -n "$OLD" ] && [ -d "$OLD" ]; then
+    ROLLBACK="/root/ege-app-static-rollback.sh"
+    {
+        echo '#!/usr/bin/env bash'
+        echo 'set -Eeuo pipefail'
+        printf 'TARGET=%q\n' "$OLD"
+        echo 'LIVE=/var/www/ege-app'
+        echo 'test -d "$TARGET"'
+        echo 'ln -sfn "$TARGET" "$LIVE.swap"'
+        echo 'mv -Tf "$LIVE.swap" "$LIVE"'
+        echo 'echo "rolled back -> $(readlink -f "$LIVE")"'
+    } > "$ROLLBACK"
+    chmod 700 "$ROLLBACK"
+fi
+
 # Keep the three most recent release directories - rollback points at them.
 # Migration snapshots ege-app.rollback-* / *.client-rollback-* are NOT touched:
 # they are the 60-day cutover insurance, different name and different lifetime.
 ls -1dt /var/www/ege-app.release-* 2>/dev/null | tail -n +4 | xargs -r rm -rf
 ls -1dt /var/www/ege-app.prev-* 2>/dev/null | tail -n +3 | xargs -r rm -rf
 echo "deployed release $STAMP -> $(readlink -f "$LIVE")"
+if [ -n "$OLD" ]; then
+    echo "rollback: bash /root/ege-app-static-rollback.sh -> $OLD"
+fi
 '@
     # The remote script travels as a FILE, not as an ssh argument.
     # WARNING - learned the hard way on 2026-07-27: PowerShell 5.1 mangles nested quotes

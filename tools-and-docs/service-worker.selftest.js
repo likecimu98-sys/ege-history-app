@@ -10,16 +10,27 @@ const source = fs.readFileSync(path.join(__dirname, '..', 'service-worker.js'), 
 const pwaSource = fs.readFileSync(path.join(__dirname, '..', 'pwa.js'), 'utf8');
 const indexSource = fs.readFileSync(path.join(__dirname, '..', 'index.html'), 'utf8');
 
-function makeWorker({ cachedResponse = null } = {}) {
+function makeWorker({
+    cachedResponse = null,
+    hangFetch = false,
+    hangCacheOpen = false,
+    hangCacheMatch = false,
+    hangCacheKeys = false,
+    timerCapMs = null
+} = {}) {
     const handlers = {};
     let releaseCacheWriteResolve;
     let releaseCacheWrites = 0;
     let networkFetches = 0;
     let cacheDeletes = 0;
+    const never = () => new Promise(() => {});
+    const workerSetTimeout = timerCapMs === null
+        ? setTimeout
+        : (callback, delay, ...args) => setTimeout(callback, Math.min(delay, timerCapMs), ...args);
 
     const releaseCacheWrite = new Promise((resolve) => { releaseCacheWriteResolve = resolve; });
     const cache = {
-        match: async () => cachedResponse,
+        match: async () => (hangCacheMatch ? never() : cachedResponse),
         put: async () => {
             releaseCacheWrites++;
             await releaseCacheWrite;
@@ -32,19 +43,20 @@ function makeWorker({ cachedResponse = null } = {}) {
         Promise,
         Set,
         console,
-        setTimeout,
+        setTimeout: workerSetTimeout,
         clearTimeout,
         fetch: async () => {
             networkFetches++;
+            if (hangFetch) return never();
             return new Response('window.booted = true;', {
                 status: 200,
                 headers: { 'Content-Type': 'application/javascript' }
             });
         },
         caches: {
-            open: async () => cache,
+            open: async () => (hangCacheOpen ? never() : cache),
             match: async () => cachedResponse,
-            keys: async () => ['ege-history-static-old'],
+            keys: async () => (hangCacheKeys ? never() : ['ege-history-static-old']),
             delete: async () => { cacheDeletes++; return true; }
         },
         self: {
@@ -62,6 +74,23 @@ function makeWorker({ cachedResponse = null } = {}) {
         releaseCacheWriteResolve,
         stats: () => ({ releaseCacheWrites, networkFetches, cacheDeletes })
     };
+}
+
+function makeNavigationRequest(url = 'https://reshay-istoriyu.ru/') {
+    const request = new Request(url);
+    Object.defineProperty(request, 'mode', { value: 'navigate' });
+    Object.defineProperty(request, 'destination', { value: 'document' });
+    return request;
+}
+
+function dispatchNavigation(worker, request = makeNavigationRequest()) {
+    let responsePromise;
+    worker.handlers.fetch({
+        request,
+        respondWith(promise) { responsePromise = Promise.resolve(promise); },
+        waitUntil() {}
+    });
+    return responsePromise;
 }
 
 async function coldCodeDoesNotWaitForCacheStorage() {
@@ -121,6 +150,53 @@ async function activationKeepsPreviousReleaseAlive() {
     worker.releaseCacheWriteResolve();
 }
 
+async function navigationNeverWaitsForHungFetchAndCacheOpen() {
+    const worker = makeWorker({
+        hangFetch: true,
+        hangCacheOpen: true,
+        timerCapMs: 5
+    });
+    const response = await Promise.race([
+        dispatchNavigation(worker),
+        new Promise((_, reject) => setTimeout(
+            () => reject(new Error('navigation stayed pending with hung fetch + caches.open')),
+            200
+        ))
+    ]);
+    assert.equal(response.status, 503);
+    assert.match(await response.text(), /Повторить загрузку/);
+}
+
+async function navigationNeverWaitsForHungPreviousCacheLookup() {
+    const worker = makeWorker({
+        hangFetch: true,
+        hangCacheKeys: true,
+        timerCapMs: 5
+    });
+    const response = await Promise.race([
+        dispatchNavigation(worker),
+        new Promise((_, reject) => setTimeout(
+            () => reject(new Error('navigation stayed pending with hung caches.keys')),
+            200
+        ))
+    ]);
+    assert.equal(response.status, 503);
+    assert.equal(response.headers.get('Cache-Control'), 'no-store');
+}
+
+async function navigationUsesCachedHtmlWhenNetworkHangs() {
+    const worker = makeWorker({
+        cachedResponse: new Response('<!doctype html><title>cached app</title>', {
+            headers: { 'Content-Type': 'text/html; charset=utf-8' }
+        }),
+        hangFetch: true,
+        timerCapMs: 5
+    });
+    const response = await dispatchNavigation(worker);
+    assert.equal(response.status, 200);
+    assert.match(await response.text(), /cached app/);
+}
+
 async function iosTelegramDoesNotInstallInterceptingWorker() {
     let registrations = 0;
     let unregisters = 0;
@@ -131,7 +207,7 @@ async function iosTelegramDoesNotInstallInterceptingWorker() {
         clearTimeout: () => undefined,
         localStorage: { getItem: () => null, setItem: () => undefined },
         location: {
-            protocol: 'https:', pathname: '/', search: '',
+            protocol: 'https:', hostname: 'reshay-istoriyu.ru', pathname: '/', search: '',
             hash: '#tgWebAppData=signed&tgWebAppVersion=8.0&tgWebAppPlatform=ios'
         },
         navigator: {
@@ -160,6 +236,46 @@ async function iosTelegramDoesNotInstallInterceptingWorker() {
     assert.equal(registrations, 0, 'iOS Telegram installed an intercepting Service Worker');
     assert.equal(unregisters, 1, 'iOS Telegram did not unregister the old Service Worker');
     assert.equal(context.window.__egeServiceWorkerDisabledReason, 'ios-telegram-webview');
+}
+
+async function wwwFallbackDoesNotInstallInterceptingWorker() {
+    let registrations = 0;
+    let unregisters = 0;
+    const context = vm.createContext({
+        console,
+        Promise,
+        setTimeout: () => 1,
+        clearTimeout: () => undefined,
+        localStorage: { getItem: () => null, setItem: () => undefined },
+        location: {
+            protocol: 'https:', hostname: 'www.reshay-istoriyu.ru',
+            pathname: '/', search: '', hash: ''
+        },
+        navigator: {
+            userAgent: 'Mozilla/5.0 (Linux; Android 15) AppleWebKit/537.36 Chrome/138 Mobile Safari/537.36',
+            onLine: false,
+            serviceWorker: {
+                controller: {},
+                register: async () => { registrations++; },
+                getRegistrations: async () => [{ unregister: async () => { unregisters++; } }]
+            }
+        },
+        document: {
+            readyState: 'complete', visibilityState: 'visible',
+            documentElement: { toggleAttribute: () => undefined },
+            addEventListener: () => undefined,
+            removeEventListener: () => undefined
+        },
+        window: {
+            addEventListener: () => undefined
+        }
+    });
+    context.window.window = context.window;
+    vm.runInContext(pwaSource, context, { filename: 'pwa.js' });
+    await new Promise((resolve) => setImmediate(resolve));
+    assert.equal(registrations, 0, 'www fallback installed an intercepting Service Worker');
+    assert.equal(unregisters, 1, 'www fallback did not unregister the old Service Worker');
+    assert.equal(context.window.__egeServiceWorkerDisabledReason, 'direct-fallback-host');
 }
 
 function bootHtmlIsOneAtomicRelease() {
@@ -222,7 +338,11 @@ function assetCacheIsIndependentOfAppVersion() {
     await coldCodeDoesNotWaitForCacheStorage();
     await exactReleaseHitAvoidsNetwork();
     await activationKeepsPreviousReleaseAlive();
+    await navigationNeverWaitsForHungFetchAndCacheOpen();
+    await navigationNeverWaitsForHungPreviousCacheLookup();
+    await navigationUsesCachedHtmlWhenNetworkHangs();
     await iosTelegramDoesNotInstallInterceptingWorker();
+    await wwwFallbackDoesNotInstallInterceptingWorker();
     bootHtmlIsOneAtomicRelease();
     console.log('service-worker.selftest: ok');
 })().catch((error) => {
