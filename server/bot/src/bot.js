@@ -10,6 +10,7 @@ const { createVpsFirestoreCompat } = require('./vps-firestore-compat');
 const BOT_TOKEN = process.env.BOT_TOKEN;
 const BOT_USERNAME = process.env.BOT_USERNAME || 'Reshay_istoriyu_bot';
 const APP_URL = process.env.APP_URL || 'https://likecimu98-sys.github.io/ege-history-app/';
+const RECOVERY_URL = process.env.RECOVERY_URL || 'https://reshay-istoriyu.ru/sw-recover';
 const ADMIN_ID = Number(process.env.ADMIN_ID || 0);
 const FB_APP_ID = process.env.FB_APP_ID || 'ege-history-bot';
 const HISTORY_API_URL = process.env.HISTORY_API_URL || 'http://127.0.0.1:8792';
@@ -154,6 +155,7 @@ bot.use(async (ctx, next) => {
 });
 
 const appKb = () => new InlineKeyboard().webApp('🚀 Открыть тренажёр', APP_URL);
+const repairKb = () => new InlineKeyboard().webApp('🛟 Исправить загрузку', RECOVERY_URL);
 const sleep = (ms) => new Promise(r => setTimeout(r, ms));
 // ожидание ввода названия группы после нажатия кнопки «Новая группа»
 const awaitingInput = new Map(); // userId -> { type, ts }
@@ -174,6 +176,7 @@ const CMD_BASE = [
     { command: 'menu', description: '📋 Меню и все команды' },
     { command: 'pc', description: '💻 Открыть на компьютере' },
     { command: 'parent', description: '👪 Отчёт родителям' },
+    { command: 'repair', description: '🛟 Исправить загрузку' },
     { command: 'settings', description: '⚙️ Уведомления' }
 ];
 const CMD_TEACHER = [
@@ -182,6 +185,7 @@ const CMD_TEACHER = [
     { command: 'myclasses', description: '📚 Мои группы и ссылки' },
     { command: 'msg', description: '📣 Сообщение группе' },
     { command: 'delclass', description: '🗑 Удалить группу' },
+    { command: 'repair', description: '🛟 Исправить загрузку' },
     { command: 'settings', description: '⚙️ Уведомления' },
     { command: 'start', description: '🚀 Открыть тренажёр' }
 ];
@@ -192,6 +196,7 @@ const CMD_OWNER = [
     { command: 'msg', description: '📣 Сообщение группе' },
     { command: 'inviteteacher', description: '👨‍🏫 Пригласить преподавателя' },
     { command: 'delclass', description: '🗑 Удалить группу' },
+    { command: 'repair', description: '🛟 Исправить загрузку' },
     { command: 'settings', description: '⚙️ Уведомления' }
 ];
 const CMD_ADMIN = [
@@ -204,6 +209,7 @@ const CMD_ADMIN = [
     { command: 'menu', description: '📋 Меню' },
     { command: 'newclass', description: '➕ Создать группу' },
     { command: 'myclasses', description: '📚 Группы' },
+    { command: 'repair', description: '🛟 Исправить загрузку' },
     { command: 'settings', description: '⚙️ Уведомления' },
     { command: 'start', description: '🚀 Открыть тренажёр' }
 ];
@@ -409,6 +415,14 @@ bot.callbackQuery('onb_parent', async (ctx) => {
 // ---------- Меню/помощь ----------
 bot.command(['menu', 'help'], async (ctx) => { applyCommandMenu(ctx.from.id); await sendMenu(ctx); });
 bot.command('id', async (ctx) => { await ctx.reply(`Твой Telegram ID: \`${ctx.from.id}\``, { parse_mode: 'Markdown' }); });
+bot.command('repair', async (ctx) => {
+    applyCommandMenu(ctx.from.id);
+    await ctx.reply(
+        'Если тренажёр не начинает загружаться, нажми кнопку ниже.\n\n' +
+        'Она откроет восстановление именно внутри Telegram Mini App, удалит только старый кэш приложения и вернёт тебя в тренажёр. Аккаунт и прогресс сохранятся.',
+        { reply_markup: repairKb() }
+    );
+});
 
 // ---------- Вход на компьютере (магик-линк) ----------
 // Ученик тренируется в Telegram, а на ПК (обычный браузер, без TG) открывает ссылку
