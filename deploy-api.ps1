@@ -50,7 +50,10 @@ $sshOptions = @(
 
 try {
     if (-not $SkipDirtyCheck) {
-        $dirty = & git -C $repoRoot status --porcelain
+        # The workspace can be owned by another local Windows profile. Trust only
+        # this resolved repository for these commands; keep global Git protection.
+        $gitTrust = "safe.directory=$($repoRoot -replace '\\', '/')"
+        $dirty = & git -c $gitTrust -C $repoRoot status --porcelain
         if ($LASTEXITCODE -ne 0) { throw 'git status failed' }
         if ($dirty) { throw 'Commit changes before deploying the API.' }
     }
@@ -60,7 +63,8 @@ try {
     # subtree directly makes server/api the archive root, so the ignore rule - which
     # is matched against the archive path - no longer applies.
     Write-Host 'Packing server/api from HEAD...'
-    Invoke-Native { git -C $repoRoot archive --format=tar.gz -o $archive 'HEAD:server/api' } 'git archive failed'
+    if (-not $gitTrust) { $gitTrust = "safe.directory=$($repoRoot -replace '\\', '/')" }
+    Invoke-Native { git -c $gitTrust -C $repoRoot archive --format=tar.gz -o $archive 'HEAD:server/api' } 'git archive failed'
 
     $entries = & tar -tzf $archive
     if ($LASTEXITCODE -ne 0) { throw 'Cannot read archive.' }
