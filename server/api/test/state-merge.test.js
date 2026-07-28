@@ -69,3 +69,20 @@ test('keeps assignment items added on either device and legacy exam mistakes', (
   assert.equal(merged.stats.assignments[0].items[1].progress, 2);
   assert.equal(merged.stats.mockExamMistakes.length, 1);
 });
+
+test('drops active legacy homework ghosts but preserves completed history', () => {
+  const merged = mergeStateValues([
+    { stats: { assignments: [
+      { id: 'legacy_task3_old', status: 'active', items: [{ task: 'task3', goal: 10, progress: 0 }] },
+      { id: 'legacy_task4_done', status: 'done', completedAt: 10, items: [{ task: 'task4', goal: 5, progress: 5 }] },
+      { id: 'hw-current', status: 'active', items: [{ task: 'task3', goal: 6, progress: 1 }] },
+    ] } },
+    { stats: { assignments: [
+      { id: 'legacy_task3_old', status: 'active', updatedAt: 20, items: [{ task: 'task3', goal: 10, progress: 2 }] },
+    ] } },
+  ]);
+
+  assert.deepEqual(merged.stats.assignments.map(item => item.id).sort(), ['hw-current', 'legacy_task4_done']);
+  assert.equal(merged.stats.hwFlashcardsToSolve, 5);
+  assert.equal(merged.stats.hwTask3, 5);
+});

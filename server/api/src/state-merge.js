@@ -134,6 +134,9 @@ function mergeStateValues(values) {
   const assignments = new Map();
   for (const state of states) for (const assignment of state.stats.assignments || []) {
     if (!assignment || !assignment.id) continue;
+    // Active legacy_* records belonged to the removed homework model. Never let
+    // a stale device resurrect their false lobby badge during server-side merge.
+    if (assignment.status === 'active' && String(assignment.id).startsWith('legacy_')) continue;
     const current = assignments.get(assignment.id);
     if (!current || assignment.status === 'done' || (current.status !== 'done' && Number(assignment.updatedAt) >= Number(current.updatedAt))) {
       assignments.set(assignment.id, clone(assignment));

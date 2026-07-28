@@ -2,6 +2,54 @@
 // Заменяет 4 отдельные функции generateTable/Task3/Task5/Task7Table (~800 строк → ~350)
 'use strict';
 
+function _tableIdentityKey(value) {
+    return String(value ?? '')
+        .toLocaleLowerCase('ru-RU')
+        .replace(/ё/g, 'е')
+        .replace(/[«»„“”"'`]/g, '')
+        .replace(/[‐‑‒–—−]/g, '-')
+        .replace(/\s+/g, ' ')
+        .trim();
+}
+
+function _tableRowsCompatible(task, cfg, candidate, selected) {
+    if (!candidate) return false;
+    const displayKey = _tableIdentityKey(candidate[cfg.displayField]);
+    const hiddenKey = _tableIdentityKey(candidate[cfg.fieldName]);
+    if (!displayKey || selected.some(row => _tableIdentityKey(row[cfg.displayField]) === displayKey)) return false;
+    // В двухколоночных заданиях одинаковый скрытый ответ делает два слота
+    // неразличимыми. У задания 4 скрываемые поля выбираются позже и отдельно.
+    if (task !== 'task4' && (!hiddenKey || selected.some(row => _tableIdentityKey(row[cfg.fieldName]) === hiddenKey))) return false;
+    if (task === 'task3' && selected.some(row => _task3Conflicts(candidate, row))) return false;
+    if (task === 'task5' && selected.some(row => _task5Interchangeable(candidate, row))) return false;
+    return true;
+}
+
+// Старые ДЗ по ссылке содержат фиксированные индексы. Просматриваем их по порядку,
+// но никогда не показываем две одинаковые/взаимозаменяемые строки в одной таблице.
+// Конфликтную строку не теряем: переносим в следующий раунд, где она получит другой контекст.
+function _selectHomeworkTargets(task, cfg, dataSource, pool, rowsCount) {
+    const target = [];
+    const selectedIndices = [];
+    const deferredIndices = [];
+    const sourcePool = Array.isArray(pool) ? pool : [];
+    let scanned = 0;
+    for (const rawIndex of sourcePool) {
+        if (target.length >= rowsCount) break;
+        scanned++;
+        const row = dataSource[rawIndex];
+        if (!row) continue;
+        if (_tableRowsCompatible(task, cfg, row, target)) {
+            target.push(row);
+            selectedIndices.push(rawIndex);
+        } else {
+            deferredIndices.push(rawIndex);
+        }
+    }
+    window.state.hwCurrentPool = selectedIndices.concat(deferredIndices, sourcePool.slice(scanned));
+    return target;
+}
+
 // ═══════════════════════════════════════════════════════════
 //  АЛГОРИТМЫ ПОДБОРА СТРОК ПО ЭПОХАМ
 // ═══════════════════════════════════════════════════════════
@@ -196,9 +244,11 @@ function pickTargetTask3(allowed, rowsCount) {
     const uP = new Set(), uF = new Set(), target = [];
     TASK_EPOCHS.forEach(e => {
         for (const f of ep[e]) {
-            if (uP.has(f.process) || uF.has(f.fact)) continue;
+            const processKey = _tableIdentityKey(f.process);
+            const factKey = _tableIdentityKey(f.fact);
+            if (uP.has(processKey) || uF.has(factKey)) continue;
             if (target.some(t => _task3Conflicts(f, t))) continue;
-            target.push(f); uP.add(f.process); uF.add(f.fact); break;
+            target.push(f); uP.add(processKey); uF.add(factKey); break;
         }
     });
     return target.length === 4 ? shuffleArray(target) : null;
@@ -1239,6 +1289,19 @@ function generateTableOnce() {
 function validateTable() {
     const slots = $$('#task-table-body .dnd-slot');
     if (!slots.length) return true; // пустая таблица (напр. «ошибок нет») — не ошибка
+    const cfg = TASK_CONFIG[window.state.currentTask];
+    const targets = window.state.currentTargetData || [];
+    if (cfg && window.state.currentTask !== 'task4') {
+        const display = new Set();
+        const hidden = new Set();
+        for (const row of targets) {
+            const displayKey = _tableIdentityKey(row?.[cfg.displayField]);
+            const hiddenKey = _tableIdentityKey(row?.[cfg.fieldName]);
+            if (!displayKey || !hiddenKey || display.has(displayKey) || hidden.has(hiddenKey)) return false;
+            display.add(displayKey);
+            hidden.add(hiddenKey);
+        }
+    }
     const have = {};
     $$('#pool-container .dnd-chip').forEach(c => {
         const t = c.dataset.pureText;
@@ -1474,10 +1537,7 @@ function generateTwoColumnTable() {
     let target = [];
     if (window.state.isHomeworkMode && window.state.hwTargetIndices?.length > 0) {
         const dataSource = cfg.data();
-        const count = Math.min(rowsCount, window.state.hwCurrentPool.length);
-        window.state.hwCurrentPool.slice(0, count).forEach(i => {
-            if (dataSource[i]) target.push(dataSource[i]);
-        });
+        target = _selectHomeworkTargets(task, cfg, dataSource, window.state.hwCurrentPool, rowsCount);
     } else {
         const picker = EPOCH_PICKERS[task];
         // Умный подбор работает если доступны все эпохи (all, или кастом покрывающий все)
@@ -1507,10 +1567,12 @@ function generateTwoColumnTable() {
             const t5Deferred = [];  // task5: отложенные из-за неоднозначности (добираем, если не хватит)
             for (const f of shuf) {
                 if (target.length >= rowsCount) break;
+                const key1 = _tableIdentityKey(f[dedupeKey]);
+                const key2 = dedupeKey2 ? _tableIdentityKey(f[dedupeKey2]) : '';
                 if (task === 'task1') {
                     if (_task1EventVariants(f).some(v => used1.has(v))) continue;
-                } else if (used1.has(f[dedupeKey])) continue;
-                if (dedupeKey2 && used2.has(f[dedupeKey2])) continue;
+                } else if (used1.has(key1)) continue;
+                if (dedupeKey2 && used2.has(key2)) continue;
                 // Task7: trait не должен быть альтернативой другой уже выбранной culture и наоборот
                 if (task === 'task7') {
                     if (!_task7CanUseAsTarget(f, selectedRows7, selectedCultures7, selectedTraits)) continue;
@@ -1529,8 +1591,8 @@ function generateTwoColumnTable() {
                 if (task === 'task3' && target.some(t => _task3Conflicts(f, t))) { t5Deferred.push(f); continue; }
                 target.push(f);
                 if (task === 'task1') _task1EventVariants(f).forEach(v => used1.add(v));
-                else used1.add(f[dedupeKey]);
-                if (dedupeKey2) { used2.add(f[dedupeKey2]); selectedTraits.add(f[dedupeKey2]); }
+                else used1.add(key1);
+                if (dedupeKey2) { used2.add(key2); selectedTraits.add(f[dedupeKey2]); }
                 if (task === 'task7') _task7RememberTarget(f, selectedRows7, selectedCultures7, selectedTraits);
                 if (task === 'task5') { selectedPersons5.add(f.person); selectedEvents5.add(f.event); }
             }
@@ -1539,9 +1601,11 @@ function generateTwoColumnTable() {
             if ((task === 'task5' || task === 'task3') && target.length < rowsCount && t5Deferred.length) {
                 for (const f of t5Deferred) {
                     if (target.length >= rowsCount) break;
-                    if (used1.has(f[dedupeKey]) || (dedupeKey2 && used2.has(f[dedupeKey2]))) continue;
+                    const key1 = _tableIdentityKey(f[dedupeKey]);
+                    const key2 = dedupeKey2 ? _tableIdentityKey(f[dedupeKey2]) : '';
+                    if (used1.has(key1) || (dedupeKey2 && used2.has(key2))) continue;
                     target.push(f);
-                    used1.add(f[dedupeKey]); if (dedupeKey2) used2.add(f[dedupeKey2]);
+                    used1.add(key1); if (dedupeKey2) used2.add(key2);
                     if (task === 'task5') { selectedPersons5.add(f.person); selectedEvents5.add(f.event); }
                 }
             }
@@ -1623,10 +1687,7 @@ function generateTask4Table() {
 
     let target = [];
     if (window.state.isHomeworkMode && window.state.hwTargetIndices?.length > 0) {
-        const count = Math.min(rowsCount, window.state.hwCurrentPool.length);
-        window.state.hwCurrentPool.slice(0, count).forEach(i => {
-            if (window.bigData[i]) target.push(window.bigData[i]);
-        });
+        target = _selectHomeworkTargets('task4', TASK_CONFIG.task4, window.bigData, window.state.hwCurrentPool, rowsCount);
     } else {
         const allowed = getFilteredPool(actualPeriod, rowsCount);
         if (!allowed || allowed.length === 0) {

@@ -7,14 +7,14 @@
             signInWithCredential, signOut, initializeFirestore, collection, doc, setDoc, getDoc,
             getDocs, addDoc, updateDoc, deleteDoc, deleteField, onSnapshot, query, where,
             orderBy, limit, runTransaction, arrayUnion, arrayRemove, vpsApiFetch, refreshVpsAuth
-        } from "./vps-sync-compat.js?v=20260727-6";
+        } from "./vps-sync-compat.js?v=20260728-7";
 
         // jsPDF грузился с cdnjs.cloudflare.com без SRI — то есть посторонний скрипт
         // исполнялся с полными правами страницы, а при недоступности CDN (у части
         // нашей аудитории это обычное дело) экспорт PDF просто не работал. Довод тот
         // же, что и для telegram-web-app.js: своя копия с того же origin.
         // Версия совпадает с прежней CDN-ной — 2.5.1, лежит в vendor/.
-        const VENDOR_JSPDF = 'vendor/jspdf.umd.min.js?v=20260727-6';
+        const VENDOR_JSPDF = 'vendor/jspdf.umd.min.js?v=20260728-7';
 
         const cloudConfig = { projectId: 'vps-postgresql' };
         
@@ -3276,6 +3276,9 @@
             states.forEach(s => {
                 (Array.isArray(s.stats?.assignments) ? s.stats.assignments : []).forEach(a => {
                     if (!a || !a.id) return;
+                    // Активные legacy_* — фантомы удалённой модели ДЗ. Не даём старому
+                    // устройству воскресить их при объединении с актуальным состоянием.
+                    if (a.status === 'active' && String(a.id).indexOf('legacy_') === 0) return;
                     const cur = asgById.get(a.id);
                     if (!cur) { asgById.set(a.id, JSON.parse(JSON.stringify(a))); return; }
                     if (cur.status === 'done') return;
@@ -3352,7 +3355,8 @@
                 const revokedSet = (window._classRevoked instanceof Set) ? window._classRevoked : new Set();
                 const sweepTs = Number(window._classRevokeBefore) || 0;
                 st.assignments = st.assignments.filter(a => a && a.id &&
-                    (a.status === 'done' || (!revokedSet.has(a.id) && !_sweptByTeacher(a, sweepTs))));
+                    (a.status === 'done' || (String(a.id).indexOf('legacy_') !== 0 &&
+                        !revokedSet.has(a.id) && !_sweptByTeacher(a, sweepTs))));
                 window.state.stats.assignments = st.assignments;
                 if (window.recomputeHwMirror) window.recomputeHwMirror();
             }

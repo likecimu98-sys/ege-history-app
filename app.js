@@ -575,7 +575,11 @@ function checkURLForHomework() {
     if (hwIds) {
         const tsk = p.get('task') || 'task4';
         window.state.isHomeworkMode = true;
-        window.state.hwTargetIndices = hwIds.split(',').map(Number);
+        // Старые ссылки могли содержать повторённые/битые индексы. Один индекс — одно
+        // цельное задание: дубли не должны превращаться в одинаковые строки таблицы.
+        window.state.hwTargetIndices = [...new Set(hwIds.split(',')
+            .map(value => Number(value))
+            .filter(value => Number.isInteger(value) && value >= 0))];
         window.state.hwCurrentPool = [...window.state.hwTargetIndices];
         $('filter-task').value = tsk;
         window.state.currentTask = tsk;

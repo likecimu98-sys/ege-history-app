@@ -13,7 +13,8 @@
     "test:sw-recovery": "node tools-and-docs/sw-recovery.selftest.js",
     "test:bot-repair": "node tools-and-docs/bot-repair.selftest.js",
     "test:security-headers": "node tools-and-docs/security-headers.selftest.js",
-    "check": "npm run test:sw && npm run test:sw-recovery && npm run test:bot-repair && npm run test:security-headers && npm run test:scoring && npm run test:bank && npm run lint:design",
+    "test:homework-table-duel": "node tools-and-docs/homework-table-duel.selftest.js",
+    "check": "npm run test:sw && npm run test:sw-recovery && npm run test:bot-repair && npm run test:security-headers && npm run test:homework-table-duel && npm run test:scoring && npm run test:bank && npm run lint:design",
     "test:scoring": "node tools-and-docs/exam-scoring.selftest.js",
     "test:bank": "node tools-and-docs/exam-bank.selftest.js"
   },

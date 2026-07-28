@@ -72,7 +72,7 @@ window.Sfx = (function () {
         wow: 'assets/sounds/wow.mp3',  // верный ответ
         fah: 'assets/sounds/fah.mp3',  // неверный ответ
         dun: 'assets/sounds/dun.mp3',  // пришла домашка
-        duel: 'assets/sounds/duel.mp3', // зов на дуэль (зацикленный)
+        duel: 'assets/sounds/duel.mp3', // legacy-файл; входящий вызов теперь без звука
     };
     const cache = {};
     let unlocked = false;
@@ -113,8 +113,8 @@ window.Sfx = (function () {
         ['pointerdown', 'touchstart', 'keydown', 'click'].forEach(ev =>
             window.removeEventListener(ev, unlock, true));
     }
-    // Зацикленное воспроизведение (для зова на дуэль) — без проверки isMuted,
-    // глушением управляет вызывающий код (свой ключ duel_challenge_muted).
+    // Универсальный API циклического звука. Вызов на дуэль его больше не использует:
+    // ученику остаются только визуальная плашка и короткая вибрация.
     function loop(name, vol) {
         const a = get(name); if (!a) return;
         try {

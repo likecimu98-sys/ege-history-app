@@ -704,7 +704,9 @@ function refreshHwState() {
     if (!Array.isArray(s.assignments)) { s.assignments = []; return; }
     // Фантомы старой модели (id legacy_*): активные копии больше не поддерживаем —
     // они «воскресали» из зеркала/облака и висели неудаляемым долгом. Сданные оставляем.
+    const assignmentsBeforeCleanup = s.assignments.length;
     s.assignments = s.assignments.filter(a => a && !(a.status === 'active' && String(a.id || '').indexOf('legacy_') === 0));
+    const removedLegacy = assignmentsBeforeCleanup - s.assignments.length;
     let anyCompleted = false;
     s.assignments.forEach(a => {
         if (a.status !== 'active') return;
@@ -725,6 +727,12 @@ function refreshHwState() {
         window.state.isHomeworkMode = false;
     }
     if (anyCompleted && typeof checkAchievements === 'function') checkAchievements();
+    if (removedLegacy > 0) {
+        // Закрепляем очистку локально и отправляем её в облако: иначе старое устройство
+        // снова добавит фантом при следующем объединении состояний.
+        if (typeof saveProgress === 'function') saveProgress();
+        if (typeof window.updateHwNavBadge === 'function') window.updateHwNavBadge();
+    }
     return anyCompleted;
 }
 window.refreshHwState = refreshHwState;

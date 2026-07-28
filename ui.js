@@ -1241,7 +1241,8 @@ function _hwFmtDate(dl) {
     return new Date(dl + 'T00:00:00').toLocaleDateString('ru-RU', { day: 'numeric', month: 'long' });
 }
 function _hwAssignmentActive(a) {
-    return a.status === 'active' && (a.items || []).some(it => !window.hwItemDone(it));
+    if (!a || a.status !== 'active' || String(a.id || '').indexOf('legacy_') === 0) return false;
+    return (a.items || []).some(it => !window.hwItemDone(it));
 }
 function _hwAssignmentRemainingItems(a) {
     return (a.items || []).filter(it => !window.hwItemDone(it)).length;
@@ -1288,6 +1289,7 @@ function _hwItemRow(it, idx, kind) {
 window.openHwTab = function() {
     haptic('light');
     if (window.refreshHwState) window.refreshHwState();
+    if (window.updateHwNavBadge) window.updateHwNavBadge();
     const arr = (window.state.stats.assignments || []).slice();
     const now = Date.now();
     const isOverdue = a => a.deadline && new Date(a.deadline + 'T23:59:59').getTime() < now;
@@ -1449,35 +1451,11 @@ window.maybeAdvanceHw = function() {
 
 // ── Всплывающий вызов на дуэль (сверху, не мешает решать) ──
 let _challengeHideTimer = null;
-let _challengeAudioCtx = null;
 let _lastChallengeShownId = null;
 const _dismissedChallenges = new Set();
 
-// Зов на дуэль: зацикленный звук (assets/sounds/duel.mp3), играет пока висит
-// баннер, и обрывается при «Принять» / «✕» / авто-скрытии (см. hideDuelChallenge).
-// Заглушить: localStorage duel_challenge_muted=1.
-function _playChallengeChime() {
-    try {
-        if (localStorage.getItem('duel_challenge_muted') === '1') return;
-        if (window.Sfx && window.Sfx.loop) { window.Sfx.loop('duel'); return; }
-        // Фолбэк — короткий синтетический «дзынь», если Sfx недоступен
-        const Ctx = window.AudioContext || window.webkitAudioContext;
-        if (!Ctx) return;
-        _challengeAudioCtx = _challengeAudioCtx || new Ctx();
-        if (_challengeAudioCtx.state === 'suspended') _challengeAudioCtx.resume();
-        const ctx = _challengeAudioCtx, t = ctx.currentTime;
-        [[880, 0], [1318.5, 0.10]].forEach(([f, dt]) => {
-            const o = ctx.createOscillator(), g = ctx.createGain();
-            o.type = 'sine'; o.frequency.value = f;
-            g.gain.setValueAtTime(0.0001, t + dt);
-            g.gain.exponentialRampToValueAtTime(0.11, t + dt + 0.02);
-            g.gain.exponentialRampToValueAtTime(0.0001, t + dt + 0.18);
-            o.connect(g); g.connect(ctx.destination);
-            o.start(t + dt); o.stop(t + dt + 0.2);
-        });
-    } catch (e) {}
-}
 function _stopChallengeChime() {
+    // Останавливаем звук от уже открытой старой вкладки после обновления клиента.
     try { if (window.Sfx && window.Sfx.stop) window.Sfx.stop('duel'); } catch (e) {}
 }
 
@@ -1512,7 +1490,6 @@ window.showDuelChallenge = function(ch) {
     if (isNew) {
         el.style.animation = 'duelChalPulse 1.1s ease-in-out 3';
         if (typeof haptic === 'function') haptic('warning');
-        _playChallengeChime();
     }
     clearTimeout(_challengeHideTimer);
     _challengeHideTimer = setTimeout(() => window.hideDuelChallenge(), 26000);
@@ -1787,7 +1764,7 @@ function _weakestSpot() {
 function computeMainAction() {
     const s = window.state.stats;
     const due = _dueReviewCounts();
-    const active = (s.assignments || []).filter(a => a.status === 'active');
+    const active = (s.assignments || []).filter(_hwAssignmentActive);
     const hwRemaining = active.reduce((n, a) => n + (a.items || []).reduce((m, it) => m + window.hwItemRemaining(it), 0), 0);
     const doneToday = (s.dailyStats && s.dailyStats[getTodayString()] && s.dailyStats[getTodayString()].solved) || 0;
     const wp = _workingPeriod();
