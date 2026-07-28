@@ -1,0 +1,100 @@
+<!doctype html>
+<html lang="ru">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+    <meta name="color-scheme" content="light dark">
+    <title>Восстановление загрузки</title>
+    <style>
+        :root { color-scheme: light dark; font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+        * { box-sizing: border-box; }
+        body { margin: 0; min-height: 100vh; display: grid; place-items: center; padding: 24px; background: #eef8ff; color: #172033; }
+        main { width: min(100%, 420px); padding: 28px 22px; border: 1px solid #cfe3f2; border-radius: 14px; background: #fff; text-align: center; }
+        .icon { font-size: 42px; line-height: 1; }
+        h1 { margin: 16px 0 8px; font-size: 22px; }
+        p { margin: 0; color: #526179; line-height: 1.5; }
+        .bar { height: 7px; margin-top: 22px; overflow: hidden; border-radius: 999px; background: #dbeafe; }
+        .bar::after { content: ""; display: block; width: 45%; height: 100%; border-radius: inherit; background: #2563eb; animation: move 1s ease-in-out infinite alternate; }
+        @keyframes move { from { transform: translateX(-15%); } to { transform: translateX(135%); } }
+        @media (prefers-color-scheme: dark) {
+            body { background: #09111f; color: #f3f7ff; }
+            main { background: #111c2e; border-color: #263854; box-shadow: none; }
+            p { color: #aebbd0; }
+            .bar { background: #263854; }
+            .bar::after { background: #60a5fa; }
+        }
+    </style>
+</head>
+<body>
+<main>
+    <div class="icon" aria-hidden="true">🛟</div>
+    <h1>Исправляем загрузку</h1>
+    <p id="status">Удаляем только старый кэш приложения. Прогресс и аккаунт сохранятся.</p>
+    <div class="bar" aria-hidden="true"></div>
+</main>
+<script>
+(function () {
+    'use strict';
+
+    var finished = false;
+    var status = document.getElementById('status');
+
+    function destination() {
+        var next = new URL('/', location.origin);
+        new URLSearchParams(location.search).forEach(function (value, key) {
+            if (key !== '_sw_recover') next.searchParams.append(key, value);
+        });
+        next.searchParams.set('_sw_recovered', String(Date.now()));
+        next.hash = location.hash || '';
+        return next.toString();
+    }
+
+    function openApp() {
+        if (finished) return;
+        finished = true;
+        if (status) status.textContent = 'Готово. Открываем тренажёр…';
+        setTimeout(function () { location.replace(destination()); }, 120);
+    }
+
+    function within(promise, timeoutMs, fallback) {
+        return Promise.race([
+            Promise.resolve(promise).catch(function () { return fallback; }),
+            new Promise(function (resolve) {
+                setTimeout(function () { resolve(fallback); }, timeoutMs);
+            })
+        ]);
+    }
+
+    async function recover() {
+        try {
+            if ('serviceWorker' in navigator) {
+                var registrations = await within(navigator.serviceWorker.getRegistrations(), 1600, []);
+                await within(Promise.all((registrations || []).map(function (registration) {
+                    return registration.unregister().catch(function () { return false; });
+                })), 1600, null);
+            }
+        } catch (error) {}
+
+        // CacheStorage may be the broken component. Its cleanup is deliberately
+        // time-boxed and is never allowed to hold the next navigation.
+        try {
+            if ('caches' in window) {
+                var names = await within(caches.keys(), 1000, []);
+                await within(Promise.all((names || []).filter(function (name) {
+                    return name.indexOf('ege-history-') === 0;
+                }).map(function (name) {
+                    return caches.delete(name).catch(function () { return false; });
+                })), 1000, null);
+            }
+        } catch (error) {}
+
+        openApp();
+    }
+
+    // Even a damaged browser storage implementation cannot leave this page hanging.
+    setTimeout(openApp, 5200);
+    recover();
+})();
+</script>
+</body>
+</html>
