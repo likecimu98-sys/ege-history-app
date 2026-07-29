@@ -930,6 +930,20 @@
             return !!(myUid && player.uid && String(player.uid) === String(myUid));
         }
         function _ddbg() { try { if (localStorage.getItem('ege_duel_debug')) console.log('[Duel]', ...arguments); } catch (e) {} }
+
+        // ─── Режимы дуэли ───────────────────────────────────────────────────────
+        // Один список на весь файл. Клиент играет ТОЛЬКО перечисленное здесь: старая
+        // версия, не знающая 'match', такой матч не увидит и в него не сядет — иначе
+        // один играл бы подбор, а второй классическую таблицу.
+        // Объявлено ДО startChallengeListener: слушатель может отдать закэшированный
+        // снапшот сразу при подписке, а const в TDZ уронил бы весь обработчик.
+        const DUEL_MODES_PLAYABLE = ['swipe', 'match'];
+        function _duelModePlayable(m) { return DUEL_MODES_PLAYABLE.indexOf(m || 'classic') !== -1; }
+        // 'auto' совместим с любым играбельным режимом, конкретный — только сам с собой.
+        function _duelModeMatches(want, has) {
+            const h = has || 'classic';
+            return want === 'auto' ? _duelModePlayable(h) : (want || 'classic') === h;
+        }
         function startChallengeListener() {
             if (!db) { _ddbg('listener: нет db'); return; }
             if (_challengeUnsub) { try { _challengeUnsub(); } catch(e) {} _challengeUnsub = null; }
@@ -959,8 +973,12 @@
                     if (d.player2) return;                            // слот уже занят
                     if (now - (d.createdAt || 0) > 28000) return;     // протух
                     const id = docSnap.id;
-                    // Хозяин стыкуется только с искателем ТОГО ЖЕ режима (классика/свайп).
-                    if (host && (d.mode || 'classic') !== (duel.mode || 'classic')) return;
+                    // Хозяин стыкуется только с совместимым режимом. Свой матч он уже создал
+                    // в конкретном режиме, поэтому здесь сравнение всегда точное.
+                    if (host && !_duelModeMatches(duel.mode, d.mode)) return;
+                    // Не-хозяину показываем только те вызовы, которые эта версия умеет играть:
+                    // иначе клиент со старым набором режимов согласится и сядет не в ту игру.
+                    if (!host && !_duelModePlayable(d.mode)) return;
                     // Если я сам жду — стыкуемся только с матчем с «меньшим» id.
                     // Детерминированный тайбрейк: ровно одна сторона присоединяется,
                     // без гонки «оба приняли друг друга».
@@ -1032,7 +1050,11 @@
             return duel.localSeq;
         }
         window.startDuelSearchDb = async function(mode) {
-            mode = mode === 'swipe' ? 'swipe' : 'classic';
+            // 'auto' — обычный вход с кнопки: присоединяемся к ЛЮБОМУ играбельному режиму,
+            // а если соперника нет и создаём матч сами — бросаем монетку свайп/подбор.
+            // Фильтровать вход по случайно выбранному режиму было бы вдвое хуже для
+            // стыковки: два ищущих человека расходились бы просто по жребию.
+            mode = (_duelModePlayable(mode) || mode === 'classic') ? mode : 'auto';
             if (!fbUser || !db) { _ddbg('поиск невозможен: нет', !fbUser ? 'авторизации' : 'db'); return showToast('❌', 'Подключитесь к сети', 'bg-rose-500', 'border-rose-700'); }
             window.state.duel = { active: false, searching: true, matchId: null, isPlayer1: false, oppName: '', myScore: 0, oppScore: 0, myCombo: 0, oppCombo: 0 };
             window.state.duel.mode = mode;
@@ -1057,7 +1079,7 @@
                     // Брошенный матч (приложение закрыли во время поиска) — на уборку,
                     // иначе очередь разрастается и ломает выборку у всех.
                     if (data.player2 == null && age > 45000) { staleIds.push(docSnap.id); return; }
-                    if ((data.mode || 'classic') !== mode) return; // стыкуем только одинаковые режимы
+                    if (!_duelModeMatches(mode, data.mode)) return; // стыкуем только совместимые режимы
                     if (data.player1 && !_isMyDuelPlayer(data.player1, myUid) && age < 30000) {
                         candidateIds.push(docSnap.id);
                     }
@@ -1104,10 +1126,17 @@
                     listenToDuel(joinedMatchId, myUid);
                 } else {
                     // Не нашли свободный матч — создаём свой.
-                    // Для свайпа колоду генерирует создатель и кладёт прямо в документ матча
-                    // (со снапшотами правителей) — оба игрока получают идентичные карточки.
-                    let swipeSections = null;
-                    if (mode === 'swipe') {
+                    // Колоду генерирует создатель и кладёт прямо в документ матча
+                    // (со снапшотами данных) — оба игрока получают идентичные карточки.
+                    // 'auto' → монетка: половина матчей стартует подбором, половина свайпом.
+                    let createMode = mode === 'auto' ? (Math.random() < 0.5 ? 'match' : 'swipe') : mode;
+                    let swipeSections = null, matchRounds = null;
+                    if (createMode === 'match') {
+                        matchRounds = window.buildMatchDuelRounds ? window.buildMatchDuelRounds() : null;
+                        // Данные №1 ещё не подъехали — молча играем свайпом вместо ошибки.
+                        if (!matchRounds) createMode = 'swipe';
+                    }
+                    if (createMode === 'swipe') {
                         swipeSections = window.buildSwipeDuelSections ? window.buildSwipeDuelSections() : null;
                         if (!swipeSections) {
                             showToast('⚠️', 'Данные свайпа ещё грузятся, попробуй через пару секунд', 'bg-amber-500', 'border-amber-700');
@@ -1115,11 +1144,15 @@
                             return;
                         }
                     }
+                    // Режим матча зафиксирован — храним его в state, чтобы авто-стыковка
+                    // «оба ищут одновременно» сравнивала реальный режим, а не 'auto'.
+                    window.state.duel.mode = createMode;
                     window.state.duel.isPlayer1 = true;
                     const newMatch = await addDoc(matchesRef, {
                         status: 'waiting',
-                        mode,
+                        mode: createMode,
                         ...(swipeSections ? { swipeSections } : {}),
+                        ...(matchRounds ? { matchRounds } : {}),
                         createdAt: Date.now(),
                         player1: { uid: myUid, name: myName, score: 0, combo: 0, elo: _myDuelElo() },
                         player2: null,
@@ -1160,6 +1193,7 @@
                     // Режим и колода дуэли — из документа матча (единая точка для обеих сторон).
                     window.state.duel.mode = data.mode || 'classic';
                     window.state.duel.swipeSections = data.swipeSections || null;
+                    window.state.duel.matchRounds = data.matchRounds || null;
                     window.state.duel.startTime = data.startTime || Date.now();
                     window.initDuelStart(data.startTime);
                 }
@@ -1170,8 +1204,10 @@
                         window.state.duel.oppScore = opp.score || 0;
                         window.state.duel.oppCombo = opp.combo || 0;
                         window.updateDuelUI();
-                        // Свайп-дуэль: живой прогресс соперника (done/correct пишутся вместе со счётом).
-                        if ((window.state.duel.mode || data.mode) === 'swipe' && window.updateSwipeDuelOpp) window.updateSwipeDuelOpp(opp);
+                        // Живой прогресс соперника (done/correct пишутся вместе со счётом).
+                        const dm = window.state.duel.mode || data.mode;
+                        if (dm === 'swipe' && window.updateSwipeDuelOpp) window.updateSwipeDuelOpp(opp);
+                        else if (dm === 'match' && window.updateMatchDuelOpp) window.updateMatchDuelOpp(opp);
                     }
                 }
                 

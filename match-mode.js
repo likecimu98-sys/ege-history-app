@@ -2,6 +2,12 @@
 // «событие ↔ дата» из задания №1), тапаешь две подходящие — исчезают. Таймер идёт
 // вверх, промах = +1 секунда штрафа. Цель — собрать все пары быстрее рекорда.
 // Самодостаточный оверлей (как swipe-mode.js): не трогает currentMode/таблицу.
+//
+// ДУЭЛЬ-ПОДБОР (openMatchDuel) живёт в этом же файле и делит с одиночным режимом
+// сетку, выбор карточек и звуки. Отличия ровно три: таймер идёт ВНИЗ (45 с, как в
+// свайп-дуэли), промах стоит очков, а не секунд, и наверху появляется полоса счёта
+// с соперником. Очки считаются по ТОЙ ЖЕ формуле, что и в свайп-дуэли, иначе Elo
+// в двух режимах означал бы разное и общий топ дуэлей потерял бы смысл.
 'use strict';
 
 (function () {
@@ -10,6 +16,12 @@
     const PAIRS = 6;            // пар в раунде (12 карточек, как в Quizlet)
     const PENALTY_MS = 1000;    // штраф за промах
     const Z = 10006;
+
+    // Дуэль: 4 раунда по 6 пар — заведомо больше, чем успевают за 45 секунд.
+    // Матч всегда обрывает таймер, а не «закончились карточки» у быстрого игрока.
+    const DUEL_ROUNDS = 4;
+    const DUEL_MS = 45000;
+    window.MATCH_DUEL_MS = DUEL_MS;
 
     function _h(type) { try { if (typeof haptic === 'function') haptic(type); } catch (e) {} }
     function _esc(s) {
@@ -61,6 +73,191 @@
 
     function _best() { return Number(window.state && window.state.stats && window.state.stats.matchBestMs) || 0; }
 
+    // ─── Дуэль-подбор: у обоих игроков ОДИНАКОВЫЕ карточки ──────────────────────
+    // Колоду строит создатель матча и кладёт в документ матча — как в свайп-дуэли.
+    // Период НЕ применяем: у соперника он свой, а колода обязана совпасть до карточки.
+    // Уникальность дат — в пределах ВСЕГО матча, а не раунда: одна и та же дата в
+    // разных раундах превратила бы неверную пару в внешне верную при быстром темпе.
+    window.buildMatchDuelRounds = function () {
+        const base = (window.task1Data || []).filter(r => r && r.event && r.year);
+        const need = PAIRS * DUEL_ROUNDS;
+        const picked = [], seen = new Set();
+        for (const r of _shuffle(base.slice())) {
+            const y = String(r.year).trim();
+            if (seen.has(y)) continue;
+            seen.add(y);
+            picked.push(r);
+            if (picked.length === need) break;
+        }
+        if (picked.length < need) return null;
+        const rounds = [];
+        for (let i = 0; i < DUEL_ROUNDS; i++) {
+            rounds.push({ pairs: picked.slice(i * PAIRS, (i + 1) * PAIRS).map(r => ({ e: r.event, y: String(r.year) })) });
+        }
+        return rounds;
+    };
+
+    function _fmtLeft(ms) {
+        const s = Math.max(0, Math.floor(ms / 1000));
+        return Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0');
+    }
+    // plural живёт в ui.js; здесь страхуемся на случай другого порядка загрузки.
+    function _pairs(n) { return typeof plural === 'function' ? plural(n, 'пара', 'пары', 'пар') : 'пар'; }
+
+    window.openMatchDuel = function (opts) {
+        const rounds = ((opts && opts.rounds) || []).filter(r => r && (r.pairs || []).length);
+        const total = rounds.reduce((n, r) => n + r.pairs.length, 0);
+        if (!total) {
+            if (typeof showToast === 'function') showToast('⚠️', 'Не удалось получить колоду дуэли', 'bg-rose-500', 'border-rose-700');
+            try { window.cancelDuelDb && window.cancelDuelDb(); } catch (e) {}
+            return;
+        }
+        if (_m) window.closeMatchMode();
+        try { if (window.Sfx) window.Sfx.unlock(); } catch (e) {}
+        _m = {
+            cards: [], sel: -1, lock: false, done: 0, penalty: 0, t0: Date.now(), int: null, over: false,
+            score: 0, streak: 0, best: 0,
+            duel: {
+                rounds, roundIdx: -1, total, done: 0,
+                oppName: (opts && opts.oppName) || 'Соперник',
+                oppScore: 0, oppDone: 0,
+                endsAt: (opts && opts.endsAt) || (Date.now() + DUEL_MS),
+                finishedMine: false, over: false, timerIv: null
+            }
+        };
+        _render();
+        _duelNextRound();
+        _m.duel.timerIv = setInterval(_duelTick, 250);
+        _duelTick();
+        _h('medium');
+    };
+
+    function _duelNextRound() {
+        const d = _m && _m.duel; if (!d) return;
+        d.roundIdx++;
+        const round = d.rounds[d.roundIdx];
+        if (!round) return _duelMineDone();
+        const cards = [];
+        round.pairs.forEach((p, i) => {
+            cards.push({ pair: i, kind: 'e', text: p.e });
+            cards.push({ pair: i, kind: 'y', text: p.y });
+        });
+        _shuffle(cards);
+        _m.cards = cards; _m.sel = -1; _m.done = 0; _m.lock = false;
+        _renderGrid();
+    }
+
+    function _duelReport() {
+        const d = _m && _m.duel; if (!d) return;
+        try { window.updateDuelScoreDb && window.updateDuelScoreDb(_m.score, _m.streak, { done: d.done, correct: d.done }); } catch (e) {}
+    }
+
+    function _updateDuelBar() {
+        const d = _m && _m.duel; if (!d) return;
+        const me = document.getElementById('mm-d-me'), op = document.getElementById('mm-d-opp');
+        const meB = document.getElementById('mm-d-me-bar'), opB = document.getElementById('mm-d-opp-bar');
+        if (me) me.textContent = `${d.done}/${d.total} · ${_m.score}`;
+        if (op) op.textContent = `${d.oppDone}/${d.total} · ${d.oppScore}`;
+        if (meB) meB.style.width = Math.round(d.done / d.total * 100) + '%';
+        if (opB) opB.style.width = Math.round(d.oppDone / d.total * 100) + '%';
+        const sc = document.getElementById('mm-score'); if (sc) sc.textContent = _m.score;
+        const st = document.getElementById('mm-streak'); if (st) st.textContent = _m.streak;
+    }
+
+    window.updateMatchDuelOpp = function (opp) {
+        const d = _m && _m.duel; if (!d || !opp) return;
+        d.oppScore = opp.score || 0;
+        d.oppDone = opp.done || 0;
+        _updateDuelBar();
+        if (d.finishedMine && d.oppDone >= d.total && !d.over) _duelFinish();
+    };
+
+    function _duelTick() {
+        const d = _m && _m.duel; if (!d) return;
+        const el = document.getElementById('mm-timer');
+        if (el) el.textContent = _fmtLeft(d.endsAt - Date.now());
+        if (d.endsAt - Date.now() <= 0 && !d.over) _duelFinish();
+    }
+
+    function _duelMineDone() {
+        const d = _m && _m.duel; if (!d || d.over) return;
+        d.finishedMine = true;
+        _duelReport();
+        _updateDuelBar();
+        if (d.oppDone >= d.total) return _duelFinish();
+        const grid = document.getElementById('mm-grid');
+        if (grid) grid.innerHTML = `
+            <div style="grid-column:1/-1;align-self:center;text-align:center;color:#64748b">
+                <div style="font-size:44px">🚀</div>
+                <div style="font-size:16px;font-weight:900;margin-top:6px">Все пары собраны!</div>
+                <div style="font-size:12.5px;opacity:.8;margin-top:4px">Жди конца таймера — соперник ещё играет</div>
+            </div>`;
+    }
+
+    function _duelFinish() {
+        const d = _m && _m.duel; if (!d || d.over) return;
+        d.over = true; _m.over = true; _m.lock = true;
+        if (d.timerIv) { clearInterval(d.timerIv); d.timerIv = null; }
+        _duelReport();
+        const grid = document.getElementById('mm-grid');
+        if (grid) grid.innerHTML = `
+            <div style="grid-column:1/-1;align-self:center;text-align:center;color:#64748b">
+                <div style="font-size:44px">⏱</div>
+                <div style="font-size:17px;font-weight:1000;margin-top:6px">Время!</div>
+                <div style="font-size:12.5px;opacity:.8;margin-top:4px">Считаем очки…</div>
+            </div>`;
+        setTimeout(_duelVerdict, 400);
+    }
+
+    // Финал — той же процедурой, что и свайп-дуэль: авторитетные числа из документа
+    // матча (иначе у одного «победа», у другого «ничья»), затем Elo и только потом
+    // cancelDuelDb, который стирает рейтинг соперника из window.state.duel.
+    async function _duelVerdict() {
+        const d = _m && _m.duel; if (!d) return;
+        let my = _m.score, opp = d.oppScore, oppEloDoc = null;
+        try {
+            const fin = window.finalizeDuelScores
+                ? await window.finalizeDuelScores(_m.score, _m.streak, { done: d.done, correct: d.done })
+                : null;
+            if (fin) { my = fin.mine; opp = fin.opp; oppEloDoc = fin.oppElo; d.oppScore = opp; }
+        } catch (e) { console.warn('[Duel] finalize:', e); }
+        let rate = null;
+        try {
+            const oppElo = oppEloDoc || (window.state && window.state.duel && window.state.duel.oppElo) || 1000;
+            rate = window.applyDuelResult ? window.applyDuelResult(my, opp, oppElo) : null;
+            if (rate) {
+                if (window.saveProgress) window.saveProgress();
+                if (window.syncNow) window.syncNow();
+            }
+        } catch (e) { console.warn('[Duel] Elo не применён:', e); }
+        try { if (window.state && window.state.duel) window.state.duel.active = false; } catch (e) {}
+        try { window.cancelDuelDb && window.cancelDuelDb(); } catch (e) {}
+        const win = my > opp, draw = my === opp;
+        _h(win ? 'success' : 'error');
+        _play(win);
+        _updateDuelBar();
+        const ov = document.getElementById('match-overlay'); if (!ov) return;
+        const panel = document.createElement('div');
+        panel.id = 'mm-duel-end';
+        panel.className = 'fixed inset-0 flex items-center justify-center';
+        panel.style.cssText = `z-index:${Z + 1};background:rgba(0,0,0,0.55);backdrop-filter:blur(3px)`;
+        panel.innerHTML = `
+            <div class="bg-white dark:bg-[#1e1e1e] rounded-3xl shadow-2xl text-center" style="padding:24px 22px;width:88%;max-width:340px">
+                <div style="font-size:52px;line-height:1">${win ? '🏆' : draw ? '🤝' : '💔'}</div>
+                <div class="font-black uppercase tracking-widest" style="font-size:15px;margin-top:8px;color:${win ? '#16a34a' : draw ? '#64748b' : '#e11d48'}">${win ? 'Победа!' : draw ? 'Ничья' : 'Поражение'}</div>
+                <div class="font-black tabular-nums text-gray-800 dark:text-gray-200" style="font-size:34px;margin-top:6px">${my} <span style="opacity:.4">:</span> ${opp}</div>
+                <div class="text-[11px] font-bold text-gray-400" style="margin-top:2px">Ты: ${d.done} ${_pairs(d.done)} · ${_esc(d.oppName)}: ${d.oppDone} ${_pairs(d.oppDone)}</div>
+                ${rate ? `<div class="font-black" style="font-size:13px;margin-top:6px;color:${rate.delta >= 0 ? '#16a34a' : '#e11d48'}">🏅 Рейтинг: ${rate.elo} (${rate.delta >= 0 ? '+' : ''}${rate.delta})</div>` : ''}
+                <button id="mm-d-rematch" class="w-full bg-blue-600 text-white rounded-2xl font-black uppercase tracking-wider active:scale-95 transition-transform" style="padding:13px;margin-top:16px;font-size:13px">⚔️ Ещё раз</button>
+                <button id="mm-d-exit" class="w-full bg-gray-100 dark:bg-[#2c2c2c] text-gray-600 dark:text-gray-300 rounded-2xl font-black uppercase tracking-wider active:scale-95 transition-transform" style="padding:11px;margin-top:8px;font-size:12px">✕ Выйти</button>
+                <button id="mm-d-top" class="font-black text-blue-500 underline" style="background:none;border:none;font-size:12px;margin-top:10px;cursor:pointer">🏆 Топ дуэлей</button>
+            </div>`;
+        document.body.appendChild(panel);
+        panel.querySelector('#mm-d-rematch').onclick = () => { panel.remove(); window.closeMatchMode(); if (window.startDuelSearch) window.startDuelSearch(); };
+        panel.querySelector('#mm-d-exit').onclick = () => { panel.remove(); window.closeMatchMode(); };
+        panel.querySelector('#mm-d-top').onclick = () => { panel.remove(); window.closeMatchMode(); if (window.openGlobalTopModal) window.openGlobalTopModal('duel'); };
+    }
+
     window.openMatchMode = function () {
         if (_m) return;
         // Норма/лимит (Q2): подбор считается как обычные строки → упирается в дневной лимит.
@@ -79,6 +276,7 @@
         _shuffle(cards);
         _m = { cards, sel: -1, lock: false, done: 0, penalty: 0, t0: Date.now(), int: null, over: false };
         _render();
+        _renderGrid();
         _m.int = setInterval(_tick, 100);
         _h('light');
     };
@@ -86,10 +284,28 @@
     window.closeMatchMode = function () {
         if (!_m) return;
         clearInterval(_m.int);
+        // Выход из дуэли: гасим таймер и закрываем матч (cancelDuelDb идемпотентен),
+        // иначе соперник до конца таймера играет с «замороженным» счётом ушедшего.
+        if (_m.duel) {
+            if (_m.duel.timerIv) { clearInterval(_m.duel.timerIv); _m.duel.timerIv = null; }
+            try { if (window.state && window.state.duel) window.state.duel.active = false; } catch (e) {}
+            try { window.cancelDuelDb && window.cancelDuelDb(); } catch (e) {}
+        }
         const ov = document.getElementById('match-overlay');
         if (ov) ov.remove();
+        const end = document.getElementById('mm-duel-end');
+        if (end) end.remove();
         _m = null;
+        if (window.updateProgressBars) window.updateProgressBars();
     };
+
+    function _requestExit() {
+        _h('light');
+        if (_m && _m.duel && !_m.duel.over && window.uiConfirm) {
+            return window.uiConfirm('Выйти из дуэли? Это засчитается как сдача.', window.closeMatchMode);
+        }
+        window.closeMatchMode();
+    }
 
     function _tick() {
         if (!_m || _m.over) return;
@@ -102,30 +318,54 @@
         if (old) old.remove();
         const cols = (window.innerWidth || 360) >= 640 ? 4 : 3;
         const best = _best();
+        const d = _m && _m.duel;
         const ov = document.createElement('div');
         ov.id = 'match-overlay';
         ov.className = 'fixed inset-0 flex flex-col bg-gray-50 dark:bg-[#121212]';
         ov.style.cssText = `z-index:${Z};padding:calc(10px + env(safe-area-inset-top)) 10px calc(10px + env(safe-area-inset-bottom))`;
+        // Дуэльная шапка занимает место у сетки, а не наезжает на неё: обе части —
+        // flex-shrink:0 в той же колонке, сетка остаётся flex-grow. На 3 колонках
+        // 12 карточек — 4 ряда по 84px минимум, помещаются и на 568px экране.
         ov.innerHTML = `
             <div style="width:100%;max-width:840px;margin:0 auto;display:flex;flex-direction:column;flex-grow:1;min-height:0">
-            <div class="flex items-center justify-between shrink-0 mb-2" style="gap:8px">
+            <div class="flex items-center justify-between shrink-0" style="gap:8px;margin-bottom:${d ? '6px' : '8px'}">
                 <div class="text-left" style="min-width:86px">
-                    <div class="text-[9px] font-black uppercase tracking-widest text-gray-400">🧩 Подбор · №1</div>
-                    <div class="text-[10px] font-bold text-gray-400">${best ? '🏆 ' + _fmt(best) : 'первый раунд!'}</div>
+                    <div class="text-[9px] font-black uppercase tracking-widest text-gray-400">${d ? '⚔️ Подбор · дуэль' : '🧩 Подбор · №1'}</div>
+                    ${d
+                        ? `<div class="text-[11px] font-black text-gray-500 dark:text-gray-300" style="margin-top:1px">Счёт: <span id="mm-score" class="text-blue-600 dark:text-blue-400">0</span> · 🔥<span id="mm-streak">0</span></div>`
+                        : `<div class="text-[10px] font-bold text-gray-400">${best ? '🏆 ' + _fmt(best) : 'первый раунд!'}</div>`}
                 </div>
                 <div class="text-center">
-                    <div id="mm-timer" class="font-black text-2xl tabular-nums text-gray-800 dark:text-gray-200">0.0 сек</div>
-                    <div id="mm-penalty" class="text-[10px] font-black text-rose-500" style="visibility:hidden">+1 сек штрафа!</div>
+                    <div id="mm-timer" class="font-black text-2xl tabular-nums ${d ? 'text-rose-500' : 'text-gray-800 dark:text-gray-200'}">${d ? _fmtLeft(DUEL_MS) : '0.0 сек'}</div>
+                    <div id="mm-penalty" class="text-[10px] font-black text-rose-500" style="visibility:hidden">${d ? '−5 очков!' : '+1 сек штрафа!'}</div>
                 </div>
                 <button id="mm-exit" class="font-black text-xs bg-white dark:bg-[#2c2c2c] text-gray-600 dark:text-gray-300 rounded-xl border border-gray-200 dark:border-[#3f3f46] shadow-sm active:scale-95 transition-transform" style="padding:8px 12px">✕ Выйти</button>
             </div>
+            ${d ? `
+            <div class="shrink-0" style="display:flex;flex-direction:column;gap:3px;margin-bottom:7px;font-size:11px;font-weight:900">
+                <div style="display:flex;align-items:center;gap:7px">
+                    <span style="width:58px;flex-shrink:0;color:#3b82f6">ТЫ</span>
+                    <div style="flex:1;height:6px;background:rgba(120,120,140,0.22);border-radius:999px;overflow:hidden"><div id="mm-d-me-bar" style="width:0%;height:100%;background:#3b82f6;border-radius:999px;transition:width .3s"></div></div>
+                    <span id="mm-d-me" class="text-gray-500 dark:text-gray-300 tabular-nums" style="flex-shrink:0">0/${d.total} · 0</span>
+                </div>
+                <div style="display:flex;align-items:center;gap:7px">
+                    <span style="width:58px;flex-shrink:0;color:#f59e0b;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${_esc(d.oppName).toUpperCase()}</span>
+                    <div style="flex:1;height:6px;background:rgba(120,120,140,0.22);border-radius:999px;overflow:hidden"><div id="mm-d-opp-bar" style="width:0%;height:100%;background:#f59e0b;border-radius:999px;transition:width .3s"></div></div>
+                    <span id="mm-d-opp" class="text-gray-500 dark:text-gray-300 tabular-nums" style="flex-shrink:0">0/${d.total} · 0</span>
+                </div>
+            </div>` : ''}
             <!-- max-высота карточек + align-content:center: на ПК плитки не раздуваются во весь экран.
                  padding у грида — чтобы scale(1.04) выбранной карточки не обрезался краем overflow -->
             <div id="mm-grid" class="flex-grow" style="display:grid;grid-template-columns:repeat(${cols},1fr);grid-auto-rows:minmax(84px,156px);align-content:center;gap:9px;overflow-y:auto;padding:6px"></div>
             </div>`;
         document.body.appendChild(ov);
-        ov.querySelector('#mm-exit').onclick = () => { _h('light'); window.closeMatchMode(); };
-        const grid = ov.querySelector('#mm-grid');
+        ov.querySelector('#mm-exit').onclick = _requestExit;
+    }
+
+    function _renderGrid() {
+        const grid = document.getElementById('mm-grid');
+        if (!grid || !_m) return;
+        grid.innerHTML = '';
         _m.cards.forEach((c, i) => {
             const b = document.createElement('button');
             b.dataset.idx = String(i);
@@ -162,13 +402,35 @@
             // ── пара! обе исчезают ──
             a.gone = c.gone = true;
             _m.done++;
-            if (window.creditNorm) window.creditNorm(1, 'task1'); // Q2: подбор идёт в норму дня
+            // Дуэль в норму дня и в дневной лимит не идёт (как и свайп-дуэль):
+            // норма — про самостоятельную работу, а не про матч с соперником.
+            if (_m.duel) {
+                // Та же формула, что в свайп-дуэли: 10 очков + растущий бонус за серию
+                // (максимум +20). Менять её здесь нельзя — Elo общий на оба режима.
+                _m.streak++; _m.best = Math.max(_m.best, _m.streak);
+                _m.score += 10 + Math.min(20, (_m.streak - 1) * 2);
+                _m.duel.done++;
+                if (!_m.duel.over) { _duelReport(); _updateDuelBar(); }
+            } else if (window.creditNorm) {
+                window.creditNorm(1, 'task1'); // Q2: подбор идёт в норму дня
+            }
             [j, i].forEach(k => { const el = _cardEl(k); if (el) { el.style.opacity = '0'; el.style.pointerEvents = 'none'; el.style.transform = 'scale(0.8)'; } });
             _play(true); _h('medium');
-            if (_m.done === PAIRS) _finish();
+            if (_m.done === PAIRS) {
+                // Даём доиграть анимации исчезновения последней пары, иначе новый раунд
+                // подменяет сетку мгновенно и выглядит как сбой.
+                if (_m.duel) { _m.lock = true; setTimeout(() => { if (_m && _m.duel && !_m.duel.over) _duelNextRound(); }, 320); }
+                else _finish();
+            }
         } else {
-            // ── промах: +1с, красная встряска обеих ──
-            _m.penalty += PENALTY_MS;
+            // ── промах: в одиночном режиме +1 секунда, в дуэли −5 очков ──
+            if (_m.duel) {
+                _m.streak = 0;
+                _m.score = Math.max(0, _m.score - 5);
+                if (!_m.duel.over) { _duelReport(); _updateDuelBar(); }
+            } else {
+                _m.penalty += PENALTY_MS;
+            }
             _play(false); _h('heavy');
             const pen = document.getElementById('mm-penalty');
             if (pen) { pen.style.visibility = 'visible'; setTimeout(() => { if (pen) pen.style.visibility = 'hidden'; }, 700); }

@@ -283,7 +283,8 @@
             </div>
             <button id="sw-d-top" style="background:none;border:none;color:#a5b4fc;font-size:12px;font-weight:900;cursor:pointer;margin-top:6px;text-decoration:underline">🏆 Топ дуэлей</button>
         </div>`;
-        zone.querySelector('#sw-d-rematch').onclick = () => { window.closeSwipeMode(); if (window.startDuelSearch) window.startDuelSearch('swipe'); };
+        // «Ещё раз» без режима — новый матч снова разыгрывает свайп/подбор жребием.
+        zone.querySelector('#sw-d-rematch').onclick = () => { window.closeSwipeMode(); if (window.startDuelSearch) window.startDuelSearch(); };
         zone.querySelector('#sw-d-exit').onclick = window.closeSwipeMode;
         const topBtn = zone.querySelector('#sw-d-top');
         if (topBtn) topBtn.onclick = () => { window.closeSwipeMode(); if (window.openGlobalTopModal) window.openGlobalTopModal('duel'); };

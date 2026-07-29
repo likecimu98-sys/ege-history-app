@@ -10,10 +10,14 @@ let duelSearchTimer = null;
 let duelSearchSeconds = 0;
 
 window.startDuelSearch = function(mode) {
-    mode = mode || 'swipe'; // дуэль по умолчанию — свайп (классика оставлена в коде на будущее)
+    // Без аргумента — 'auto': присоединяемся к любому играбельному режиму, а свой матч
+    // создаём свайпом или подбором по жребию (см. startDuelSearchDb). Явный режим
+    // оставлен для отладки; классика живёт в коде, но кнопкой не вызывается.
+    mode = mode || 'auto';
     haptic('medium');
     showModal('duel-search-modal');
-    $('duel-search-status').innerText = mode === 'swipe' ? 'Поиск соперника (свайп)...' : 'Поиск соперника...';
+    $('duel-search-status').innerText = mode === 'swipe' ? 'Поиск соперника (свайп)...'
+        : mode === 'match' ? 'Поиск соперника (подбор)...' : 'Поиск соперника...';
     // Рейтинг Elo в окне поиска: видно, за что играем
     const eloEl = $('duel-my-elo');
     if (eloEl) {
@@ -72,14 +76,25 @@ window.startDuelGame = function() {
     // Матч начался — убираем чужой вызов на дуэль (и его зацикленный звук),
     // иначе баннер, показанный в окно отсчёта, играл бы всю дуэль.
     if (window.hideDuelChallenge) window.hideDuelChallenge();
-    // Свайп-дуэль живёт в собственном оверлее — классический игровой экран не трогаем.
-    if ((window.state.duel || {}).mode === 'swipe' && window.openSwipeDuel) {
+    // Свайп и подбор живут в собственных оверлеях — классический игровой экран не трогаем.
+    const duelMode = (window.state.duel || {}).mode;
+    if (duelMode === 'swipe' && window.openSwipeDuel) {
         window.state.currentMode = 'duel';
         Object.assign(window.state.duel, { active: true, myScore: 0, myCombo: 0 });
         window.openSwipeDuel({
             sections: window.state.duel.swipeSections || [],
             oppName: window.state.duel.oppName,
             endsAt: (window.state.duel.startTime || Date.now()) + (window.SWIPE_DUEL_MS || 45000)
+        });
+        return;
+    }
+    if (duelMode === 'match' && window.openMatchDuel) {
+        window.state.currentMode = 'duel';
+        Object.assign(window.state.duel, { active: true, myScore: 0, myCombo: 0 });
+        window.openMatchDuel({
+            rounds: window.state.duel.matchRounds || [],
+            oppName: window.state.duel.oppName,
+            endsAt: (window.state.duel.startTime || Date.now()) + (window.MATCH_DUEL_MS || 45000)
         });
         return;
     }

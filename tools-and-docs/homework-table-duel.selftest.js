@@ -247,4 +247,46 @@ const merged = mergeStateValues([
 assert.deepEqual(merged.stats.assignments.map(item => item.id).sort(), ['hw-current', 'legacy_task3_done']);
 assert.equal(merged.stats.hwFlashcardsToSolve, 5);
 
+// ─── Режимы дуэли: стыковка и единая формула очков ───────────────────────────
+// Свайп и подбор делят один рейтинг Elo и один топ дуэлей. Если формула очков
+// разъедется, победы в двух режимах начнут стоить разного — а увидим мы это
+// только по кривому топу через неделю. Поэтому обе проверяются вместе.
+const matchSource = read('match-mode.js');
+const swipeSource = read('swipe-mode.js');
+const modesSource = read('modes.js');
+
+const SCORE_FORMULA = /score \+?= 10 \+ Math\.min\(20, \(_(?:sw|m)\.streak - 1\) \* 2\)/;
+assert.match(swipeSource, SCORE_FORMULA, 'swipe duel lost the shared scoring formula');
+assert.match(matchSource, SCORE_FORMULA, 'match duel lost the shared scoring formula');
+assert.match(swipeSource, /score = Math\.max\(0, _sw\.score - 5\)/, 'swipe duel lost the miss penalty');
+assert.match(matchSource, /score = Math\.max\(0, _m\.score - 5\)/, 'match duel lost the miss penalty');
+
+// Дуэль не должна засчитываться в дневную норму: норма — про самостоятельную работу.
+assert.match(matchSource, /if \(_m\.duel\) \{[\s\S]*?\} else if \(window\.creditNorm\)/,
+  'match duel must not credit the daily norm');
+
+// Совместимость режимов: 'auto' стыкуется с любым играбельным, конкретный — только
+// сам с собой, неизвестный режим не играется вовсе (защита старых клиентов).
+const modeHelpers = cloudSource.match(
+  /const DUEL_MODES_PLAYABLE = \[[^\]]*\];[\s\S]*?function _duelModeMatches\(want, has\) \{[\s\S]*?\n        \}/);
+assert.ok(modeHelpers, 'duel mode helpers not found in cloud-sync.js');
+const modeCtx = vm.createContext({});
+vm.runInContext(modeHelpers[0] + '\nthis.playable = _duelModePlayable; this.matches = _duelModeMatches;', modeCtx);
+assert.equal(modeCtx.playable('swipe'), true);
+assert.equal(modeCtx.playable('match'), true);
+assert.equal(modeCtx.playable('classic'), false, 'classic must not be offered as a playable duel');
+assert.equal(modeCtx.playable(undefined), false, 'a match without mode is legacy classic — not playable');
+assert.equal(modeCtx.matches('auto', 'swipe'), true);
+assert.equal(modeCtx.matches('auto', 'match'), true);
+assert.equal(modeCtx.matches('auto', 'quiz'), false, 'auto must never join a mode this build cannot play');
+assert.equal(modeCtx.matches('swipe', 'match'), false, 'an explicit mode must not cross over');
+assert.equal(modeCtx.matches('match', 'match'), true);
+
+// Роутинг режима в игру: без него игрок сядет в классическую таблицу против подбора.
+assert.match(modesSource, /duelMode === 'match' && window\.openMatchDuel/, 'match duel is not routed in startDuelGame');
+assert.match(modesSource, /duelMode === 'swipe' && window\.openSwipeDuel/, 'swipe duel routing was lost');
+// Колода подбора обязана уехать в документ матча — иначе у игроков разные карточки.
+assert.match(cloudSource, /\.\.\.\(matchRounds \? \{ matchRounds \} : \{\}\)/, 'match deck is not stored in the match document');
+assert.match(cloudSource, /window\.state\.duel\.matchRounds = data\.matchRounds \|\| null/, 'match deck is not read back from the match document');
+
 console.log('Homework, table uniqueness and silent duel self-test passed.');
