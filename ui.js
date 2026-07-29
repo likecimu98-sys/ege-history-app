@@ -579,13 +579,68 @@ function _isPcWebFreshLocal() {
         return solved === 0;
     } catch (e) { return false; }
 }
-function checkOnboarding() {
-    if (localStorage.getItem('ege_onboarding_done')) return;
-    // Свежий заход на ПК (не из Telegram) — сначала спросим, есть ли уже аккаунт.
-    if (_isPcWebFreshLocal()) { showPcWelcome(); return; }
+// Уже знаем человека? Согласие лежит в состоянии и приезжает из облака вместе с
+// прогрессом; имя — из localStorage или из самого Telegram.
+function _alreadyOnboarded() {
+    if (localStorage.getItem('ege_onboarding_done')) return true;
+    const c = window.state && window.state.stats && window.state.stats.consent;
+    return !!(c && c.acceptedAt);
+}
+function _inTelegramNow() {
+    try {
+        const tg = window.Telegram && window.Telegram.WebApp;
+        return !!(tg && ((tg.initData && String(tg.initData).length > 0) || (tg.initDataUnsafe && tg.initDataUnsafe.user)));
+    } catch (e) { return false; }
+}
+function _showOnboardingOverlay() {
+    // Имя из Telegram — чтобы человек не набирал его заново, если анкету всё же показали.
+    try {
+        const input = $('onb-name-input');
+        const u = (window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.initDataUnsafe || {}).user;
+        if (input && !input.value && u && u.first_name) input.value = String(u.first_name).slice(0, 24);
+    } catch (e) {}
     $('onboarding-overlay').classList.remove('hidden');
     $('onboarding-overlay').classList.add('flex');
 }
+
+// 🔴 Анкету НЕЛЬЗЯ решать по одному localStorage. В Telegram (особенно в десктопном
+// клиенте и в WebView) хранилище может не пережить перезапуск приложения — и тогда
+// знакомого человека с оплаченным прогрессом спрашивали имя и согласие ПРИ КАЖДОМ
+// входе, а следом показывали пустой аккаунт до ответа облака. Это выглядит как
+// потеря аккаунта и убивает возврат.
+// Поэтому: в Telegram ждём ответа облака (там лежит согласие) и показываем анкету
+// только если человек и правда новый. Вне Telegram ничего не ждём — там пусто
+// localStorage действительно означает нового пользователя.
+const ONBOARDING_CLOUD_WAIT_MS = 6000;
+function checkOnboarding() {
+    if (_alreadyOnboarded()) {
+        // Согласие приехало из облака — закрепляем локально, чтобы следующий вход
+        // не ждал сеть вовсе.
+        try { localStorage.setItem('ege_onboarding_done', '1'); } catch (e) {}
+        return;
+    }
+    // Свежий заход на ПК (не из Telegram) — сначала спросим, есть ли уже аккаунт.
+    if (_isPcWebFreshLocal()) { showPcWelcome(); return; }
+    if (!_inTelegramNow()) { _showOnboardingOverlay(); return; }
+
+    const decide = () => {
+        if (_alreadyOnboarded()) {
+            // Знакомый человек: закрепляем флаг локально, чтобы следующий вход был
+            // мгновенным, даже если облако не ответит.
+            try { localStorage.setItem('ege_onboarding_done', '1'); } catch (e) {}
+            return;
+        }
+        _showOnboardingOverlay();
+    };
+    if (window._cloudStateLoaded) return decide();
+    let done = false;
+    const once = () => { if (done) return; done = true; decide(); };
+    document.addEventListener('ege:cloud-state-loaded', once, { once: true });
+    // Страховка: облако может не ответить вовсе (нет сети). Ждать бесконечно нельзя —
+    // новый ученик обязан увидеть согласие до того, как начнёт решать.
+    setTimeout(once, ONBOARDING_CLOUD_WAIT_MS);
+}
+window.checkOnboarding = checkOnboarding;
 
 function showPcWelcome() {
     const ov = $('pc-welcome-overlay'); if (!ov) return;

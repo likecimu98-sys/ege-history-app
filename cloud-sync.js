@@ -3107,8 +3107,14 @@
                 }),
                 deadline: deadline || null,
                 title: title || null,
+                // Класс проставляем, только если выдача идёт РОВНО в одну группу:
+                // иначе метка солгала бы половине получателей. По ней refreshHwState
+                // снимает с учителя домашку его собственной группы.
+                classCode: null,
                 assignedAt: Date.now()
             };
+            const codes = [...new Set(students.map(s => _classDocId(s.classCode)).filter(Boolean))];
+            if (codes.length === 1) rec.classCode = codes[0];
             showToast('⏳', `Выдаю ДЗ ${students.length} ученикам…`, 'bg-blue-500', 'border-blue-700');
             let ok = 0, fail = 0;
             for (const s of students) {
@@ -3120,7 +3126,6 @@
                 } catch (e) { fail++; }
             }
             // Журнал класса(ов) — по всем классам, что есть среди загруженных учеников (для опоздавших)
-            const codes = [...new Set(students.map(s => _classDocId(s.classCode)).filter(Boolean))];
             for (const code of codes) {
                 try {
                     const cref = doc(db, 'artifacts', appId, 'public', 'data', 'classes', code);
@@ -3534,6 +3539,7 @@
                     localStorage.setItem('teacher_class_code', groups[0].code);
                 }
                 if (window.populateTeacherGroups) window.populateTeacherGroups();
+                _dropOwnClassHomework(groups);
                 if (!sessionStorage.getItem('teacher_hint_shown')) {
                     sessionStorage.setItem('teacher_hint_shown', '1');
                     setTimeout(() => showToast('👨‍🏫', 'Кабинет учителя доступен: двойной клик по логотипу', 'bg-purple-600', 'border-purple-800'), 2500);
@@ -3547,6 +3553,47 @@
                 return false;
             }
         };
+
+        // 🔴 Снять с учителя домашку ЕГО СОБСТВЕННЫХ групп.
+        // Учитель, случайно открывший ссылку-приглашение своего ученика, зачислялся
+        // в свою же группу и получал её ДЗ. Само зачисление закрыто в боте, но
+        // выданный долг остался в состоянии навсегда: выйти некуда — принадлежности
+        // к классу уже нет, а задания есть, и в шапке висит чужой долг (516 строк).
+        // Метка classCode есть только у новых выдач, поэтому старьё опознаём точно:
+        // берём журнал каждой своей группы и снимаем всё, что оттуда пришло.
+        // Сданное не трогаем — отметка «сдано» это история, а не долг.
+        let _ownHwSweepDone = false;
+        async function _dropOwnClassHomework(groups) {
+            if (_ownHwSweepDone) return;
+            _ownHwSweepDone = true;
+            const mine = (groups || []).map(g => g && g.code).filter(Boolean);
+            if (!mine.length || !db) return;
+            const active = (window.state.stats.assignments || []).filter(a => a && a.status === 'active');
+            if (!active.length) return;
+            const ids = new Set();
+            for (const code of mine) {
+                try {
+                    const snap = await getDoc(doc(db, 'artifacts', appId, 'public', 'data', 'classes', _classDocId(code)));
+                    if (!snap.exists()) continue;
+                    (Array.isArray(snap.data().assignments) ? snap.data().assignments : [])
+                        .forEach(rec => { if (rec && rec.id) ids.add(rec.id); });
+                } catch (e) { console.warn('[HW] журнал группы не прочитан:', code, e && e.message); }
+            }
+            // Новые выдачи помечены классом — их снимаем и без журнала.
+            const byLabel = active.filter(a => a.classCode && mine.indexOf(a.classCode) !== -1).map(a => a.id);
+            const drop = [...new Set([...active.filter(a => ids.has(a.id)).map(a => a.id), ...byLabel])];
+            if (!drop.length) return;
+            const removed = window.reconcileRevokedAssignments ? window.reconcileRevokedAssignments(drop) : 0;
+            if (window.rememberRevokedHw) window.rememberRevokedHw(drop, 0);
+            if (removed > 0) {
+                if (window.recomputeHwMirror) window.recomputeHwMirror();
+                if (window.saveProgress) window.saveProgress();
+                if (window.syncNow) window.syncNow();
+                if (window.updateGlobalUI) window.updateGlobalUI();
+                if (window.updateHwNavBadge) window.updateHwNavBadge();
+                console.log('[HW] снято ДЗ собственных групп:', removed);
+            }
+        }
 
         // ─── P4: приватный блоб прогресса ────────────────────────────────────
         // fullStateJson переезжает из ПУБЛИЧНОГО students/{id} (его читает любой
@@ -3905,6 +3952,13 @@
                 window._studentPremium = !!(bestData && (bestData.premium || bestData.premiumAuto));
                 window.refreshDailyLimit && window.refreshDailyLimit();
             } catch(e) { console.error('[Sync] loadProgressFromCloud error:', e); }
+            finally {
+                // Сигнал «облако ответило» — по нему checkOnboarding решает, знаком ли
+                // нам человек. Ставим в finally: даже упавшая загрузка обязана снять
+                // ожидание, иначе анкета зависнет невидимой навсегда.
+                window._cloudStateLoaded = true;
+                try { document.dispatchEvent(new Event('ege:cloud-state-loaded')); } catch (e) {}
+            }
         };
 
         window.syncProgressToCloud = async function() {

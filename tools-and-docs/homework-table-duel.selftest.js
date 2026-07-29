@@ -299,4 +299,24 @@ assert.match(modesSource, /duelMode === 'swipe' && window\.openSwipeDuel/, 'swip
 assert.match(cloudSource, /\.\.\.\(matchRounds \? \{ matchRounds \} : \{\}\)/, 'match deck is not stored in the match document');
 assert.match(cloudSource, /window\.state\.duel\.matchRounds = data\.matchRounds \|\| null/, 'match deck is not read back from the match document');
 
+// ─── Анкета не должна всплывать у знакомого человека ─────────────────────────
+// В Telegram localStorage может не пережить перезапуск клиента. Если решать по
+// одному флагу, знакомого ученика спрашивают имя и согласие при каждом входе —
+// это выглядит как потеря аккаунта и убивает возврат.
+assert.match(uiSource, /function _alreadyOnboarded\(\)[\s\S]*?stats\.consent/,
+  'onboarding must also accept consent restored from the cloud');
+assert.match(uiSource, /if \(!_inTelegramNow\(\)\) \{ _showOnboardingOverlay\(\); return; \}/,
+  'outside Telegram the onboarding must stay immediate');
+assert.match(uiSource, /document\.addEventListener\('ege:cloud-state-loaded', once, \{ once: true \}\)/,
+  'in Telegram the onboarding must wait for the cloud answer');
+assert.match(uiSource, /setTimeout\(once, ONBOARDING_CLOUD_WAIT_MS\)/,
+  'a new student must still see consent if the cloud never answers');
+// Сигнал обязан приходить и при упавшей загрузке, иначе анкета зависнет невидимой.
+assert.match(cloudSource, /finally \{[\s\S]{0,400}window\._cloudStateLoaded = true;[\s\S]{0,200}ege:cloud-state-loaded/,
+  'the cloud-loaded signal must fire in finally, not only on success');
+// Домашка собственной группы не должна висеть на учителе.
+assert.match(cloudSource, /async function _dropOwnClassHomework\(groups\)/, 'teacher own-class HW sweep is missing');
+assert.match(stateSource, /myClasses\.has\(a\.classCode\)/, 'refreshHwState must drop own-class homework');
+assert.match(stateSource, /classCode: rec\.classCode \|\| null/, 'assignment classCode must survive normalization');
+
 console.log('Homework, table uniqueness and silent duel self-test passed.');

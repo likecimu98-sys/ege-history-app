@@ -677,6 +677,9 @@ function normalizeAssignmentRec(rec) {
     return {
         id: rec.id,
         title: rec.title || null,
+        // Класс, которому выдали ДЗ. Нужен, чтобы снять с учителя домашку СВОЕЙ же
+        // группы (см. refreshHwState) — без него отличить её от чужой нечем.
+        classCode: rec.classCode || null,
         deadline: rec.deadline || null,
         assignedAt: rec.assignedAt || Date.now(),
         status: 'active',
@@ -791,6 +794,17 @@ function refreshHwState() {
     // Теперь набор сохраняется локально и применяется ЗДЕСЬ, до первой отрисовки;
     // сервер по-прежнему остаётся источником правды и дополняет его.
     s.assignments = s.assignments.filter(a => !revokedLocally(a));
+    // 🔴 ДЗ СВОЕГО ЖЕ класса у учителя. Раньше учитель, ткнувший в ссылку-приглашение
+    // своего ученика, зачислялся в собственную группу и получал её домашку. Зачисление
+    // закрыто в боте, но выданный долг остался в состоянии и висит вечно: выйти
+    // некуда — принадлежности к классу уже нет, а задания есть. Один такой долг
+    // (516 строк на аккаунте владельца) при каждом входе мигал в шапке.
+    // Снимаем невыполненные задания тех классов, которые человек сам ведёт.
+    const myClasses = new Set((window._teacherGroups || []).map(g => g && g.code).filter(Boolean));
+    if (myClasses.size) {
+        s.assignments = s.assignments.filter(a =>
+            !(a && a.status === 'active' && a.classCode && myClasses.has(a.classCode)));
+    }
     const removedLegacy = assignmentsBeforeCleanup - s.assignments.length;
     let anyCompleted = false;
     s.assignments.forEach(a => {
