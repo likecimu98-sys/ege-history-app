@@ -2220,17 +2220,29 @@ function updateGlobalUI() {
 
         // Подсказка с КОНКРЕТНЫМ числом. Раньше здесь было общее «цель дня и стрик»,
         // и на вопрос «сколько мне сегодня решить, чтобы огонёк не погас» приложение
-        // не отвечало нигде. Норма записана одной константой (DAILY_GOAL_LINES),
-        // поэтому подсказка не разъедется с кольцом.
+        // не отвечало нигде.
+        // Порог стрика берём из window.STREAK_DAILY_MIN (utils.js) — это ЕДИНСТВЕННОЕ
+        // место, где решается, засчитан ли день. Писать здесь «хотя бы одну строку»
+        // нельзя: с 30-строчным порогом это прямая ложь, ученик поверит и потеряет серию.
         const ringBtn = goalRing && goalRing.closest('button');
         if (ringBtn) {
+            const streakMin = window.STREAK_DAILY_MIN || DAILY_GOAL_LINES;
             const left = Math.max(0, DAILY_GOAL_LINES - doneToday);
+            const needStreak = Math.max(0, streakMin - doneToday);
+            const rows = n => plural(n, 'строку', 'строки', 'строк');
             const goalLine = left > 0
                 ? `Сегодня решено ${doneToday} из ${DAILY_GOAL_LINES} — осталось ${left}`
                 : `Цель дня выполнена: ${doneToday} из ${DAILY_GOAL_LINES}`;
-            const streakLine = streakDays > 0
-                ? `Серия: ${streakDays} ${plural(streakDays, 'день', 'дня', 'дней')} подряд. Чтобы не прервать — решай хотя бы одну строку в день.`
-                : 'Реши хотя бы одну строку сегодня, чтобы начать серию.';
+            let streakLine;
+            if (streakDays > 0 && needStreak === 0) {
+                streakLine = `Серия: ${streakDays} ${plural(streakDays, 'день', 'дня', 'дней')} подряд — сегодня уже засчитан.`;
+            } else if (streakDays > 0) {
+                streakLine = `Серия: ${streakDays} ${plural(streakDays, 'день', 'дня', 'дней')} подряд. Чтобы не прервать — реши сегодня ещё ${needStreak} ${rows(needStreak)}.`;
+            } else if (needStreak > 0) {
+                streakLine = `День идёт в серию от ${streakMin} ${rows(streakMin)}. Сегодня осталось ${needStreak}.`;
+            } else {
+                streakLine = `День засчитан в серию: решено ${doneToday} из ${streakMin}.`;
+            }
             ringBtn.title = `${goalLine}\n${streakLine}`;
         }
     }
