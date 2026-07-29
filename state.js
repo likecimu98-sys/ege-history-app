@@ -600,6 +600,11 @@ function updateScoreAndStats(linesCount, isPerfectHw, egePointsToAdd) {
 //          'learned' — считается живьём: сколько фактов периода уже выучено (SRS level>0).
 
 const HW_EPOCHS = ['early', '18th', '19th', '20th'];
+// Этапы, у которых охват задаётся годами (yearStart/yearEnd), а не селектором периода.
+// Одна точка правды: тот же список нужен нормализации в state.js и санитайзерам выдачи
+// в cloud-sync.js, и разъехавшись, он молча стирал бы рамки при выдаче ДЗ.
+const RANGE_TASKS = new Set(['cram', 'match']);
+window.HW_RANGE_TASKS = RANGE_TASKS;
 
 function hwIsOnTime(deadline, whenMs) {
     if (!deadline) return true;
@@ -663,7 +668,10 @@ function normalizeAssignmentRec(rec) {
             done: false
         };
         if (o.period === 'custom') { o.yearStart = Number(it.yearStart) || 862; o.yearEnd = Number(it.yearEnd) || 2026; }
-        else if (o.task === 'cram' && it.yearStart && it.yearEnd) { o.yearStart = Number(it.yearStart); o.yearEnd = Number(it.yearEnd); } // диапазон зубрёжки не терять
+        // Зубрёжка и подбор задаются хронологическими рамками БЕЗ period='custom' —
+        // их диапазон обязан пережить нормализацию, иначе ДЗ «даты XX века»
+        // молча превращается в «вся история».
+        else if (RANGE_TASKS.has(o.task) && it.yearStart && it.yearEnd) { o.yearStart = Number(it.yearStart); o.yearEnd = Number(it.yearEnd); }
         return o;
     });
     return {

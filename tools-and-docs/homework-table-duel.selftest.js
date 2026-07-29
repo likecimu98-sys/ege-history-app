@@ -262,8 +262,18 @@ assert.match(swipeSource, /score = Math\.max\(0, _sw\.score - 5\)/, 'swipe duel 
 assert.match(matchSource, /score = Math\.max\(0, _m\.score - 5\)/, 'match duel lost the miss penalty');
 
 // Дуэль не должна засчитываться в дневную норму: норма — про самостоятельную работу.
-assert.match(matchSource, /if \(_m\.duel\) \{[\s\S]*?\} else if \(window\.creditNorm\)/,
+// Норма и прогресс ДЗ живут ТОЛЬКО в ветке «не дуэль».
+assert.match(matchSource, /if \(_m\.duel\) \{[\s\S]*?\} else \{\s*\n\s*if \(window\.creditNorm\) window\.creditNorm\(1, 'task1'\);/,
   'match duel must not credit the daily norm');
+// ДЗ «подбор» не проходит через checkAnswers — без этого вызова этап не сдвинется.
+assert.match(matchSource, /if \(_m\.hw && window\.creditActiveHwItem\) \{\s*\n\s*window\.creditActiveHwItem\('match', 1, 0\);/,
+  'match homework progress is not credited');
+// Рамки учителя обязаны переживать нормализацию задания и оба санитайзера выдачи.
+assert.match(stateSource, /const RANGE_TASKS = new Set\(\['cram', 'match'\]\)/, 'HW range-task list changed');
+assert.equal((cloudSource.match(/window\.HW_RANGE_TASKS \|\| new Set\(\['cram'\]\)/g) || []).length, 2,
+  'both assignment sanitizers must keep year ranges for range-tasks');
+assert.match(uiSource, /window\.openMatchMode\(\{ hw: true, yearStart: it\.yearStart, yearEnd: it\.yearEnd \}\)/,
+  'match homework must start with the teacher year range');
 
 // Совместимость режимов: 'auto' стыкуется с любым играбельным, конкретный — только
 // сам с собой, неизвестный режим не играется вовсе (защита старых клиентов).

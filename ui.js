@@ -63,8 +63,11 @@ const HWC_TASKS = [
     { v: 'task3', t: '🔗 №3 Процессы' },
     { v: 'task5', t: '👤 №5 Личности' },
     { v: 'task7', t: '🎨 №7 Культура' },
-    { v: 'cram',  t: '⚡ Зубрёжка дат' }
+    { v: 'cram',  t: '⚡ Зубрёжка дат' },
+    { v: 'match', t: '🧩 Подбор дат (№1)' }
 ];
+// Этапы, охват которых задаётся годами (поля «Годы от—до»), а не селектором периода.
+const HWC_RANGE_TASKS = ['cram', 'match'];
 const HWC_PERIODS = [
     { v: 'all', t: 'Вся история' }, { v: 'early', t: 'До XVIII в.' },
     { v: '18th', t: 'XVIII век' }, { v: '19th', t: 'XIX век' }, { v: '20th', t: 'XX век' },
@@ -104,14 +107,16 @@ window.openHwComposer = function(target) {
 // ─── Список выданных ДЗ + отмена (вариант А): весь класс или конкретный ученик ───
 let _hwListCache = [];
 let _hwlCtx = { mode: 'class', code: '', uid: '', name: '' };
-const _HWL_TASK = { task1: '⏳№1', task3: '🔗№3', task4: '📍№4', task5: '👤№5', task7: '🎨№7', cram: '⚡Зубрёжка' };
+const _HWL_TASK = { task1: '⏳№1', task3: '🔗№3', task4: '📍№4', task5: '👤№5', task7: '🎨№7', cram: '⚡Зубрёжка', match: '🧩Подбор' };
 const _HWL_UNIT = { lines: 'строк', points: 'баллов', learned: 'фактов' };
+// Подбор считает пары, а не строки: «20 строк» в списке ДЗ вводило бы в заблуждение.
+function _hwUnit(it) { return it.task === 'match' ? 'пар' : (_HWL_UNIT[it.metric] || ''); }
 function _hwlEsc(s) { return String(s == null ? '' : s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c])); }
 function _hwlItemSummary(it) {
-    const scope = it.task === 'cram'
+    const scope = HWC_RANGE_TASKS.indexOf(it.task) !== -1
         ? (it.yearStart && it.yearEnd ? `${it.yearStart}–${it.yearEnd}` : 'любые')
         : (it.period === 'custom' ? `${it.yearStart || '?'}–${it.yearEnd || '?'}` : (it.period || 'all'));
-    return `${_HWL_TASK[it.task] || it.task} ${it.goal} ${_HWL_UNIT[it.metric] || ''} · ${scope}`;
+    return `${_HWL_TASK[it.task] || it.task} ${it.goal} ${_hwUnit(it)} · ${scope}`;
 }
 function _hwlStateBadge(state) {
     if (state === 'done') return '<span style="font-size:9px;font-weight:900;color:#059669;background:rgba(16,185,129,0.14);border-radius:6px;padding:2px 6px">сдано ✓</span>';
@@ -358,13 +363,34 @@ function _hwcAvail() {
     _hwcSyncDraft();
     const { task, period, metric, yearStart, yearEnd } = c.draft;
     const hint = document.getElementById('hwc-avail');
-    // Зубрёжка: период/метрика не нужны — цель всегда «вызубрить N дат». Прячем лишние контролы.
+    // Зубрёжка и подбор: период/метрика не нужны — охват задают годы, а цель считается
+    // в своих единицах (дат / пар). Прячем лишние контролы.
     const isCram = task === 'cram';
+    const isMatch = task === 'match';
+    const byYears = HWC_RANGE_TASKS.indexOf(task) !== -1;
     const periodRow = document.getElementById('hwc-period-row');
     const metricRow = document.getElementById('hwc-metric-row');
-    if (periodRow) periodRow.style.display = isCram ? 'none' : '';
-    if (metricRow) metricRow.style.display = isCram ? 'none' : '';
-    // Год-диапазон («Годы от—до») показываем И для зубрёжки — это выбор дат для ДЗ.
+    if (periodRow) periodRow.style.display = byYears ? 'none' : '';
+    if (metricRow) metricRow.style.display = byYears ? 'none' : '';
+    // Год-диапазон («Годы от—до») показываем И для зубрёжки/подбора — это выбор дат для ДЗ.
+    if (isMatch) {
+        c.draft.metric = 'lines';   // пары накапливаются как строки — прогресс этапа
+        if (hint) {
+            let ys2 = Number(yearStart) || 862, ye2 = Number(yearEnd) || 2026;
+            if (ys2 > ye2) { const t = ys2; ys2 = ye2; ye2 = t; }
+            const narrowed = !(ys2 <= 862 && ye2 >= 2026);
+            const info = window.matchDatesInRange ? window.matchDatesInRange(ys2, ye2) : null;
+            hint.style.display = '';
+            if (!info) { hint.textContent = '🧩 Подбор дат — данные №1 ещё грузятся…'; return; }
+            const scope = narrowed ? `${ys2}–${ye2}` : 'вся история';
+            // Раунд = 6 пар из УНИКАЛЬНЫХ дат. Если их меньше шести, движок молча
+            // расширится до всей базы — учитель должен узнать об этом здесь, а не от ученика.
+            hint.textContent = info.unique < info.pairsNeeded
+                ? `⚠️ ${scope}: дат всего ${info.unique} — на раунд нужно ${info.pairsNeeded}. Расширьте диапазон, иначе подбор пойдёт по всей истории.`
+                : `🧩 Подбор дат · ${scope}: ${info.total} ${_ruFacts(info.total)}, из них ${info.unique} с разными годами. Цель — сколько пар собрать.`;
+        }
+        return;
+    }
     if (isCram) {
         c.draft.metric = 'learned';
         if (hint) {
@@ -387,18 +413,18 @@ function _hwcAvail() {
     if (!hint) return;
     const isCustom = period === 'custom';
     const ys = isCustom ? yearStart : undefined, ye = isCustom ? yearEnd : undefined;
-    if (metric === 'learned' && window.learnedCountInPeriod) {
-        const { total } = window.learnedCountInPeriod(task, period, ys, ye);
-        hint.textContent = `Доступно фактов: ${total}`;
-        hint.style.display = '';
-    } else if (isCustom) {
-        const cfg = window.TASK_CONFIG && window.TASK_CONFIG[task];
-        if (cfg && cfg.data) {
-            const count = cfg.data().filter(f => { const y = getYearFromFact(f); return y >= yearStart && y <= yearEnd; }).length;
-            hint.textContent = `Фактов в диапазоне ${yearStart}–${yearEnd}: ${count}`;
-            hint.style.display = '';
-        } else { hint.style.display = 'none'; }
-    } else { hint.style.display = 'none'; }
+    // Сколько фактов в выбранном охвате — показываем ВСЕГДА, а не только для «своих
+    // годов» и метрики «выучить». Раньше на пресетных периодах подсказка пропадала,
+    // и учитель ставил цель «40 строк» там, где фактов всего 12.
+    const scopeTxt = isCustom ? `${yearStart}–${yearEnd}` : (HW_PERIOD_LABEL[period] || period);
+    const { total } = (window.learnedCountInPeriod
+        ? window.learnedCountInPeriod(task, period, ys, ye)
+        : { total: 0 });
+    if (!total) { hint.style.display = 'none'; return; }
+    hint.style.display = '';
+    hint.textContent = metric === 'learned'
+        ? `${scopeTxt}: доступно ${total} ${_ruFacts(total)} — больше выучить не выйдет.`
+        : `${scopeTxt}: ${total} ${_ruFacts(total)} в задании. Цель может быть и больше — факты повторяются.`;
 }
 window._hwcAvail = _hwcAvail;
 
@@ -408,12 +434,20 @@ window._hwcAddItem = function() {
     const { task, period, metric } = c.draft;
     let goal = parseInt(c.draft.goal);
     if (isNaN(goal) || goal <= 0) return showToast('⚠️', 'Укажите цель (> 0)', 'bg-rose-500', 'border-rose-700');
-    // Зубрёжка — отдельный этап без периода: «вызубрить N дат» (любые блоки тренажёра).
-    if (task === 'cram') {
-        const cit = { task: 'cram', metric: 'learned', goal };
-        // Диапазон лет для зубрёжки (необязательно): сохраняем, только если сужен относительно полного 862–2026.
+    // Зубрёжка и подбор — этапы без периода: охват задаётся годами.
+    // Диапазон сохраняем, только если он сужен относительно полного 862–2026.
+    if (task === 'cram' || task === 'match') {
+        const cit = task === 'cram'
+            ? { task: 'cram', metric: 'learned', goal }
+            : { task: 'match', period: 'all', metric: 'lines', goal };
         const ys = c.draft.yearStart, ye = c.draft.yearEnd;
         if (ys && ye && !(ys <= 862 && ye >= 2026)) { cit.yearStart = Math.min(ys, ye); cit.yearEnd = Math.max(ys, ye); }
+        if (task === 'match' && window.matchDatesInRange) {
+            const info = window.matchDatesInRange(cit.yearStart || 862, cit.yearEnd || 2026);
+            if (info && info.unique < info.pairsNeeded) {
+                return showToast('⚠️', `В диапазоне только ${info.unique} разных дат — на раунд нужно ${info.pairsNeeded}`, 'bg-rose-500', 'border-rose-700');
+            }
+        }
         c.items.push(cit);
         c.draft.goal = '';
         return _renderHwComposer();
@@ -463,18 +497,17 @@ function _renderHwComposer() {
     const targetName = c.target.type === 'class'
         ? `Весь класс — ${c.target.count} ${c.target.count === 1 ? 'ученик' : 'учеников'}`
         : c.target.name;
-    const metricUnit = { lines: 'строк', points: 'баллов', learned: 'фактов' };
-    const taskShort = { task1: '⏳№1', task3: '🔗№3', task4: '📍№4', task5: '👤№5', task7: '🎨№7', cram: '⚡Зубрёжка' };
+    const taskShort = { task1: '⏳№1', task3: '🔗№3', task4: '📍№4', task5: '👤№5', task7: '🎨№7', cram: '⚡Зубрёжка', match: '🧩Подбор' };
     const periodShort = Object.fromEntries(HWC_PERIODS.map(p => [p.v, p.t]));
-    const itemScope = it => it.task === 'cram'
-        ? (it.yearStart && it.yearEnd ? `даты ${it.yearStart}–${it.yearEnd} гг.` : 'даты (любые блоки)')
+    const itemScope = it => HWC_RANGE_TASKS.indexOf(it.task) !== -1
+        ? (it.yearStart && it.yearEnd ? `${it.yearStart}–${it.yearEnd} гг.` : (it.task === 'cram' ? 'даты (любые блоки)' : 'вся история'))
         : (it.period === 'custom' ? (it.yearStart || '?') + '–' + (it.yearEnd || '?') + ' гг.' : (periodShort[it.period] || it.period));
 
     const itemsHtml = c.items.length ? c.items.map((it, i) => `
         <div style="display:flex;align-items:center;gap:8px;background:rgba(59,130,246,0.07);border:1px solid rgba(59,130,246,0.2);border-radius:10px;padding:8px 10px;margin-bottom:6px">
           <div style="flex:1;min-width:0">
             <div style="font-size:12px;font-weight:800;color:#111" class="dark:text-gray-100">Этап ${i + 1}: ${taskShort[it.task] || it.task}</div>
-            <div style="font-size:10px;color:#6b7280">${it.goal} ${metricUnit[it.metric]} · ${itemScope(it)}</div>
+            <div style="font-size:10px;color:#6b7280">${it.goal} ${_hwUnit(it)} · ${itemScope(it)}</div>
           </div>
           <button onclick="window._hwcRemoveItem(${i})" style="background:none;border:none;color:var(--c-danger);font-size:16px;cursor:pointer;padding:2px 6px">🗑</button>
         </div>`).join('')
@@ -1024,7 +1057,8 @@ const HW_TASK_META = {
     task4: { emoji: '📍', name: 'Задание №4 — География' },
     task5: { emoji: '👤', name: 'Задание №5 — Личности' },
     task7: { emoji: '🎨', name: 'Задание №7 — Культура' },
-    cram:  { emoji: '⚡', name: 'Зубрёжка дат' }
+    cram:  { emoji: '⚡', name: 'Зубрёжка дат' },
+    match: { emoji: '🧩', name: 'Подбор дат' }
 };
 const HW_PERIOD_LABEL = { all: 'Вся история', early: 'До XVIII в.', '18th': 'XVIII век', '19th': 'XIX век', '20th': 'XX век', custom: 'Свои годы' };
 const HW_METRIC_META = {
@@ -1155,6 +1189,8 @@ function _ruDates(n) {
     if (b >= 2 && b <= 4) return n + ' даты';
     return n + ' дат';
 }
+// Только слово, без числа: подсказки составителя ДЗ сами подставляют количество.
+function _ruFacts(n) { return plural(n, 'факт', 'факта', 'фактов'); }
 
 window.openCram = function(deckId) {
     haptic('light');
@@ -1268,16 +1304,19 @@ function _hwItemRow(it, idx, kind) {
     const prog = window.hwItemProgress(it), goal = it.goal || 0;
     const pct = goal ? Math.min(100, Math.round(prog / goal * 100)) : 0;
     const done = window.hwItemDone(it);
-    const periodLabel = it.task === 'cram'
-        ? (it.yearStart && it.yearEnd ? `даты ${it.yearStart}–${it.yearEnd} гг.` : 'тренажёр дат')
+    const periodLabel = HWC_RANGE_TASKS.indexOf(it.task) !== -1
+        ? (it.yearStart && it.yearEnd ? `${it.yearStart}–${it.yearEnd} гг.` : (it.task === 'cram' ? 'тренажёр дат' : 'вся история'))
         : (it.period === 'custom' ? (it.yearStart || '?') + '–' + (it.yearEnd || '?') + ' гг.' : (HW_PERIOD_LABEL[it.period] || ''));
+    // Подбор считает пары: «решить 20 строк» в карточке ученика было бы неправдой.
+    const unit = it.task === 'match' ? 'пар' : mm.unit;
+    const verb = it.task === 'match' ? 'Собрать' : mm.verb;
     const tick = done ? '✅' : '▢';
     return `
       <div style="display:flex;gap:8px;align-items:center;padding:6px 0">
         <span style="font-size:14px;width:18px;flex-shrink:0">${tick}</span>
         <div style="flex:1;min-width:0">
           <div style="font-size:12px;font-weight:800;color:#111;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" class="dark:text-gray-100">${m.emoji} ${m.name}</div>
-          <div style="font-size:10px;color:#9ca3af;margin:1px 0 3px">${mm.verb} ${goal} ${mm.unit} · ${periodLabel}</div>
+          <div style="font-size:10px;color:#9ca3af;margin:1px 0 3px">${verb} ${goal} ${unit} · ${periodLabel}</div>
           <div style="width:100%;height:5px;background:rgba(128,128,128,0.15);border-radius:3px;overflow:hidden">
             <div style="height:100%;width:${pct}%;background:${done ? 'var(--c-success)' : mm.color};border-radius:3px;transition:width .3s"></div>
           </div>
@@ -1406,6 +1445,16 @@ window.startHwItem = function(id, idx) {
         showToast('⚡', `Этап ${idx + 1} из ${total}: вызубрить ${it.goal} дат${rangeTxt}`, 'bg-indigo-500', 'border-indigo-700');
         window._cramHwFlow = true; // зубрёжка открыта ИЗ ДЗ → на выходе можно двигать этапы
         if (window.openCram) window.openCram('period:' + ys + '-' + ye);
+        return;
+    }
+    // Подбор дат: свой полноэкранный режим с рамками учителя. Глобальный селектор
+    // периода не трогаем — рамки едут параметрами, чтобы выбор ученика в лобби
+    // не подменил диапазон ДЗ.
+    if (it.task === 'match') {
+        const total = (a.items || []).length;
+        const rangeTxt = (it.yearStart && it.yearEnd) ? ` (${it.yearStart}–${it.yearEnd})` : '';
+        showToast('🧩', `Этап ${idx + 1} из ${total}: собрать ${it.goal} ${plural(it.goal, 'пару', 'пары', 'пар')}${rangeTxt}`, 'bg-indigo-500', 'border-indigo-700');
+        if (window.openMatchMode) window.openMatchMode({ hw: true, yearStart: it.yearStart, yearEnd: it.yearEnd });
         return;
     }
     const mm = HW_METRIC_META[it.metric] || HW_METRIC_META.lines;

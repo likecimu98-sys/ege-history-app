@@ -3064,7 +3064,9 @@
                         goal: Number(it.goal) || 0
                     };
                     if (o.period === 'custom') { o.yearStart = Number(it.yearStart) || 862; o.yearEnd = Number(it.yearEnd) || 2026; }
-                    else if (o.task === 'cram' && it.yearStart && it.yearEnd) { o.yearStart = Number(it.yearStart); o.yearEnd = Number(it.yearEnd); } // диапазон зубрёжки не терять
+                    // Зубрёжка и подбор задаются годами без period='custom' — список задач
+                    // с диапазоном лежит в state.js (HW_RANGE_TASKS), одна точка правды.
+                    else if ((window.HW_RANGE_TASKS || new Set(['cram'])).has(o.task) && it.yearStart && it.yearEnd) { o.yearStart = Number(it.yearStart); o.yearEnd = Number(it.yearEnd); }
                     return o;
                 }),
                 deadline: deadline || null,
@@ -3098,7 +3100,9 @@
                         goal: Number(it.goal) || 0
                     };
                     if (o.period === 'custom') { o.yearStart = Number(it.yearStart) || 862; o.yearEnd = Number(it.yearEnd) || 2026; }
-                    else if (o.task === 'cram' && it.yearStart && it.yearEnd) { o.yearStart = Number(it.yearStart); o.yearEnd = Number(it.yearEnd); } // диапазон зубрёжки не терять
+                    // Зубрёжка и подбор задаются годами без period='custom' — список задач
+                    // с диапазоном лежит в state.js (HW_RANGE_TASKS), одна точка правды.
+                    else if ((window.HW_RANGE_TASKS || new Set(['cram'])).has(o.task) && it.yearStart && it.yearEnd) { o.yearStart = Number(it.yearStart); o.yearEnd = Number(it.yearEnd); }
                     return o;
                 }),
                 deadline: deadline || null,

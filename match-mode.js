@@ -62,14 +62,34 @@
         return out;
     }
 
-    function _pickRows() {
+    function _rowYear(r) { const m = String(r && r.year).match(/\d+/); return m ? parseInt(m[0], 10) : NaN; }
+
+    // Явные рамки (ДЗ учителя) сильнее глобального селектора периода: в ДЗ диапазон
+    // задан преподавателем и подстраиваться под то, что ученик выбрал в лобби, нельзя.
+    function _pickRows(range) {
         const base = (window.task1Data || []).filter(r => r && r.event && r.year);
-        let out = _sixUniqueDates(_periodFilterTask1(base));
+        const scoped = range
+            ? base.filter(r => { const y = _rowYear(r); return y >= range[0] && y <= range[1]; })
+            : _periodFilterTask1(base);
+        let out = _sixUniqueDates(scoped);
         // Узкий период не набрал 6 уникальных дат — тихо расширяемся до всей базы,
         // чтобы раунд всегда собирался (лучше сыграть по всей истории, чем показать ошибку).
         if (out.length < PAIRS) out = _sixUniqueDates(base);
         return out;
     }
+
+    // Сколько дат задания №1 попадает в диапазон. Раунд собирается из УНИКАЛЬНЫХ дат
+    // (два события одного года сделали бы неверную пару внешне верной), поэтому
+    // составителю ДЗ важно именно второе число — по нему видно, наберётся ли раунд.
+    window.matchDatesInRange = function (ys, ye) {
+        const base = (window.task1Data || []).filter(r => r && r.event && r.year);
+        if (!base.length) return null;
+        const a = Number(ys), b = Number(ye);
+        const rows = (isFinite(a) && isFinite(b))
+            ? base.filter(r => { const y = _rowYear(r); return y >= Math.min(a, b) && y <= Math.max(a, b); })
+            : base;
+        return { total: rows.length, unique: new Set(rows.map(r => String(r.year).trim())).size, pairsNeeded: PAIRS };
+    };
 
     function _best() { return Number(window.state && window.state.stats && window.state.stats.matchBestMs) || 0; }
 
@@ -258,14 +278,22 @@
         panel.querySelector('#mm-d-top').onclick = () => { panel.remove(); window.closeMatchMode(); if (window.openGlobalTopModal) window.openGlobalTopModal('duel'); };
     }
 
-    window.openMatchMode = function () {
+    // opts.yearStart/yearEnd — хронологические рамки (из ДЗ учителя или явного вызова).
+    // opts.hw — раунд идёт внутри ДЗ: собранные пары идут в прогресс этапа, а после
+    // раунда мы не показываем экран рекорда, а сразу раздаём следующий, пока цель не взята.
+    window.openMatchMode = function (opts) {
         if (_m) return;
+        opts = opts || {};
+        const ys = parseInt(opts.yearStart, 10), ye = parseInt(opts.yearEnd, 10);
+        const range = (isFinite(ys) && isFinite(ye)) ? [Math.min(ys, ye), Math.max(ys, ye)] : null;
         // Норма/лимит (Q2): подбор считается как обычные строки → упирается в дневной лимит.
+        // ДЗ от лимита освобождено (см. _isExemptFromDailyLimit), но проверку всё равно
+        // зовём: она сама знает про activeHw и вернёт ok.
         if (window.canSolveMore) {
             const lim = window.canSolveMore();
             if (!lim.ok) { if (window.showDailyLimitModal) window.showDailyLimitModal(); return; }
         }
-        const rows = _pickRows();
+        const rows = _pickRows(range);
         if (rows.length < PAIRS) { if (typeof showToast === 'function') showToast('⚠️', 'Данные задания №1 ещё загружаются — попробуй через секунду', 'bg-amber-500', 'border-amber-700'); return; }
         try { if (window.Sfx) window.Sfx.unlock(); } catch (e) {}
         const cards = [];
@@ -274,12 +302,27 @@
             cards.push({ pair: i, kind: 'y', text: r.year });
         });
         _shuffle(cards);
-        _m = { cards, sel: -1, lock: false, done: 0, penalty: 0, t0: Date.now(), int: null, over: false };
+        _m = { cards, sel: -1, lock: false, done: 0, penalty: 0, t0: Date.now(), int: null, over: false,
+               range, hw: !!opts.hw };
         _render();
         _renderGrid();
         _m.int = setInterval(_tick, 100);
         _h('light');
     };
+
+    // Сколько пар осталось до цели этапа ДЗ. 0 — цель взята, null — этапа подбора нет.
+    // ⚠️ Задание ищем БЕЗ фильтра по статусу: как только цель взята, refreshHwState
+    // переводит ДЗ в 'done', и фильтр `status === 'active'` возвращал бы null —
+    // то есть «сколько осталось, неизвестно». _finish принимал это за «играем дальше»
+    // и запускал раунды бесконечно, не давая сдать домашку.
+    function _hwLeft() {
+        const ah = window.state && window.state.activeHw;
+        if (!ah || !window.state.stats) return null;
+        const a = (window.state.stats.assignments || []).find(x => x.id === ah.id);
+        const it = a && (a.items || [])[ah.itemIndex];
+        if (!it || it.task !== 'match') return null;
+        return Math.max(0, (it.goal || 0) - (it.progress || 0));
+    }
 
     window.closeMatchMode = function () {
         if (!_m) return;
@@ -319,6 +362,7 @@
         const cols = (window.innerWidth || 360) >= 640 ? 4 : 3;
         const best = _best();
         const d = _m && _m.duel;
+        const hwLeft = (_m && _m.hw) ? _hwLeft() : null;
         const ov = document.createElement('div');
         ov.id = 'match-overlay';
         ov.className = 'fixed inset-0 flex flex-col bg-gray-50 dark:bg-[#121212]';
@@ -330,10 +374,12 @@
             <div style="width:100%;max-width:840px;margin:0 auto;display:flex;flex-direction:column;flex-grow:1;min-height:0">
             <div class="flex items-center justify-between shrink-0" style="gap:8px;margin-bottom:${d ? '6px' : '8px'}">
                 <div class="text-left" style="min-width:86px">
-                    <div class="text-[9px] font-black uppercase tracking-widest text-gray-400">${d ? '⚔️ Подбор · дуэль' : '🧩 Подбор · №1'}</div>
+                    <div class="text-[9px] font-black uppercase tracking-widest text-gray-400">${d ? '⚔️ Подбор · дуэль' : hwLeft !== null ? '🧩 Подбор · ДЗ' : '🧩 Подбор · №1'}${!d && _m.range ? ` · ${_m.range[0]}–${_m.range[1]}` : ''}</div>
                     ${d
                         ? `<div class="text-[11px] font-black text-gray-500 dark:text-gray-300" style="margin-top:1px">Счёт: <span id="mm-score" class="text-blue-600 dark:text-blue-400">0</span> · 🔥<span id="mm-streak">0</span></div>`
-                        : `<div class="text-[10px] font-bold text-gray-400">${best ? '🏆 ' + _fmt(best) : 'первый раунд!'}</div>`}
+                        : hwLeft !== null
+                            ? `<div id="mm-hw-left" class="text-[11px] font-black" style="margin-top:1px;color:#4f46e5">Осталось ${hwLeft} ${_pairs(hwLeft)}</div>`
+                            : `<div class="text-[10px] font-bold text-gray-400">${best ? '🏆 ' + _fmt(best) : 'первый раунд!'}</div>`}
                 </div>
                 <div class="text-center">
                     <div id="mm-timer" class="font-black text-2xl tabular-nums ${d ? 'text-rose-500' : 'text-gray-800 dark:text-gray-200'}">${d ? _fmtLeft(DUEL_MS) : '0.0 сек'}</div>
@@ -411,8 +457,18 @@
                 _m.score += 10 + Math.min(20, (_m.streak - 1) * 2);
                 _m.duel.done++;
                 if (!_m.duel.over) { _duelReport(); _updateDuelBar(); }
-            } else if (window.creditNorm) {
-                window.creditNorm(1, 'task1'); // Q2: подбор идёт в норму дня
+            } else {
+                if (window.creditNorm) window.creditNorm(1, 'task1'); // Q2: подбор идёт в норму дня
+                // ДЗ «подбор»: пара = единица прогресса этапа. Считаем ТУТ, а не в
+                // checkAnswers: подбор не проходит через решение таблицы, и без этого
+                // вызова этап никогда бы не сдвинулся.
+                if (_m.hw && window.creditActiveHwItem) {
+                    window.creditActiveHwItem('match', 1, 0);
+                    if (window.refreshHwState) window.refreshHwState();
+                    if (window.saveLocal) window.saveLocal();
+                    const left = _hwLeft(), el = document.getElementById('mm-hw-left');
+                    if (el && left !== null) el.textContent = left > 0 ? `Осталось ${left} ${_pairs(left)}` : 'Этап выполнен ✓';
+                }
             }
             [j, i].forEach(k => { const el = _cardEl(k); if (el) { el.style.opacity = '0'; el.style.pointerEvents = 'none'; el.style.transform = 'scale(0.8)'; } });
             _play(true); _h('medium');
@@ -456,6 +512,26 @@
             try { if (typeof saveProgress === 'function') saveProgress(); } catch (e) {}
         }
         _play(true); _h('medium');
+
+        // ДЗ: раунд — это 6 пар, а цель учителя обычно больше. Экран рекорда посреди
+        // домашки только сбивает: молча раздаём следующий раунд в тех же рамках, пока
+        // цель не взята. Взята — отдаём управление потоку ДЗ (он сам покажет итог
+        // и перейдёт к следующему этапу).
+        if (_m.hw) {
+            const left = _hwLeft();
+            const range = _m.range;
+            // null (этап пропал/сменился) трактуем как «дальше не играем»: зациклиться
+            // на раундах хуже, чем лишний раз выйти в список ДЗ.
+            if (left !== null && left > 0) {
+                if (typeof showToast === 'function') showToast('🧩', `Раунд собран! Осталось ${left} ${_pairs(left)}`, 'bg-indigo-500', 'border-indigo-700');
+                window.closeMatchMode();
+                setTimeout(() => window.openMatchMode({ hw: true, yearStart: range && range[0], yearEnd: range && range[1] }), 450);
+                return;
+            }
+            window.closeMatchMode();
+            if (window.maybeAdvanceHw) window.maybeAdvanceHw();
+            return;
+        }
         const ov = document.getElementById('match-overlay');
         if (!ov) return;
         const panel = document.createElement('div');
@@ -471,7 +547,13 @@
                 <button id="mm-close" class="w-full bg-gray-100 dark:bg-[#2c2c2c] text-gray-600 dark:text-gray-300 rounded-2xl font-black uppercase tracking-wider active:scale-95 transition-transform" style="padding:11px;margin-top:8px;font-size:12px">✕ Выйти</button>
             </div>`;
         document.body.appendChild(panel);
-        panel.querySelector('#mm-again').onclick = () => { panel.remove(); window.closeMatchMode(); window.openMatchMode(); };
+        // «Ещё раз» сохраняет хронологические рамки текущего раунда — иначе игрок,
+        // тренировавший XX век, следующим раундом получал бы всю историю.
+        const againRange = _m.range;
+        panel.querySelector('#mm-again').onclick = () => {
+            panel.remove(); window.closeMatchMode();
+            window.openMatchMode(againRange ? { yearStart: againRange[0], yearEnd: againRange[1] } : undefined);
+        };
         panel.querySelector('#mm-close').onclick = () => { panel.remove(); window.closeMatchMode(); };
     }
 
