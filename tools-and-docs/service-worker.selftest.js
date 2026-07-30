@@ -311,6 +311,23 @@ function bootHtmlIsOneAtomicRelease() {
     // «страница не доехала».
     assert.match(indexSource, /if \(phase === 'html'\) bootBeacon\(qs\);/,
         'маяк на фазе html пропал — диагностика снова ослепнет при мёртвом fetch');
+    // 🔴 Модули, которые index.html НЕ подключает тегом, а тянет из кода, тоже обязаны
+    // нести текущий релиз. pwa.js держал свою константу ?v=20260728-7 и её забыли
+    // поднять: два дня клиенты тянули СТАРЫЙ cloud-sync.js (Service Worker кэширует
+    // код по точному адресу), и правки жребия дуэли и снятия ДЗ учителя до людей не
+    // доехали — при том что на сервере лежал новый файл, а в логах всё выглядело
+    // штатно. Проверка ловит ровно этот класс молчаливого расхождения.
+    const dynamicStamps = [];
+    for (const file of ['pwa.js', 'cloud-sync.js']) {
+        const src = fs.readFileSync(path.join(__dirname, '..', file), 'utf8');
+        for (const m of src.matchAll(/['"][^'"]*\?v=(\d{8}-\d+)['"]/g)) dynamicStamps.push(`${file}: ${m[1]}`);
+    }
+    assert.deepEqual(
+        dynamicStamps.filter((entry) => !entry.endsWith(release)),
+        [],
+        `версия в динамически подключаемых модулях отстала от релиза ${release}`
+    );
+
     // Маяк обязан идти МИМО /api/: именно туда на проблемных устройствах не проходит
     // ни один запрос, и маяк на том же адресе не различал бы нужный случай.
     const beacon = indexSource.match(/function bootBeacon\(params\) \{[\s\S]*?\n        \}/);

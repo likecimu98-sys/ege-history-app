@@ -1,7 +1,24 @@
 (function () {
     'use strict';
 
-    const CLOUD_SYNC_MODULE = './cloud-sync.js?v=20260728-7';
+    // 🔴 Версия cloud-sync.js берётся из адреса САМОГО pwa.js, а не пишется числом.
+    // Раньше здесь стояла своя константа, и её забыли поднять: с 28.07 клиенты
+    // тянули cloud-sync.js по неизменному ?v=20260728-7, а Service Worker кэширует
+    // код по точному адресу вместе с запросом — значит НИ ОДНА правка этого файла
+    // за два дня до людей не доехала (жребий режима дуэли, снятие ДЗ учителя,
+    // сигнал загрузки облака). На сервере файл новый, в браузере — старый, и по
+    // логам это не видно: запрос-то приходит.
+    // Собственный адрес всегда несёт актуальный релиз, потому что index.html
+    // проштампован целиком одной версией.
+    const CLOUD_SYNC_MODULE = (function () {
+        let release = '';
+        try {
+            const self = document.currentScript
+                || document.querySelector('script[src*="pwa.js"]');
+            if (self && self.src) release = new URL(self.src, location.href).searchParams.get('v') || '';
+        } catch (e) {}
+        return './cloud-sync.js' + (release ? '?v=' + encodeURIComponent(release) : '');
+    })();
     const APP_SHELL_CACHE_MESSAGE = { type: 'CACHE_APP_SHELL' };
     const OFFLINE_CACHE_MESSAGE = { type: 'CACHE_OFFLINE_ASSETS' };
     const APP_SHELL_WARMUP_DELAY_MS = 45000;
