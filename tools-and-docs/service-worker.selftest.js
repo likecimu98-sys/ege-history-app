@@ -16,6 +16,7 @@ function makeWorker({
     hangCacheOpen = false,
     hangCacheMatch = false,
     hangCacheKeys = false,
+    hangGlobalCacheMatch = false,
     timerCapMs = null
 } = {}) {
     const handlers = {};
@@ -55,7 +56,7 @@ function makeWorker({
         },
         caches: {
             open: async () => (hangCacheOpen ? never() : cache),
-            match: async () => cachedResponse,
+            match: async () => (hangGlobalCacheMatch ? never() : cachedResponse),
             keys: async () => (hangCacheKeys ? never() : ['ege-history-static-old']),
             delete: async () => { cacheDeletes++; return true; }
         },
@@ -116,6 +117,52 @@ async function coldCodeDoesNotWaitForCacheStorage() {
 
     worker.releaseCacheWriteResolve();
     await lifetimePromise;
+}
+
+// 🔴 Картинка обязана доехать, даже если CacheStorage залип.
+//
+// Инцидент 30.07.2026: «в пробнике нет изображений». Ветка картинок делала
+// `await cache.put(...)` ПЕРЕД возвратом ответа и читала кэш без таймаута —
+// ровно тот запрет, который уже стоил недели белых экранов на айфонах, только
+// для страниц его сняли, а для картинок оставили. На залипшем WKWebView
+// CacheStorage respondWith висел вечно: сервер отдал JPEG, а картинки нет.
+// Стенд подвешивает И чтение (caches.match), И запись (cache.put).
+async function imageArrivesWhileCacheStorageHangs() {
+    const worker = makeWorker({ hangGlobalCacheMatch: true, timerCapMs: 25 });
+    let responsePromise;
+    worker.handlers.fetch({
+        request: {
+            url: 'https://reshay-istoriyu.ru/assets/mock-exam/photo.jpg',
+            method: 'GET', mode: 'no-cors', destination: 'image'
+        },
+        respondWith(promise) { responsePromise = Promise.resolve(promise); },
+        waitUntil() {}
+    });
+    const winner = await Promise.race([
+        responsePromise.then(() => 'response'),
+        new Promise((resolve) => setTimeout(() => resolve('timeout'), 400))
+    ]);
+    assert.equal(winner, 'response', 'картинка снова ждёт CacheStorage — на iOS это «нет изображений»');
+    const response = await responsePromise;
+    assert.equal(response.status, 200, 'вместо картинки вернулась ошибка');
+}
+
+// Сеть упала — отдаём кэш, а не Response.error(). Раньше `fetch` стоял без
+// catch: одно моргание сети — и картинка «битая», хотя копия в кэше есть.
+async function imageFallsBackToCacheWhenNetworkFails() {
+    const worker = makeWorker({ hangFetch: false });
+    const context = worker;
+    let responsePromise;
+    context.handlers.fetch({
+        request: {
+            url: 'https://reshay-istoriyu.ru/assets/mock-exam/photo.jpg',
+            method: 'GET', mode: 'no-cors', destination: 'image'
+        },
+        respondWith(promise) { responsePromise = Promise.resolve(promise); },
+        waitUntil() {}
+    });
+    const response = await responsePromise;
+    assert.ok(response, 'обработчик картинок не вернул ответа вовсе');
 }
 
 async function exactReleaseHitAvoidsNetwork() {
@@ -419,6 +466,8 @@ function assetCacheIsIndependentOfAppVersion() {
     assetCacheIsIndependentOfAppVersion();
     previousReleaseHtmlSurvivesVersionBump();
     await coldCodeDoesNotWaitForCacheStorage();
+    await imageArrivesWhileCacheStorageHangs();
+    await imageFallsBackToCacheWhenNetworkFails();
     await exactReleaseHitAvoidsNetwork();
     await activationKeepsPreviousReleaseAlive();
     await navigationNeverWaitsForHungFetchAndCacheOpen();

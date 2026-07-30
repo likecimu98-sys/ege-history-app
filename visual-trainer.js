@@ -62,7 +62,14 @@ function visualWaitNext(proceed) {
         fn();
     };
     const btn = $('visual-next-btn');
-    if (btn) btn.onclick = function () { if (_visualPendingNext) _visualPendingNext(); };
+    if (btn) {
+        btn.onclick = function () { if (_visualPendingNext) _visualPendingNext(); };
+        // Разбор появляется НИЖЕ вариантов и на телефоне уходит за нижний край:
+        // человек видит подсветку ответа и решает, что тренажёр встал. Подводим
+        // кнопку продолжения к глазам сами — искать её прокруткой не нужно.
+        // `block:'nearest'` не дёргает экран, если она и так видна.
+        try { btn.scrollIntoView({ block: 'nearest', behavior: 'smooth' }); } catch (e) { btn.scrollIntoView(false); }
+    }
 }
 
 const VISUAL_CATEGORY_CONFIG = {

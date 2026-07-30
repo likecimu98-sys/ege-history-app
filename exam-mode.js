@@ -215,6 +215,17 @@
         return arr;
     }
 
+    // Положить вариант в слот. Одна точка правды для тапа и для переноса:
+    // разъедутся — и правило «один вариант стоит ровно в одном слоте» будет
+    // соблюдаться только одним способом ввода.
+    function placeDigitInSlot(task, value, digit, index) {
+        const slots = normalizedOrderedAnswer(task, value);
+        const previousIndex = slots.indexOf(digit);
+        if (previousIndex !== -1) slots[previousIndex] = '';
+        slots[index] = digit;
+        return slots;
+    }
+
     function isAnswered(task, value) {
         if (ORDERED_KIMS.has(task.kim)) return normalizedOrderedAnswer(task, value).every(Boolean);
         if (CHOICE_KIMS.has(task.kim)) return window.EgeScoring.normalizeSymbols(value).length > 0;
@@ -1288,17 +1299,15 @@
             return rerenderKeepingContext(isTraining ? renderTraining : renderWork, target);
         }
         if (action === 'slot') {
-            const slots = normalizedOrderedAnswer(task, currentValue);
             const index = Number(target.dataset.index) || 0;
             if (selectedExamChip && selectedExamChipTaskId === task.id) {
-                const previousIndex = slots.indexOf(selectedExamChip);
-                if (previousIndex !== -1) slots[previousIndex] = '';
-                slots[index] = selectedExamChip;
+                const slots = placeDigitInSlot(task, currentValue, selectedExamChip, index);
                 selectedExamChip = null;
                 selectedExamChipTaskId = null;
-            } else if (slots[index]) {
-                slots[index] = '';
+                return commitInteractiveAnswer(slots);
             }
+            const slots = normalizedOrderedAnswer(task, currentValue);
+            if (slots[index]) slots[index] = '';
             return commitInteractiveAnswer(slots);
         }
         if (action === 'clear-slot') {
@@ -1409,6 +1418,64 @@
         // Fallback for unusual embeds where storage initialization is intercepted.
         setTimeout(schedule, 8000);
     })();
+
+    /* ── Перенос вариантов мышью и пальцем ────────────────────────────────
+       🔴 Сам жест живёт в table.js и раньше слушал ВЕСЬ документ, поэтому
+       хватал и наши варианты — они размечены теми же классами `dnd-chip` /
+       `dnd-slot`. Клал он их логикой тренажёра таблиц: узел переезжал в слот
+       прямо в DOM, а в `active.answers` не попадал. Ответ был виден на экране,
+       но не существовал — и пропадал, как только разметка перерисовывалась из
+       состояния (переход «Далее» или по верхней панели). Отсюда жалобы 30.07:
+       «не сохранил ответы на 1, 2, 3, 4, 5, 7».
+       Теперь мы объявляем СВОЮ область и кладём вариант тем же путём, что и
+       тап, — через placeDigitInSlot + updateAnswer. */
+    function interactiveContext() {
+        const isTraining = view === 'training';
+        if (view !== 'work' && !isTraining) return null;
+        const active = isTraining ? null : examState().active;
+        const task = isTraining ? trainingTask : activeTasks()[currentIndex];
+        if ((!isTraining && !active) || !task) return null;
+        return {
+            task,
+            value: isTraining ? trainingAnswer : active.answers?.[task.id],
+            commit(value, target) {
+                if (isTraining) {
+                    trainingAnswer = value;
+                    rerenderKeepingContext(renderTraining, target);
+                } else {
+                    updateAnswer(task, value);
+                    rerenderKeepingContext(renderWork, target);
+                }
+            }
+        };
+    }
+
+    if (typeof window.registerChipDropZone === 'function') {
+        window.registerChipDropZone('#exam-mode-overlay', {
+            // Тащим только варианты из пула активного задания. В разборе они
+            // отрисованы с `disabled` и без data-em-action — там перенос не нужен.
+            canDrag: chip => chip.dataset.emAction === 'chip' && !chip.disabled,
+            // Слот принимает ответ только в рабочем режиме: в разборе data-em-action нет.
+            isLocked: slot => !slot || slot.dataset.emAction !== 'slot',
+            // Вынимать нечего: разметку рисует состояние, а не перетаскивание.
+            pickUp: () => true,
+            drop(chip, slot) {
+                const ctx = interactiveContext();
+                if (!ctx) return;
+                selectedExamChip = null;
+                selectedExamChipTaskId = null;
+                ctx.commit(placeDigitInSlot(ctx.task, ctx.value, chip.dataset.value,
+                    Number(slot.dataset.index) || 0), slot);
+            },
+            cancel() {
+                if (!selectedExamChip) return;
+                selectedExamChip = null;
+                selectedExamChipTaskId = null;
+                if (view === 'work') renderWork();
+                else if (view === 'training') renderTraining();
+            }
+        });
+    }
 
     window.addEventListener('pagehide', () => { if (view === 'work') stopTimer(true); });
     window.openExamMode = openExamMode;

@@ -1,7 +1,7 @@
 'use strict';
 
-const APP_VERSION = '2026-07-30-vps-67';
-const RELEASE_ASSET_VERSION = '20260730-6';
+const APP_VERSION = '2026-07-30-vps-68';
+const RELEASE_ASSET_VERSION = '20260730-7';
 // ⚠️ Версия НАБОРА КАРТИНОК, а не версия приложения. Поднимай её ТОЛЬКО когда
 // меняется состав offline-assets.json — добавились, удалились или переснялись
 // файлы. От бампа APP_VERSION она не зависит и зависеть не должна.
@@ -340,13 +340,46 @@ async function networkFirstNavigation(request) {
     return lateNetwork.response || emergencyNavigationResponse(request.url);
 }
 
+// 🔴 Картинки: тот же инвариант, что у навигации, — ЧТЕНИЕ кэша под таймаутом,
+// ЗАПИСЬ только фоном, сеть с фолбэком. Раньше здесь было три мины сразу, и все
+// три давали один симптом: «в пробнике нет изображений» (жалоба ученика 30.07).
+//   1. `await putIfOk(...)` стоял НА ПУТИ ОТВЕТА. На iOS WKWebView зависший
+//      CacheStorage оставляет respondWith pending навсегда — картинка не
+//      появляется вообще, хотя Nginx ответ уже отдал. Ровно из-за этого класса
+//      бага был белый экран на айфонах; для страниц починили, для картинок нет.
+//   2. `caches.match` без таймаута — тот же залипший CacheStorage вешает ответ
+//      ещё до сети.
+//   3. `fetch()` без catch: моргнула сеть → промис отклонён → respondWith reject
+//      → битая картинка, хотя в кэше могла лежать годная копия.
 async function cacheFirst(request, cacheName) {
-    const cached = await caches.match(request, { ignoreSearch: true });
+    const cached = await settleWithin(
+        caches.match(request, { ignoreSearch: true }),
+        CACHE_READ_TIMEOUT_MS,
+        null
+    );
     if (cached) return cached;
 
-    const response = await fetch(request);
-    const cache = await caches.open(cacheName);
-    await putIfOk(cache, request, response);
+    let response = null;
+    try {
+        response = await fetch(request);
+    } catch (error) {
+        response = null;
+    }
+    if (!response) {
+        // Сеть не дала ответа. Кэш мог «проснуться» после таймаута — последняя попытка.
+        const late = await settleWithin(
+            caches.match(request, { ignoreSearch: true }),
+            CACHE_READ_TIMEOUT_MS,
+            null
+        );
+        return late || Response.error();
+    }
+
+    // Запись отцеплена от выдачи: страница получает картинку сразу.
+    const copy = response.clone();
+    caches.open(cacheName)
+        .then((cache) => putIfOk(cache, request, copy))
+        .catch(() => {});
     return response;
 }
 

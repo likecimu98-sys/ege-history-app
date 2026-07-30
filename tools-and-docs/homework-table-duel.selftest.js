@@ -326,4 +326,42 @@ assert.match(cloudSource, /async function _dropOwnClassHomework\(groups\)/, 'tea
 assert.match(stateSource, /myClasses\.has\(a\.classCode\)/, 'refreshHwState must drop own-class homework');
 assert.match(stateSource, /classCode: rec\.classCode \|\| null/, 'assignment classCode must survive normalization');
 
+// ─── Перетаскивание: чужие фишки трогать нельзя ──────────────────────────────
+// Слушатель висит на document и физически видит ЛЮБОЙ `.dnd-chip` на странице.
+// Пока у него не было понятия «зона», он хватал варианты пробника и клал их
+// логикой тренажёра таблиц: узел переезжал в слот, а в состояние пробника
+// ответ не попадал и пропадал при следующей перерисовке (жалобы учеников 30.07
+// «не сохранил ответы на 1, 2, 3, 4, 5, 7»). Проверяем именно РАЗДЕЛЕНИЕ, а не
+// наличие слова: код обязан спрашивать зону и класть руками владельца.
+const examSource = read('exam-mode.js');
+assert.match(tableSource, /window\.registerChipDropZone = function/, 'chip drag lost its zone registry');
+assert.match(tableSource, /const zone = zoneOf\(chip\);\s*\n\s*if \(!zone\) return;/,
+  'a chip outside every registered zone must not be draggable at all');
+assert.match(tableSource, /zone\.handlers\.drop\(chip, target\)/,
+  'the drop must be performed by the zone owner, not by the table trainer');
+assert.doesNotMatch(tableSource, /if \(drop && target && !isLocked\(target\)\) \{\s*\n\s*handleSlotClick\(target\)/,
+  'the drag must not call the table trainer directly any more');
+assert.match(tableSource, /zoneOf\(slot\) === drag\.zone/,
+  'a chip must never be droppable into another zone slot');
+assert.match(tableSource, /registerChipDropZone\('#classic-task-area'/, 'the table trainer must register its own zone');
+assert.match(examSource, /registerChipDropZone\('#exam-mode-overlay'/, 'the mock exam must register its own zone');
+// Пробник обязан класть ответ ЧЕРЕЗ СВОЁ состояние, иначе он снова «не сохранится».
+assert.match(examSource, /ctx\.commit\(placeDigitInSlot\(ctx\.task, ctx\.value, chip\.dataset\.value/,
+  'the mock exam drop must go through its own answer state');
+// Один вариант стоит ровно в одном слоте — и при тапе, и при переносе.
+assert.match(examSource, /function placeDigitInSlot\(task, value, digit, index\)[\s\S]{0,260}previousIndex !== -1\) slots\[previousIndex\] = ''/,
+  'placeDigitInSlot must free the slot the digit came from');
+
+// ─── Тренажёр визуала: разбор нельзя обрезать ────────────────────────────────
+// `overflow: hidden` на корне вместе с max-height делал кнопку «Дальше»
+// физически недостижимой после неверного ответа: прокрутки внутри нет, страница
+// не растёт. Ученик с iPhone: «ничего больше не выходит, только в лобби выходить».
+const stylesSource = read('styles.css');
+assert.match(stylesSource, /\.visual-trainer-root \{[^}]*overflow-y: auto/,
+  'visual trainer must scroll its content, never clip it');
+assert.doesNotMatch(stylesSource, /\.visual-trainer-root \{[^}]*overflow: hidden/,
+  'visual trainer must not clip the razbor and the next button again');
+assert.match(read('visual-trainer.js'), /btn\.scrollIntoView\(\{ block: 'nearest'/,
+  'the next button must be scrolled into view after a wrong answer');
+
 console.log('Homework, table uniqueness and silent duel self-test passed.');

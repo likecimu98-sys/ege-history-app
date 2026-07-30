@@ -1988,6 +1988,44 @@ window.onChipClick = function(chip, e) {
     let pending = null;   // нажали на фишку, но ещё не решили: тап или перенос
     let drag = null;      // идёт перенос
 
+    /* ── Зоны: чьи это фишки и по каким правилам они кладутся ──────────────
+       🔴 Перенос — общий ЖЕСТ, но правила у каждой области свои, и раньше их
+       не было вовсе: слушатель висел на document и хватал ЛЮБОЙ `.dnd-chip`
+       на странице, а клал его логикой тренажёра таблиц.
+       Пробник ЕГЭ размечает свои варианты теми же классами, и потому ловил
+       чужую логику: фишка ложилась в слот прямо в DOM, а в состояние пробника
+       (`active.answers`) не попадала — ответ был виден на экране, но не
+       существовал. При переходе к следующему заданию разметка перерисовывалась
+       из состояния, и ответ исчезал. Отсюда жалобы 30.07: «не сохранил мои
+       ответы на задания 1–5 и 7», «на один слот можно наложить все варианты».
+       Вдобавок фишку из занятого слота уносило в `#pool-container` ГЛАВНОГО
+       экрана — чужой контейнер, которого в пробнике нет на виду.
+       Теперь область регистрирует себя сама и приносит свои правила. Фишка вне
+       зарегистрированной области не таскается вовсе: молчаливый захват чужого
+       интерфейса больше невозможен. */
+    const zones = [];
+    const zoneRoot = zone => (typeof zone.root === 'function' ? zone.root()
+        : typeof zone.root === 'string' ? document.querySelector(zone.root) : zone.root);
+    function zoneOf(node) {
+        if (!node) return null;
+        // Зоны перебираем с конца: вложенная (оверлей поверх экрана) регистрируется
+        // позже общей и обязана выигрывать.
+        for (let i = zones.length - 1; i >= 0; i--) {
+            const root = zoneRoot(zones[i]);
+            if (root && root.contains(node)) return zones[i];
+        }
+        return null;
+    }
+    /* Публичная точка: область объявляет свой корень и правила.
+       canDrag(chip)  — можно ли вообще тащить эту фишку;
+       isLocked(slot) — слот закрыт для приёма (проверен/раскрыт/только чтение);
+       pickUp(chip)   — вынуть фишку перед переносом; false отменяет перенос;
+       drop(chip,slot)— положить (здесь область пишет СВОЁ состояние);
+       cancel(chip)   — бросили мимо. */
+    window.registerChipDropZone = function (root, handlers) {
+        zones.push({ root, handlers: handlers || {} });
+    };
+
     /* Гасим ОДИН клик сразу после переноса — тот, который браузер синтезирует
        следом за pointerup. Без этого onChipClick тут же снял бы выбор.
        Раньше здесь стоял простой флаг `swallowClick = true`, и это был баг:
@@ -2011,23 +2049,10 @@ window.onChipClick = function(chip, e) {
         return null;
     }
 
-    function beginDrag(chip, x, y) {
-        // Фишка, лежащая в слоте, сначала честно оттуда вынимается — тем же путём,
-        // что и по тапу. Иначе слот остался бы с классом has-item, но пустой.
-        if (chip.classList.contains('in-slot')) {
-            const slot = chip.parentElement;
-            if (isLocked(slot)) return false;
-            chip.classList.remove('in-slot', 'selected');
-            $('pool-container').appendChild(chip);
-            slot.innerHTML = '';
-            slot.classList.remove('has-item', 'incorrect-slot');
-        }
-        if (window.state.selectedChip && window.state.selectedChip !== chip) {
-            window.state.selectedChip.classList.remove('selected');
-        }
-        window.state.selectedChip = chip;
-        chip.classList.add('selected');
-        updateSlotGlow();
+    function beginDrag(chip, x, y, zone) {
+        // Фишку из слота вынимает сама область: у тренажёра она возвращается в пул,
+        // у пробника состояние перерисует разметку. Отказ (false) отменяет перенос.
+        if (zone.handlers.pickUp && zone.handlers.pickUp(chip) === false) return false;
 
         const rect = chip.getBoundingClientRect();
         const ghost = chip.cloneNode(true);
@@ -2038,7 +2063,7 @@ window.onChipClick = function(chip, e) {
 
         chip.classList.add('is-dragging');
         drag = {
-            chip, ghost,
+            chip, ghost, zone,
             dx: rect.left - x, dy: rect.top - y,
             scroller: scrollableAncestor(chip),
             target: null
@@ -2076,20 +2101,18 @@ window.onChipClick = function(chip, e) {
 
     function endDrag(drop) {
         if (!drag) return;
-        const { chip, ghost, target } = drag;
+        const { chip, ghost, target, zone } = drag;
         ghost.remove();
         chip.classList.remove('is-dragging');
         if (target) target.classList.remove('drop-target');
         drag = null;
         swallowNextClick();
 
-        if (drop && target && !isLocked(target)) {
-            handleSlotClick(target);          // ← ровно тот же путь, что и у тапа
-        } else {
-            // Бросили мимо — снимаем выбор, чтобы фишка не осталась «в руке».
-            chip.classList.remove('selected');
-            if (window.state.selectedChip === chip) window.state.selectedChip = null;
-            updateSlotGlow();
+        // Кладёт ВСЕГДА область-владелец: только она знает, где живёт ответ.
+        if (drop && target && !zone.handlers.isLocked(target)) {
+            zone.handlers.drop(chip, target);
+        } else if (zone.handlers.cancel) {
+            zone.handlers.cancel(chip);
         }
     }
 
@@ -2097,10 +2120,11 @@ window.onChipClick = function(chip, e) {
         if (event.button !== undefined && event.button !== 0) return;
         const chip = event.target.closest && event.target.closest('.dnd-chip');
         if (!chip) return;
-        // Зачёркнутый вариант не таскаем: по нему тапом снимают отсев.
-        if (chip.classList.contains('crossed-out')) return;
-        if (chip.classList.contains('in-slot') && isLocked(chip.parentElement)) return;
-        pending = { chip, x: event.clientX, y: event.clientY, id: event.pointerId, limit: thresholdFor(event.pointerType) };
+        // Фишка вне зарегистрированной области — не наша, не трогаем.
+        const zone = zoneOf(chip);
+        if (!zone) return;
+        if (zone.handlers.canDrag && !zone.handlers.canDrag(chip)) return;
+        pending = { chip, zone, x: event.clientX, y: event.clientY, id: event.pointerId, limit: thresholdFor(event.pointerType) };
     }, true);
 
     document.addEventListener('pointermove', event => {
@@ -2111,14 +2135,17 @@ window.onChipClick = function(chip, e) {
             // Призрак не должен закрывать цель от поиска — он pointer-events: none.
             const under = document.elementFromPoint(event.clientX, event.clientY);
             const slot = under && under.closest ? under.closest('.dnd-slot') : null;
-            setTarget(slot && !isLocked(slot) ? slot : null);
+            // Целью может быть только слот СВОЕЙ области: перенести вариант пробника
+            // в таблицу тренажёра (и наоборот) нельзя даже случайно.
+            const ok = slot && zoneOf(slot) === drag.zone && !drag.zone.handlers.isLocked(slot);
+            setTarget(ok ? slot : null);
             return;
         }
         if (!pending || event.pointerId !== pending.id) return;
         if (Math.hypot(event.clientX - pending.x, event.clientY - pending.y) < pending.limit) return;
-        const chip = pending.chip;
+        const { chip, zone } = pending;
         pending = null;
-        if (beginDrag(chip, event.clientX, event.clientY)) event.preventDefault();
+        if (beginDrag(chip, event.clientX, event.clientY, zone)) event.preventDefault();
     }, { passive: false });
 
     document.addEventListener('pointerup', event => {
@@ -2127,4 +2154,43 @@ window.onChipClick = function(chip, e) {
     }, { passive: false });
 
     document.addEventListener('pointercancel', () => { endDrag(false); pending = null; });
+
+    /* Область тренажёра таблиц (и детектива — он рисует слоты в той же таблице).
+       Поведение ровно прежнее: перенос ничего не решает сам, а зовёт тот же
+       handleSlotClick(), что и тап. */
+    window.registerChipDropZone('#classic-task-area', {
+        canDrag(chip) {
+            // Зачёркнутый вариант не таскаем: по нему тапом снимают отсев.
+            if (chip.classList.contains('crossed-out')) return false;
+            if (chip.classList.contains('in-slot') && isLocked(chip.parentElement)) return false;
+            return true;
+        },
+        isLocked,
+        pickUp(chip) {
+            // Фишка, лежащая в слоте, честно оттуда вынимается — тем же путём, что
+            // и по тапу. Иначе слот остался бы с классом has-item, но пустой.
+            if (chip.classList.contains('in-slot')) {
+                const slot = chip.parentElement;
+                if (isLocked(slot)) return false;
+                chip.classList.remove('in-slot', 'selected');
+                $('pool-container').appendChild(chip);
+                slot.innerHTML = '';
+                slot.classList.remove('has-item', 'incorrect-slot');
+            }
+            if (window.state.selectedChip && window.state.selectedChip !== chip) {
+                window.state.selectedChip.classList.remove('selected');
+            }
+            window.state.selectedChip = chip;
+            chip.classList.add('selected');
+            updateSlotGlow();
+            return true;
+        },
+        drop(chip, slot) { handleSlotClick(slot); },
+        cancel(chip) {
+            // Бросили мимо — снимаем выбор, чтобы фишка не осталась «в руке».
+            chip.classList.remove('selected');
+            if (window.state.selectedChip === chip) window.state.selectedChip = null;
+            updateSlotGlow();
+        }
+    });
 })();
