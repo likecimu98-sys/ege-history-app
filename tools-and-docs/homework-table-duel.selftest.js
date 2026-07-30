@@ -233,7 +233,14 @@ assert.doesNotMatch(uiSource, /Sfx\.loop\('duel'\)/, 'Incoming duel challenge mu
 assert.doesNotMatch(uiSource, /_playChallengeChime/, 'Incoming duel challenge must remain silent');
 assert.match(uiSource, /duelChalPulse/, 'The silent visual duel notification must remain');
 
-assert.match(stateSource, /const removedLegacy = assignmentsBeforeCleanup - s\.assignments\.length/);
+// Очистка обязана учитывать И удалённые legacy-фантомы, И свежие надгробия
+// revoked — обе перемены требуют saveProgress, иначе не доедут до облака.
+assert.match(stateSource, /const removedLegacy = \(assignmentsBeforeCleanup - s\.assignments\.length\) \+ tombstoned/);
+// Отзыв ДЗ ставит надгробие, а не удаляет запись: удалённое воскресает при слиянии.
+assert.match(stateSource, /a\.status = 'revoked'; a\.updatedAt = Date\.now\(\); marked\+\+;/,
+  'reconcileRevokedAssignments must tombstone, not delete');
+assert.doesNotMatch(stateSource, /s\.assignments = s\.assignments\.filter\(a => !\(a && set\.has\(a\.id\)/,
+  'reconcileRevokedAssignments must not delete revoked records');
 assert.match(cloudSource, /a\.status === 'active' && String\(a\.id\)\.indexOf\('legacy_'\) === 0/);
 
 const { mergeStateValues } = require(path.join(ROOT, 'server', 'api', 'src', 'state-merge'));

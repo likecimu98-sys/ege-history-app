@@ -793,19 +793,35 @@ function refreshHwState() {
     // как глюк и подрывает доверие к домашке сильнее, чем сама задержка.
     // Теперь набор сохраняется локально и применяется ЗДЕСЬ, до первой отрисовки;
     // сервер по-прежнему остаётся источником правды и дополняет его.
-    s.assignments = s.assignments.filter(a => !revokedLocally(a));
+    // ⚠️ Помечаем надгробием, а НЕ удаляем (см. reconcileRevokedAssignments):
+    // удалённая запись не попадает в сохранение, и слияние с облачной копией
+    // воскрешало задание при каждом «обновить».
+    let tombstoned = 0;
+    s.assignments.forEach(a => {
+        if (a && a.status !== 'revoked' && revokedLocally(a)) { a.status = 'revoked'; a.updatedAt = Date.now(); tombstoned++; }
+    });
     // 🔴 ДЗ СВОЕГО ЖЕ класса у учителя. Раньше учитель, ткнувший в ссылку-приглашение
     // своего ученика, зачислялся в собственную группу и получал её домашку. Зачисление
     // закрыто в боте, но выданный долг остался в состоянии и висит вечно: выйти
     // некуда — принадлежности к классу уже нет, а задания есть. Один такой долг
     // (516 строк на аккаунте владельца) при каждом входе мигал в шапке.
-    // Снимаем невыполненные задания тех классов, которые человек сам ведёт.
+    // Помечаем невыполненные задания тех классов, которые человек сам ведёт.
     const myClasses = new Set((window._teacherGroups || []).map(g => g && g.code).filter(Boolean));
     if (myClasses.size) {
-        s.assignments = s.assignments.filter(a =>
-            !(a && a.status === 'active' && a.classCode && myClasses.has(a.classCode)));
+        s.assignments.forEach(a => {
+            if (a && a.status === 'active' && a.classCode && myClasses.has(a.classCode)) {
+                a.status = 'revoked'; a.updatedAt = Date.now(); tombstoned++;
+            }
+        });
     }
-    const removedLegacy = assignmentsBeforeCleanup - s.assignments.length;
+    // Надгробий не копим бесконечно: без потолка список рос бы с каждым отзывом.
+    // Старейшие уходят — они уже сделали свою работу во всех слияниях.
+    const tombs = s.assignments.filter(a => a && a.status === 'revoked');
+    if (tombs.length > 80) {
+        const keepIds = new Set(tombs.sort((x, y) => (x.updatedAt || 0) - (y.updatedAt || 0)).slice(-80).map(a => a.id));
+        s.assignments = s.assignments.filter(a => !(a && a.status === 'revoked') || keepIds.has(a.id));
+    }
+    const removedLegacy = (assignmentsBeforeCleanup - s.assignments.length) + tombstoned;
     let anyCompleted = false;
     s.assignments.forEach(a => {
         if (a.status !== 'active') return;
@@ -855,16 +871,26 @@ function ingestAssignment(rec) {
 }
 window.ingestAssignment = ingestAssignment;
 
-// Отзыв ДЗ учителем (вариант А): убираем у себя только НЕвыполненные задания с отозванными id.
-// Уже сданные (status==='done') оставляем — отметка и достижение сохраняются. Возвращает число убранных.
+// Отзыв ДЗ (учителем или снятие у себя): НЕ удаляем запись, а ставим надгробие
+// status:'revoked'. Удаление не переживает слияние состояний: старая облачная
+// копия возвращала задание при следующей загрузке — «цифры моргнули и пропали,
+// а по „обновить" снова тут». Надгробие сохраняется, уезжает в облако и там
+// побеждает active из любой другой копии (клиентский deepMergeStates и
+// серверный mergeStateValues). Во всех счётчиках и списках участвуют только
+// 'active' и 'done' — надгробие невидимо, но защищает.
+// Сданные (done) не трогаем — отметка и достижение остаются. Возвращает число помеченных.
 function reconcileRevokedAssignments(revokedIds) {
     const s = window.state && window.state.stats;
     if (!s || !Array.isArray(s.assignments)) return 0;
     const set = new Set(revokedIds || []);
     if (!set.size) return 0;
-    const before = s.assignments.length;
-    s.assignments = s.assignments.filter(a => !(a && set.has(a.id) && a.status !== 'done'));
-    return before - s.assignments.length;
+    let marked = 0;
+    s.assignments.forEach(a => {
+        if (a && set.has(a.id) && a.status !== 'done' && a.status !== 'revoked') {
+            a.status = 'revoked'; a.updatedAt = Date.now(); marked++;
+        }
+    });
+    return marked;
 }
 window.reconcileRevokedAssignments = reconcileRevokedAssignments;
 

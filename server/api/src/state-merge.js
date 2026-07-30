@@ -135,25 +135,29 @@ function mergeStateValues(values) {
   // удаление на клиенте не помогало: облачная копия возвращала запись при следующей
   // загрузке. Со стороны это выглядело так — цифры домашки пару секунд «моргают» и
   // пропадают (клиент вычистил), а по «обновить» задание снова тут (сервер вернул).
-  // Теперь клиент не удаляет, а помечает status:'revoked', и такая метка ПОБЕЖДАЕТ:
-  // достаточно одной копии с ней, чтобы задание исчезло у всех устройств.
-  const revoked = new Set();
-  for (const state of states) for (const assignment of state.stats.assignments || []) {
-    if (assignment && assignment.id && assignment.status === 'revoked') revoked.add(assignment.id);
-  }
+  // Клиент не удаляет, а помечает status:'revoked' — надгробие. Приоритет статусов:
+  // done > revoked > active. Сданное — история, её не отнимает даже отзыв.
+  // ⚠️ Надгробие обязано ОСТАТЬСЯ в результате слияния. Первая версия выкидывала
+  // запись целиком — надгробие защищало ровно одно слияние, а следующее (с другим
+  // устройством, где копия ещё active) воскрешало задание заново. Во всех
+  // счётчиках ниже участвуют только active — надгробие невидимо, но живёт.
   const assignments = new Map();
   for (const state of states) for (const assignment of state.stats.assignments || []) {
     if (!assignment || !assignment.id) continue;
-    if (revoked.has(assignment.id)) continue;
     // Active legacy_* records belonged to the removed homework model. Never let
     // a stale device resurrect their false lobby badge during server-side merge.
     if (assignment.status === 'active' && String(assignment.id).startsWith('legacy_')) continue;
     const current = assignments.get(assignment.id);
-    if (!current || assignment.status === 'done' || (current.status !== 'done' && Number(assignment.updatedAt) >= Number(current.updatedAt))) {
+    if (!current) { assignments.set(assignment.id, clone(assignment)); continue; }
+    if (current.status === 'done') continue;
+    if (assignment.status === 'done') { assignments.set(assignment.id, clone(assignment)); continue; }
+    if (current.status === 'revoked') continue;
+    if (assignment.status === 'revoked') { assignments.set(assignment.id, clone(assignment)); continue; }
+    if (Number(assignment.updatedAt) >= Number(current.updatedAt)) {
       assignments.set(assignment.id, clone(assignment));
       continue;
     }
-    if (current.status !== 'done') for (let i = 0; i < (assignment.items || []).length; i++) {
+    for (let i = 0; i < (assignment.items || []).length; i++) {
       const other = assignment.items[i];
       current.items ||= [];
       if (!current.items[i]) current.items[i] = clone(other);
@@ -161,6 +165,12 @@ function mergeStateValues(values) {
     }
   }
   st.assignments = [...assignments.values()];
+  // Потолок на надгробия: старейшие уже отработали своё во всех слияниях.
+  const tombstones = st.assignments.filter(a => a.status === 'revoked');
+  if (tombstones.length > 100) {
+    const keep = new Set(tombstones.sort((a, b) => (Number(a.updatedAt) || 0) - (Number(b.updatedAt) || 0)).slice(-100).map(a => a.id));
+    st.assignments = st.assignments.filter(a => a.status !== 'revoked' || keep.has(a.id));
+  }
   const perTask = Object.fromEntries(TEXT_TASK_KEYS.map(k => [k, 0]));
   let remainingTotal = 0;
   for (const assignment of st.assignments) if (assignment.status === 'active') for (const item of assignment.items || []) {

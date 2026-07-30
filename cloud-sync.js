@@ -7,14 +7,14 @@
             signInWithCredential, signOut, initializeFirestore, collection, doc, setDoc, getDoc,
             getDocs, addDoc, updateDoc, deleteDoc, deleteField, onSnapshot, query, where,
             orderBy, limit, runTransaction, arrayUnion, arrayRemove, vpsApiFetch, refreshVpsAuth
-        } from "./vps-sync-compat.js?v=20260730-5";
+        } from "./vps-sync-compat.js?v=20260730-6";
 
         // jsPDF грузился с cdnjs.cloudflare.com без SRI — то есть посторонний скрипт
         // исполнялся с полными правами страницы, а при недоступности CDN (у части
         // нашей аудитории это обычное дело) экспорт PDF просто не работал. Довод тот
         // же, что и для telegram-web-app.js: своя копия с того же origin.
         // Версия совпадает с прежней CDN-ной — 2.5.1, лежит в vendor/.
-        const VENDOR_JSPDF = 'vendor/jspdf.umd.min.js?v=20260730-5';
+        const VENDOR_JSPDF = 'vendor/jspdf.umd.min.js?v=20260730-6';
 
         const cloudConfig = { projectId: 'vps-postgresql' };
         
@@ -1408,7 +1408,8 @@
             const _notRevoked = a => a && !(_tRevoked && _tRevoked.has(a.id)) && !_sweptByTeacher(a, _tSweep);
             const assignments  = (Array.isArray(stats.assignments) ? stats.assignments
                                 : (Array.isArray(state.assignments) ? state.assignments : []))
-                                .filter(a => a && (a.status === 'done' || _notRevoked(a)));
+                                // Надгробия revoked — не долг: ученик их уже «снял», в кабинете им не место.
+                                .filter(a => a && a.status !== 'revoked' && (a.status === 'done' || _notRevoked(a)));
             const docPending   = (Array.isArray(s.pendingAssignments) ? s.pendingAssignments : [])
                                 .filter(r => r && !(_tRevoked && _tRevoked.has(r.id)) && !(_tSweep && (r.assignedAt || 0) < _tSweep));
             let hwFromAssign = 0, hwDoneOnTime = 0, hwDoneLate = 0, hwOverdue = 0, nearestDl = null;
@@ -2761,7 +2762,23 @@
                 if (window.checkTeacherRole) {
                     await Promise.race([window.checkTeacherRole(), new Promise(r => setTimeout(r, 3000))]);
                 }
-                if ((window._teacherGroups || []).some(g => g && _classDocId(g.code) === code)) return;
+                if ((window._teacherGroups || []).some(g => g && _classDocId(g.code) === code)) {
+                    // Стираем и сам ИСТОЧНИК повторных подтяжек: протухший
+                    // student_class_code остался в localStorage со времён, когда
+                    // учитель мог значиться учеником своей группы. Пока он жив,
+                    // каждый вход и каждое «обновить» тянут журнал заново, а
+                    // трёхсекундный потолок ожидания роли иногда пропускает
+                    // подтяжку — ДЗ группы «возвращается из ниоткуда».
+                    try {
+                        if (_classDocId(localStorage.getItem('student_class_code') || '') === code) {
+                            localStorage.removeItem('student_class_code');
+                            localStorage.removeItem('class_current_upto');
+                            localStorage.removeItem('class_current_period');
+                            console.log('[HW] стёрт протухший код собственной группы:', code);
+                        }
+                    } catch (e) {}
+                    return;
+                }
             } catch (e) { /* роль не выяснилась — ведём себя как раньше */ }
 
             try {
@@ -2790,9 +2807,13 @@
                     if (window.rememberRevokedHw) window.rememberRevokedHw([], sweepTs);
                     const asg = window.state && window.state.stats && window.state.stats.assignments;
                     if (Array.isArray(asg)) {
-                        const before = asg.length;
-                        window.state.stats.assignments = asg.filter(a => !_sweptByTeacher(a, sweepTs));
-                        removed += before - window.state.stats.assignments.length;
+                        // Надгробие вместо удаления — иначе слияние с облачной
+                        // копией вернёт снятое (см. reconcileRevokedAssignments).
+                        asg.forEach(a => {
+                            if (a && a.status !== 'revoked' && _sweptByTeacher(a, sweepTs)) {
+                                a.status = 'revoked'; a.updatedAt = Date.now(); removed++;
+                            }
+                        });
                     }
                 }
                 const today = new Date().toISOString().split('T')[0];
@@ -2967,7 +2988,8 @@
                 try { const st = JSON.parse((await _readPrivateBlob(uid)) || data.fullStateJson || '{}'); ingested = (st.stats || st || {}).assignments || []; } catch (e) {}
                 const byId = new Map();
                 (Array.isArray(ingested) ? ingested : []).forEach(a => {
-                    if (a && a.id) byId.set(a.id, { id: a.id, title: a.title, deadline: a.deadline, assignedAt: a.assignedAt, items: a.items, state: a.status === 'done' ? 'done' : 'active', revoked: revoked.has(a.id) });
+                    // Надгробия revoked не показываем: для учителя такого ДЗ больше нет.
+                    if (a && a.id && a.status !== 'revoked') byId.set(a.id, { id: a.id, title: a.title, deadline: a.deadline, assignedAt: a.assignedAt, items: a.items, state: a.status === 'done' ? 'done' : 'active', revoked: revoked.has(a.id) });
                 });
                 (Array.isArray(data.pendingAssignments) ? data.pendingAssignments : []).forEach(a => {
                     if (a && a.id && !byId.has(a.id)) byId.set(a.id, { id: a.id, title: a.title, deadline: a.deadline, assignedAt: a.assignedAt, items: a.items, state: 'pending', revoked: revoked.has(a.id) });
@@ -3003,7 +3025,7 @@
                 const data = snap.data();
                 let ingested = [];
                 try { const st = JSON.parse((await _readPrivateBlob(uid)) || data.fullStateJson || '{}'); ingested = (st.stats || st || {}).assignments || []; } catch (e) {}
-                const activeIds = (Array.isArray(ingested) ? ingested : []).filter(a => a && a.id && a.status !== 'done').map(a => a.id);
+                const activeIds = (Array.isArray(ingested) ? ingested : []).filter(a => a && a.id && a.status === 'active').map(a => a.id);
                 const pendingIds = (Array.isArray(data.pendingAssignments) ? data.pendingAssignments : []).map(a => a && a.id).filter(Boolean);
                 const revoked = Array.isArray(data.revokedAssignments) ? data.revokedAssignments.slice() : [];
                 [...activeIds, ...pendingIds].forEach(id => { if (!revoked.includes(id)) revoked.push(id); });
@@ -3351,8 +3373,13 @@
                     if (a.status === 'active' && String(a.id).indexOf('legacy_') === 0) return;
                     const cur = asgById.get(a.id);
                     if (!cur) { asgById.set(a.id, JSON.parse(JSON.stringify(a))); return; }
+                    // Приоритет статусов: done > revoked > active. Сданное — история,
+                    // её не отнимает даже отзыв. Надгробие revoked обязано побеждать
+                    // active из любой устаревшей копии — ради этого его и храним.
                     if (cur.status === 'done') return;
                     if (a.status === 'done') { asgById.set(a.id, JSON.parse(JSON.stringify(a))); return; }
+                    if (cur.status === 'revoked') return;
+                    if (a.status === 'revoked') { asgById.set(a.id, JSON.parse(JSON.stringify(a))); return; }
                     (cur.items || []).forEach((it, i) => {
                         const o = (a.items || [])[i];
                         if (o && (Number(o.progress) || 0) > (Number(it.progress) || 0)) it.progress = Number(o.progress) || 0;
@@ -3418,15 +3445,25 @@
             CLOUD_STATE_FIELDS.forEach(k => {
                 if (st[k] !== undefined) window.state.stats[k] = st[k];
             });
-            // ДЗ: применяем слитые задания с фильтром отозванных и «снятых оптом» (revokeBefore) —
-            // иначе отменённое учителем ДЗ «воскресало» бы из старой облачной копии fullStateJson.
-            // Сданные (done) сохраняем всегда — отметка и ачивка остаются (вариант А).
+            // ДЗ: отозванные и «снятые оптом» (revokeBefore) получают надгробие
+            // status:'revoked' — иначе отменённое учителем ДЗ «воскресало» бы из
+            // старой облачной копии fullStateJson. Именно ПОЛУЧАЮТ, а не выкидываются:
+            // удалённая запись не попадает в следующее сохранение, и облачная копия
+            // возвращала её при каждом «обновить». Сданные (done) сохраняем всегда —
+            // отметка и ачивка остаются (вариант А). Активные legacy_* по-прежнему
+            // отбрасываем: их «надгробия» никого не защищают, модель удалена целиком.
             if (Array.isArray(st.assignments)) {
                 const revokedSet = (window._classRevoked instanceof Set) ? window._classRevoked : new Set();
                 const sweepTs = Number(window._classRevokeBefore) || 0;
-                st.assignments = st.assignments.filter(a => a && a.id &&
-                    (a.status === 'done' || (String(a.id).indexOf('legacy_') !== 0 &&
-                        !revokedSet.has(a.id) && !_sweptByTeacher(a, sweepTs))));
+                st.assignments = st.assignments
+                    .filter(a => a && a.id && !(a.status === 'active' && String(a.id).indexOf('legacy_') === 0))
+                    .map(a => {
+                        if (a.status !== 'done' && a.status !== 'revoked'
+                            && (revokedSet.has(a.id) || _sweptByTeacher(a, sweepTs))) {
+                            return Object.assign({}, a, { status: 'revoked', updatedAt: Date.now() });
+                        }
+                        return a;
+                    });
                 window.state.stats.assignments = st.assignments;
                 if (window.recomputeHwMirror) window.recomputeHwMirror();
             }
@@ -3583,24 +3620,22 @@
             const byLabel = active.filter(a => a.classCode && mine.indexOf(a.classCode) !== -1).map(a => a.id);
             const drop = [...new Set([...active.filter(a => ids.has(a.id)).map(a => a.id), ...byLabel])];
             if (!drop.length) return;
-            // Помечаем, а НЕ удаляем: слияние на сервере объединяет задания по id, и
-            // просто удалённое возвращалось из облачной копии при следующем входе —
-            // отсюда «цифры моргнули и пропали, а по обновлению снова тут». Метка
-            // revoked побеждает при слиянии и убивает задание у всех устройств.
-            const dropSet = new Set(drop);
-            let marked = 0;
-            (window.state.stats.assignments || []).forEach(a => {
-                if (a && a.status === 'active' && dropSet.has(a.id)) { a.status = 'revoked'; a.updatedAt = Date.now(); marked++; }
-            });
-            const removed = window.reconcileRevokedAssignments ? window.reconcileRevokedAssignments(drop) : 0;
+            // Помечаем надгробием, а НЕ удаляем: слияние объединяет задания по id,
+            // и просто удалённое возвращалось из облачной копии при следующем входе —
+            // отсюда «цифры моргнули и пропали, а по обновлению снова тут».
+            // ⚠️ Первая версия этого фикса помечала запись и СЛЕДУЮЩЕЙ ЖЕ строкой
+            // удаляла её старым reconcileRevokedAssignments — метка не доживала до
+            // сохранения, и в облако не уехало НИ ОДНОГО надгробия. Теперь
+            // reconcileRevokedAssignments сам ставит надгробия и ничего не удаляет.
+            const marked = window.reconcileRevokedAssignments ? window.reconcileRevokedAssignments(drop) : 0;
             if (window.rememberRevokedHw) window.rememberRevokedHw(drop, 0);
-            if (removed > 0 || marked > 0) {
+            if (marked > 0) {
                 if (window.recomputeHwMirror) window.recomputeHwMirror();
                 if (window.saveProgress) window.saveProgress();
                 if (window.syncNow) window.syncNow();
                 if (window.updateGlobalUI) window.updateGlobalUI();
                 if (window.updateHwNavBadge) window.updateHwNavBadge();
-                console.log('[HW] снято ДЗ собственных групп:', removed);
+                console.log('[HW] снято ДЗ собственных групп (надгробий):', marked);
             }
         }
 

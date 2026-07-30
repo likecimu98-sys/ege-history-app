@@ -98,7 +98,9 @@ module.exports = function initEngagement(ctx) {
         const learned = Number(d.learnedCount) || 0;
         const asg = Array.isArray(stats.assignments) ? stats.assignments : [];
         const today = todayKey(), tmr = daysAgoKey(-1);
-        const active = asg.filter(a => a && a.status !== 'done');
+        // Строго status==='active': кроме done есть надгробия revoked (снятое ДЗ,
+        // запись хранится ради слияния состояний) — напоминать о них нельзя.
+        const active = asg.filter(a => a && a.status === 'active');
         const overdue = active.filter(a => a.deadline && a.deadline < today);
         const dueSoon = active.filter(a => a.deadline && (a.deadline === today || a.deadline === tmr));
         const doneThisWeek = asg.filter(a => a && a.status === 'done' && a.completedAt && a.completedAt > Date.now() - 7 * 86400000);

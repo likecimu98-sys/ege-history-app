@@ -105,16 +105,44 @@ test('согласие с одного устройства не теряетс�
   assert.ok(merged.stats.consent, 'без переноса согласия анкету показывают при каждом входе');
 });
 
-test('снятое ДЗ не воскресает из облачной копии', () => {
+test('снятое ДЗ не воскресает из облачной копии, а надгробие остаётся в результате', () => {
   const merged = mergeStateValues([
-    { stats: { assignments: [{ id: 'hw-1', status: 'revoked', items: [{ task: 'task3', goal: 10, progress: 0 }] }] } },
+    { stats: { assignments: [{ id: 'hw-1', status: 'revoked', updatedAt: 5, items: [{ task: 'task3', goal: 10, progress: 0 }] }] } },
     { stats: { assignments: [
       { id: 'hw-1', status: 'active', updatedAt: 99, items: [{ task: 'task3', goal: 10, progress: 0 }] },
       { id: 'hw-2', status: 'active', items: [{ task: 'task4', goal: 4, progress: 1 }] },
     ] } },
   ]);
-  assert.deepEqual(merged.stats.assignments.map(a => a.id), ['hw-2']);
+  const hw1 = merged.stats.assignments.find(a => a.id === 'hw-1');
+  // Надгробие обязано пережить слияние: если запись выкинуть целиком, СЛЕДУЮЩЕЕ
+  // слияние с ещё одним устройством (где копия всё ещё active) воскресит задание.
+  assert.equal(hw1 && hw1.status, 'revoked', 'надгробие must survive the merge');
   assert.equal(merged.stats.hwFlashcardsToSolve, 3, 'долг снятого задания не должен считаться');
+  // Второй раунд: результат первого слияния против устройства с копией active —
+  // ровно сценарий «нажал обновить, и ДЗ вернулось».
+  const second = mergeStateValues([
+    JSON.stringify({ stats: merged.stats }),
+    { stats: { assignments: [{ id: 'hw-1', status: 'active', updatedAt: 500, items: [{ task: 'task3', goal: 10, progress: 0 }] }] } },
+  ]);
+  const again = second.stats.assignments.find(a => a.id === 'hw-1');
+  assert.equal(again && again.status, 'revoked', 'снятое ДЗ не должно воскресать во втором слиянии');
+  assert.equal(second.stats.hwFlashcardsToSolve, 3);
+});
+
+test('сданное ДЗ побеждает надгробие — отметку и ачивку отзыв не отнимает', () => {
+  const merged = mergeStateValues([
+    { stats: { assignments: [{ id: 'hw-1', status: 'revoked', updatedAt: 900 }] } },
+    { stats: { assignments: [{ id: 'hw-1', status: 'done', completedAt: 100, items: [] }] } },
+  ]);
+  assert.equal(merged.stats.assignments.find(a => a.id === 'hw-1').status, 'done');
+});
+
+test('надгробий не копится больше сотни', () => {
+  const tombs = Array.from({ length: 130 }, (_, i) => ({ id: `t${i}`, status: 'revoked', updatedAt: i }));
+  const merged = mergeStateValues([{ stats: { assignments: tombs } }]);
+  const kept = merged.stats.assignments.filter(a => a.status === 'revoked');
+  assert.equal(kept.length, 100);
+  assert.ok(kept.every(a => Number(a.updatedAt) >= 30), 'уходить должны старейшие');
 });
 
 test('круг по банку ФИПИ и время по заданиям переживают слияние', () => {
