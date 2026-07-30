@@ -299,6 +299,18 @@ function bootHtmlIsOneAtomicRelease() {
         [],
         `boot-файл не привязан к текущему релизу ${release}`
     );
+    // BOOT_RELEASE уезжает в каждый диагностический пинг. Он был захардкожен и
+    // отстал на два релиза — в логе версия загрузки врала, и разбор поля шёл
+    // по несуществующей сборке. Держим его на той же версии, что и ассеты.
+    const bootRelease = indexSource.match(/var BOOT_RELEASE = '([^']+)'/);
+    assert.ok(bootRelease, 'BOOT_RELEASE не найден в index.html');
+    assert.equal(bootRelease[1], release,
+        `BOOT_RELEASE (${bootRelease[1]}) отстал от релиза ассетов (${release}) — пинги загрузки будут врать`);
+    // Маяк-картинка: на устройствах со сломанным fetch это ЕДИНСТВЕННЫЙ сигнал,
+    // что страница вообще выполнилась. Без него такое устройство неотличимо от
+    // «страница не доехала».
+    assert.match(indexSource, /if \(phase === 'html'\) bootBeacon\(qs\);/,
+        'маяк на фазе html пропал — диагностика снова ослепнет при мёртвом fetch');
 
     for (const match of indexSource.matchAll(/<script([^>]*)>([\s\S]*?)<\/script>/gi)) {
         if (/\bsrc=/i.test(match[1]) || /application\/ld\+json/i.test(match[1])) continue;
