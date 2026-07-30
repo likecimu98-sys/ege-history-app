@@ -690,6 +690,7 @@ const ACTION_HANDLERS = {
     toggleTheme:            () => window.toggleTheme?.(),
     startDuelSearch:        () => window.startDuelSearch?.(),
     mainActionGo:           () => window.mainActionGo?.(),
+    showStreakHint:         () => window.showStreakHint?.(),
     cancelDuelSearch:       () => window.cancelDuelSearch?.(),
     startHwFromBanner:      () => window.startHwFromBanner?.(),
     openHwTab:              () => window.openHwTab?.(),

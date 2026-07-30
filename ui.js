@@ -1327,6 +1327,18 @@ window.cramLearnedCount = function(deckPrefixOrFrom, maybeTo) {
     return n;
 };
 
+// Подсказка про серию по нажатию на огонёк. Тост, а не title: на телефоне
+// наведения мышью не бывает, и подсказка была невидима в принципе.
+window.showStreakHint = function() {
+    if (typeof haptic === 'function') haptic('light');
+    const h = window._streakHint;
+    if (!h) return;
+    const done = h.done;
+    showToast(done ? '🔥' : '🎯', `${h.goalLine}. ${h.streakLine}`,
+        done ? 'bg-emerald-500' : 'bg-indigo-500',
+        done ? 'border-emerald-700' : 'border-indigo-700');
+};
+
 function _hwFmtDate(dl) {
     if (!dl) return 'без срока';
     return new Date(dl + 'T00:00:00').toLocaleDateString('ru-RU', { day: 'numeric', month: 'long' });
@@ -2348,6 +2360,10 @@ function updateGlobalUI() {
                 streakLine = `День засчитан в серию: решено ${doneToday} из ${streakMin}.`;
             }
             ringBtn.title = `${goalLine}\n${streakLine}`;
+            // title виден только под мышью. На телефоне подсказку показывает тост,
+            // поэтому текст держим ещё и здесь — showStreakHint берёт готовые строки
+            // и не пересчитывает их заново (иначе разъедутся).
+            window._streakHint = { goalLine, streakLine, done: needStreak === 0 };
         }
     }
     // Дни до ЕГЭ — только когда их ≤150: раньше это шум, ближе к экзамену — мотивация.

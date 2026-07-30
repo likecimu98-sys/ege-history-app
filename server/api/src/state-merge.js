@@ -131,9 +131,20 @@ function mergeStateValues(values) {
     if (typeof value === 'number') st.achievementsData[key] = Math.max(st.achievementsData[key] || 0, value);
   }
 
+  // 🔴 Снятое ДЗ обязано умирать НАВСЕГДА. Слияние идёт объединением по id, поэтому
+  // удаление на клиенте не помогало: облачная копия возвращала запись при следующей
+  // загрузке. Со стороны это выглядело так — цифры домашки пару секунд «моргают» и
+  // пропадают (клиент вычистил), а по «обновить» задание снова тут (сервер вернул).
+  // Теперь клиент не удаляет, а помечает status:'revoked', и такая метка ПОБЕЖДАЕТ:
+  // достаточно одной копии с ней, чтобы задание исчезло у всех устройств.
+  const revoked = new Set();
+  for (const state of states) for (const assignment of state.stats.assignments || []) {
+    if (assignment && assignment.id && assignment.status === 'revoked') revoked.add(assignment.id);
+  }
   const assignments = new Map();
   for (const state of states) for (const assignment of state.stats.assignments || []) {
     if (!assignment || !assignment.id) continue;
+    if (revoked.has(assignment.id)) continue;
     // Active legacy_* records belonged to the removed homework model. Never let
     // a stale device resurrect their false lobby badge during server-side merge.
     if (assignment.status === 'active' && String(assignment.id).startsWith('legacy_')) continue;
@@ -159,6 +170,35 @@ function mergeStateValues(values) {
   }
   st.hwFlashcardsToSolve = remainingTotal;
   for (const key of TEXT_TASK_KEYS) st[`hw${key[0].toUpperCase()}${key.slice(1)}`] = perTask[key];
+
+  // 🔴 Поля, которые слияние РАНЬШЕ МОЛЧА ТЕРЯЛО. Список полей собирается здесь
+  // вручную, и всё, что в него не попало, исчезает при каждой записи в облако.
+  //
+  // consent — согласие на обработку данных. Его потеря дороже всех: на устройстве,
+  // где localStorage не пережил перезапуск (Telegram Desktop), человека спрашивали
+  // имя и галочку ПРИ КАЖДОМ входе, потому что в облаке согласия не было ни у кого.
+  // На 30.07 — 0 записей из 1345. Держим САМОЕ РАННЕЕ: это юридический факт «когда
+  // человек согласился», и переписывать его свежей датой нельзя.
+  let consent = null;
+  for (const state of states) {
+    const candidate = state.stats.consent;
+    if (!candidate || !candidate.acceptedAt) continue;
+    if (!consent || Number(candidate.acceptedAt) < Number(consent.acceptedAt)) consent = clone(candidate);
+  }
+  if (consent) st.consent = consent;
+
+  // examSolved — круг по банку ФИПИ: id уже верно решённых заданий. Без переноса
+  // ротация обнулялась при каждом слиянии, и банк шёл по второму кругу.
+  const examSolved = new Set();
+  for (const state of states) for (const id of state.stats.examSolved || []) if (id) examSolved.add(id);
+  if (examSolved.size) st.examSolved = [...examSolved];
+
+  // timeByTask — время по заданиям; берём максимум, как и общее время.
+  const timeByTask = {};
+  for (const state of states) for (const [key, value] of Object.entries(state.stats.timeByTask || {})) {
+    timeByTask[key] = Math.max(Number(timeByTask[key]) || 0, Number(value) || 0);
+  }
+  if (Object.keys(timeByTask).length) st.timeByTask = timeByTask;
 
   const mistakeKeys = new Set();
   for (const state of states) for (const mistake of state.mistakesPool || []) {

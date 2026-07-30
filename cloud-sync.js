@@ -7,14 +7,14 @@
             signInWithCredential, signOut, initializeFirestore, collection, doc, setDoc, getDoc,
             getDocs, addDoc, updateDoc, deleteDoc, deleteField, onSnapshot, query, where,
             orderBy, limit, runTransaction, arrayUnion, arrayRemove, vpsApiFetch, refreshVpsAuth
-        } from "./vps-sync-compat.js?v=20260730-4";
+        } from "./vps-sync-compat.js?v=20260730-5";
 
         // jsPDF грузился с cdnjs.cloudflare.com без SRI — то есть посторонний скрипт
         // исполнялся с полными правами страницы, а при недоступности CDN (у части
         // нашей аудитории это обычное дело) экспорт PDF просто не работал. Довод тот
         // же, что и для telegram-web-app.js: своя копия с того же origin.
         // Версия совпадает с прежней CDN-ной — 2.5.1, лежит в vendor/.
-        const VENDOR_JSPDF = 'vendor/jspdf.umd.min.js?v=20260730-4';
+        const VENDOR_JSPDF = 'vendor/jspdf.umd.min.js?v=20260730-5';
 
         const cloudConfig = { projectId: 'vps-postgresql' };
         
@@ -3583,9 +3583,18 @@
             const byLabel = active.filter(a => a.classCode && mine.indexOf(a.classCode) !== -1).map(a => a.id);
             const drop = [...new Set([...active.filter(a => ids.has(a.id)).map(a => a.id), ...byLabel])];
             if (!drop.length) return;
+            // Помечаем, а НЕ удаляем: слияние на сервере объединяет задания по id, и
+            // просто удалённое возвращалось из облачной копии при следующем входе —
+            // отсюда «цифры моргнули и пропали, а по обновлению снова тут». Метка
+            // revoked побеждает при слиянии и убивает задание у всех устройств.
+            const dropSet = new Set(drop);
+            let marked = 0;
+            (window.state.stats.assignments || []).forEach(a => {
+                if (a && a.status === 'active' && dropSet.has(a.id)) { a.status = 'revoked'; a.updatedAt = Date.now(); marked++; }
+            });
             const removed = window.reconcileRevokedAssignments ? window.reconcileRevokedAssignments(drop) : 0;
             if (window.rememberRevokedHw) window.rememberRevokedHw(drop, 0);
-            if (removed > 0) {
+            if (removed > 0 || marked > 0) {
                 if (window.recomputeHwMirror) window.recomputeHwMirror();
                 if (window.saveProgress) window.saveProgress();
                 if (window.syncNow) window.syncNow();

@@ -86,3 +86,42 @@ test('drops active legacy homework ghosts but preserves completed history', () =
   assert.equal(merged.stats.hwFlashcardsToSolve, 5);
   assert.equal(merged.stats.hwTask3, 5);
 });
+
+test('согласие переживает слияние и не переписывается свежей датой', () => {
+  const merged = mergeStateValues([
+    { stats: { consent: { version: 1, acceptedAt: 5000, byGuardian: true } } },
+    { stats: { consent: { version: 1, acceptedAt: 9000, byGuardian: true } } },
+    { stats: {} },
+  ]);
+  assert.equal(merged.stats.consent.acceptedAt, 5000,
+    'храним самую раннюю дату согласия — это юридический факт, а не «последнее значение»');
+});
+
+test('согласие с одного устройства не теряется, если на другом его нет', () => {
+  const merged = mergeStateValues([
+    { stats: { totalSolvedEver: 100 } },
+    { stats: { consent: { version: 1, acceptedAt: 7000, byGuardian: true } } },
+  ]);
+  assert.ok(merged.stats.consent, 'без переноса согласия анкету показывают при каждом входе');
+});
+
+test('снятое ДЗ не воскресает из облачной копии', () => {
+  const merged = mergeStateValues([
+    { stats: { assignments: [{ id: 'hw-1', status: 'revoked', items: [{ task: 'task3', goal: 10, progress: 0 }] }] } },
+    { stats: { assignments: [
+      { id: 'hw-1', status: 'active', updatedAt: 99, items: [{ task: 'task3', goal: 10, progress: 0 }] },
+      { id: 'hw-2', status: 'active', items: [{ task: 'task4', goal: 4, progress: 1 }] },
+    ] } },
+  ]);
+  assert.deepEqual(merged.stats.assignments.map(a => a.id), ['hw-2']);
+  assert.equal(merged.stats.hwFlashcardsToSolve, 3, 'долг снятого задания не должен считаться');
+});
+
+test('круг по банку ФИПИ и время по заданиям переживают слияние', () => {
+  const merged = mergeStateValues([
+    { stats: { examSolved: ['a', 'b'], timeByTask: { task4: 100, task5: 10 } } },
+    { stats: { examSolved: ['b', 'c'], timeByTask: { task4: 40, task5: 90 } } },
+  ]);
+  assert.deepEqual(merged.stats.examSolved.sort(), ['a', 'b', 'c']);
+  assert.deepEqual(merged.stats.timeByTask, { task4: 100, task5: 90 });
+});
