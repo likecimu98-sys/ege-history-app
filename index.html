@@ -99,15 +99,15 @@
     <link rel="manifest" href="manifest.webmanifest">
     <link rel="icon" type="image/png" href="assets/icons/icon-192.png">
     <link rel="apple-touch-icon" href="assets/icons/icon-180.png">
-    <link rel="stylesheet" href="tokens.css?v=20260730-2">
-    <link rel="stylesheet" href="output.css?v=20260730-2">
-    <link rel="stylesheet" href="theme-classic.css?v=20260730-2">
-    <link rel="stylesheet" href="styles.css?v=20260730-2">
+    <link rel="stylesheet" href="tokens.css?v=20260730-3">
+    <link rel="stylesheet" href="output.css?v=20260730-3">
+    <link rel="stylesheet" href="theme-classic.css?v=20260730-3">
+    <link rel="stylesheet" href="styles.css?v=20260730-3">
     
     <!-- Самохостинг telegram-web-app.js: telegram.org часто недоступен (сеть/VPN),
          тогда window.Telegram не создавался → known_tg_id не считывался → случайный id «через раз».
          Локальная копия отдаётся с того же origin и кэшируется service worker'ом. -->
-    <script src="vendor/telegram-web-app.js?v=20260730-2" defer></script>
+    <script src="vendor/telegram-web-app.js?v=20260730-3" defer></script>
 
     <style>
         /* Этот inline-блок намеренно МИНИМАЛЕН: только то, что должно сработать на
@@ -333,7 +333,7 @@
 
     <script>
       (function() {
-      var BOOT_RELEASE = '20260730-2';
+      var BOOT_RELEASE = '20260730-3';
         var bootT0 = Date.now();
         // 🔴 Диагностика загрузки НЕ должна зависеть только от fetch.
         // 30.07 два айфона скачали страницу и ВСЕ 20 скриптов (200 в логе), но не
@@ -343,8 +343,20 @@
         // «страница не выполнилась» от «выполнилась, но сеть для API мертва».
         // Картинка грузится другим механизмом браузера и проходит там, где fetch нет.
         // Маяком помечаем только фазу html — одного лишнего запроса на загрузку хватает.
+        // ⚠️ Маяк НЕ должен идти по адресу /api/. Первая версия шла туда же, куда и
+        // обычные пинги, и потому не различала ровно тот случай, ради которого её
+        // делали: на проблемных айфонах не проходит НИЧЕГО с /api/ (30.07: с одного
+        // IP андроид шлёт пинги и телеметрию, айфон — ноль запросов к /api, при том
+        // что всю статику качает). Похоже на блокировщик контента: в его списках
+        // пути вида /api/.../telemetry и /health — типовые записи.
+        // Поэтому маяк выглядит как обычная картинка. Имя случайное: у Service Worker
+        // картинки идут cache-first с ignoreSearch, и постоянное имя после первого
+        // раза отвечало бы из кэша, не доходя до сервера. Файла нет — нам нужен сам
+        // факт запроса в логе, ответ 404 подходит идеально.
         function bootBeacon(params) {
-          try { (new Image()).src = '/api/v1/health?' + params + '&b=img&t=' + Date.now(); } catch (e) {}
+          try {
+            (new Image()).src = '/px-' + Math.random().toString(36).slice(2, 10) + '.gif?' + params + '&b=img';
+          } catch (e) {}
         }
         function bootSignal(phase, detail) {
           try {
@@ -553,24 +565,24 @@
          диагностика поломок сама стала способом их устроить.
          Единственное, что теряется с defer, — ошибки инлайн-скриптов ВЫШЕ по
          документу. Они уже покрыты своим отчётом (bootSignal('error')). -->
-    <script src="telemetry.js?v=20260730-2" defer></script>
+    <script src="telemetry.js?v=20260730-3" defer></script>
 
     <!-- JS разбит на модули: config → utils → state → table → ui → modes → app -->
     <!-- Порядок defer гарантирован браузером: выполняются строго по порядку в DOM -->
-    <script src="config.js?v=20260730-2" defer></script>
-    <script src="utils.js?v=20260730-2" defer></script>
-    <script src="exam-scoring.js?v=20260730-2" defer></script>
-    <script src="state.js?v=20260730-2" defer></script>
-    <script src="table.js?v=20260730-2" defer></script>
-    <script src="ui.js?v=20260730-2" defer></script>
-    <script src="modes.js?v=20260730-2" defer></script>
-    <script src="swipe-data.js?v=20260730-2" defer></script>
-    <script src="swipe-mode.js?v=20260730-2" defer></script>
-    <script src="match-mode.js?v=20260730-2" defer></script>
-    <script src="vov-mode.js?v=20260730-2" defer></script>
-    <script src="visual-trainer.js?v=20260730-2" defer></script>
-    <script src="exam-mode.js?v=20260730-2" defer></script>
-    <script src="app.js?v=20260730-2" defer></script>
+    <script src="config.js?v=20260730-3" defer></script>
+    <script src="utils.js?v=20260730-3" defer></script>
+    <script src="exam-scoring.js?v=20260730-3" defer></script>
+    <script src="state.js?v=20260730-3" defer></script>
+    <script src="table.js?v=20260730-3" defer></script>
+    <script src="ui.js?v=20260730-3" defer></script>
+    <script src="modes.js?v=20260730-3" defer></script>
+    <script src="swipe-data.js?v=20260730-3" defer></script>
+    <script src="swipe-mode.js?v=20260730-3" defer></script>
+    <script src="match-mode.js?v=20260730-3" defer></script>
+    <script src="vov-mode.js?v=20260730-3" defer></script>
+    <script src="visual-trainer.js?v=20260730-3" defer></script>
+    <script src="exam-mode.js?v=20260730-3" defer></script>
+    <script src="app.js?v=20260730-3" defer></script>
 
     <!-- ШАПКА -->
     <header id="main-header" class="sticky top-0 z-50 no-print transition-colors duration-400 pt-2 pb-2 sm:pt-3 sm:pb-3 px-4">
@@ -1464,11 +1476,11 @@
     <!-- jsPDF грузится лениво (см. loadJsPDFOnDemand в cloud-sync.js) — не нужен при старте -->
 
     <!-- === PWA + first-party cloud sync loader === -->
-    <script src="pwa.js?v=20260730-2" defer></script>
+    <script src="pwa.js?v=20260730-3" defer></script>
 
     <!-- Ядро (факты, ~659 КБ): нужно для лобби и заданий. Приложение ОТКРЫВАЕТСЯ сразу
          после него — defer парсит HTML параллельно, порядок выполнения гарантирован. -->
-    <script src="data.js?v=20260730-2" defer></script>
+    <script src="data.js?v=20260730-3" defer></script>
     <!-- app:ready диспатчит инлайн-вотчер готовности в начале <body> (см. watchBoot):
          отдельный boot-ready.js убран — свежий файл не лежал в старом SW-кэше и на
          моргнувшей сети вис, не давая снять заставку. -->

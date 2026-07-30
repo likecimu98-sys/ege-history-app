@@ -311,6 +311,16 @@ function bootHtmlIsOneAtomicRelease() {
     // «страница не доехала».
     assert.match(indexSource, /if \(phase === 'html'\) bootBeacon\(qs\);/,
         'маяк на фазе html пропал — диагностика снова ослепнет при мёртвом fetch');
+    // Маяк обязан идти МИМО /api/: именно туда на проблемных устройствах не проходит
+    // ни один запрос, и маяк на том же адресе не различал бы нужный случай.
+    const beacon = indexSource.match(/function bootBeacon\(params\) \{[\s\S]*?\n        \}/);
+    assert.ok(beacon, 'bootBeacon не найден');
+    assert.doesNotMatch(beacon[0], /\/api\//,
+        'маяк снова уехал на /api/ — он обязан выглядеть как обычная статика');
+    // Имя случайное: у Service Worker картинки идут cache-first с ignoreSearch,
+    // постоянное имя после первого раза отвечало бы из кэша и до сервера не дошло.
+    assert.match(beacon[0], /Math\.random\(\)/,
+        'у маяка постоянное имя — Service Worker отдаст его из кэша, и в лог он не попадёт');
 
     for (const match of indexSource.matchAll(/<script([^>]*)>([\s\S]*?)<\/script>/gi)) {
         if (/\bsrc=/i.test(match[1]) || /application\/ld\+json/i.test(match[1])) continue;
