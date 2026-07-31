@@ -17,6 +17,7 @@ function makeWorker({
     hangCacheMatch = false,
     hangCacheKeys = false,
     hangGlobalCacheMatch = false,
+    failFetchTimes = 0,
     timerCapMs = null
 } = {}) {
     const handlers = {};
@@ -49,6 +50,7 @@ function makeWorker({
         fetch: async () => {
             networkFetches++;
             if (hangFetch) return never();
+            if (networkFetches <= failFetchTimes) throw new TypeError('Failed to fetch');
             return new Response('window.booted = true;', {
                 status: 200,
                 headers: { 'Content-Type': 'application/javascript' }
@@ -117,6 +119,32 @@ async function coldCodeDoesNotWaitForCacheStorage() {
 
     worker.releaseCacheWriteResolve();
     await lifetimePromise;
+}
+
+// 🔴 Сорванная попытка сети НЕ должна убивать скрипт.
+//
+// Маячки 30-31.07.2026: из 248 стартов до ядра доехало 122, и в отказах видны
+// ошибки ЗАГРУЗКИ файлов (lineno=0) — table.js, ui.js, state.js, pwa.js. Ветка
+// кода отдавала Response.error() после ПЕРВОГО же сетевого сбоя, а на мобильной
+// связи один обрыв из двадцати параллельных defer-запросов — рядовое событие:
+// файл помечался несостоявшимся, quickStartGame не определялась, человек
+// оставался на заставке навсегда. Стенд роняет сеть дважды подряд.
+async function scriptSurvivesFlakyNetwork() {
+    const worker = makeWorker({ failFetchTimes: 2, timerCapMs: 5 });
+    let responsePromise;
+    worker.handlers.fetch({
+        request: {
+            url: 'https://reshay-istoriyu.ru/table.js?v=20260731-11',
+            method: 'GET', mode: 'cors', destination: 'script'
+        },
+        respondWith(promise) { responsePromise = Promise.resolve(promise); },
+        waitUntil() {}
+    });
+    const response = await responsePromise;
+    assert.equal(response.status, 200,
+        'после двух сорванных попыток сети скрипт обязан доехать, а не стать Response.error()');
+    assert.ok(worker.stats().networkFetches >= 3,
+        'повторных попыток сети не было — значит один обрыв по-прежнему хоронит запуск');
 }
 
 // 🔴 Картинка обязана доехать, даже если CacheStorage залип.
@@ -466,6 +494,7 @@ function assetCacheIsIndependentOfAppVersion() {
     assetCacheIsIndependentOfAppVersion();
     previousReleaseHtmlSurvivesVersionBump();
     await coldCodeDoesNotWaitForCacheStorage();
+    await scriptSurvivesFlakyNetwork();
     await imageArrivesWhileCacheStorageHangs();
     await imageFallsBackToCacheWhenNetworkFails();
     await exactReleaseHitAvoidsNetwork();

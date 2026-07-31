@@ -1,7 +1,7 @@
 'use strict';
 
-const APP_VERSION = '2026-07-31-vps-71';
-const RELEASE_ASSET_VERSION = '20260731-10';
+const APP_VERSION = '2026-08-01-vps-72';
+const RELEASE_ASSET_VERSION = '20260801-11';
 // ⚠️ Версия НАБОРА КАРТИНОК, а не версия приложения. Поднимай её ТОЛЬКО когда
 // меняется состав offline-assets.json — добавились, удалились или переснялись
 // файлы. От бампа APP_VERSION она не зависит и зависеть не должна.
@@ -202,6 +202,25 @@ async function previousReleaseHtml(cacheKey) {
         const cache = await caches.open(name);
         const hit = (await cache.match(cacheKey)) || (await cache.match(scopedRequest('./index.html')));
         if (hit) return hit;
+    }
+    return null;
+}
+
+// Файл кода из кэша ЛЮБОГО релиза — последняя надежда, когда сеть не далась даже
+// с повторами. Подмены версий тут быть не может: адрес несёт `?v=<релиз>`, поэтому
+// найдётся ровно тот же файл, просто сохранённый кэшем другого релиза. Старая копия
+// скрипта всё равно лучше несостоявшегося запуска — на заставке навсегда человек
+// не может вообще ничего, а с файлом из соседнего кэша приложение стартует.
+async function findInAnyStaticCache(request) {
+    const names = (await caches.keys())
+        .filter((name) => name.startsWith(STATIC_CACHE_PREFIX))
+        .reverse(); // caches.keys() отдаёт в порядке создания — начинаем со свежего
+    for (const name of names) {
+        try {
+            const cache = await caches.open(name);
+            const hit = await cache.match(request);
+            if (hit) return hit;
+        } catch (error) { /* повреждённый кэш не должен обрывать перебор */ }
     }
     return null;
 }
@@ -420,6 +439,30 @@ function respondWithReleaseCode(event) {
         return networkPairPromise;
     };
 
+    // 🔴 ОДНА сорванная попытка НЕ должна убивать скрипт. Раньше здесь было
+    // «fetch упал → Response.error()», и этого хватало, чтобы приложение не
+    // запустилось вовсе: файл помечается несостоявшимся, `quickStartGame` может
+    // не определиться, человек остаётся на заставке навсегда. На мобильной связи
+    // (LTE в дороге, слабый сигнал, пересадка Wi-Fi↔сеть) один обрыв из двадцати
+    // параллельных defer-запросов — рядовое событие. По маячкам за 30–31.07:
+    // из 248 запусков до ядра доехало 122, и в отказах видны именно ошибки
+    // ЗАГРУЗКИ файлов (lineno=0) — table.js, ui.js, state.js, pwa.js и другие.
+    // Поэтому пробуем сеть ещё дважды с короткими паузами. Промис попытки
+    // сбрасываем — иначе повтор вернул бы ту же самую отвергнутую сеть.
+    const NETWORK_RETRIES = 2;
+    const RETRY_DELAY_MS = 250;
+    const networkWithRetries = async () => {
+        for (let attempt = 0; ; attempt++) {
+            try {
+                return (await networkPair()).client;
+            } catch (error) {
+                if (attempt >= NETWORK_RETRIES) throw error;
+                networkPairPromise = null;
+                await new Promise((resolve) => setTimeout(resolve, RETRY_DELAY_MS * (attempt + 1)));
+            }
+        }
+    };
+
     // Кэш-хит быстро → отдаём из кэша (сеть НЕ дёргаем: скорость + офлайн сохранены).
     // Кэш-промах → сеть. Кэш «завис» дольше CACHE_READ_TIMEOUT_MS → не ждём его, идём в сеть,
     // чтобы CacheStorage на iOS не мог удержать страницу на загрузчике.
@@ -430,10 +473,12 @@ function respondWithReleaseCode(event) {
         ]);
         if (cached && cached !== '__cache_timeout__') return cached;
         try {
-            return (await networkPair()).client;
+            return await networkWithRetries();
         } catch (error) {
-            const late = (cached === '__cache_timeout__') ? await cachedPromise.catch(() => null) : null;
-            return late || Response.error();
+            // Сеть не далась и после повторов — последняя надежда на кэш любого
+            // соседнего релиза: старый файл лучше несостоявшегося запуска.
+            const late = await cachedPromise.catch(() => null);
+            return late || (await findInAnyStaticCache(request)) || Response.error();
         }
     })();
 
