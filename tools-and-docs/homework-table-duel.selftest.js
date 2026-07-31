@@ -333,6 +333,18 @@ assert.match(stateSource, /classCode: rec\.classCode \|\| null/, 'assignment cla
 assert.match(cloudSource,
   /localStorage\.setItem\('student_class_code', bestData\.classCode\);[\s\S]{0,1500}window\.pullClassAssignments\(bestData\.classCode\)/,
   'restoring classCode from the cloud must immediately pull the class journal');
+// 🔴 Журнал класса обязан записываться ДО персональной рассылки. Пока он шёл
+// последним, обрыв цикла по ученикам (закрытая вкладка, уснувший WebView, сеть)
+// оставлял класс без журнала: 31.07 в летней школе ДЗ получили 13 из 145, а
+// догнать остальных было нечем. Проверяем именно ПОРЯДОК двух записей.
+{
+  const assignBody = cloudSource.slice(cloudSource.indexOf('const codes = [...new Set(students.map'));
+  const journalAt = assignBody.indexOf('assignments: arrayUnion(rec)');
+  const fanoutAt = assignBody.indexOf('pendingAssignments: arrayUnion(rec)');
+  assert.ok(journalAt > -1 && fanoutAt > -1, 'homework assign must write both the journal and per-student records');
+  assert.ok(journalAt < fanoutAt,
+    'the class journal must be written BEFORE the per-student fan-out, so an interrupted assign is still recoverable');
+}
 
 // ─── Перетаскивание: чужие фишки трогать нельзя ──────────────────────────────
 // Слушатель висит на document и физически видит ЛЮБОЙ `.dnd-chip` на странице.

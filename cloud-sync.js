@@ -7,14 +7,14 @@
             signInWithCredential, signOut, initializeFirestore, collection, doc, setDoc, getDoc,
             getDocs, addDoc, updateDoc, deleteDoc, deleteField, onSnapshot, query, where,
             orderBy, limit, runTransaction, arrayUnion, arrayRemove, vpsApiFetch, refreshVpsAuth
-        } from "./vps-sync-compat.js?v=20260731-9";
+        } from "./vps-sync-compat.js?v=20260731-10";
 
         // jsPDF грузился с cdnjs.cloudflare.com без SRI — то есть посторонний скрипт
         // исполнялся с полными правами страницы, а при недоступности CDN (у части
         // нашей аудитории это обычное дело) экспорт PDF просто не работал. Довод тот
         // же, что и для telegram-web-app.js: своя копия с того же origin.
         // Версия совпадает с прежней CDN-ной — 2.5.1, лежит в vendor/.
-        const VENDOR_JSPDF = 'vendor/jspdf.umd.min.js?v=20260731-9';
+        const VENDOR_JSPDF = 'vendor/jspdf.umd.min.js?v=20260731-10';
 
         const cloudConfig = { projectId: 'vps-postgresql' };
         
@@ -3174,6 +3174,23 @@
             const codes = [...new Set(students.map(s => _classDocId(s.classCode)).filter(Boolean))];
             if (codes.length === 1) rec.classCode = codes[0];
             showToast('⏳', `Выдаю ДЗ ${students.length} ученикам…`, 'bg-blue-500', 'border-blue-700');
+            // 🔴 ЖУРНАЛ КЛАССА ПИШЕТСЯ ПЕРВЫМ — до персональной рассылки.
+            // Раньше он шёл последним, после цикла по всем ученикам. В большом классе
+            // цикл идёт десятки секунд, и любой обрыв на середине (закрыли вкладку,
+            // телефон усыпил WebView, потеряли сеть) оставлял класс БЕЗ журнала:
+            // выдача была видна только тем, до кого успели дописать персонально.
+            // 31.07 так и вышло — 13 учеников из 145 получили ДЗ, журнал остался пуст,
+            // и догнать остальных было уже нечем (pullClassAssignments читает журнал).
+            // Теперь одна запись в журнал делается сразу: даже если рассылка оборвётся,
+            // каждый ученик подтянет задание сам при следующем входе.
+            let journalOk = 0;
+            for (const code of codes) {
+                try {
+                    const cref = doc(db, 'artifacts', appId, 'public', 'data', 'classes', code);
+                    await setDoc(cref, { assignments: arrayUnion(rec), updatedAt: Date.now() }, { merge: true });
+                    journalOk++;
+                } catch (e) { console.error('class-log write error:', e); }
+            }
             let ok = 0, fail = 0;
             for (const s of students) {
                 try {
@@ -3183,12 +3200,11 @@
                     ok++;
                 } catch (e) { fail++; }
             }
-            // Журнал класса(ов) — по всем классам, что есть среди загруженных учеников (для опоздавших)
-            for (const code of codes) {
-                try {
-                    const cref = doc(db, 'artifacts', appId, 'public', 'data', 'classes', code);
-                    await setDoc(cref, { assignments: arrayUnion(rec), updatedAt: Date.now() }, { merge: true });
-                } catch (e) { console.error('class-log write error:', e); }
+            if (codes.length && !journalOk) {
+                // Журнал — единственная страховка на случай обрыва. Не записался — говорим
+                // прямо, а не рапортуем success: иначе учитель уйдёт, считая класс выданным.
+                showToast('⚠️', 'Журнал класса не записался — часть учеников может не получить ДЗ',
+                    'bg-amber-500', 'border-amber-700');
             }
             showToast(fail ? '⚠️' : '✅',
                 `ДЗ выдано: ${ok} из ${students.length}${fail ? ` · ошибок: ${fail}` : ''}${codes.length ? ` · журнал: ${codes.join(', ')}` : ''}`,
