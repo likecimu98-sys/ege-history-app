@@ -325,6 +325,14 @@ assert.match(cloudSource, /finally \{[\s\S]{0,400}window\._cloudStateLoaded = tr
 assert.match(cloudSource, /async function _dropOwnClassHomework\(groups\)/, 'teacher own-class HW sweep is missing');
 assert.match(stateSource, /myClasses\.has\(a\.classCode\)/, 'refreshHwState must drop own-class homework');
 assert.match(stateSource, /classCode: rec\.classCode \|\| null/, 'assignment classCode must survive normalization');
+// 🔴 Журнал класса тянется в слушателе ДЗ по коду из localStorage, а сам код
+// приезжает из облака ПОЗЖЕ — при загрузке профиля. На чистом устройстве (новый
+// телефон, очистка данных, инкогнито) слушатель отрабатывал с пустым кодом, и
+// первый вход оставался без домашки, хотя в журнале класса она лежала.
+// Проверяем именно догрузку в момент, когда код стал известен.
+assert.match(cloudSource,
+  /localStorage\.setItem\('student_class_code', bestData\.classCode\);[\s\S]{0,1500}window\.pullClassAssignments\(bestData\.classCode\)/,
+  'restoring classCode from the cloud must immediately pull the class journal');
 
 // ─── Перетаскивание: чужие фишки трогать нельзя ──────────────────────────────
 // Слушатель висит на document и физически видит ЛЮБОЙ `.dnd-chip` на странице.

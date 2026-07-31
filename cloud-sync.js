@@ -7,14 +7,14 @@
             signInWithCredential, signOut, initializeFirestore, collection, doc, setDoc, getDoc,
             getDocs, addDoc, updateDoc, deleteDoc, deleteField, onSnapshot, query, where,
             orderBy, limit, runTransaction, arrayUnion, arrayRemove, vpsApiFetch, refreshVpsAuth
-        } from "./vps-sync-compat.js?v=20260730-8";
+        } from "./vps-sync-compat.js?v=20260731-9";
 
         // jsPDF грузился с cdnjs.cloudflare.com без SRI — то есть посторонний скрипт
         // исполнялся с полными правами страницы, а при недоступности CDN (у части
         // нашей аудитории это обычное дело) экспорт PDF просто не работал. Довод тот
         // же, что и для telegram-web-app.js: своя копия с того же origin.
         // Версия совпадает с прежней CDN-ной — 2.5.1, лежит в vendor/.
-        const VENDOR_JSPDF = 'vendor/jspdf.umd.min.js?v=20260730-8';
+        const VENDOR_JSPDF = 'vendor/jspdf.umd.min.js?v=20260731-9';
 
         const cloudConfig = { projectId: 'vps-postgresql' };
         
@@ -3959,6 +3959,18 @@
                 if (bestData?.classCode && !localStorage.getItem('student_class_code')) {
                     localStorage.setItem('student_class_code', bestData.classCode);
                     if (window.renderProfileClass) window.renderProfileClass();
+                    // 🔴 Журнал класса тянут ОДИН раз — в слушателе ДЗ, и код класса берётся
+                    // там из localStorage. А приезжает он из облака только здесь, позже.
+                    // Значит на чистом устройстве (новый телефон, очистка данных, другой
+                    // браузер, режим инкогнито) первый вход оставался БЕЗ домашки: слушатель
+                    // уже отработал с пустым кодом, а второго вызова не было до перезапуска.
+                    // Ученик видел «мне ничего не задали», хотя в журнале класса ДЗ лежало.
+                    // Догоняем сразу, как код стал известен: pullClassAssignments идемпотентен
+                    // (ingestAssignment не задваивает уже принятое, revoked-надгробия целы).
+                    if (window.pullClassAssignments) {
+                        Promise.resolve(window.pullClassAssignments(bestData.classCode))
+                            .catch(e => console.warn('[HW] догрузка журнала класса не удалась:', e && e.message));
+                    }
                 }
                 if (bestData?.tgId && /^\d+$/.test(String(bestData.tgId))) localStorage.setItem('known_tg_id', String(bestData.tgId));
                 if (bestData?.knownTgId && /^\d+$/.test(String(bestData.knownTgId))) localStorage.setItem('known_tg_id', String(bestData.knownTgId));
