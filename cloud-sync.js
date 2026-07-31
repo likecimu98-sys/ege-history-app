@@ -7,14 +7,14 @@
             signInWithCredential, signOut, initializeFirestore, collection, doc, setDoc, getDoc,
             getDocs, addDoc, updateDoc, deleteDoc, deleteField, onSnapshot, query, where,
             orderBy, limit, runTransaction, arrayUnion, arrayRemove, vpsApiFetch, refreshVpsAuth
-        } from "./vps-sync-compat.js?v=20260801-11";
+        } from "./vps-sync-compat.js?v=20260801-12";
 
         // jsPDF грузился с cdnjs.cloudflare.com без SRI — то есть посторонний скрипт
         // исполнялся с полными правами страницы, а при недоступности CDN (у части
         // нашей аудитории это обычное дело) экспорт PDF просто не работал. Довод тот
         // же, что и для telegram-web-app.js: своя копия с того же origin.
         // Версия совпадает с прежней CDN-ной — 2.5.1, лежит в vendor/.
-        const VENDOR_JSPDF = 'vendor/jspdf.umd.min.js?v=20260801-11';
+        const VENDOR_JSPDF = 'vendor/jspdf.umd.min.js?v=20260801-12';
 
         const cloudConfig = { projectId: 'vps-postgresql' };
         
@@ -390,6 +390,32 @@
         }
 
         let telegramAuthRetryTimer = null;
+        // 🔴 ОТКАЗ ВХОДА ОБЯЗАН ГОВОРИТЬ ВСЛУХ. Fail-closed ниже правильный: чужую
+        // серверную сессию подхватывать нельзя. Но он был НЕМЫМ — клиент молча
+        // ретраил каждые 5 секунд, а человек видел пустой аккаунт без объяснений и
+        // не мог отличить «нет связи» от «сломалось приложение» и от «потерян
+        // аккаунт». Отсюда весь поток жалоб «не работает» без подробностей.
+        // Первую неудачу не показываем: она обычно и есть та самая моргнувшая сеть,
+        // которую вылечит ближайший ретрай. Говорим со второй подряд.
+        let _authFailStreak = 0;
+        function _cloudBanner(show, hint) {
+            try {
+                const el = document.getElementById('lobby-cloud-banner');
+                if (!el) return;
+                el.classList.toggle('hidden', !show);
+                if (show && hint) {
+                    const hintEl = document.getElementById('lobby-cloud-hint');
+                    if (hintEl) hintEl.textContent = hint;
+                }
+            } catch (e) {}
+        }
+        window.retryCloudLogin = function () {
+            _authFailStreak = 0;
+            _cloudBanner(false);
+            showToast('☁️', 'Пробуем войти заново…', 'bg-blue-500', 'border-blue-700');
+            try { initAuth(); } catch (e) {}
+        };
+
         const initAuth = async () => {
             // В Telegram подписанный initData — единственный источник личности.
             // Нельзя откатываться на cookie/гостя: WebView может хранить сессию другого
@@ -402,6 +428,8 @@
                         if (tk) {
                             if (telegramAuthRetryTimer) clearTimeout(telegramAuthRetryTimer);
                             telegramAuthRetryTimer = null;
+                            _authFailStreak = 0;
+                            _cloudBanner(false);
                             await signInWithCustomToken(auth, tk);
                             return;
                         }
@@ -412,6 +440,13 @@
 
                 // Fail closed: локальный тренажёр продолжает работать, но чужая
                 // серверная сессия не получает ни синхронизацию, ни роль учителя.
+                _authFailStreak++;
+                if (_authFailStreak >= 2) {
+                    _cloudBanner(true, navigator.onLine === false
+                        ? 'Нет интернета. Заниматься можно — прогресс сохранится и уедет, когда связь вернётся.'
+                        : 'Заниматься можно — прогресс сохранится и уедет позже. Нажмите, чтобы войти заново.');
+                    if (window.__egeBootSignal) window.__egeBootSignal('auth_failed', String(_authFailStreak));
+                }
                 if (!telegramAuthRetryTimer && _tokenAuthOn) {
                     telegramAuthRetryTimer = setTimeout(() => {
                         telegramAuthRetryTimer = null;
