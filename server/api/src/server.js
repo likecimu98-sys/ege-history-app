@@ -113,6 +113,10 @@ async function leaderboardRows(type, limit) {
       totalSolved: Number(data.totalSolved) || 0,
       egePoints: Number(data.egePoints) || 0,
       weeklyScore: Number(data.weeklyScore) || 0,
+      // Баллы ЕГЭ за неделю — вторая строка в карточке недельного топа.
+      // Поле уже писалось клиентом, но наружу не отдавалось, и вкладка
+      // «Неделя» показывала бы только строки.
+      weeklyEgePoints: Number(data.weeklyEgePoints) || 0,
       duelRating: Number(data.duelRating) || Number(data.duelElo) || 0,
       // Счёт побед — не персональные данные, а часть самой таблицы дуэлей.
       duelGames: Number(data.duelGames) || 0,

@@ -7,14 +7,14 @@
             signInWithCredential, signOut, initializeFirestore, collection, doc, setDoc, getDoc,
             getDocs, addDoc, updateDoc, deleteDoc, deleteField, onSnapshot, query, where,
             orderBy, limit, runTransaction, arrayUnion, arrayRemove, vpsApiFetch, refreshVpsAuth
-        } from "./vps-sync-compat.js?v=20260730-7";
+        } from "./vps-sync-compat.js?v=20260730-8";
 
         // jsPDF грузился с cdnjs.cloudflare.com без SRI — то есть посторонний скрипт
         // исполнялся с полными правами страницы, а при недоступности CDN (у части
         // нашей аудитории это обычное дело) экспорт PDF просто не работал. Довод тот
         // же, что и для telegram-web-app.js: своя копия с того же origin.
         // Версия совпадает с прежней CDN-ной — 2.5.1, лежит в vendor/.
-        const VENDOR_JSPDF = 'vendor/jspdf.umd.min.js?v=20260730-7';
+        const VENDOR_JSPDF = 'vendor/jspdf.umd.min.js?v=20260730-8';
 
         const cloudConfig = { projectId: 'vps-postgresql' };
         
@@ -2540,15 +2540,51 @@
             }
         };
 
+        // Понедельник текущей недели в виде YYYY-MM-DD — граница недельного зачёта.
+        // Ровно та же формула живёт в mondayStr() на сервере (server.js): по ней
+        // отбираются строки недельного топа. Разъедутся — ученик будет видеть в
+        // топе одно число, а у себя другое, причём заметят это только в понедельник.
+        function _mondayISO(now = new Date()) {
+            const day = now.getDay() || 7;
+            const monday = new Date(now.getFullYear(), now.getMonth(), now.getDate() - day + 1);
+            const pad = value => String(value).padStart(2, '0');
+            return `${monday.getFullYear()}-${pad(monday.getMonth() + 1)}-${pad(monday.getDate())}`;
+        }
+
         window.openGlobalTopModal = async function(tab) {
-            tab = tab === 'duel' ? 'duel' : 'solved';
+            // 🔴 По умолчанию открывается НЕДЕЛЯ, а не общий зачёт.
+            // Топ за всё время быстро превращается в музей: наверху навсегда
+            // застревают те, кто занимался год назад, набранные ими тысячи строк
+            // не догнать, и новому ученику смотреть там не на что. Недельный счёт
+            // сервер обнуляет каждый понедельник (сверка по weekStartStr), поэтому
+            // попасть в первую десятку может любой, кто хорошо позанимался НА ЭТОЙ
+            // неделе. Общий зачёт никуда не делся — он рядом, второй вкладкой.
+            tab = ['duel', 'solved', 'weekly'].indexOf(tab) !== -1 ? tab : 'weekly';
             const cont = document.getElementById('global-top-container'); window.showModal('global-top-modal');
             if (!db) return;
-            const tabBtn = (t, label) => `<button onclick="window.openGlobalTopModal('${t}')" style="flex:1;border:none;border-radius:10px;padding:8px;font-size:11px;font-weight:900;cursor:pointer;${tab === t ? 'background:#2563eb;color:#fff' : 'background:rgba(128,128,128,0.12);color:#6b7280'}">${label}</button>`;
-            const tabs = `<div style="display:flex;gap:6px;margin-bottom:10px">${tabBtn('solved', '📚 Решено')}${tabBtn('duel', '⚔️ Рейтинг дуэлей')}</div>`;
+            const tabBtn = (t, label) => `<button onclick="window.openGlobalTopModal('${t}')" style="flex:1;border:none;border-radius:10px;padding:8px 4px;font-size:11px;font-weight:900;cursor:pointer;${tab === t ? 'background:#2563eb;color:#fff' : 'background:rgba(128,128,128,0.12);color:#6b7280'}">${label}</button>`;
+            const tabs = `<div style="display:flex;gap:6px;margin-bottom:10px">${tabBtn('weekly', '🔥 Неделя')}${tabBtn('solved', '📚 Всё время')}${tabBtn('duel', '⚔️ Дуэли')}</div>`;
             cont.innerHTML = tabs + '<p class="text-[10px] font-bold text-gray-500 text-center py-4">⏳ Загрузка...</p>';
             const escTop = v => String(v == null ? '' : v).replace(/[<>&]/g, c => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;' }[c]));
             try {
+                // ── Вкладка «🔥 Неделя» ──
+                if (tab === 'weekly') {
+                    const { rows } = await vpsApiFetch('/api/v1/leaderboards?type=weekly&limit=20');
+                    const mine = Number((window.state?.stats?.dailyStats && Object.entries(window.state.stats.dailyStats)
+                        .filter(([d]) => d >= _mondayISO())
+                        .reduce((n, [, v]) => n + (Number(v && v.solved) || 0), 0)) || 0);
+                    const myLine = `<div style="text-align:center;font-size:11px;font-weight:900;color:#059669;margin-bottom:8px">Твой счёт за неделю: 🔥${mine} ${mine === 1 ? 'строка' : mine >= 2 && mine <= 4 ? 'строки' : 'строк'}</div>`;
+                    let ht = '<div class="flex flex-col gap-2">';
+                    rows.forEach((s, idx) => {
+                        ht += `<div class="bg-white dark:bg-[#1e1e1e] rounded-xl p-3 shadow-sm border border-gray-100 dark:border-[#2c2c2c] flex justify-between items-center transition-transform hover:-translate-y-0.5"><div class="flex items-center gap-3"><span class="text-xl sm:text-2xl drop-shadow-sm font-black">${idx===0?'🥇':(idx===1?'🥈':(idx===2?'🥉':`<span class="text-gray-400 w-5 inline-block text-center text-base">${idx+1}</span>`))}</span><div class="flex flex-col"><span class="font-black text-xs sm:text-sm text-gray-800 dark:text-gray-300 leading-tight">${escTop(s.displayName || 'Аноним')}</span>${(s.weeklyEgePoints || 0) > 0 ? `<span class="text-[11px] font-bold text-yellow-600 dark:text-yellow-400 leading-tight">⭐ ${s.weeklyEgePoints} балл. ЕГЭ</span>` : ''}</div></div><div class="text-right flex flex-col items-end"><span class="text-sm font-black text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/30 px-2 py-0.5 rounded-lg border border-emerald-100 dark:border-emerald-800/50">🔥${s.weeklyScore || 0}</span></div></div>`;
+                    });
+                    if (!rows.length) ht += '<p class="text-[11px] font-bold text-gray-500 text-center py-4">Неделя только началась — реши пару строк и займи первое место! 🔥</p>';
+                    ht += '</div>';
+                    cont.innerHTML = tabs
+                        + '<p style="text-align:center;font-size:11px;font-weight:800;color:#9ca3af;margin-bottom:6px">Счёт обнуляется каждый понедельник</p>'
+                        + myLine + ht;
+                    return;
+                }
                 // ── Вкладка «Рейтинг дуэлей» (Elo) ──
                 if (tab === 'duel') {
                     // Рейтинг приходит с сервера уже отсортированным и урезанным.
@@ -4045,10 +4081,7 @@
             // ✅ FIX: Вычисляем weeklyScore здесь и храним как отдельное поле,
             // чтобы индексировать в Firestore для серверной сортировки лидерборда
             const dStat = s.dailyStats || {};
-            const now2 = new Date();
-            const day2 = now2.getDay() || 7;
-            const monday2 = new Date(now2.getFullYear(), now2.getMonth(), now2.getDate() - day2 + 1);
-            const monStr2 = monday2.getFullYear() + '-' + String(monday2.getMonth()+1).padStart(2,'0') + '-' + String(monday2.getDate()).padStart(2,'0');
+            const monStr2 = _mondayISO();
             let weeklyScore = 0;
             let weeklyEgePoints = 0; // баллы по критериям ЕГЭ за неделю
             for (const d in dStat) {
