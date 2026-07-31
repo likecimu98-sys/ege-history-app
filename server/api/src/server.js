@@ -9,7 +9,8 @@ const { timingSafeEqualText, randomToken, sha256 } = require('./crypto');
 const { json, redirect, readJson, requestIp, safeReturnTo, parseCookies } = require('./http');
 const {
   resolveIdentity, loadUser, createSession, sessionCookies, clearSessionCookies, getSession,
-  revokeSession, csrfValid, userForClient, createGuest, createGoogleStart, finishGoogle, claimLegacyDocument,
+  revokeSession, extendSession, csrfValid, userForClient, createGuest, createGoogleStart, finishGoogle,
+  claimLegacyDocument,
 } = require('./auth');
 const { mergeStateValues } = require('./state-merge');
 const { DocumentStore, accessContext } = require('./store');
@@ -142,6 +143,24 @@ async function replaceSession(req, res, userId, oldSession) {
   const created = await createSession(userId, req);
   const user = await loadUser(userId);
   return { headers: { 'Set-Cookie': sessionCookies(created) }, user };
+}
+
+// 🔴 ТОТ ЖЕ человек с живой сессией — продлеваем её, а не пересоздаём.
+// Клиент зовёт /auth/telegram при каждом запуске приложения, и раньше это всегда
+// означало replaceSession: старую отозвали, новую выдали. В базе за неделю осело
+// 1180 сессий, у одного ученика 248 при норме 1–3. Опасен не объём таблицы, а ОКНО
+// между отзывом старой куки и принятием новой: попавшие в него запросы получают
+// 401/403, а клиент на отказ реагирует молчаливым ожиданием. На айфонах, где куки
+// живут по более жёстким правилам, каждый лишний цикл входа — лишний шанс остаться
+// без сессии вовсе. Смена человека (другой tgId, привязка гостя) по-прежнему идёт
+// через полную замену: там новая сессия обязательна.
+async function ensureSession(req, res, userId, oldSession) {
+  if (oldSession && oldSession.userId === userId) {
+    await extendSession(oldSession.id);
+    // Куки не трогаем — у клиента они уже стоят и остаются валидными.
+    return { headers: {}, user: await loadUser(userId) };
+  }
+  return replaceSession(req, res, userId, oldSession);
 }
 
 async function redeemLogin(req, res, session, body) {
@@ -321,7 +340,7 @@ async function handle(req, res) {
         displayName: [tgUser.first_name, tgUser.last_name].filter(Boolean).join(' '), profile: tgUser,
         linkUserId: session?.user?.isAnonymous ? session.userId : null,
       });
-      const switched = await replaceSession(req, res, userId, session);
+      const switched = await ensureSession(req, res, userId, session);
       pool.query('UPDATE teacher_profiles SET user_id=$1 WHERE doc_id=$2 AND user_id IS NULL', [userId, String(verified.tgId)]).catch(() => {});
       refreshPremium(String(verified.tgId)).catch(error => log('warn', 'premium.refresh.failed', { message: error.message }));
       return json(res, 200, { token: 'vps-session', user: userForClient(switched.user) }, switched.headers);

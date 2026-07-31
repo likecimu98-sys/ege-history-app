@@ -187,6 +187,20 @@ async function getSession(req, { touch = true } = {}) {
   return { id: row.id, userId: row.user_id, csrfHash: row.csrf_hash, user, cookies };
 }
 
+// 🔴 Продление живой сессии вместо выдачи новой. Клиент дёргает /auth/telegram при
+// КАЖДОМ запуске приложения, а тот всегда звал replaceSession: старая сессия
+// отзывалась, создавалась новая. В базе за неделю накопилось 1180 сессий, у одного
+// ученика — 248 (норма 1–3). Беда не в объёме таблицы, а в ОКНЕ между «отозвали
+// старую» и «браузер принял новую куку»: попавшие в него запросы получают 401/403,
+// а на айфонах, где куки живут по более жёстким правилам, лишний цикл входа — это
+// лишний шанс остаться вообще без сессии. Тому же человеку продлеваем то, что есть.
+async function extendSession(sessionId) {
+  await pool.query(
+    `UPDATE user_sessions SET expires_at = now()+($2 || ' days')::interval, last_seen_at = now()
+     WHERE id = $1`,
+    [sessionId, String(env.sessionDays)]);
+}
+
 async function revokeSession(req) {
   const cookies = parseCookies(req.headers.cookie);
   const raw = cookies[env.sessionCookie];
@@ -260,6 +274,6 @@ async function finishGoogle(req, code, state) {
 
 module.exports = {
   canonicalFor, mergeUsers, resolveIdentity, loadUser, createSession, sessionCookies, clearSessionCookies,
-  getSession, revokeSession, csrfValid, userForClient, createGuest, createGoogleStart, finishGoogle,
+  getSession, revokeSession, extendSession, csrfValid, userForClient, createGuest, createGoogleStart, finishGoogle,
   claimLegacyDocument,
 };
