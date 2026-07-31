@@ -11,3 +11,6 @@ output.css.pre-rebuild
 .claude/settings.local.json
 tools-and-docs/tmp/
 tools-and-docs/outputs/
+
+# Временный файл эпопеи с Яндекс-CDN (IP эджа), в репозитории не нужен
+cdn_ip.txt
