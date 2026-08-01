@@ -468,4 +468,62 @@ assert.doesNotMatch(stateCode, /Number\(a\.assignedAt \|\| 0\) < before/,
 assert.match(stateCode, /const at = Number\(a\.assignedAt\);\s*\n\s*if \(!at\) return false;/,
     'revokedLocally должен пропускать записи без метки времени, а не считать их снятыми');
 
+// ─── Слияние состояния не имеет права ТЕРЯТЬ домашку ────────────────────────
+// 01.08.2026, корень жалобы «ДЗ пришло, плашка мигнула, список пуст»:
+// applyMergedState присваивал `window.state.stats.assignments = st.assignments`
+// ЦЕЛИКОМ. А слияние перед записью в облако собирается из копии профиля и
+// localStorage, снятых ДО сетевого запроса. Пока запрос летит, приходит новое ДЗ и
+// живёт только в памяти; ответ возвращается — и присвоение затирает список ПУСТЫМ,
+// потом тем же пустым перезаписывается localStorage и уезжает в облако.
+// Ломается тем чаще, чем медленнее сеть, — поэтому ловилось на телефонах.
+assert.doesNotMatch(cloudCode, /window\.state\.stats\.assignments = st\.assignments;/,
+    'applyMergedState снова ЗАМЕНЯЕТ список ДЗ целиком. Пустой результат слияния '
+    + 'сотрёт домашку, пришедшую во время сетевого запроса, — и в памяти, и в localStorage.');
+assert.match(cloudCode, /_mergeAssignmentLists\(window\.state\.stats\.assignments, st\.assignments\)/,
+    'applyMergedState должен ДОПОЛНЯТЬ список ДЗ, а не заменять');
+
+// Поведенческая проверка самой функции слияния: вытаскиваем её из исходника и гоняем.
+{
+    const fnStart = cloudSource.indexOf('function _mergeAssignmentLists');
+    assert.ok(fnStart >= 0, 'Пропала функция слияния списков ДЗ');
+    // Функция объявлена целиком до applyMergedState — берём кусок между ними.
+    const fnEnd = cloudSource.indexOf('function applyMergedState', fnStart);
+    assert.ok(fnEnd > fnStart, 'Не найден конец функции слияния');
+    const ctx = { console };
+    vm.createContext(ctx);
+    vm.runInContext(cloudSource.slice(fnStart, fnEnd) + '\nglobalThis.merge = _mergeAssignmentLists;', ctx,
+        { filename: 'merge-assignments.js' });
+    const merge = ctx.merge;
+
+    // Главный случай: в памяти свежее ДЗ, из облака пришёл пустой список.
+    const fresh = [{ id: 'a_new', status: 'active', items: [{ goal: 10, progress: 0 }] }];
+    assert.equal(merge(fresh, []).length, 1,
+        'Пустой список из облака СТИРАЕТ свежее ДЗ — ровно эта потеря и ловилась у учеников');
+    assert.equal(merge([], fresh).length, 1, 'Слияние обязано принимать ДЗ и из входящего списка');
+
+    // Сданное не откатывается до активного ни с какой стороны.
+    const done = [{ id: 'a1', status: 'done', items: [] }];
+    const active = [{ id: 'a1', status: 'active', items: [] }];
+    assert.equal(merge(done, active)[0].status, 'done', 'Активная копия не должна отменять сдачу');
+    assert.equal(merge(active, done)[0].status, 'done', 'Сдача обязана побеждать активную копию');
+
+    // Надгробие отзыва бьёт активное, но не сданное.
+    const revoked = [{ id: 'a1', status: 'revoked', items: [] }];
+    assert.equal(merge(active, revoked)[0].status, 'revoked', 'Отзыв обязан побеждать активное');
+    assert.equal(merge(done, revoked)[0].status, 'done', 'Отзыв не отнимает уже сданное');
+
+    // У двух активных копий берём максимальный прогресс каждого этапа.
+    // ⚠️ Проверяем ОБА порядка. Первая редакция теста сверяла только (низкий, высокий)
+    // и пропускала подмену условия на безусловное присваивание: в обратном порядке
+    // прогресс молча откатывался назад. Проверено саботажем.
+    const mkLow = () => [{ id: 'a1', status: 'active', items: [{ goal: 10, progress: 2 }] }];
+    const mkHigh = () => [{ id: 'a1', status: 'active', items: [{ goal: 10, progress: 7 }] }];
+    assert.equal(merge(mkLow(), mkHigh())[0].items[0].progress, 7, 'Прогресс ДЗ должен подниматься до большего');
+    assert.equal(merge(mkHigh(), mkLow())[0].items[0].progress, 7, 'Прогресс ДЗ не должен откатываться назад');
+
+    // Активные фантомы старой модели не воскресают.
+    assert.equal(merge([], [{ id: 'legacy_x', status: 'active', items: [] }]).length, 0,
+        'Активные legacy_* обязаны отсеиваться');
+}
+
 console.log('Homework, table uniqueness and silent duel self-test passed.');

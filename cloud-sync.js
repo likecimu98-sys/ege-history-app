@@ -7,14 +7,14 @@
             signInWithCredential, signOut, initializeFirestore, collection, doc, setDoc, getDoc,
             getDocs, addDoc, updateDoc, deleteDoc, deleteField, onSnapshot, query, where,
             orderBy, limit, runTransaction, arrayUnion, arrayRemove, vpsApiFetch, refreshVpsAuth
-        } from "./vps-sync-compat.js?v=20260801-17";
+        } from "./vps-sync-compat.js?v=20260801-18";
 
         // jsPDF грузился с cdnjs.cloudflare.com без SRI — то есть посторонний скрипт
         // исполнялся с полными правами страницы, а при недоступности CDN (у части
         // нашей аудитории это обычное дело) экспорт PDF просто не работал. Довод тот
         // же, что и для telegram-web-app.js: своя копия с того же origin.
         // Версия совпадает с прежней CDN-ной — 2.5.1, лежит в vendor/.
-        const VENDOR_JSPDF = 'vendor/jspdf.umd.min.js?v=20260801-17';
+        const VENDOR_JSPDF = 'vendor/jspdf.umd.min.js?v=20260801-18';
 
         const cloudConfig = { projectId: 'vps-postgresql' };
         
@@ -3668,6 +3668,35 @@
             'consent'
         ];
 
+        // Объединение списков ДЗ по id. Правила те же, что в deepMergeStates, и держать
+        // их одинаковыми обязательно: разойдутся — и «сданное» на одном пути станет
+        // «активным» на другом. Операция только добавляет: потерять задание нельзя.
+        function _mergeAssignmentLists(current, incoming) {
+            const byId = new Map();
+            const put = (a) => {
+                if (!a || !a.id) return;
+                // Активные legacy_* — фантомы удалённой модели ДЗ, их не воскрешаем.
+                if (a.status === 'active' && String(a.id).indexOf('legacy_') === 0) return;
+                const cur = byId.get(a.id);
+                if (!cur) { byId.set(a.id, a); return; }
+                // Сдано — история, её не отнимает даже отзыв. Надгробие бьёт активное.
+                if (cur.status === 'done') return;
+                if (a.status === 'done') { byId.set(a.id, a); return; }
+                if (cur.status === 'revoked') return;
+                if (a.status === 'revoked') { byId.set(a.id, a); return; }
+                // Оба активны — берём максимальный прогресс по каждому этапу.
+                (cur.items || []).forEach((it, i) => {
+                    const other = (a.items || [])[i];
+                    if (other && Number(other.progress) > Number(it.progress || 0)) {
+                        it.progress = Number(other.progress) || 0;
+                    }
+                });
+            };
+            (Array.isArray(current) ? current : []).forEach(put);
+            (Array.isArray(incoming) ? incoming : []).forEach(put);
+            return [...byId.values()];
+        }
+
         function applyMergedState(merged) {
             const normalized = normalizeSavedStateObject(merged);
             if (!normalized) return null;
@@ -3685,8 +3714,23 @@
             if (Array.isArray(st.assignments)) {
                 const revokedSet = (window._classRevoked instanceof Set) ? window._classRevoked : new Set();
                 const sweepTs = Number(window._classRevokeBefore) || 0;
-                st.assignments = st.assignments
-                    .filter(a => a && a.id && !(a.status === 'active' && String(a.id).indexOf('legacy_') === 0))
+                // 🔴 ДОПОЛНЯЕМ, А НЕ ЗАМЕНЯЕМ. Здесь стояло
+                // `window.state.stats.assignments = st.assignments` — присвоение целиком.
+                //
+                // Слияние перед записью в облако (syncProgressToCloud) собирается всего из
+                // двух источников: копии профиля и localStorage, и ОБА снимаются ДО
+                // сетевого запроса. Пока запрос летит, приходит новое ДЗ и попадает
+                // только в память. Ответ возвращается — и присвоение затирало живой
+                // список ПУСТЫМ, после чего applyMergedState тем же пустым перезаписывал
+                // localStorage, а следующая запись увозила пустоту в облако.
+                // Ученик видел ровно это: «ДЗ пришло, плашка мигнула, список пуст».
+                // Ломалось тем чаще, чем медленнее сеть, — потому и ловилось на телефонах.
+                //
+                // Слияние идёт по id с теми же правилами, что и deepMergeStates:
+                // сдано > отозвано > активно, у активных берём максимальный прогресс.
+                // Потерять задание слияние не может в принципе — только добавить.
+                const merged = _mergeAssignmentLists(window.state.stats.assignments, st.assignments);
+                window.state.stats.assignments = merged
                     .map(a => {
                         if (a.status !== 'done' && a.status !== 'revoked'
                             && (revokedSet.has(a.id) || _sweptByTeacher(a, sweepTs))) {
@@ -3694,7 +3738,7 @@
                         }
                         return a;
                     });
-                window.state.stats.assignments = st.assignments;
+                st.assignments = window.state.stats.assignments;
                 if (window.recomputeHwMirror) window.recomputeHwMirror();
             }
             if (Array.isArray(normalized.mistakesPool)) window.state.mistakesPool = normalized.mistakesPool;
