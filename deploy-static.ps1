@@ -4,7 +4,7 @@
 # deploy-vps.ps1 (that is the one-time Firebase->PostgreSQL cutover). Use THIS
 # script for routine site changes. ASCII-only to stay codepage-independent.
 param(
-    [string]$Vps = 'root@185.198.152.200',
+    [string]$Vps = 'root@5.35.94.238',   # Beget с 01.08.2026; прежний AdminVPS 185.198.152.200 держим месяц как откат
     [string]$KeyPath = (Join-Path $env:USERPROFILE '.ssh\id_ed25519'),
     [string]$KnownHostsPath = (Join-Path $env:USERPROFILE '.ssh\known_hosts')
 )
