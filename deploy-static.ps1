@@ -115,8 +115,12 @@ fi
 # Keep the three most recent release directories - rollback points at them.
 # Migration snapshots ege-app.rollback-* / *.client-rollback-* are NOT touched:
 # they are the 60-day cutover insurance, different name and different lifetime.
-ls -1dt /var/www/ege-app.release-* 2>/dev/null | tail -n +4 | xargs -r rm -rf
-ls -1dt /var/www/ege-app.prev-* 2>/dev/null | tail -n +3 | xargs -r rm -rf
+# `|| true` обязателен: при set -Eeuo pipefail отсутствие каталогов делает ls
+# неуспешным, конвейер падает — и ВЕСЬ деплой сообщает об ошибке, хотя вебрут уже
+# переключён. Ровно так упал первый выкат на Beget 01.08.2026: там ещё не было ни
+# одного ege-app.prev-*, уборка «не нашла что убрать» и уронила скрипт.
+ls -1dt /var/www/ege-app.release-* 2>/dev/null | tail -n +4 | xargs -r rm -rf || true
+ls -1dt /var/www/ege-app.prev-* 2>/dev/null | tail -n +3 | xargs -r rm -rf || true
 echo "deployed release $STAMP -> $(readlink -f "$LIVE")"
 if [ -n "$OLD" ]; then
     echo "rollback: bash /root/ege-app-static-rollback.sh -> $OLD"
