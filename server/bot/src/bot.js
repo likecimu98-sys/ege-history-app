@@ -1172,6 +1172,13 @@ function watchJobs() {
 
 // ---------- Дуэли ----------
 const MAX_WAITING_AGE_MS = 2 * 60 * 1000;
+// Размер волны приглашений и пауза между волнами. 25 человек с запасом закрывают
+// потребность «найти одного соперника»: при 231 подписчике полный обход давал ~200
+// сообщений на матч, которые потом приходилось догонять удалением.
+// 12 секунд — время принять вызов, не растягивая поиск: за 2 минуты жизни вызова
+// успевает пройти до 8 волн, то есть весь список, если никто не откликается.
+const DUEL_WAVE_SIZE = 25;
+const DUEL_WAVE_PAUSE_MS = 12000;
 function watchDuels() {
     const saveMsg = db.prepare('INSERT INTO duel_msgs (match_id, chat_id, message_id, created_at) VALUES (?, ?, ?, ?)');
     const msgsFor = db.prepare('SELECT rowid AS rid, chat_id, message_id FROM duel_msgs WHERE match_id = ?');
@@ -1229,13 +1236,26 @@ function watchDuels() {
                 const seeker = m.player1 || {}; const seekerUid = String(seeker.uid || ''); const seekerName = String(seeker.name || 'Кто-то').slice(0, 40);
                 const modeLabel = m.mode === 'swipe' ? 'свайп-дуэль' : 'дуэль по датам';
                 const now = Date.now();
-                // Без кулдауна: зовём ВСЕХ, у кого включены уведомления о дуэлях. Сообщение
-                // затирается, как только матч уходит из waiting (соперник нашёлся / поиск окончен) —
-                // см. ветку change.type === 'removed' ниже, поэтому спама «висящих» вызовов нет.
+                // 🔴 ЗОВЁМ ВОЛНАМИ, А НЕ ВЕСЬ СПИСОК СРАЗУ.
+                //
+                // Дуэли нужен ОДИН соперник, а подписано на вызовы 231 человек. Прежний код
+                // на каждый матч рассылал двести сообщений и потом гнался за ними, чтобы
+                // удалить: 209 удалений за день, круг рассылки ~30 секунд, и любой сбой в
+                // уборке оставлял вызовы висеть у людей. Это лечение симптома — правильно
+                // не создавать двести сообщений там, где хватает десятка.
+                //
+                // Волна: зовём WAVE_SIZE случайных человек и ждём WAVE_PAUSE_MS. Соперник
+                // нашёлся — цикл обрывается на следующей же проверке waiting, и убирать
+                // придётся десятки сообщений вместо двух сотен. Никого не нашли — зовём
+                // следующую волну, пока не кончится время жизни вызова (2 минуты).
+                //
+                // Случайный порядок обязателен: при выборке по id первые в списке получали
+                // бы каждый вызов, а хвост — никогда.
                 if (!flagOn('duel_notify')) continue; // глобальный выключатель из /admin
-                const candidates = db.prepare('SELECT id FROM users WHERE notify_duel = 1').all();
+                const candidates = db.prepare('SELECT id FROM users WHERE notify_duel = 1 ORDER BY RANDOM()').all();
                 waiting.add(matchId);
                 try {
+                    let inWave = 0;
                     for (const { id } of candidates) {
                         // Матч закончился, пока мы рассылали, — звать в него больше некого.
                         // Возрастная граница страхует на случай, если событие об окончании
@@ -1244,8 +1264,19 @@ function watchDuels() {
                         if (Date.now() - createdAt > MAX_WAITING_AGE_MS) break;
                         if (String(id) === seekerUid) continue;
                         const sent = await sendSafe(id, `⚔️ ${seekerName} ищет соперника (${modeLabel})!\nПрими вызов, пока место свободно 👇`, { reply_markup: duelKb() });
-                        if (sent) saveMsg.run(matchId, id, sent.message_id, now);
-                        await sleep(60);
+                        if (sent) saveMsg.run(matchId, id, sent.message_id, Date.now());
+                        if (++inWave >= DUEL_WAVE_SIZE) {
+                            inWave = 0;
+                            // Пауза дробная: между кусочками снова смотрим, не закончился ли
+                            // матч. Один сон на всю паузу задержал бы обрыв на секунды, и за
+                            // это время улетела бы лишняя волна.
+                            for (let waited = 0; waited < DUEL_WAVE_PAUSE_MS; waited += 500) {
+                                if (!waiting.has(matchId)) break;
+                                await sleep(500);
+                            }
+                        } else {
+                            await sleep(60);
+                        }
                     }
                 } finally { waiting.delete(matchId); }
             }
