@@ -39,6 +39,22 @@ const PUBLIC_STUDENT_FIELDS = new Set([
 // который сервер считает сам (поле self) — см. publicMatch.
 const PUBLIC_MATCH_FIELDS = ['status', 'mode', 'createdAt', 'startTime', 'swipeSections'];
 
+// 🔴 Поля, с которыми ученик имеет право СОЗДАТЬ матч. Перечень белый и строгий:
+// лишнее поле отвергает запрос ЦЕЛИКОМ, а не вырезается.
+//
+// Ровно поэтому он ломает дуэли молча. 01.08.2026 в логах — 12 отказов за день
+// на `matches/<id> [status,mode,matchRounds,...] mode=create`: клиент научился
+// режиму «подбор» (task #25) и стал слать `matchRounds` с колодой раундов, а
+// здесь этого поля не было. Итог: выпал режим «подбор» — дуэль не создаётся
+// вообще, ученик жмёт «Дуэли» и не получает ничего. Никакой ошибки на экране,
+// в логе безымянное `forbidden` — заметили только по расшифровке отказов.
+//
+// ⚠️ Добавляешь поле в создание матча на клиенте (cloud-sync.js, объект нового
+// матча) — добавь его и сюда. Договор закреплён тестом store-match-fields.
+const MATCH_CREATE_FIELDS = new Set([
+  'status', 'mode', 'swipeSections', 'matchRounds', 'createdAt', 'player1', 'player2', 'startTime',
+]);
+
 // Документ класса читает и учитель, и УЧЕНИК этого класса: в нём лежит журнал ДЗ
 // (pullClassAssignments), граница «дошли до года» и признак безлимита. Поэтому
 // «читать может только учитель» было бы тихой поломкой всей выдачи домашних
@@ -374,7 +390,7 @@ async function authorizeWrite(client, ref, ctx, current, patch, mode, { internal
       if (mode === 'create') {
         const fields = Object.keys(patch || {});
         return patch?.status === 'waiting' && patch?.player2 == null && ownMatchActor(ctx, patch?.player1)
-          && fields.every(key => ['status', 'mode', 'swipeSections', 'createdAt', 'player1', 'player2', 'startTime'].includes(key));
+          && fields.every(key => MATCH_CREATE_FIELDS.has(key));
       }
       const player1Own = ownMatchActor(ctx, before.player1);
       const player2Own = ownMatchActor(ctx, before.player2);

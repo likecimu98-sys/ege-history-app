@@ -7,14 +7,14 @@
             signInWithCredential, signOut, initializeFirestore, collection, doc, setDoc, getDoc,
             getDocs, addDoc, updateDoc, deleteDoc, deleteField, onSnapshot, query, where,
             orderBy, limit, runTransaction, arrayUnion, arrayRemove, vpsApiFetch, refreshVpsAuth
-        } from "./vps-sync-compat.js?v=20260801-15";
+        } from "./vps-sync-compat.js?v=20260801-16";
 
         // jsPDF грузился с cdnjs.cloudflare.com без SRI — то есть посторонний скрипт
         // исполнялся с полными правами страницы, а при недоступности CDN (у части
         // нашей аудитории это обычное дело) экспорт PDF просто не работал. Довод тот
         // же, что и для telegram-web-app.js: своя копия с того же origin.
         // Версия совпадает с прежней CDN-ной — 2.5.1, лежит в vendor/.
-        const VENDOR_JSPDF = 'vendor/jspdf.umd.min.js?v=20260801-15';
+        const VENDOR_JSPDF = 'vendor/jspdf.umd.min.js?v=20260801-16';
 
         const cloudConfig = { projectId: 'vps-postgresql' };
         
@@ -1246,7 +1246,16 @@
             } catch(e) {
                 _ddbg('ОШИБКА поиска:', e && (e.code || e.message));
                 console.error("Ошибка поиска дуэли:", e);
-                showToast('❌', 'Сервер недоступен (Офлайн)', 'bg-rose-500', 'border-rose-700');
+                // 🔴 Отказ сервера — это НЕ офлайн. 01.08.2026 создание дуэли в режиме
+                // «подбор» отвергалось с 403 (поля matchRounds не было в белом списке),
+                // а ученик читал «Сервер недоступен» и шёл проверять интернет. Причина
+                // и сообщение расходились, поэтому о поломке никто не сообщил — нашли
+                // её по логам сервера, а не по жалобам.
+                const denied = /403|forbidden/i.test(String(e && (e.code || e.message || '')));
+                if (denied) window.reportSilent && window.reportSilent('создание дуэли отклонено сервером', e);
+                showToast('❌',
+                    denied ? 'Дуэль не создалась — уже чиним' : 'Сервер недоступен (Офлайн)',
+                    'bg-rose-500', 'border-rose-700');
                 window.cancelDuelSearch();
             }
         };
