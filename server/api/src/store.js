@@ -372,6 +372,65 @@ function mergeMatchData(current, next, patch) {
   return next;
 }
 
+// 🔴 ЗАМОК НА ОЧИСТКУ ВЫДАЧИ ДЗ.
+//
+// Ученик забирает домашку из `pendingAssignments` и сразу просит сервер снять её с
+// документа. Если между «забрал» и «сохранил состояние» что-то пошло не так —
+// задание исчезает НАВСЕГДА: в выдаче пусто, в состоянии пусто, повторить нечем.
+// Ровно так 01.08.2026 терялись задания у Султана, Веры и Тушинского Вора.
+//
+// Клиентские причины (безусловная очистка, затирание списка при слиянии) починены,
+// но этого мало: в тот же день по логам работали ШЕСТЬ разных версий клиента —
+// кэш обновляется не у всех и не сразу, и старая версия продолжает уничтожать
+// выдачу. Поэтому правило переносится на сервер, где версия клиента не важна.
+//
+// Правило: снять запись из выдачи можно, только если это же задание УЖЕ лежит в
+// сохранённом состоянии ученика. Не доехало — остаётся в выдаче и придёт снова.
+// Повторная выдача безопасна: ingestAssignment на клиенте идемпотентен по id.
+//
+// ⚠️ Побочный эффект: отозванное учителем задание ученик пропускает при приёмке, в
+// состояние оно не попадает — и остаётся висеть в выдаче. Это безвредно (клиент
+// его каждый раз отсеивает), и это осознанный размен: лишняя строка в выдаче
+// дешевле потерянной домашки.
+async function guardPendingAssignments(client, ref, patch, selfStudentWrite) {
+  if (!selfStudentWrite || !patch || ref.collection !== 'students') return patch;
+  const op = patch.pendingAssignments;
+  if (opKind(op) !== 'arrayRemove') return patch;
+  const removing = Array.isArray(op.values) ? op.values : [];
+  if (!removing.length) return patch;
+
+  let landed = new Set();
+  try {
+    const state = await client.query('SELECT data FROM student_states WHERE doc_id=$1', [ref.docId]);
+    const raw = state.rows[0]?.data?.fullStateJson;
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      for (const a of (parsed?.stats?.assignments || [])) if (a && a.id) landed.add(String(a.id));
+    }
+  } catch (error) {
+    // Состояние не прочиталось/битый JSON — очистку НЕ разрешаем. Ошибаться надо в
+    // сторону лишней записи в выдаче, а не потерянного задания.
+    console.warn(JSON.stringify({ level: 'warn', event: 'pending.guard.state_unreadable', doc: ref.docId, message: error.message }));
+    // Именно delete, а не присваивание undefined: applyPatch обходит ключи объекта и
+    // записал бы undefined ЗНАЧЕНИЕМ, стерев выдачу — то есть сделал бы ровно то,
+    // от чего этот замок защищает.
+    const safe = { ...patch };
+    delete safe.pendingAssignments;
+    return safe;
+  }
+
+  const allowed = removing.filter(rec => rec && rec.id && landed.has(String(rec.id)));
+  if (allowed.length === removing.length) return patch;
+  console.warn(JSON.stringify({
+    level: 'warn', event: 'pending.guard.blocked', doc: ref.docId,
+    asked: removing.length, allowed: allowed.length,
+  }));
+  const next = { ...patch };
+  if (allowed.length) next.pendingAssignments = { ...op, values: allowed };
+  else delete next.pendingAssignments;
+  return next;
+}
+
 async function authorizeWrite(client, ref, ctx, current, patch, mode, { internal = false } = {}) {
   if (internal || ctx?.admin) return true;
   if (!ctx) return false;
@@ -637,8 +696,9 @@ class DocumentStore extends EventEmitter {
       const actualMode = current ? mode : 'create';
       const selfStudentWrite = ref.collection === 'students' && !options.internal && !ctx?.admin && !!ctx
         && (ctx.docIds.has(ref.docId) || (!!current?.user_id && current.user_id === ctx.userId));
-      const effectivePatch = stripPrivilegedFields(
-        protectTeacherClassAssignment(current?.data || null, patch, selfStudentWrite), selfStudentWrite);
+      const effectivePatch = await guardPendingAssignments(client, ref, stripPrivilegedFields(
+        protectTeacherClassAssignment(current?.data || null, patch, selfStudentWrite), selfStudentWrite),
+        selfStudentWrite);
       if (!await authorizeWrite(client, ref, ctx, current, effectivePatch, actualMode, options)) {
         // 🔴 Говорим, ЧТО именно запретили. Раньше в лог уходило голое `forbidden`
         // без коллекции и документа: 01.08.2026 в логах висело 47 таких отказов за
@@ -739,5 +799,8 @@ module.exports = {
   // Экспортируются ради регрессионных тестов доступа (test/store-access.test.js):
   // права на чтение — самая дорогая ошибка в этом файле, они обязаны быть покрыты.
   authorizeRead, authorizeCollectionQuery, publicMatch, studentClassView, projectDocument, classDocId,
-  buildQueryPlan, applyConstraints
+  buildQueryPlan, applyConstraints,
+  // Замок на очистку выдачи ДЗ — из-за него домашка перестаёт теряться независимо
+  // от версии клиента, поэтому он обязан быть покрыт тестом.
+  guardPendingAssignments
 };
