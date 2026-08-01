@@ -111,9 +111,17 @@ npm ci --omit=dev --no-audit --no-fund
 # so this cannot touch production data. Failing here aborts before any swap.
 node --test test/*.test.js
 
-# Match the ownership prod already uses: readable by the hist-api service user,
-# writable by nobody. pm2 runs the process as uid/gid hist-api.
-chown -R root:hist-api "$NEW"
+# Match the ownership prod already uses: readable by the service user, writable by
+# nobody.
+# ⚠️ Хвост переезда на Beget (01.08.2026): группы hist-api там НЕТ, API работает под
+# root, и `chown root:hist-api` валил весь деплой на ровном месте — «invalid group»
+# уже ПОСЛЕ установки и тестов, то есть подмены не происходило вовсе. Группу
+# применяем, только если она заведена; иначе оставляем root.
+if getent group hist-api >/dev/null 2>&1; then
+  chown -R root:hist-api "$NEW"
+else
+  chown -R root:root "$NEW"
+fi
 find "$NEW" -type d -exec chmod 750 {} +
 find "$NEW" -type f -exec chmod 640 {} +
 
