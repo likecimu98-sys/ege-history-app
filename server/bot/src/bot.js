@@ -1126,8 +1126,52 @@ function watchJobs() {
 const MAX_WAITING_AGE_MS = 2 * 60 * 1000;
 function watchDuels() {
     const saveMsg = db.prepare('INSERT INTO duel_msgs (match_id, chat_id, message_id, created_at) VALUES (?, ?, ?, ?)');
-    const msgsFor = db.prepare('SELECT chat_id, message_id FROM duel_msgs WHERE match_id = ?');
-    const clearFor = db.prepare('DELETE FROM duel_msgs WHERE match_id = ?');
+    const msgsFor = db.prepare('SELECT rowid AS rid, chat_id, message_id FROM duel_msgs WHERE match_id = ?');
+    const dropMsgRow = db.prepare('DELETE FROM duel_msgs WHERE rowid = ?');
+
+    // 🔴 Матчи, которые ПРЯМО СЕЙЧАС ищут соперника.
+    //
+    // Замер 01.08.2026: на дуэли подписан 231 человек, отправка идёт с паузой 60 мс,
+    // то есть полный круг рассылки — около 30 секунд. Дуэль же принимают за секунды.
+    // Раньше цикл этого не знал и продолжал звать людей в матч, которого уже нет:
+    // большинство получало приглашение в мёртвую дуэль, и висело оно до уборщика
+    // (5 минут). Отсюда жалоба «половина вызовов не удаляется» — они и не удалялись
+    // вовремя, потому что отправлялись уже ПОСЛЕ конца матча.
+    //
+    // Теперь ветка 'removed' убирает матч отсюда, и рассылка обрывается на следующем
+    // же человеке. Проверка синхронная и стоит до первого await — гонки нет.
+    const waiting = new Set();
+
+    // 🔴 Убираем разосланные вызовы ПОСТРОЧНО.
+    //
+    // Прежний код читал список сообщений, удалял их, а потом стирал ВСЕ строки матча
+    // одним `DELETE ... WHERE match_id = ?`. Пока шло удаление (по 40 мс на сообщение),
+    // рассылка успевала дописать новые строки — и тот `DELETE` стирал их, ни разу не
+    // удалив сами сообщения. Строки исчезали, сообщения оставались, уборщик их уже не
+    // видел: висели у людей навсегда. Именно поэтому таблица duel_msgs выглядит пустой,
+    // а вызовы у части учеников на месте.
+    //
+    // Теперь строка удаляется ровно та, чьё сообщение мы только что обработали. Всё,
+    // что доехало позже, останется в таблице и достанется уборщику (см. ниже).
+    const purgeMatchMessages = async (matchId) => {
+        let failed = 0, removed = 0;
+        // Два прохода: второй добирает то, что дописала обрывающаяся рассылка.
+        for (let pass = 0; pass < 2; pass++) {
+            const rows = msgsFor.all(matchId);
+            if (!rows.length) break;
+            for (const row of rows) {
+                try { await bot.api.deleteMessage(row.chat_id, row.message_id); removed++; }
+                catch (e) { failed++; }
+                // Строку убираем в любом случае: повторять отказ Telegram бессмысленно.
+                dropMsgRow.run(row.rid);
+                await sleep(40);
+            }
+        }
+        // Раньше отказ Telegram глотался пустым catch — сколько вызовов реально осталось
+        // висеть у людей, узнать было неоткуда. Теперь это видно в логе.
+        if (failed) console.warn(`duel cleanup: матч ${matchId} — убрано ${removed}, не удалось ${failed}`);
+    };
+
     const attach = () => fdb.collection(`${base}/matches`).where('status', '==', 'waiting').onSnapshot(async (snap) => {
         for (const change of snap.docChanges()) {
             const matchId = change.doc.id;
@@ -1142,16 +1186,26 @@ function watchDuels() {
                 // см. ветку change.type === 'removed' ниже, поэтому спама «висящих» вызовов нет.
                 if (!flagOn('duel_notify')) continue; // глобальный выключатель из /admin
                 const candidates = db.prepare('SELECT id FROM users WHERE notify_duel = 1').all();
-                for (const { id } of candidates) {
-                    if (String(id) === seekerUid) continue;
-                    const sent = await sendSafe(id, `⚔️ ${seekerName} ищет соперника (${modeLabel})!\nПрими вызов, пока место свободно 👇`, { reply_markup: duelKb() });
-                    if (sent) saveMsg.run(matchId, id, sent.message_id, now);
-                    await sleep(60);
-                }
+                waiting.add(matchId);
+                try {
+                    for (const { id } of candidates) {
+                        // Матч закончился, пока мы рассылали, — звать в него больше некого.
+                        // Возрастная граница страхует на случай, если событие об окончании
+                        // потерялось (перезапуск бота, обрыв опроса): вызов живёт 2 минуты.
+                        if (!waiting.has(matchId)) break;
+                        if (Date.now() - createdAt > MAX_WAITING_AGE_MS) break;
+                        if (String(id) === seekerUid) continue;
+                        const sent = await sendSafe(id, `⚔️ ${seekerName} ищет соперника (${modeLabel})!\nПрими вызов, пока место свободно 👇`, { reply_markup: duelKb() });
+                        if (sent) saveMsg.run(matchId, id, sent.message_id, now);
+                        await sleep(60);
+                    }
+                } finally { waiting.delete(matchId); }
             }
             if (change.type === 'removed') {
-                for (const row of msgsFor.all(matchId)) { try { await bot.api.deleteMessage(row.chat_id, row.message_id); } catch (e) {} await sleep(40); }
-                clearFor.run(matchId);
+                // Порядок важен: сначала обрываем рассылку, потом убираем разосланное.
+                // Иначе цикл выше продолжит добавлять новые сообщения нам за спиной.
+                waiting.delete(matchId);
+                await purgeMatchMessages(matchId);
             }
         }
     }, (err) => { console.error('watchDuels error:', err.message); setTimeout(attach, 15000); });
