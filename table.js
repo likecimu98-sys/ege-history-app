@@ -28,7 +28,18 @@ function _tableRowsCompatible(task, cfg, candidate, selected) {
 // Старые ДЗ по ссылке содержат фиксированные индексы. Просматриваем их по порядку,
 // но никогда не показываем две одинаковые/взаимозаменяемые строки в одной таблице.
 // Конфликтную строку не теряем: переносим в следующий раунд, где она получит другой контекст.
-function _selectHomeworkTargets(task, cfg, dataSource, pool, rowsCount) {
+// 🔴 allowedRows — строки, разрешённые ВЫБРАННЫМ ПЕРИОДОМ.
+//
+// Индексы в hwCurrentPool приходят ссылкой из бота и про период ничего не знают:
+// они указывают в ПОЛНЫЙ набор данных. Поэтому ДЗ «задание №4, 862–1340» показывало
+// Кёнигсберг 1945 и линию Маннергейма — жалоба ученицы 01.08.2026 («несмотря на
+// установленный временной период, в 4, 5 и 7 попадаются задания со всей истории»).
+// Ученик решал не то, что задал учитель, и прогресс по ДЗ засчитывался за чужие годы.
+//
+// Строка вне периода из пула ВЫБЫВАЕТ насовсем (не уходит в deferred): в рамках
+// этого ДЗ она не станет годной никогда, а держать её — значит перебирать её заново
+// на каждой таблице.
+function _selectHomeworkTargets(task, cfg, dataSource, pool, rowsCount, allowedRows) {
     const target = [];
     const selectedIndices = [];
     const deferredIndices = [];
@@ -39,6 +50,7 @@ function _selectHomeworkTargets(task, cfg, dataSource, pool, rowsCount) {
         scanned++;
         const row = dataSource[rawIndex];
         if (!row) continue;
+        if (allowedRows && !allowedRows.has(row)) continue;
         if (_tableRowsCompatible(task, cfg, row, target)) {
             target.push(row);
             selectedIndices.push(rawIndex);
@@ -1615,8 +1627,14 @@ function generateTwoColumnTable() {
     let target = [];
     if (window.state.isHomeworkMode && window.state.hwTargetIndices?.length > 0) {
         const dataSource = cfg.data();
-        target = _selectHomeworkTargets(task, cfg, dataSource, window.state.hwCurrentPool, rowsCount);
-    } else {
+        // Период считаем по getBasePool, а не по allowed: allowed в режиме «Ошибки»
+        // подменяется пулом ошибок, и рамки ДЗ по нему считать нельзя.
+        target = _selectHomeworkTargets(task, cfg, dataSource, window.state.hwCurrentPool, rowsCount,
+            new Set(getBasePool(actualPeriod)));
+    }
+    // Не «else»: если в периоде ДЗ индексов не осталось, собираем таблицу обычным
+    // путём — из того же периода. Пустая таблица вместо домашки хуже.
+    if (!target.length) {
         const picker = EPOCH_PICKERS[task];
         // Умный подбор работает если доступны все эпохи (all, или кастом покрывающий все)
         const coversAll = TASK_EPOCHS.every(e => allowed.some(f => f.c === e));
@@ -1768,8 +1786,14 @@ function generateTask4Table() {
 
     let target = [];
     if (window.state.isHomeworkMode && window.state.hwTargetIndices?.length > 0) {
-        target = _selectHomeworkTargets('task4', TASK_CONFIG.task4, window.bigData, window.state.hwCurrentPool, rowsCount);
-    } else {
+        // Рамки периода обязаны действовать и здесь: индексы из ссылки бота смотрят
+        // в ПОЛНЫЙ bigData, поэтому ДЗ «862–1340» показывало Кёнигсберг 1945.
+        target = _selectHomeworkTargets('task4', TASK_CONFIG.task4, window.bigData, window.state.hwCurrentPool, rowsCount,
+            new Set(getBasePool(actualPeriod)));
+    }
+    // Не «else»: если в периоде ДЗ индексов не осталось, собираем обычным путём —
+    // из того же периода, а не из всей истории.
+    if (!target.length) {
         const allowed = getFilteredPool(actualPeriod, rowsCount);
         if (!allowed || allowed.length === 0) {
             $('task-table-body').innerHTML = `<tr><td colspan="3" class="p-10 text-center font-bold text-rose-500 bg-white dark:bg-[#1e1e1e]">⚠️ Нет событий!</td></tr>`;

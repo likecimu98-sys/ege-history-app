@@ -526,4 +526,59 @@ assert.match(cloudCode, /_mergeAssignmentLists\(window\.state\.stats\.assignment
         'Активные legacy_* обязаны отсеиваться');
 }
 
+// ─── Период ДЗ обязан действовать на СТРОКИ ─────────────────────────────────
+// 01.08.2026, жалоба ученицы: «несмотря на установленный временной период, в 4, 5 и 7
+// попадаются задания со всей истории». Индексы в hwCurrentPool приходят ссылкой из
+// бота и указывают в ПОЛНЫЙ набор данных — период к ним не применялся вовсе. ДЗ
+// «задание №4, 862–1340» показывало Кёнигсберг 1945 и линию Маннергейма, и прогресс
+// засчитывался за чужие годы.
+{
+    // Поведенческая проверка на настоящем отборе из table.js.
+    const rows = [
+        { year: '1036 г.', geo: 'Киев', event: 'разгром печенегов', c: 'early' },
+        { year: '1945 г.', geo: 'Кёнигсберг', event: 'операция в Восточной Пруссии', c: '20th' },
+        { year: '1113 г.', geo: 'Киев', event: 'восстание', c: 'early' },
+        { year: '1812 г.', geo: 'Тарутино', event: 'манёвр русской армии', c: '19th' },
+    ];
+    const inPeriod = new Set([rows[0], rows[2]]); // только 862–1340
+
+    const ctx = {
+        console,
+        document: { addEventListener() {} },
+        requestAnimationFrame() {},
+        shuffleArray(items) { return [...items]; },
+        setTimeout, clearTimeout,
+    };
+    ctx.window = ctx; ctx.globalThis = ctx;
+    ctx.state = { hwCurrentPool: [0, 1, 2, 3] };
+    ctx.task3Data = [];
+    vm.createContext(ctx);
+    vm.runInContext(tableSource, ctx, { filename: 'table.js' });
+
+    const picked = ctx._selectHomeworkTargets(
+        'task4', { displayField: 'event', fieldName: 'year' }, rows, [0, 1, 2, 3], 4, inPeriod);
+
+    const years = picked.map(r => r.year);
+    assert.ok(!years.includes('1945 г.') && !years.includes('1812 г.'),
+        `В ДЗ попали строки вне заданного периода: ${years.join(', ')}. `
+        + 'Период обязан отсекать строки, а не только подписывать заголовок.');
+    assert.ok(years.includes('1036 г.'), 'Строки внутри периода обязаны оставаться доступными');
+
+    // Выбывшие из периода не должны копиться в пуле и перебираться заново.
+    assert.ok(!ctx.state.hwCurrentPool.includes(1) && !ctx.state.hwCurrentPool.includes(3),
+        'Строки вне периода обязаны выбывать из пула ДЗ насовсем');
+
+    // Без набора-ограничителя поведение прежнее — иначе сломались бы старые вызовы.
+    ctx.state.hwCurrentPool = [0, 1, 2, 3];
+    const all = ctx._selectHomeworkTargets(
+        'task4', { displayField: 'event', fieldName: 'year' }, rows, [0, 1, 2, 3], 4);
+    assert.equal(all.length, 4, 'Без ограничителя периода отбор обязан работать как раньше');
+}
+
+// Оба сборщика таблиц обязаны передавать рамки периода в отбор ДЗ.
+assert.equal((tableSource.match(/_selectHomeworkTargets\([\s\S]{0,220}?new Set\(getBasePool\(actualPeriod\)\)\)/g) || []).length, 2,
+    'Не оба сборщика таблиц ограничивают ДЗ периодом (нужны и общий, и task4)');
+assert.doesNotMatch(tableSource, /_selectHomeworkTargets\('task4', TASK_CONFIG\.task4, window\.bigData, window\.state\.hwCurrentPool, rowsCount\)/,
+    'task4 снова берёт строки ДЗ из полного bigData без периода');
+
 console.log('Homework, table uniqueness and silent duel self-test passed.');
