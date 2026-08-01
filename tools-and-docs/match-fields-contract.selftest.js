@@ -15,12 +15,16 @@
 // Тест сравнивает ИСХОДНИКИ: клиентский объект нового матча против серверного
 // перечня. Поднимать браузер и Postgres ради одной проверки дороже, чем зафиксировать
 // сам договор.
+//
+// ⚠️ Живёт в tools-and-docs, а НЕ в server/api/test, хотя проверяет серверное правило:
+// deploy-api.ps1 заливает на сервер только папку server/api и гоняет её тесты там.
+// Клиентского cloud-sync.js на сервере нет — тест падал бы на каждом выкате API.
 
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 
-const ROOT = path.resolve(__dirname, '..', '..', '..');
+const ROOT = path.resolve(__dirname, '..');
 const read = file => fs.readFileSync(path.join(ROOT, file), 'utf8');
 
 // Комментарии вырезаем ПЕРЕД разбором: иначе объяснительный текст выше сам себя
