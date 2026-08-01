@@ -610,6 +610,10 @@ async function handle(req, res) {
     const status = Number(error.statusCode) || (error.code === '23505' ? 409 : 500);
     log(status >= 500 ? 'error' : 'warn', 'request.failed', {
       method: req.method, path: url.pathname, status, code: error.code || '', message: error.message, elapsedMs: Date.now() - started,
+      // Какой документ и какие поля отклонили (см. deniedRef в store.js). Без этого
+      // отказ записи виден в логе как безымянное `forbidden` — не отличить тихую
+      // потерю прогресса ученика от безобидной попытки записать чужой документ.
+      ...(error.deniedRef ? { denied: error.deniedRef } : {}),
     });
     return json(res, status, { error: error.message || 'internal', ...(error.details ? { details: error.details } : {}) });
   }

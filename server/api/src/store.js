@@ -624,7 +624,15 @@ class DocumentStore extends EventEmitter {
       const effectivePatch = stripPrivilegedFields(
         protectTeacherClassAssignment(current?.data || null, patch, selfStudentWrite), selfStudentWrite);
       if (!await authorizeWrite(client, ref, ctx, current, effectivePatch, actualMode, options)) {
-        throw Object.assign(new Error('forbidden'), { statusCode: 403 });
+        // 🔴 Говорим, ЧТО именно запретили. Раньше в лог уходило голое `forbidden`
+        // без коллекции и документа: 01.08.2026 в логах висело 47 таких отказов за
+        // день, и понять, теряет ли из-за них ученик прогресс или это безобидная
+        // попытка записи чужого документа, было НЕЧЕМ. Разбор пришлось вести
+        // гаданием по коду.
+        // ⚠️ Только коллекция, id документа и имена полей — без значений: в патче
+        // едут ФИО, код класса и кусок состояния ученика.
+        const denied = `${ref.collection}/${ref.docId} [${Object.keys(effectivePatch || {}).join(',') || 'без полей'}] mode=${actualMode}`;
+        throw Object.assign(new Error('forbidden'), { statusCode: 403, deniedRef: denied });
       }
       if (mode === 'update' && !current) throw Object.assign(new Error('not_found'), { statusCode: 404 });
       const conflictMerged = options.expectedVersion !== undefined
