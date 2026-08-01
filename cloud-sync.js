@@ -7,14 +7,14 @@
             signInWithCredential, signOut, initializeFirestore, collection, doc, setDoc, getDoc,
             getDocs, addDoc, updateDoc, deleteDoc, deleteField, onSnapshot, query, where,
             orderBy, limit, runTransaction, arrayUnion, arrayRemove, vpsApiFetch, refreshVpsAuth
-        } from "./vps-sync-compat.js?v=20260801-13";
+        } from "./vps-sync-compat.js?v=20260801-14";
 
         // jsPDF грузился с cdnjs.cloudflare.com без SRI — то есть посторонний скрипт
         // исполнялся с полными правами страницы, а при недоступности CDN (у части
         // нашей аудитории это обычное дело) экспорт PDF просто не работал. Довод тот
         // же, что и для telegram-web-app.js: своя копия с того же origin.
         // Версия совпадает с прежней CDN-ной — 2.5.1, лежит в vendor/.
-        const VENDOR_JSPDF = 'vendor/jspdf.umd.min.js?v=20260801-13';
+        const VENDOR_JSPDF = 'vendor/jspdf.umd.min.js?v=20260801-14';
 
         const cloudConfig = { projectId: 'vps-postgresql' };
         
@@ -2681,12 +2681,20 @@
         // ── Очередь уведомлений для TG-бота ──
         // Приложение пишет событие, бот на VPS доставляет сообщение и удаляет документ.
         // Ошибки глотаем: уведомление — не критичный путь, ДЗ выдаётся независимо от него.
+        // Возвращает true/false: массовой выдаче ДЗ важно знать, поставлено ли
+        // уведомление, — иначе учитель уйдёт уверенным, что ученикам придёт сообщение.
+        // Исключение наружу не бросаем: половина вызовов не ждёт результата, и отказ
+        // уведомления не должен ронять саму выдачу ДЗ.
         window._notifyJob = async function(payload) {
             try {
-                if (!db) return;
+                if (!db) return false;
                 await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'notifyJobs'),
                     { ...payload, ts: Date.now() });
-            } catch (e) { console.warn('[notifyJob]', e && e.message); }
+                return true;
+            } catch (e) {
+                window.reportSilent && window.reportSilent('постановка уведомления в очередь', e);
+                return false;
+            }
         };
         // Сводка по bundle-ДЗ для текста уведомления: task одного этапа или 'bundle', сумма строк.
         function _jobSummary(rec) {
@@ -3242,14 +3250,34 @@
                     journalOk++;
                 } catch (e) { console.error('class-log write error:', e); }
             }
+            // 🔴 УВЕДОМЛЕНИЕ — ОДНОЙ ЗАПИСЬЮ НА ВСЮ ВЫДАЧУ, тоже до цикла.
+            //
+            // Раньше задание боту создавалось ВНУТРИ цикла по ученикам, по штуке на
+            // каждого. Обрыв на середине — и до кого не дошли, тот не получал сообщения
+            // в бот НИКОГДА. 31.07 так и вышло: домашку в итоге увидели все (журнал
+            // класса её догоняет при следующем входе), а сообщение пришло 17 из 145 —
+            // остальные 129 пришлось досылать вручную из базы.
+            //
+            // Теперь список получателей уезжает одним документом ДО рассылки: оборвётся
+            // цикл или нет, бот разошлёт всем. Отправлять список класса целиком нельзя —
+            // учитель мог выбрать пятерых из 145, поэтому несём именно выбранных.
+            const _sum = _jobSummary(rec);
+            const notifyOk = await window._notifyJob({
+                type: 'hw_assigned_bulk',
+                studentIds: students.map(s => String(s.uid)),
+                recId: rec.id, task: _sum.task, total: _sum.total, deadline: rec.deadline
+            });
             let ok = 0, fail = 0;
             for (const s of students) {
                 try {
                     const ref = doc(db, 'artifacts', appId, 'public', 'data', 'students', s.uid);
                     await updateDoc(ref, { pendingAssignments: arrayUnion(rec) });
-                    { const sum = _jobSummary(rec); window._notifyJob({ type: 'hw_assigned', studentId: String(s.uid), recId: rec.id, task: sum.task, total: sum.total, deadline: rec.deadline }); }
                     ok++;
                 } catch (e) { fail++; }
+            }
+            if (!notifyOk) {
+                showToast('⚠️', 'Уведомления в бот не поставлены — ДЗ выдано, но сообщения не придут',
+                    'bg-amber-500', 'border-amber-700');
             }
             if (codes.length && !journalOk) {
                 // Журнал — единственная страховка на случай обрыва. Не записался — говорим

@@ -1095,6 +1095,54 @@ function watchJobs() {
                         markSeen.run(String(j.studentId), dedupeId);
                     }
                 }
+                // 🔴 Массовая выдача ДЗ — ОДНО задание со списком получателей.
+                //
+                // Раньше приложение писало по заданию на ученика прямо в цикле выдачи.
+                // Обрыв цикла (закрыли вкладку, уснул WebView, моргнула сеть) — и до кого
+                // не дошли, тот не получал сообщения НИКОГДА. 31.07 из 145 учеников
+                // сообщение получили 17, остальных 129 досылали вручную из базы.
+                // Само ДЗ при этом доходило: его догоняет журнал класса.
+                //
+                // Теперь список приезжает одним документом, записанным ДО рассылки.
+                // Обработка каждого получателя — ровно та же, что у одиночного
+                // hw_assigned, включая обе защиты от повторов (seen_assignments по паре
+                // ученик+задание и delivered_notify_recipients по паре задание+адресат).
+                if (fresh && j.type === 'hw_assigned_bulk' && Array.isArray(j.studentIds)) {
+                    const dedupeId = String(j.recId || ('noid_' + (j.ts || Date.now())));
+                    const label = TASK_LABELS[j.task] || j.task || 'задание';
+                    const dl = j.deadline ? `\n⏰ Дедлайн: ${new Date(j.deadline + 'T00:00:00').toLocaleDateString('ru-RU')}` : '';
+                    let failed = 0;
+                    for (const rawId of j.studentIds) {
+                        const studentId = String(rawId);
+                        if (isSeen.get(studentId, dedupeId)) continue;
+                        const engageKey = `engage:${studentId}`;
+                        if (engage && !isRecipientDone.get(jobId, engageKey)) {
+                            engage.onHwAssigned(studentId, dedupeId, j.ts, j.deadline, j.task);
+                            markRecipientDone.run(jobId, engageKey);
+                        }
+                        const chatId = Number(studentId);
+                        const u = Number.isFinite(chatId) ? db.prepare('SELECT notify_hw FROM users WHERE id = ?').get(chatId) : null;
+                        if (u && u.notify_hw && flagOn('hw_push') && !isRecipientDone.get(jobId, String(chatId))) {
+                            const sent = await sendSafe(chatId, `📚 Новое домашнее задание!\n${label} — ${j.total || '?'} строк${dl}\n\nОткрывай и решай 👇`, { reply_markup: appKb() });
+                            if (!sent) {
+                                // ⚠️ Отказ одного получателя НЕ обрывает рассылку остальным:
+                                // у одиночного hw_assigned адресат один и можно бросить сразу,
+                                // здесь же их до полутора сотен — один удалённый бот не должен
+                                // лишать сообщения весь класс.
+                                // Но и «обработанным» такого ученика не помечаем: без пометки
+                                // он попадёт в повтор задания (до 5 попыток с отсрочкой), а
+                                // те, кому уже отправили, отсеются по isSeen.
+                                failed++;
+                                await sleep(50);
+                                continue;
+                            }
+                            markRecipientDone.run(jobId, String(chatId));
+                        }
+                        markSeen.run(studentId, dedupeId);
+                        await sleep(50);
+                    }
+                    if (failed) throw new Error(`bulk_notify_partial:${failed}/${j.studentIds.length}`);
+                }
                 if (fresh && j.type === 'hw_done' && j.classCode && flagOn('hw_done')) {
                     const code = String(j.classCode), label = TASK_LABELS[j.task] || j.task || 'задание';
                     const name = String(j.studentName || j.studentId || 'Ученик').slice(0, 50);

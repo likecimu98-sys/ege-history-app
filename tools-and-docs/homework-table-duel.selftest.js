@@ -400,4 +400,38 @@ assert.doesNotMatch(stylesSource, /\.visual-trainer-root \{[^}]*overflow: hidden
 assert.match(read('visual-trainer.js'), /btn\.scrollIntoView\(\{ block: 'nearest'/,
   'the next button must be scrolled into view after a wrong answer');
 
+// ─── Уведомление о ДЗ не должно зависеть от цикла выдачи ─────────────────────
+// 31.07.2026: массовая выдача создавала задание боту ВНУТРИ цикла по ученикам, по
+// штуке на каждого. Цикл оборвался — и до кого не дошли, тот не получил сообщения
+// НИКОГДА: из 145 человек уведомили 17, остальных 129 досылали руками из базы.
+// Само ДЗ при этом доходило, его догоняет журнал класса, — потому и заметили не
+// сразу, жалоба звучала как «бот не рассылает домашку».
+const botSource = read('server/bot/src/bot.js');
+// Якорь — тост массовой выдачи: он есть только в ней и переживает переименования.
+const assignAt = cloudSource.indexOf('Выдаю ДЗ ');
+assert.ok(assignAt >= 0, 'Не найдена массовая выдача ДЗ');
+const assignBody = cloudSource.slice(assignAt, assignAt + 4000);
+
+const bulkAt = assignBody.indexOf("type: 'hw_assigned_bulk'");
+const loopAt = assignBody.indexOf('for (const s of students)');
+assert.ok(bulkAt >= 0, 'Пропало общее задание боту со списком получателей');
+assert.ok(loopAt >= 0, 'Не найден цикл персональной выдачи');
+assert.ok(bulkAt < loopAt,
+    'Уведомление снова ставится в очередь ПОСЛЕ цикла (или внутри него). Обрыв цикла '
+    + 'опять оставит часть класса без сообщения о домашке — так потеряли 129 из 145.');
+assert.doesNotMatch(assignBody.slice(loopAt),
+    /for \(const s of students\)[\s\S]{0,600}_notifyJob\(/,
+    'Внутри цикла выдачи снова создаётся задание боту на каждого ученика — это и есть '
+    + 'та самая зависимость уведомления от того, дожил ли цикл до конца');
+
+// Бот обязан понимать общий список, иначе уведомления просто перестанут приходить.
+assert.match(botSource, /j\.type === 'hw_assigned_bulk' && Array\.isArray\(j\.studentIds\)/,
+    'Бот не обрабатывает общее задание со списком получателей — уведомления о ДЗ не дойдут ни до кого');
+// Неудачная отправка не должна помечать ученика обработанным: иначе повтор задания
+// его пропустит, и сообщения он не получит уже никогда.
+assert.match(botSource, /failed\+\+;[\s\S]{0,120}continue;/,
+    'Отказ отправки снова помечает ученика обработанным — при повторе задания его пропустят');
+assert.match(botSource, /if \(failed\) throw new Error\(`bulk_notify_partial/,
+    'Частичная неудача рассылки больше не отправляет задание на повтор — потерянные адресаты не догонятся');
+
 console.log('Homework, table uniqueness and silent duel self-test passed.');
