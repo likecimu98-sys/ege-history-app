@@ -758,7 +758,13 @@ function revokedLocally(a) {
     if (!a || a.status === 'done') return false;
     if (localRevokedSet().has(a.id)) return true;
     const before = localRevokedBefore();
-    return !!before && Number(a.assignedAt || 0) < before;
+    // ⚠️ Запись без метки времени НЕ считаем снятой. Прежнее `Number(a.assignedAt || 0)`
+    // давало ноль, то есть «выдано до начала времён», и сохранённая метка «с чистого
+    // листа» хоронила такое ДЗ при каждом пересчёте — сразу после того, как оно
+    // пришло. Ровно так выглядит жалоба «домашка появилась на секунду и пропала».
+    const at = Number(a.assignedAt);
+    if (!at) return false;
+    return !!before && at < before;
 }
 
 window.rememberRevokedHw = function(ids, sweepTs) {

@@ -7,14 +7,14 @@
             signInWithCredential, signOut, initializeFirestore, collection, doc, setDoc, getDoc,
             getDocs, addDoc, updateDoc, deleteDoc, deleteField, onSnapshot, query, where,
             orderBy, limit, runTransaction, arrayUnion, arrayRemove, vpsApiFetch, refreshVpsAuth
-        } from "./vps-sync-compat.js?v=20260801-16";
+        } from "./vps-sync-compat.js?v=20260801-17";
 
         // jsPDF грузился с cdnjs.cloudflare.com без SRI — то есть посторонний скрипт
         // исполнялся с полными правами страницы, а при недоступности CDN (у части
         // нашей аудитории это обычное дело) экспорт PDF просто не работал. Довод тот
         // же, что и для telegram-web-app.js: своя копия с того же origin.
         // Версия совпадает с прежней CDN-ной — 2.5.1, лежит в vendor/.
-        const VENDOR_JSPDF = 'vendor/jspdf.umd.min.js?v=20260801-16';
+        const VENDOR_JSPDF = 'vendor/jspdf.umd.min.js?v=20260801-17';
 
         const cloudConfig = { projectId: 'vps-postgresql' };
         
@@ -945,13 +945,45 @@
                         let added = 0;
                         const revoked = window._classRevoked; // отозванные учителем ДЗ не подхватываем
                         const sweepTs = Number(window._classRevokeBefore) || 0; // «с чистого листа»: старое не подхватываем
+                        // 🔴 Снимаем с документа ТОЛЬКО то, что реально обработали.
+                        //
+                        // Раньше здесь стоял безусловный arrayRemove(...pending): выдачу
+                        // вычищали целиком, даже если не приняли из неё НИ ОДНОЙ записи.
+                        // Тогда ДЗ исчезало навсегда — второго шанса нет, у ученика в
+                        // состоянии пусто, в выдаче пусто, а учитель видит «выдано».
+                        // 01.08.2026 так потерялись все три выдачи Султану и Вере: в
+                        // профиле pendingAssignments пуст, в состоянии assignments: [].
+                        // Теперь непринятая запись ОСТАЁТСЯ в выдаче и будет принята при
+                        // следующем заходе, когда причина пропуска отпадёт.
+                        const handled = [];
+                        const skipped = { revoked: 0, swept: 0, broken: 0, noIngest: 0 };
                         pending.forEach(rec => {
-                            if (rec && rec.id && revoked && revoked.has(rec.id)) return;
-                            if (sweepTs && rec && (rec.assignedAt || 0) < sweepTs) return;
-                            if (window.ingestAssignment && window.ingestAssignment(rec)) added++;
+                            if (!rec || !rec.id) { skipped.broken++; handled.push(rec); return; }
+                            // Отозванное и снятое оптом обработано ОСОЗНАННО — такое снимаем.
+                            if (revoked && revoked.has(rec.id)) { skipped.revoked++; handled.push(rec); return; }
+                            // ⚠️ Запись БЕЗ метки времени НЕ считаем древней. Раньше
+                            // `(rec.assignedAt || 0)` превращало её в ноль — то есть в
+                            // «выдано до начала времён», и метка «с чистого листа»
+                            // сносила её всегда. Ошибаться надо в сторону лишнего ДЗ,
+                            // а не потерянного: normalizeAssignmentRec ровно так и
+                            // считает — `assignedAt: rec.assignedAt || Date.now()`.
+                            if (sweepTs && Number(rec.assignedAt) && Number(rec.assignedAt) < sweepTs) { skipped.swept++; handled.push(rec); return; }
+                            if (!window.ingestAssignment) { skipped.noIngest++; return; } // оставляем в выдаче
+                            if (window.ingestAssignment(rec)) added++;
+                            handled.push(rec);
                         });
                         // снимаем обработанные записи с документа (точное соответствие объектов)
-                        updateDoc(docSnap.ref, { pendingAssignments: arrayRemove(...pending) }).catch(console.error);
+                        if (handled.length) {
+                            updateDoc(docSnap.ref, { pendingAssignments: arrayRemove(...handled) })
+                                .catch(e => window.reportSilent && window.reportSilent('очистка выданного ДЗ', e));
+                        }
+                        // Выдача была, а не взяли ничего — это ровно та поломка, про которую
+                        // жалуются «пришло и пропало». Пусть скажет о себе сама.
+                        if (!added) {
+                            window.reportSilent && window.reportSilent(
+                                'ДЗ пришло, но не принято',
+                                new Error(`в выдаче=${pending.length} отозвано=${skipped.revoked} снято_оптом=${skipped.swept} битых=${skipped.broken} нет_приёмки=${skipped.noIngest} метка=${sweepTs} первое_ДЗ=${(pending[0] && pending[0].assignedAt) || 'нет'}`));
+                        }
                         if (added > 0) {
                             if (window.recomputeHwMirror) window.recomputeHwMirror();
                             const by = { task1: 0, task3: 0, task4: 0, task5: 0, task7: 0 };
@@ -2802,7 +2834,12 @@
         function _sweptByTeacher(a, sweepTs) {
             if (!sweepTs || !a || a.status === 'done') return false;
             if (String(a.id || '').indexOf('legacy_') === 0) return true;
-            return (a.assignedAt || 0) < sweepTs;
+            // ⚠️ Нет метки времени — НЕ снимаем. Прежнее `(a.assignedAt || 0)` считало
+            // такую запись выданной «до начала времён», и любая метка «с чистого листа»
+            // хоронила её навсегда. Потерянное ДЗ дороже лишнего.
+            const at = Number(a.assignedAt);
+            if (!at) return false;
+            return at < sweepTs;
         }
 
         // ─── Журнал ДЗ класса: чтобы ученики, добавленные на курс позже, получили старые задания ───

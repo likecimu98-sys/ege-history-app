@@ -434,4 +434,38 @@ assert.match(botSource, /failed\+\+;[\s\S]{0,120}continue;/,
 assert.match(botSource, /if \(failed\) throw new Error\(`bulk_notify_partial/,
     'Частичная неудача рассылки больше не отправляет задание на повтор — потерянные адресаты не догонятся');
 
+// ─── Выданное ДЗ нельзя стирать, не приняв ──────────────────────────────────
+// 01.08.2026: у Султана и Веры три выдачи подряд исчезли — в профиле
+// pendingAssignments пуст, в состоянии assignments: []. Приёмка чистила выдачу
+// БЕЗУСЛОВНО (`arrayRemove(...pending)`), даже когда не приняла ни одной записи.
+// Второго шанса нет: у ученика пусто, а учитель видит «выдано».
+// ⚠️ Комментарии вырезаем: объяснение выше само содержит запрещённую строку, и без
+// этого тест падал на собственном тексте. Тот же капкан, что у стража полей состояния.
+const stripJsComments = src => src
+    .replace(/\/\*[\s\S]*?\*\//g, ' ')
+    .replace(/(^|[^:])\/\/.*$/gm, '$1');
+const cloudCode = stripJsComments(cloudSource);
+const stateCode = stripJsComments(stateSource);
+
+assert.doesNotMatch(cloudCode, /arrayRemove\(\.\.\.pending\)/,
+    'Приёмка ДЗ снова стирает ВСЮ выдачу, включая непринятое. Так домашка пропадает '
+    + 'навсегда: в профиле пусто, в состоянии пусто, повторить нечем.');
+assert.match(cloudCode, /arrayRemove\(\.\.\.handled\)/,
+    'Приёмка ДЗ должна снимать только реально обработанные записи');
+assert.match(cloudCode, /if \(!window\.ingestAssignment\) \{ skipped\.noIngest\+\+; return; \}/,
+    'Запись, которую не смогли принять, обязана ОСТАТЬСЯ в выдаче — иначе она потеряна');
+assert.match(cloudCode, /window\.reportSilent\('ДЗ пришло, но не принято'|reportSilent\(\s*'ДЗ пришло, но не принято'/,
+    'Молчаливый пропуск выданного ДЗ снова не сообщается — жалобу «пришло и пропало» опять поймаем со слов');
+
+// ─── Запись без метки времени не «древняя» ──────────────────────────────────
+// `(a.assignedAt || 0)` превращало отсутствующую метку в ноль, то есть в «выдано до
+// начала времён», и метка «с чистого листа» хоронила такое ДЗ при каждом пересчёте —
+// сразу после того, как оно пришло. Это и есть «появилось на секунду и пропало».
+assert.doesNotMatch(cloudCode, /\(a\.assignedAt \|\| 0\) < sweepTs/,
+    'Отсутствующая метка времени снова считается древностью — ДЗ будет сноситься «чистым листом»');
+assert.doesNotMatch(stateCode, /Number\(a\.assignedAt \|\| 0\) < before/,
+    'revokedLocally снова хоронит ДЗ без метки времени');
+assert.match(stateCode, /const at = Number\(a\.assignedAt\);\s*\n\s*if \(!at\) return false;/,
+    'revokedLocally должен пропускать записи без метки времени, а не считать их снятыми');
+
 console.log('Homework, table uniqueness and silent duel self-test passed.');
