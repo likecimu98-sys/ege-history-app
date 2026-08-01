@@ -7,14 +7,14 @@
             signInWithCredential, signOut, initializeFirestore, collection, doc, setDoc, getDoc,
             getDocs, addDoc, updateDoc, deleteDoc, deleteField, onSnapshot, query, where,
             orderBy, limit, runTransaction, arrayUnion, arrayRemove, vpsApiFetch, refreshVpsAuth
-        } from "./vps-sync-compat.js?v=20260801-12";
+        } from "./vps-sync-compat.js?v=20260801-13";
 
         // jsPDF грузился с cdnjs.cloudflare.com без SRI — то есть посторонний скрипт
         // исполнялся с полными правами страницы, а при недоступности CDN (у части
         // нашей аудитории это обычное дело) экспорт PDF просто не работал. Довод тот
         // же, что и для telegram-web-app.js: своя копия с того же origin.
         // Версия совпадает с прежней CDN-ной — 2.5.1, лежит в vendor/.
-        const VENDOR_JSPDF = 'vendor/jspdf.umd.min.js?v=20260801-12';
+        const VENDOR_JSPDF = 'vendor/jspdf.umd.min.js?v=20260801-13';
 
         const cloudConfig = { projectId: 'vps-postgresql' };
         
@@ -210,7 +210,11 @@
         window.logoutAccount = async function () {
             const ok = await _uiConfirm2('Выйти из аккаунта на этом устройстве? Прогресс сохранён в облаке — вернуться можно по QR-коду из Telegram или через Google. Локальные данные будут очищены.');
             if (!ok) return;
-            try { await Promise.race([window.syncProgressToCloud(), new Promise(r => setTimeout(r, 4000))]); } catch (e) {}
+            // 🔴 Это ПОСЛЕДНЕЕ сохранение перед выходом из аккаунта: дальше идёт
+            // зачистка устройства и перезагрузка. Молчащий отказ здесь означает
+            // потерянный прогресс у живого человека, поэтому сбой обязан оставить след.
+            try { await Promise.race([window.syncProgressToCloud(), new Promise(r => setTimeout(r, 4000))]); }
+            catch (e) { window.reportSilent && window.reportSilent('выход: финальное сохранение', e); }
             window._identitySwitching = true; // блокируем фоновые load/sync до перезагрузки
             _wipeDeviceIdentity();
             try { localStorage.removeItem('ege_onboarding_done'); } catch (e) {}
@@ -597,7 +601,14 @@
                         const parsed = normalizeSavedStateObject(JSON.parse(localStateJson));
                         if (parsed) applyMergedState(parsed);
                         localStorage.setItem('ege_final_storage_v4', localStateJson);
-                    } catch(e) {}
+                    } catch(e) {
+                        // 🔴 Ветка спасения: в облаке пусто, а локально прогресс ЕСТЬ —
+                        // восстанавливаем его и тут же выгружаем наверх. Отказ означает,
+                        // что наработанное гостем не доехало до аккаунта. Молчать нельзя:
+                        // localStorage бросает исключение в приватном режиме Safari и при
+                        // переполнении квоты — оба случая выглядят как «прогресс пропал».
+                        window.reportSilent && window.reportSilent('восстановление локального прогресса', e);
+                    }
                     await window.syncProgressToCloud();
                 } else if (cloudLoaded > 0) {
                     // Cloud was loaded — also sync back to ensure data is under google_<uid>
@@ -845,8 +856,13 @@
                     window._pendingGoogleToast = null;
                 }
 
-                // Теперь синхронизируем актуальный (возможно только что загруженный) прогресс в облако
-                window.syncProgressToCloud(); 
+                // Теперь синхронизируем актуальный (возможно только что загруженный) прогресс в облако.
+                // 🔴 Намеренно БЕЗ await: держать здесь загрузку нельзя, дальше идёт подписка
+                // на домашку. Но и терять отказ нельзя — раньше эта строка была единственной
+                // во всём файле, где сохранение запускалось вообще без обработки результата:
+                // упало — и об этом не узнавал никто.
+                Promise.resolve(window.syncProgressToCloud())
+                    .catch(e => window.reportSilent && window.reportSilent('синхронизация после входа', e));
                 
                 // ── Receiver for Homework — слушаем ВСЕ известные документы ──
                 // Сначала отписываемся от старых слушателей

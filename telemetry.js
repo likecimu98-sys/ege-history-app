@@ -68,6 +68,25 @@
         send({ error: { message: text, source: where, release: RELEASE } });
     }
 
+    // 🔴 ПРОГЛОЧЕННЫЕ ОШИБКИ. В клиенте полсотни мест вида `catch (e) {}` — операция
+    // падает, а следа не остаётся нигде: ни у человека на экране, ни в логах. Именно
+    // поэтому разбор жалоб «не работает» превращался в гадание. Здесь даём таким
+    // местам голос, НЕ меняя поток выполнения: код по-прежнему не падает, но факт
+    // сбоя виден в консоли и уезжает в диагностику.
+    //
+    // Защита от лавины уже есть: MAX_ERRORS_PER_SESSION и дедупликация по тексту —
+    // повторяющийся сбой уйдёт один раз за сессию.
+    //
+    // ⚠️ Сама эта функция не должна уметь сломать то, что диагностирует: любое
+    // исключение внутри неё гасится молча — здесь это оправдано.
+    window.reportSilent = function (context, error) {
+        try {
+            const message = error && (error.message || String(error)) || 'без сообщения';
+            console.warn('[тихий сбой]', context, message);
+            reportError('тихий сбой · ' + String(context || '?') + ' · ' + message, location.pathname, 0);
+        } catch (e) { /* диагностика не имеет права падать */ }
+    };
+
     window.addEventListener('error', event => {
         // Ошибки загрузки картинок и скриптов приходят сюда же, но без message.
         if (event && event.message) reportError(event.message, event.filename, event.lineno);
