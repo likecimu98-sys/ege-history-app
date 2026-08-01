@@ -7,14 +7,14 @@
             signInWithCredential, signOut, initializeFirestore, collection, doc, setDoc, getDoc,
             getDocs, addDoc, updateDoc, deleteDoc, deleteField, onSnapshot, query, where,
             orderBy, limit, runTransaction, arrayUnion, arrayRemove, vpsApiFetch, refreshVpsAuth
-        } from "./vps-sync-compat.js?v=20260801-14";
+        } from "./vps-sync-compat.js?v=20260801-15";
 
         // jsPDF грузился с cdnjs.cloudflare.com без SRI — то есть посторонний скрипт
         // исполнялся с полными правами страницы, а при недоступности CDN (у части
         // нашей аудитории это обычное дело) экспорт PDF просто не работал. Довод тот
         // же, что и для telegram-web-app.js: своя копия с того же origin.
         // Версия совпадает с прежней CDN-ной — 2.5.1, лежит в vendor/.
-        const VENDOR_JSPDF = 'vendor/jspdf.umd.min.js?v=20260801-14';
+        const VENDOR_JSPDF = 'vendor/jspdf.umd.min.js?v=20260801-15';
 
         const cloudConfig = { projectId: 'vps-postgresql' };
         
@@ -894,6 +894,36 @@
                 function _handleHwSnapshot(docSnap) {
                     if (!docSnap.exists()) return;
                     const data = docSnap.data();
+
+                    // 🔴 КЛАСС БЕРЁМ ИЗ ПРОФИЛЯ, а не только из localStorage.
+                    //
+                    // Догрузка старых ДЗ (pullClassAssignments) висела ИСКЛЮЧИТЕЛЬНО на
+                    // localStorage.student_class_code — то есть на одном конкретном
+                    // устройстве и браузере. Сервер про класс знал всегда (classCode в
+                    // профиле), но клиент его не спрашивал.
+                    // Кто входил с нового устройства, после чистки данных или после
+                    // долгого перерыва — терял связь с классом молча: журнал не читался,
+                    // и ДЗ, выданное за время его отсутствия, не приходило НИКОГДА.
+                    //
+                    // Вторая линия к восстановлению кода при слиянии документов (там же,
+                    // где подтягиваются имя и tgId): тот путь работает только в момент
+                    // входа со слиянием, а снапшот профиля приходит и позже — например,
+                    // когда учитель зачислил ученика в класс уже во время сессии.
+                    // Обе линии идемпотентны: ingestAssignment не задваивает принятое.
+                    //
+                    // ⚠️ В СОСТОЯНИИ ученика classCode нет ни у кого (0 из 177 проверено
+                    // 01.08.2026) — он не входит в SAVE_FIELDS. Источник только профиль.
+                    try {
+                        const codeFromProfile = String(data.classCode || '').trim();
+                        if (codeFromProfile && !localStorage.getItem('student_class_code')) {
+                            localStorage.setItem('student_class_code', codeFromProfile);
+                            if (window.renderProfileClass) window.renderProfileClass();
+                            if (window.pullClassAssignments) {
+                                Promise.resolve(window.pullClassAssignments(codeFromProfile))
+                                    .catch(e => window.reportSilent && window.reportSilent('догрузка журнала класса', e));
+                            }
+                        }
+                    } catch (e) { window.reportSilent && window.reportSilent('восстановление класса из профиля', e); }
 
                     // ── Индивидуально отозванные учителем ДЗ (поле revokedAssignments документа ученика) ──
                     const ownRevoked = Array.isArray(data.revokedAssignments) ? data.revokedAssignments : [];
@@ -2913,15 +2943,33 @@
                 }
                 const today = new Date().toISOString().split('T')[0];
                 let added = 0;
+                // 🔴 Считаем ПРИЧИНЫ отказов поимённо.
+                //
+                // 01.08.2026: Ира прочитала журнал своего класса трижды за день (в логах
+                // сервера — три ответа 200 с заданиями), и ДЗ от 27.07 у неё всё равно не
+                // появилось. По коду видно ЧТО не сработало, но не ВИДНО почему: все
+                // развилки молчат, а общий catch внизу глотает и настоящую ошибку.
+                // Поэтому здесь не «логирование на всякий случай», а именно те четыре
+                // числа, которые различают четыре возможные причины.
+                const skip = { revoked: 0, swept: 0, already: 0, broken: 0 };
                 list.forEach(rec => {
-                    if (!rec || !rec.id) return;
-                    if (revokedSet.has(rec.id)) return; // отозвано — не подхватываем
-                    if (sweepTs && (rec.assignedAt || 0) < sweepTs) return; // снято оптом — не подхватываем
+                    if (!rec || !rec.id) { skip.broken++; return; }
+                    if (revokedSet.has(rec.id)) { skip.revoked++; return; } // отозвано — не подхватываем
+                    if (sweepTs && (rec.assignedAt || 0) < sweepTs) { skip.swept++; return; } // снято оптом — не подхватываем
                     const r = Object.assign({}, rec);
                     // опоздавшему просроченные на момент входа дедлайны снимаем — не штрафуем за то, что задано до его прихода
                     if (r.deadline && r.deadline < today) r.deadline = null;
                     if (window.ingestAssignment && window.ingestAssignment(r)) added++;
+                    else skip.already++;
                 });
+                // Журнал не пуст, а не взяли НИЧЕГО и ничего же не было принято раньше —
+                // это и есть та поломка, которую ловили со слов учеников.
+                if (list.length && !added && !skip.already) {
+                    const have = ((window.state && window.state.stats && window.state.stats.assignments) || []).length;
+                    window.reportSilent && window.reportSilent(
+                        'журнал класса прочитан, но ДЗ не взято',
+                        new Error(`класс=${code} в журнале=${list.length} отозвано=${skip.revoked} снято_оптом=${skip.swept} битых=${skip.broken} уже_есть=${have} метка_отзыва=${sweepTs}`));
+                }
                 if (removed > 0 && added === 0) {
                     if (window.recomputeHwMirror) window.recomputeHwMirror();
                     if (window.refreshHwState) window.refreshHwState();
@@ -2937,7 +2985,12 @@
                     if (window.updateHwNavBadge) window.updateHwNavBadge();
                     showToast('📚', `Добавлены задания класса: ${added}`, 'bg-indigo-500', 'border-indigo-700');
                 }
-            } catch (e) { console.error('pullClassAssignments error:', e); }
+            } catch (e) {
+                // Раньше отказ тут оставался только в консоли ученика — то есть нигде.
+                // Догрузка журнала — единственный способ получить ДЗ, выданное, пока
+                // человек не мог войти; её падение обязано быть слышно.
+                window.reportSilent && window.reportSilent('догрузка журнала класса', e);
+            }
         };
 
         // ─── Учитель: «Дошли до года» — граница пройденного материала потока ───
