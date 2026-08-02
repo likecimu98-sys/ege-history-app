@@ -651,6 +651,34 @@ window.hwItemDone = hwItemDone;
 function hwItemRemaining(item) { return Math.max(0, (item.goal || 0) - hwItemProgress(item)); }
 window.hwItemRemaining = hwItemRemaining;
 
+// 🔴 Годы АКТИВНОГО этапа ДЗ — источник правды для отбора строк.
+//
+// Брать рамки из глобального фильтра периода нельзя: при заходе в ДЗ ПО ССЫЛКЕ ИЗ БОТА
+// (`?hw=`) фильтр не выставляется вовсе (см. checkURLForHomework в app.js) — он остаётся
+// «вся история», и любая проверка по нему пропускает все строки. Именно так ДЗ
+// «862–1340» продолжало показывать 1945 год даже после починки 02.08: сам фильтр был
+// прав ровно тогда, когда ДЗ открывали из приложения, и молчал при заходе из бота.
+// Само задание рамки знает всегда — берём их у него.
+window.getActiveHwRange = function () {
+    const s = window.state && window.state.stats;
+    if (!s) return null;
+    const ah = window.state.activeHw;
+    let it = null;
+    if (ah) {
+        const a = (s.assignments || []).find(x => x.id === ah.id);
+        it = a && (a.items || [])[ah.itemIndex];
+    }
+    if (!it) {
+        // ДЗ из бота не проставляет activeHw — берём первый незакрытый этап активного ДЗ.
+        const a = (s.assignments || []).find(x => x.status === 'active');
+        it = a && (a.items || []).find(i => !hwItemDone(i));
+    }
+    if (!it) return null;
+    const from = Number(it.yearStart), to = Number(it.yearEnd);
+    if (!(from >= 862 && to > from)) return null; // этап без рамок — ограничивать нечем
+    return { from, to };
+};
+
 // Нормализуем входящую запись в ДЗ с items (поддержка старого плоского формата {task,total}).
 function normalizeAssignmentRec(rec) {
     let items = Array.isArray(rec.items) ? rec.items : null;

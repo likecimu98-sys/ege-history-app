@@ -39,6 +39,20 @@ function _tableRowsCompatible(task, cfg, candidate, selected) {
 // Строка вне периода из пула ВЫБЫВАЕТ насовсем (не уходит в deferred): в рамках
 // этого ДЗ она не станет годной никогда, а держать её — значит перебирать её заново
 // на каждой таблице.
+// Набор строк, разрешённых текущему ДЗ. Рамки берём У САМОГО ЗАДАНИЯ, и только если
+// их нет — у глобального фильтра периода. Порядок именно такой: ДЗ по ссылке из бота
+// фильтр не выставляет, и по нему разрешено было бы всё.
+function _hwAllowedRows(dataSource, actualPeriod) {
+    const range = window.getActiveHwRange && window.getActiveHwRange();
+    if (range) {
+        return new Set((dataSource || []).filter(d => {
+            const y = getYearFromFact(d);
+            return y >= range.from && y <= range.to;
+        }));
+    }
+    return new Set(getBasePool(actualPeriod));
+}
+
 function _selectHomeworkTargets(task, cfg, dataSource, pool, rowsCount, allowedRows) {
     const target = [];
     const selectedIndices = [];
@@ -1627,10 +1641,10 @@ function generateTwoColumnTable() {
     let target = [];
     if (window.state.isHomeworkMode && window.state.hwTargetIndices?.length > 0) {
         const dataSource = cfg.data();
-        // Период считаем по getBasePool, а не по allowed: allowed в режиме «Ошибки»
-        // подменяется пулом ошибок, и рамки ДЗ по нему считать нельзя.
+        // Рамки — у самого задания, и только при их отсутствии по фильтру периода.
+        // По allowed считать нельзя: в режиме «Ошибки» он подменяется пулом ошибок.
         target = _selectHomeworkTargets(task, cfg, dataSource, window.state.hwCurrentPool, rowsCount,
-            new Set(getBasePool(actualPeriod)));
+            _hwAllowedRows(dataSource, actualPeriod));
     }
     // Не «else»: если в периоде ДЗ индексов не осталось, собираем таблицу обычным
     // путём — из того же периода. Пустая таблица вместо домашки хуже.
@@ -1789,7 +1803,7 @@ function generateTask4Table() {
         // Рамки периода обязаны действовать и здесь: индексы из ссылки бота смотрят
         // в ПОЛНЫЙ bigData, поэтому ДЗ «862–1340» показывало Кёнигсберг 1945.
         target = _selectHomeworkTargets('task4', TASK_CONFIG.task4, window.bigData, window.state.hwCurrentPool, rowsCount,
-            new Set(getBasePool(actualPeriod)));
+            _hwAllowedRows(window.bigData, actualPeriod));
     }
     // Не «else»: если в периоде ДЗ индексов не осталось, собираем обычным путём —
     // из того же периода, а не из всей истории.

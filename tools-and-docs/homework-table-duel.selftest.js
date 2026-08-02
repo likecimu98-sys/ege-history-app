@@ -568,6 +568,25 @@ assert.match(cloudCode, /_mergeAssignmentLists\(window\.state\.stats\.assignment
     assert.ok(!ctx.state.hwCurrentPool.includes(1) && !ctx.state.hwCurrentPool.includes(3),
         'Строки вне периода обязаны выбывать из пула ДЗ насовсем');
 
+    // ── Рамки задания побеждают фильтр периода ──────────────────────────────
+    // При заходе в ДЗ по ссылке из бота (`?hw=`) фильтр периода не выставляется
+    // вовсе — остаётся «вся история». Проверка по нему пропускала все строки, и ДЗ
+    // «862–1340» продолжало показывать 1945 год уже ПОСЛЕ починки 02.08.
+    ctx.getYearFromFact = d => parseInt(String(d && d.year).match(/\d+/) || 0, 10) || 0;
+    ctx.getBasePool = () => rows;               // фильтр разрешает всё («вся история»)
+    ctx.getActiveHwRange = () => ({ from: 862, to: 1340 });
+    const byAssignment = ctx._hwAllowedRows(rows, 'all');
+    assert.ok(byAssignment.has(rows[0]) && byAssignment.has(rows[2]),
+        'Строки внутри рамок задания обязаны быть разрешены');
+    assert.ok(!byAssignment.has(rows[1]) && !byAssignment.has(rows[3]),
+        'Рамки ДЗ проиграли фильтру периода: при заходе из бота фильтр = «вся история», '
+        + 'и ДЗ снова покажет 1945 год');
+
+    // Нет рамок у задания (этап без годов) — работаем по фильтру, как раньше.
+    ctx.getActiveHwRange = () => null;
+    assert.equal(ctx._hwAllowedRows(rows, 'all').size, rows.length,
+        'Без рамок у задания отбор обязан падать обратно на фильтр периода');
+
     // Без набора-ограничителя поведение прежнее — иначе сломались бы старые вызовы.
     ctx.state.hwCurrentPool = [0, 1, 2, 3];
     const all = ctx._selectHomeworkTargets(
@@ -576,8 +595,14 @@ assert.match(cloudCode, /_mergeAssignmentLists\(window\.state\.stats\.assignment
 }
 
 // Оба сборщика таблиц обязаны передавать рамки периода в отбор ДЗ.
-assert.equal((tableSource.match(/_selectHomeworkTargets\([\s\S]{0,220}?new Set\(getBasePool\(actualPeriod\)\)\)/g) || []).length, 2,
-    'Не оба сборщика таблиц ограничивают ДЗ периодом (нужны и общий, и task4)');
+assert.equal((tableSource.match(/_selectHomeworkTargets\([\s\S]{0,220}?_hwAllowedRows\(/g) || []).length, 2,
+    'Не оба сборщика таблиц ограничивают ДЗ рамками задания (нужны и общий, и task4)');
+// Рамки берём У ЗАДАНИЯ, а не у фильтра: при заходе по ссылке из бота фильтр периода
+// не выставляется вовсе, и по нему разрешено было бы всё.
+assert.match(tableSource, /const range = window\.getActiveHwRange && window\.getActiveHwRange\(\);/,
+    '_hwAllowedRows больше не спрашивает рамки у самого задания');
+assert.match(stateSource, /window\.getActiveHwRange = function/,
+    'Пропала выдача годов активного этапа ДЗ');
 assert.doesNotMatch(tableSource, /_selectHomeworkTargets\('task4', TASK_CONFIG\.task4, window\.bigData, window\.state\.hwCurrentPool, rowsCount\)/,
     'task4 снова берёт строки ДЗ из полного bigData без периода');
 
