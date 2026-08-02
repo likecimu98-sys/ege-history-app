@@ -1756,24 +1756,50 @@ function _dueReviewCounts() {
 // свои годы терял — из-за этого выбор ученика затирался при каждом «Учим новое».
 const OWN_RANGE_FROM = 'ege_own_year_from';
 const OWN_RANGE_TO = 'ege_own_year_to';
-function _ownChosenRange() {
-    const from = parseInt(localStorage.getItem(OWN_RANGE_FROM), 10);
-    const to = parseInt(localStorage.getItem(OWN_RANGE_TO), 10);
-    if (!(from >= 862 && to <= 2026 && to > from)) return null;
-    return { from, to };
+const OWN_PERIOD = 'ege_own_period';
+
+// Явный выбор ученика: {from,to} для точных лет, {era} для эпохи и «всей истории».
+// null — ученик ничего не выбирал, значит действуют рамки учителя.
+function _ownChosenPeriod() {
+    let period = '';
+    try { period = localStorage.getItem(OWN_PERIOD) || ''; } catch (e) { return null; }
+    if (!period) return null;
+    if (period === 'custom') {
+        const from = parseInt(localStorage.getItem(OWN_RANGE_FROM), 10);
+        const to = parseInt(localStorage.getItem(OWN_RANGE_TO), 10);
+        if (!(from >= 862 && to <= 2026 && to > from)) return null;
+        return { from, to };
+    }
+    // «Вся история» — тоже осознанный выбор, а не отсутствие выбора.
+    return { era: period };
 }
-// Запомнить/забыть свой диапазон. Именованная эпоха или «вся история» — выбор годами
-// снимается: иначе он тихо продолжал бы сужать пул после явного отказа от него.
+
+// Запомнить выбор ученика. Пишем ЛЮБОЙ выбор, а не только годы: эпоха, выбранная
+// учеником, обязана побеждать границу класса так же, как точные годы (решение
+// владельца 02.08.2026). Раньше эпохи уходили в ege_last_period, который стоит в
+// приоритете НИЖЕ рамок учителя, — и выбор ученика молча перебивался.
 window.rememberOwnPeriod = function (period, from, to) {
     try {
         if (period === 'custom' && Number(from) >= 862 && Number(to) > Number(from)) {
+            localStorage.setItem(OWN_PERIOD, 'custom');
             localStorage.setItem(OWN_RANGE_FROM, String(Number(from)));
             localStorage.setItem(OWN_RANGE_TO, String(Number(to)));
-        } else {
+        } else if (period) {
+            localStorage.setItem(OWN_PERIOD, String(period));
             localStorage.removeItem(OWN_RANGE_FROM);
             localStorage.removeItem(OWN_RANGE_TO);
         }
     } catch (e) {}
+};
+
+// 🔴 ЕДИНОЕ ПРАВИЛО ПЕРИОДА ДЛЯ ТРЕНАЖЁРА И ГЛАВНОЙ КНОПКИ.
+// Ученик выбрал сам — его выбор; не выбрал — рамки учителя; нет и их — вся история.
+// ДЗ сюда НЕ относится: там рамки задаёт задание (см. getActiveHwRange в state.js).
+// Вызывается на старте занятия, поэтому по умолчанию ученик занимается там, где
+// идёт класс, а не по всей истории.
+window.applyTrainerPeriod = function () {
+    if (window.state && window.state.activeHw) return; // внутри ДЗ рамки чужие
+    _applyWpFilter(_workingPeriod());
 };
 
 function _workingPeriod() {
@@ -1801,7 +1827,7 @@ function _workingPeriod() {
     // редакция обрезала — вернули полный выбор.
     // Проверка стоит ПОСЛЕ этапа ДЗ: внутри домашки рамки задаёт учитель, и там
     // собственный выбор не применяется.
-    const own = _ownChosenRange();
+    const own = _ownChosenPeriod();
     if (own) return own;
     const upto = parseInt(localStorage.getItem('class_current_upto'), 10);
     if (upto >= 862 && upto <= 2026) return { upto };

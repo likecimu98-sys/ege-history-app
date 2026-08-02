@@ -104,6 +104,12 @@ window.quickStartGame = async function(task, mode) {
     }
     const sortYC = $('pg-sort-year-container');
     if (sortYC) sortYC.classList.toggle('hidden', !supportsYearSort(task));
+    // 🔴 Единое правило периода: свой выбор ученика → рамки учителя → вся история.
+    // Без этого простой тренажёр стартовал с «всей историей», даже когда класс идёт
+    // по 862–1340: рамки учителя не подставлялись НИГДЕ по умолчанию, их надо было
+    // выставить руками. Ученица так и жаловалась — «в 4, 5 и 7 попадаются задания со
+    // всей истории». Внутри ДЗ функция сама себя не применяет: там рамки у задания.
+    if (window.applyTrainerPeriod) window.applyTrainerPeriod();
     if (!$('filter-period').value) $('filter-period').value = 'all';
 
     const cfg = TASK_CONFIG[task] || TASK_CONFIG.task4;

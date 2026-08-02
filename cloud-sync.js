@@ -7,14 +7,14 @@
             signInWithCredential, signOut, initializeFirestore, collection, doc, setDoc, getDoc,
             getDocs, addDoc, updateDoc, deleteDoc, deleteField, onSnapshot, query, where,
             orderBy, limit, runTransaction, arrayUnion, arrayRemove, vpsApiFetch, refreshVpsAuth
-        } from "./vps-sync-compat.js?v=20260802-3";
+        } from "./vps-sync-compat.js?v=20260802-4";
 
         // jsPDF грузился с cdnjs.cloudflare.com без SRI — то есть посторонний скрипт
         // исполнялся с полными правами страницы, а при недоступности CDN (у части
         // нашей аудитории это обычное дело) экспорт PDF просто не работал. Довод тот
         // же, что и для telegram-web-app.js: своя копия с того же origin.
         // Версия совпадает с прежней CDN-ной — 2.5.1, лежит в vendor/.
-        const VENDOR_JSPDF = 'vendor/jspdf.umd.min.js?v=20260802-3';
+        const VENDOR_JSPDF = 'vendor/jspdf.umd.min.js?v=20260802-4';
 
         const cloudConfig = { projectId: 'vps-postgresql' };
         
@@ -204,7 +204,7 @@
             'ege_last_task', 'ege_last_period', 'ege_period_chosen',
             // Свой диапазон годами (см. rememberOwnPeriod в ui.js) — выбор конкретного
             // человека, на общем устройстве он не должен переезжать к следующему.
-            'ege_own_year_from', 'ege_own_year_to'
+            'ege_own_period', 'ege_own_year_from', 'ege_own_year_to'
         ];
         function _wipeDeviceIdentity() {
             IDENTITY_WIPE_KEYS.forEach(k => { try { localStorage.removeItem(k); } catch (e) {} });

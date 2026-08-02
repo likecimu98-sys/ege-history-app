@@ -620,8 +620,24 @@ assert.doesNotMatch(tableSource, /_selectHomeworkTargets\('task4', TASK_CONFIG\.
         'Этап ДЗ с точными годами снова не задаёт рабочий период — «Учим новое» уйдёт мимо ДЗ');
     // Выбор ученика: хранится, побеждает лестницу, обрезается границей учителя.
     assert.match(src, /localStorage\.setItem\(OWN_RANGE_FROM/, 'Свой диапазон ученика снова не запоминается');
-    assert.match(src, /const own = _ownChosenRange\(\);\s*\n\s*if \(own\) return own;/,
+    // ── Модель периодов (решение владельца 02.08.2026) ──────────────────────
+    // Три мира, три правила:
+    //   ДЗ       — рамки задаёт УЧИТЕЛЬ, всегда;
+    //   тренажёр — свой выбор ученика, иначе рамки учителя, иначе вся история;
+    //   главная  — то же правило, что у тренажёра.
+    assert.match(src, /const own = _ownChosenPeriod\(\);\s*\n\s*if \(own\) return own;/,
         'Рабочий период больше не отдаёт приоритет выбору ученика');
+    // Тренажёр обязан подставлять рамки учителя САМ: иначе занятие стартует со «всей
+    // историей», хотя класс идёт по своему отрезку. Ровно на это жаловалась ученица.
+    assert.match(src, /window\.applyTrainerPeriod = function/, 'Пропало единое правило периода для тренажёра');
+    assert.match(src, /if \(window\.state && window\.state\.activeHw\) return;/,
+        'Правило тренажёра не отступает внутри ДЗ — перебьёт рамки учителя');
+    assert.match(appSource, /if \(window\.applyTrainerPeriod\) window\.applyTrainerPeriod\(\);/,
+        'Запуск занятия не применяет единое правило периода');
+    // Выбор эпохи учеником обязан побеждать границу класса так же, как точные годы:
+    // раньше эпохи уходили в ege_last_period, а он в приоритете НИЖЕ рамок учителя.
+    assert.match(src, /localStorage\.setItem\(OWN_PERIOD, String\(period\)\)/,
+        'Выбранная учеником эпоха снова не запоминается как его выбор');
     // Решение владельца 02.08.2026: граница класса ограничивает ДОМАШКУ, а не
     // самостоятельные занятия. Обрезка выбора ученика по classUpto — регресс.
     assert.doesNotMatch(src, /Math\.min\(own\.to, classUpto\)/,
@@ -635,7 +651,7 @@ assert.doesNotMatch(tableSource, /_selectHomeworkTargets\('task4', TASK_CONFIG\.
         '_wpYearRange не понимает диапазон {from,to} — свайп получит чужие годы');
 
     // Аккаунт-зависимые ключи обязаны стираться при смене человека на общем устройстве.
-    assert.match(cloudSource, /'ege_own_year_from', 'ege_own_year_to'/,
+    assert.match(cloudSource, /'ege_own_period', 'ege_own_year_from', 'ege_own_year_to'/,
         'Свой диапазон не стирается при смене аккаунта — переедет к следующему ученику');
 }
 
