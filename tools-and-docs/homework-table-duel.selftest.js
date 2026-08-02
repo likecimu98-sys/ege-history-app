@@ -581,4 +581,56 @@ assert.equal((tableSource.match(/_selectHomeworkTargets\([\s\S]{0,220}?new Set\(
 assert.doesNotMatch(tableSource, /_selectHomeworkTargets\('task4', TASK_CONFIG\.task4, window\.bigData, window\.state\.hwCurrentPool, rowsCount\)/,
     'task4 снова берёт строки ДЗ из полного bigData без периода');
 
+// ─── Рабочий период: годы ДЗ и выбор ученика ────────────────────────────────
+// 02.08.2026. Раньше _workingPeriod учитывал у этапа ДЗ ТОЛЬКО именованную эпоху
+// (`it.period !== 'custom'`), а учитель почти всегда задаёт годами: у летней школы все
+// восемь этапов — custom. Рабочий период проваливался на «дошли до года» класса, а
+// если та граница не доехала на устройство — на всю историю. Плюс свой диапазон
+// ученика нигде не хранился (ege_last_period пишет только эпохи) и затирался.
+{
+    const src = read('ui.js');
+
+    // Этап ДЗ, заданный годами, обязан задавать рабочий период.
+    assert.match(src, /it\.period === 'custom' && it\.yearStart && it\.yearEnd/,
+        'Этап ДЗ с точными годами снова не задаёт рабочий период — «Учим новое» уйдёт мимо ДЗ');
+    // Выбор ученика: хранится, побеждает лестницу, обрезается границей учителя.
+    assert.match(src, /localStorage\.setItem\(OWN_RANGE_FROM/, 'Свой диапазон ученика снова не запоминается');
+    assert.match(src, /const own = _ownChosenRange\(\);/, 'Рабочий период больше не смотрит на выбор ученика');
+    assert.match(src, /Math\.min\(own\.to, classUpto\)/,
+        'Выбор ученика не обрезается границей учителя — можно убежать вперёд программы');
+    assert.match(src, /window\.rememberOwnPeriod\(\$\('pg-filter-period'\)\.value/,
+        'Кнопка «Применить» не сохраняет выбранный диапазон');
+    // Диапазон должен доезжать до фильтра и до подписи.
+    assert.match(src, /if \(wp && wp\.from && wp\.to\) \{[\s\S]{0,220}custom-year-start'\)\.value = wp\.from/,
+        '_applyWpFilter не применяет диапазон {from,to}');
+    assert.match(src, /if \(wp\.from && wp\.to\) return \{ from: wp\.from, to: wp\.to \};/,
+        '_wpYearRange не понимает диапазон {from,to} — свайп получит чужие годы');
+
+    // Аккаунт-зависимые ключи обязаны стираться при смене человека на общем устройстве.
+    assert.match(cloudSource, /'ege_own_year_from', 'ege_own_year_to'/,
+        'Свой диапазон не стирается при смене аккаунта — переедет к следующему ученику');
+}
+
+// ─── Гонка записи в облако не должна откатывать прогресс ─────────────────────
+// Аудит ChatGPT/Codex 01.08: `localJson` снимался ДО `await getDoc`, и всё решённое
+// за время запроса откатывалось назад — сначала в памяти, потом в облаке. Для
+// assignments защиту сделали слиянием, остальные поля (totalSolvedEver, factStreaks,
+// dailyStats, mistakesPool, пробники) перезаписываются целиком.
+{
+    // Якорь — ОПРЕДЕЛЕНИЕ функции: просто по имени первым попадается её вызов из выхода.
+    const syncAt = cloudCode.indexOf('window.syncProgressToCloud = async function');
+    assert.ok(syncAt >= 0, 'Не найдена запись прогресса в облако');
+    const body = cloudCode.slice(syncAt, syncAt + 4000);
+    const awaitAt = body.indexOf('await getDoc(doc(studentsCol, canonicalId))');
+    const readAt = body.indexOf("localStorage.getItem('ege_final_storage_v4')");
+    assert.ok(awaitAt >= 0 && readAt >= 0, 'Не найдены запрос профиля и чтение локального снимка');
+    assert.ok(readAt > awaitAt,
+        'Снимок локального состояния снова снимается ДО сетевого запроса. Всё, что ученик '
+        + 'решит за время ожидания, откатится слиянием и уедет в облако откатанным.');
+    assert.match(body, /if \(window\.saveLocal\) window\.saveLocal\(\);[\s\S]{0,200}ege_final_storage_v4/,
+        'Живое состояние не сбрасывается в localStorage перед снятием снимка');
+    assert.match(cloudCode, /deepMergeStates\(\s*\[blobJson, serverJson, freshLocal\]/,
+        'Сверка после приватной записи снова не учитывает то, что решено за время запроса');
+}
+
 console.log('Homework, table uniqueness and silent duel self-test passed.');

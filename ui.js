@@ -963,6 +963,10 @@ window.applyGlobalSettings = function() {
     $('custom-year-start').value = $('pg-custom-year-start').value;
     $('custom-year-end').value = $('pg-custom-year-end').value;
     $('filter-case').value = $('pg-filter-case').value;
+    // Свой диапазон годами запоминаем отдельно — иначе «Учим новое» затирает его
+    // рабочим периодом, а ege_last_period хранит только именованные эпохи.
+    window.rememberOwnPeriod($('pg-filter-period').value,
+        $('pg-custom-year-start').value, $('pg-custom-year-end').value);
     // Ученик явно выбрал период — теперь плашка показывает выбранные годы вместо «Выбрать период».
     window.state.periodChosen = true;
     try { localStorage.setItem('ege_period_chosen', '1'); } catch (e) {}
@@ -1747,11 +1751,59 @@ function _dueReviewCounts() {
 // (задаёт учитель: повторяем ВСЁ от 862 до границы, а не один век) →
 // легаси-период потока → последний период самого ученика.
 // Возвращает { era: 'early'|... } либо { upto: год }, null — если ничего нет.
+// Диапазон, который ученик выставил САМ (кнопка «Применить» в настройках).
+// Хранится отдельно от ege_last_period: тот пишется только для именованных эпох и
+// свои годы терял — из-за этого выбор ученика затирался при каждом «Учим новое».
+const OWN_RANGE_FROM = 'ege_own_year_from';
+const OWN_RANGE_TO = 'ege_own_year_to';
+function _ownChosenRange() {
+    const from = parseInt(localStorage.getItem(OWN_RANGE_FROM), 10);
+    const to = parseInt(localStorage.getItem(OWN_RANGE_TO), 10);
+    if (!(from >= 862 && to <= 2026 && to > from)) return null;
+    return { from, to };
+}
+// Запомнить/забыть свой диапазон. Именованная эпоха или «вся история» — выбор годами
+// снимается: иначе он тихо продолжал бы сужать пул после явного отказа от него.
+window.rememberOwnPeriod = function (period, from, to) {
+    try {
+        if (period === 'custom' && Number(from) >= 862 && Number(to) > Number(from)) {
+            localStorage.setItem(OWN_RANGE_FROM, String(Number(from)));
+            localStorage.setItem(OWN_RANGE_TO, String(Number(to)));
+        } else {
+            localStorage.removeItem(OWN_RANGE_FROM);
+            localStorage.removeItem(OWN_RANGE_TO);
+        }
+    } catch (e) {}
+};
+
 function _workingPeriod() {
     const s = window.state.stats;
     const act = (s.assignments || []).find(a => a.status === 'active');
     const it = act && (act.items || []).find(i => !window.hwItemDone(i));
+    // Этап ДЗ, заданный точными годами, тоже задаёт рабочий период. Раньше здесь
+    // стояло только `it.period !== 'custom'`, то есть ГОДА игнорировались и учитывались
+    // одни лишь именованные эпохи. А учитель почти всегда задаёт ДЗ именно годами
+    // (у летней школы все восемь этапов — custom 862–1340): рабочий период проваливался
+    // на «дошли до года» класса, а без него — на всю историю.
+    if (it && it.period === 'custom' && it.yearStart && it.yearEnd) {
+        return { from: Number(it.yearStart), to: Number(it.yearEnd) };
+    }
     if (it && it.period && it.period !== 'all' && it.period !== 'custom') return { era: it.period };
+    // 🔴 ЯВНЫЙ ВЫБОР УЧЕНИКА ГЛАВНЕЕ ЛЕСТНИЦЫ, но не шире границы учителя.
+    // Ученик, сам выставивший годы в настройках, видел, как «Учим новое» их затирает:
+    // свой диапазон нигде не сохранялся (ege_last_period пишется только для эпох),
+    // и рабочий период каждый раз подставлял своё. Теперь выбор запоминается
+    // (см. applyGlobalSettings) и побеждает — с обрезкой по «дошли до года», чтобы
+    // ученик мог сузить программу под себя, но не убежать вперёд класса.
+    const own = _ownChosenRange();
+    const classUpto = parseInt(localStorage.getItem('class_current_upto'), 10);
+    if (own) {
+        const capped = (classUpto >= 862 && classUpto <= 2026)
+            ? { from: own.from, to: Math.min(own.to, classUpto) }
+            : own;
+        // Обрезка не должна вывернуть диапазон наизнанку.
+        if (capped.to >= capped.from) return capped;
+    }
     const upto = parseInt(localStorage.getItem('class_current_upto'), 10);
     if (upto >= 862 && upto <= 2026) return { upto };
     const cp = localStorage.getItem('class_current_period');
@@ -1763,6 +1815,7 @@ function _workingPeriod() {
 
 function _wpLabel(wp) {
     if (!wp) return '';
+    if (wp.from && wp.to) return `${wp.from}–${wp.to} гг.`;
     if (wp.upto) return `до ${wp.upto} г.`;
     return (TASK_EPOCH_SHORT && TASK_EPOCH_SHORT[wp.era]) || '';
 }
@@ -1774,6 +1827,7 @@ window.EPOCH_YEARS = EPOCH_YEARS;
 // Рабочий период → диапазон лет { from, to } (для свайпа и пресетов), null — нет ограничения.
 function _wpYearRange(wp) {
     if (!wp) return null;
+    if (wp.from && wp.to) return { from: wp.from, to: wp.to };
     if (wp.upto) return { from: 862, to: wp.upto };
     const y = EPOCH_YEARS[wp.era];
     return y ? { from: y[0], to: y[1] } : null;
@@ -1788,7 +1842,12 @@ window.getWorkingSwipeRange = function () { return _wpYearRange(_workingPeriod()
 function _applyWpFilter(wp) {
     const sel = $('filter-period');
     if (!sel) return;
-    if (wp && wp.upto) {
+    if (wp && wp.from && wp.to) {
+        // Точные годы — из этапа ДЗ или из собственного выбора ученика.
+        sel.value = 'custom';
+        if ($('custom-year-start')) $('custom-year-start').value = wp.from;
+        if ($('custom-year-end')) $('custom-year-end').value = wp.to;
+    } else if (wp && wp.upto) {
         sel.value = 'custom';
         if ($('custom-year-start')) $('custom-year-start').value = 862;
         if ($('custom-year-end')) $('custom-year-end').value = wp.upto;

@@ -7,14 +7,14 @@
             signInWithCredential, signOut, initializeFirestore, collection, doc, setDoc, getDoc,
             getDocs, addDoc, updateDoc, deleteDoc, deleteField, onSnapshot, query, where,
             orderBy, limit, runTransaction, arrayUnion, arrayRemove, vpsApiFetch, refreshVpsAuth
-        } from "./vps-sync-compat.js?v=20260801-19";
+        } from "./vps-sync-compat.js?v=20260802-1";
 
         // jsPDF грузился с cdnjs.cloudflare.com без SRI — то есть посторонний скрипт
         // исполнялся с полными правами страницы, а при недоступности CDN (у части
         // нашей аудитории это обычное дело) экспорт PDF просто не работал. Довод тот
         // же, что и для telegram-web-app.js: своя копия с того же origin.
         // Версия совпадает с прежней CDN-ной — 2.5.1, лежит в vendor/.
-        const VENDOR_JSPDF = 'vendor/jspdf.umd.min.js?v=20260801-19';
+        const VENDOR_JSPDF = 'vendor/jspdf.umd.min.js?v=20260802-1';
 
         const cloudConfig = { projectId: 'vps-postgresql' };
         
@@ -201,7 +201,10 @@
             'ege_revoked_hw_ids', 'ege_revoked_hw_before',
             'ege_final_storage_v4', 'ege_pending_cloud_sync', 'ege_last_cloud_sync',
             'ege_sync_identity_warning', 'was_telegram_device', '_lbCacheUpdatedAt',
-            'ege_last_task', 'ege_last_period', 'ege_period_chosen'
+            'ege_last_task', 'ege_last_period', 'ege_period_chosen',
+            // Свой диапазон годами (см. rememberOwnPeriod в ui.js) — выбор конкретного
+            // человека, на общем устройстве он не должен переезжать к следующему.
+            'ege_own_year_from', 'ege_own_year_to'
         ];
         function _wipeDeviceIdentity() {
             IDENTITY_WIPE_KEYS.forEach(k => { try { localStorage.removeItem(k); } catch (e) {} });
@@ -4306,9 +4309,26 @@
             const nw = Date.now();
             const studentsCol = collection(db, 'artifacts', appId, 'public', 'data', 'students');
             try {
-                const localJson = localStorage.getItem('ege_final_storage_v4') || '{}';
                 const currentSnap = await getDoc(doc(studentsCol, canonicalId));
                 if (currentSnap.exists()) {
+                    // 🔴 СНИМОК СВОЕГО СОСТОЯНИЯ БЕРЁМ ПОСЛЕ ОЖИДАНИЯ СЕТИ.
+                    //
+                    // Здесь `localJson` читался ДО `await getDoc` — то есть до похода в
+                    // сеть. Пока запрос летел (на мобильном это секунды), ученик решал
+                    // строки, и всё решённое за это время в снимок не попадало. Дальше
+                    // applyMergedState заменял живые значения результатом слияния СТАРОГО
+                    // снимка — и прогресс откатывался, после чего уезжал в облако уже
+                    // откатанным.
+                    // 01.08 так теряли ДЗ (починили отдельно, _mergeAssignmentLists), но
+                    // ровно та же гонка живёт у totalSolvedEver, factStreaks, dailyStats,
+                    // mistakesPool, пробников и прочих полей — на них защиты по слиянию
+                    // нет, они перезаписываются целиком (CLOUD_STATE_FIELDS).
+                    // Нашёл ChatGPT/Codex в аудите 01.08 — см. журнал в AGENTS.md.
+                    //
+                    // Сбрасываем живое состояние в localStorage и читаем снимок ЗДЕСЬ:
+                    // тогда в слияние едет всё, что ученик успел сделать за время запроса.
+                    try { if (window.saveLocal) window.saveLocal(); } catch (e) {}
+                    const localJson = localStorage.getItem('ege_final_storage_v4') || '{}';
                     const currentProfile = currentSnap.data();
                     // A save may start while the first cloud load is still running.
                     // Re-apply the invite from the just-read server profile before
@@ -4357,7 +4377,14 @@
                 privOk = true;
                 const serverJson = String(savedState?.data?.fullStateJson || '');
                 if (serverJson.length > 10 && serverJson !== blobJson) {
-                    const reconciled = deepMergeStates([blobJson, serverJson]);
+                    // Та же гонка, что и в слиянии выше: `blobJson` снят ДО записи, а
+                    // сверяемся мы уже ПОСЛЕ ответа сервера. Всё, что ученик решил за
+                    // время запроса, живёт только в памяти — и без третьего слагаемого
+                    // applyMergedState откатил бы это обратно.
+                    try { if (window.saveLocal) window.saveLocal(); } catch (e) {}
+                    const freshLocal = localStorage.getItem('ege_final_storage_v4') || '';
+                    const reconciled = deepMergeStates(
+                        [blobJson, serverJson, freshLocal].filter(j => j && j.length > 10));
                     if (reconciled) {
                         applyMergedState(reconciled);
                         localStorage.setItem('ege_final_storage_v4', JSON.stringify(reconciled));
