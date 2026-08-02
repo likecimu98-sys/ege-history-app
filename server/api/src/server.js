@@ -71,11 +71,22 @@ function leaderboardName(raw) {
   return `${parts[1].slice(0, 32)} ${parts[0][0].toUpperCase()}.`;
 }
 
+// Дословная копия getMondayOfCurrentWeek из utils.js — по этой строке сервер
+// отбирает недельный топ, а клиент её же кладёт в weekStartStr. Разъедутся —
+// топ ломается молча, и это уже случалось.
+//
+// 🔴 Только по Москве, НЕ по часам процесса. VPS живёт в Etc/UTC, ученики — в
+// MSK: с 00:00 до 03:00 понедельника по Москве сервер считал, что ещё
+// воскресенье, и продолжал отдавать прошлонедельный топ, а всякий открывший
+// приложение ученик писал себе weekStartStr новой недели и из этого топа
+// исчезал. Москва круглый год UTC+3, перевода часов нет с 2014-го.
+const MSK_OFFSET_MS = 3 * 60 * 60 * 1000;
 function mondayStr(now = new Date()) {
-  const day = now.getDay() || 7;
-  const monday = new Date(now.getFullYear(), now.getMonth(), now.getDate() - day + 1);
+  const msk = new Date(now.getTime() + MSK_OFFSET_MS);
+  const day = msk.getUTCDay() || 7;
+  const monday = new Date(msk.getTime() - (day - 1) * 86400000);
   const pad = value => String(value).padStart(2, '0');
-  return `${monday.getFullYear()}-${pad(monday.getMonth() + 1)}-${pad(monday.getDate())}`;
+  return `${monday.getUTCFullYear()}-${pad(monday.getUTCMonth() + 1)}-${pad(monday.getUTCDate())}`;
 }
 
 // Единственный публичный источник рейтинга. Раньше клиент сам ходил в коллекцию

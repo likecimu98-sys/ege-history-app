@@ -7,14 +7,14 @@
             signInWithCredential, signOut, initializeFirestore, collection, doc, setDoc, getDoc,
             getDocs, addDoc, updateDoc, deleteDoc, deleteField, onSnapshot, query, where,
             orderBy, limit, runTransaction, arrayUnion, arrayRemove, vpsApiFetch, refreshVpsAuth
-        } from "./vps-sync-compat.js?v=20260802-4";
+        } from "./vps-sync-compat.js?v=20260803-1";
 
         // jsPDF грузился с cdnjs.cloudflare.com без SRI — то есть посторонний скрипт
         // исполнялся с полными правами страницы, а при недоступности CDN (у части
         // нашей аудитории это обычное дело) экспорт PDF просто не работал. Довод тот
         // же, что и для telegram-web-app.js: своя копия с того же origin.
         // Версия совпадает с прежней CDN-ной — 2.5.1, лежит в vendor/.
-        const VENDOR_JSPDF = 'vendor/jspdf.umd.min.js?v=20260802-4';
+        const VENDOR_JSPDF = 'vendor/jspdf.umd.min.js?v=20260803-1';
 
         const cloudConfig = { projectId: 'vps-postgresql' };
         
@@ -1430,7 +1430,7 @@
         
         // ─── Вспомогательные функции кабинета учителя ───
 
-        function computeStudentData(s, monStr, monday) {
+        function computeStudentData(s, monStr) {
             let state = {}; try { state = JSON.parse(s.fullStateJson || '{}'); } catch(e) {}
             const stats = state.stats || state || {};
             // Дневной стрик из dailyStats (stats.streak — серия верных ответов, не дни)
@@ -2442,10 +2442,9 @@
             if (wCont) wCont.innerHTML = '<p class="text-center py-4 text-xs font-bold text-gray-500">Загрузка...</p>';
 
             try {
-                const now    = new Date();
-                const day    = now.getDay() || 7;
-                const monday = new Date(now.getFullYear(), now.getMonth(), now.getDate() - day + 1);
-                const monStr = monday.getFullYear() + '-' + String(monday.getMonth()+1).padStart(2,'0') + '-' + String(monday.getDate()).padStart(2,'0');
+                // Кабинет считает «за неделю» по той же границе, что и топ учеников,
+                // иначе учитель и ученик видят разные числа за одну и ту же неделю.
+                const monStr = window.getMondayOfCurrentWeek();
 
                 const studentsCol = collection(db, 'artifacts', appId, 'public', 'data', 'students');
                 // Галочка «только мой класс» переживает переоткрытие кабинета
@@ -2539,7 +2538,7 @@
                 }
                 if (mySeq !== _loadSeq) return;
 
-                const enriched = st.map(s => computeStudentData(s, monStr, monday));
+                const enriched = st.map(s => computeStudentData(s, monStr));
                 enriched.sort((a,b) => (b.totalSolved||0) - (a.totalSolved||0));
                 window._cachedStudents = enriched;
                 renderTeacherHwControl(enriched);
@@ -2666,14 +2665,11 @@
         };
 
         // Понедельник текущей недели в виде YYYY-MM-DD — граница недельного зачёта.
-        // Ровно та же формула живёт в mondayStr() на сервере (server.js): по ней
-        // отбираются строки недельного топа. Разъедутся — ученик будет видеть в
-        // топе одно число, а у себя другое, причём заметят это только в понедельник.
+        // Своей копии формулы здесь больше нет: она одна на проект, в
+        // getMondayOfCurrentWeek (utils.js), и её обязан повторять mondayStr()
+        // на сервере. Расхождение копий и уронило недельный топ 02.08.2026.
         function _mondayISO(now = new Date()) {
-            const day = now.getDay() || 7;
-            const monday = new Date(now.getFullYear(), now.getMonth(), now.getDate() - day + 1);
-            const pad = value => String(value).padStart(2, '0');
-            return `${monday.getFullYear()}-${pad(monday.getMonth() + 1)}-${pad(monday.getDate())}`;
+            return window.getMondayOfCurrentWeek(now);
         }
 
         window.openGlobalTopModal = async function(tab) {

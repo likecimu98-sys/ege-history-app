@@ -175,16 +175,29 @@ function getEraFromFact(fact, task) {
     return fact.c || null;
 }
 
-// ✅ FIX: Единая функция вычисления понедельника текущей недели
-// Корректно обрабатывает воскресенье (getDay() === 0)
-function getMondayOfCurrentWeek() {
-    const now = new Date();
-    const day = now.getDay() || 7; // Воскресенье = 7, не 0
-    const monday = new Date(now.getFullYear(), now.getMonth(), now.getDate() - day + 1);
-    return monday.getFullYear() + '-' +
-        String(monday.getMonth() + 1).padStart(2, '0') + '-' +
-        String(monday.getDate()).padStart(2, '0');
+// Единственная формула границы недели во всём проекте. Её обязан повторять
+// mondayStr() в server/api/src/server.js — по weekStartStr сервер отбирает строки
+// недельного топа, и разъехавшись, эти двое ломают топ молча.
+//
+// 🔴 Считаем ПО МОСКВЕ, а не по часам устройства. Раньше обе стороны брали
+// локальное время: VPS живёт в Etc/UTC, ученики — в MSK, и каждое воскресенье
+// с 00:00 до 03:00 понедельника по Москве сервер был ещё в прошлой неделе, а
+// клиенты уже в новой. Ученик, открывший приложение в этом окне, писал себе
+// weekStartStr следующей недели и пропадал из топа, а сам топ продолжал
+// показывать прошлонедельные числа — «игроки поменялись, топ не обнулился».
+// Москва круглый год UTC+3 (перевода часов нет с 2014-го), поэтому хватает
+// фиксированного сдвига без tzdata.
+const MSK_OFFSET_MS = 3 * 60 * 60 * 1000;
+function getMondayOfCurrentWeek(now = new Date()) {
+    const msk = new Date(now.getTime() + MSK_OFFSET_MS);
+    const day = msk.getUTCDay() || 7; // Воскресенье = 7, не 0
+    const monday = new Date(msk.getTime() - (day - 1) * 86400000);
+    const pad = value => String(value).padStart(2, '0');
+    return monday.getUTCFullYear() + '-' +
+        pad(monday.getUTCMonth() + 1) + '-' +
+        pad(monday.getUTCDate());
 }
+window.getMondayOfCurrentWeek = getMondayOfCurrentWeek;
 
 // ✅ FIX: Единая функция подсчёта weeklyScore
 // Исправлена проблема двойного подсчёта: solved НЕ суммируется с solvedTaskX
