@@ -1789,21 +1789,20 @@ function _workingPeriod() {
         return { from: Number(it.yearStart), to: Number(it.yearEnd) };
     }
     if (it && it.period && it.period !== 'all' && it.period !== 'custom') return { era: it.period };
-    // 🔴 ЯВНЫЙ ВЫБОР УЧЕНИКА ГЛАВНЕЕ ЛЕСТНИЦЫ, но не шире границы учителя.
+    // 🔴 ЯВНЫЙ ВЫБОР УЧЕНИКА ГЛАВНЕЕ ЛЕСТНИЦЫ И ГРАНИЦЫ КЛАССА.
+    //
     // Ученик, сам выставивший годы в настройках, видел, как «Учим новое» их затирает:
-    // свой диапазон нигде не сохранялся (ege_last_period пишется только для эпох),
-    // и рабочий период каждый раз подставлял своё. Теперь выбор запоминается
-    // (см. applyGlobalSettings) и побеждает — с обрезкой по «дошли до года», чтобы
-    // ученик мог сузить программу под себя, но не убежать вперёд класса.
+    // свой диапазон нигде не сохранялся (ege_last_period пишет только эпохи), и рабочий
+    // период каждый раз подставлял своё.
+    //
+    // ⚠️ Обрезки по «дошли до года» здесь НЕТ и быть не должно: граница учителя
+    // ограничивает ДОМАШКУ, а не самостоятельные занятия. Хочет ученик учить XX век,
+    // пока класс на XIII — это его право (решение владельца, 02.08.2026). Первая
+    // редакция обрезала — вернули полный выбор.
+    // Проверка стоит ПОСЛЕ этапа ДЗ: внутри домашки рамки задаёт учитель, и там
+    // собственный выбор не применяется.
     const own = _ownChosenRange();
-    const classUpto = parseInt(localStorage.getItem('class_current_upto'), 10);
-    if (own) {
-        const capped = (classUpto >= 862 && classUpto <= 2026)
-            ? { from: own.from, to: Math.min(own.to, classUpto) }
-            : own;
-        // Обрезка не должна вывернуть диапазон наизнанку.
-        if (capped.to >= capped.from) return capped;
-    }
+    if (own) return own;
     const upto = parseInt(localStorage.getItem('class_current_upto'), 10);
     if (upto >= 862 && upto <= 2026) return { upto };
     const cp = localStorage.getItem('class_current_period');

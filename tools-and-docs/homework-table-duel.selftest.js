@@ -595,9 +595,12 @@ assert.doesNotMatch(tableSource, /_selectHomeworkTargets\('task4', TASK_CONFIG\.
         'Этап ДЗ с точными годами снова не задаёт рабочий период — «Учим новое» уйдёт мимо ДЗ');
     // Выбор ученика: хранится, побеждает лестницу, обрезается границей учителя.
     assert.match(src, /localStorage\.setItem\(OWN_RANGE_FROM/, 'Свой диапазон ученика снова не запоминается');
-    assert.match(src, /const own = _ownChosenRange\(\);/, 'Рабочий период больше не смотрит на выбор ученика');
-    assert.match(src, /Math\.min\(own\.to, classUpto\)/,
-        'Выбор ученика не обрезается границей учителя — можно убежать вперёд программы');
+    assert.match(src, /const own = _ownChosenRange\(\);\s*\n\s*if \(own\) return own;/,
+        'Рабочий период больше не отдаёт приоритет выбору ученика');
+    // Решение владельца 02.08.2026: граница класса ограничивает ДОМАШКУ, а не
+    // самостоятельные занятия. Обрезка выбора ученика по classUpto — регресс.
+    assert.doesNotMatch(src, /Math\.min\(own\.to, classUpto\)/,
+        'Выбор ученика снова обрезается границей учителя — он вправе учить что хочет вне ДЗ');
     assert.match(src, /window\.rememberOwnPeriod\(\$\('pg-filter-period'\)\.value/,
         'Кнопка «Применить» не сохраняет выбранный диапазон');
     // Диапазон должен доезжать до фильтра и до подписи.
