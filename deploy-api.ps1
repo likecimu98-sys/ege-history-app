@@ -147,6 +147,29 @@ fi
 # Keep three snapshots for manual rollback, drop older ones.
 ls -1dt "$LIVE".prev-* 2>/dev/null | tail -n +4 | xargs -r rm -rf
 echo "api release $STAMP healthy on port $PORT"
+
+# Бэкапы и сторож живости — это systemd-таймеры, и они умеют ломаться беззвучно.
+# 07.08.2026 выяснилось, что после переезда на Beget /usr/local/sbin остался пустым:
+# юниты падали с 203/EXEC при каждом тике, таймеры при этом бодро тикали, и неделю
+# никто не знал, что бэкапов базы нет вообще. Деплой — единственное место, куда мы
+# смотрим регулярно, поэтому спрашиваем здесь. Не роняем выкат: API исправен, это
+# предупреждение, а не повод откатывать релиз.
+BROKEN=""
+for u in ege-backup-local ege-backup-telegram ege-restore-check ege-health-watch; do
+  if [ "$(systemctl show -p ActiveState --value "$u.service" 2>/dev/null)" = "failed" ]; then
+    BROKEN="$BROKEN $u"
+  fi
+  EXEC="$(systemctl show -p ExecStart --value "$u.service" 2>/dev/null | sed -n 's/.*path=\([^ ;]*\).*/\1/p' | head -1)"
+  if [ -n "$EXEC" ] && [ ! -x "$EXEC" ]; then
+    BROKEN="$BROKEN $u(нет $EXEC)"
+  fi
+done
+if [ -n "$BROKEN" ]; then
+  echo "!!! ВНИМАНИЕ: сломаны обслуживающие юниты:$BROKEN"
+  echo "!!! Скорее всего не разложены скрипты из server/infra (см. setup-vps.sh)."
+else
+  echo "обслуживающие юниты (бэкапы, сторож) в порядке"
+fi
 '@
     # Substitute the commit via a placeholder rather than interpolating into the
     # here-string: @'...'@ is literal on purpose, and switching it to @"..."@ would

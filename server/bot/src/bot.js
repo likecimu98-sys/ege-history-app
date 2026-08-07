@@ -119,22 +119,44 @@ function recipientsForClass(code) {
     if (ADMIN_ID) set.add(ADMIN_ID);
     return set;
 }
+// 🔴 Пишем в лог ТОЛЬКО когда состав кэша изменился.
+//
+// onSnapshot достался нам от Firestore, где колбэк звали по факту изменения. После
+// переезда на PostgreSQL под ним слой совместимости, который просто ОПРАШИВАЕТ базу
+// раз в несколько секунд и зовёт колбэк на каждый опрос — изменилось что-нибудь или
+// нет. Замер 07.08.2026: пара строк каждые 4 секунды, 290 954 строки за сутки при 44
+// строках настоящих событий. Лог бота стал непригоден для разбора (поиск по «duel»
+// не находил ничего, хотя дуэли шли), и это 11 МБ в сутки на диск.
+//
+// Подпись считаем по составу ключей, а не по размеру: замена учителя один-в-один
+// размер не меняет, а знать о ней надо.
+function cacheSignature(map) {
+    return map.size + ':' + [...map.keys()].sort().join(',');
+}
 function watchTeachers() {
+    let logged = null;
     const attach = () => fdb.collection(`${base}/teachers`).onSnapshot((snap) => {
         for (const change of snap.docChanges()) {
             if (change.type === 'removed') teachers.delete(change.doc.id);
             else teachers.set(change.doc.id, change.doc.data() || {});
         }
+        const sig = cacheSignature(teachers);
+        if (sig === logged) return;
+        logged = sig;
         console.log(`teachers cache: ${teachers.size}`);
     }, (err) => { console.error('watchTeachers error:', err.message); setTimeout(attach, 15000); });
     attach();
 }
 function watchOrgs() {
+    let logged = null;
     const attach = () => fdb.collection(`${base}/orgs`).onSnapshot((snap) => {
         for (const change of snap.docChanges()) {
             if (change.type === 'removed') orgs.delete(change.doc.id);
             else orgs.set(change.doc.id, change.doc.data() || {});
         }
+        const sig = cacheSignature(orgs);
+        if (sig === logged) return;
+        logged = sig;
         console.log(`orgs cache: ${orgs.size}`);
     }, (err) => { console.error('watchOrgs error:', err.message); setTimeout(attach, 15000); });
     attach();

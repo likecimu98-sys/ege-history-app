@@ -431,6 +431,29 @@ async function guardPendingAssignments(client, ref, patch, selfStudentWrite) {
   return next;
 }
 
+// Почему отказали, а не только что отказали. Строка `denied` называла коллекцию,
+// документ и поля — но по ней всё равно нельзя было понять, кто ломился и какое
+// правило сработало.
+// 🔴 Разбор 07.08.2026: 44 отказа подряд на `students/8618432261
+// [_mergedInto,_mergedAt,knownTgId,googleEmail,knownGoogleId] mode=merge` — и
+// определить, чей это был запрос и на каком из двух условий он упал (не свой
+// документ / поля вне учительского списка), было нечем. Дописываем ровно то,
+// что отвечает на «почему»: владелец ли пишущий, учитель ли он и какие поля
+// вышли за учительский белый список. Значений полей по-прежнему НЕ логируем — в
+// патче едут ФИО, код класса и кусок состояния ученика.
+function denyContext(ref, ctx, current, patch) {
+  const own = !!ctx && (ctx.docIds.has(ref.docId) || (!!current?.user_id && current.user_id === ctx.userId));
+  const parts = [`актор=${ctx?.userId || 'гость'}`, `свой=${own ? 'да' : 'нет'}`];
+  if (ref.collection === 'students') {
+    parts.push(`учитель=${ctx?.teacher ? 'да' : 'нет'}`);
+    if (!own) {
+      const extra = Object.keys(patch || {}).filter(key => !TEACHER_STUDENT_WRITE_FIELDS.has(key));
+      if (extra.length) parts.push(`вне_списка_учителя=[${extra.join(',')}]`);
+    }
+  }
+  return parts.join(' ');
+}
+
 async function authorizeWrite(client, ref, ctx, current, patch, mode, { internal = false } = {}) {
   if (internal || ctx?.admin) return true;
   if (!ctx) return false;
@@ -707,7 +730,8 @@ class DocumentStore extends EventEmitter {
         // гаданием по коду.
         // ⚠️ Только коллекция, id документа и имена полей — без значений: в патче
         // едут ФИО, код класса и кусок состояния ученика.
-        const denied = `${ref.collection}/${ref.docId} [${Object.keys(effectivePatch || {}).join(',') || 'без полей'}] mode=${actualMode}`;
+        const denied = `${ref.collection}/${ref.docId} [${Object.keys(effectivePatch || {}).join(',') || 'без полей'}] mode=${actualMode}`
+          + ` ${denyContext(ref, ctx, current, effectivePatch)}`;
         throw Object.assign(new Error('forbidden'), { statusCode: 403, deniedRef: denied });
       }
       if (mode === 'update' && !current) throw Object.assign(new Error('not_found'), { statusCode: 404 });
@@ -802,5 +826,7 @@ module.exports = {
   buildQueryPlan, applyConstraints,
   // Замок на очистку выдачи ДЗ — из-за него домашка перестаёт теряться независимо
   // от версии клиента, поэтому он обязан быть покрыт тестом.
-  guardPendingAssignments
+  guardPendingAssignments,
+  // Объяснение отказа: единственное, по чему потом разбирают инцидент в логах.
+  denyContext
 };

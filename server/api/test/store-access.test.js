@@ -12,7 +12,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const {
   authorizeRead, authorizeCollectionQuery, publicStudent, publicMatch, studentClassView,
-  projectDocument, classDocId, DocumentStore
+  projectDocument, classDocId, DocumentStore, denyContext
 } = require('../src/store');
 const { pool } = require('../src/db');
 
@@ -291,3 +291,52 @@ test('граница недели — полночь по Москве, а не 
 // Сверку формулы с клиентской getMondayOfCurrentWeek держит
 // tools-and-docs/weekly-top.selftest.js: сюда её класть нельзя — deploy-api.ps1
 // гоняет эти тесты на VPS, где клиентского utils.js попросту нет.
+
+// ───────────────────────── объяснение отказа в логе ─────────────────────────
+
+test('отказ называет актора, владение документом и поля вне учительского списка', () => {
+  // Боевой случай 05.08.2026: 44 отказа подряд, и по логу нельзя было понять,
+  // чей это запрос и на каком условии он упал.
+  const row = studentRow('8618432261', 'letnyaya-2wp4tbt');
+  const patch = { _mergedInto: 'x', _mergedAt: 1, knownTgId: '1', googleEmail: 'a@b.c', knownGoogleId: 'g' };
+  const outsider = context({ docIds: ['other'], userId: 77 });
+
+  const text = denyContext(ref('students', '8618432261'), outsider, row, patch);
+  assert.match(text, /актор=77/, 'не видно, чей это был запрос');
+  assert.match(text, /свой=нет/, 'не видно, что документ чужой');
+  assert.match(text, /учитель=нет/, 'не видно роли пишущего');
+  // Именно эти три поля вывели патч за учительский белый список.
+  assert.match(text, /вне_списка_учителя=\[knownTgId,googleEmail,knownGoogleId\]/,
+    'не названы поля, из-за которых патч не прошёл');
+  // Значения полей в лог попадать не должны — там ФИО и почта.
+  assert.doesNotMatch(text, /a@b\.c/, 'в лог утекло значение поля');
+});
+
+test('на своём документе отказ не выдумывает лишних полей', () => {
+  const row = studentRow('555', '7A');
+  const own = context({ docIds: ['555'], userId: 9 });
+  const text = denyContext(ref('students', '555'), own, row, { name: 'Ы' });
+  assert.match(text, /свой=да/);
+  assert.doesNotMatch(text, /вне_списка_учителя/,
+    'для своего документа учительский список не при чём');
+});
+
+test('гость в отказе виден как гость', () => {
+  const text = denyContext(ref('classes', '7A'), null, null, { assignments: [] });
+  assert.match(text, /актор=гость/);
+  assert.match(text, /свой=нет/);
+});
+
+test('объяснение отказа реально подставляется в лог, а не просто существует', () => {
+  // Три теста выше проверяют саму denyContext. Если её перестать вызывать в
+  // write(), они останутся зелёными, а в логе снова будет отказ без причины —
+  // ровно та дыра, из-за которой разбор 05.08 упёрся в тупик. Тест на проводку
+  // приходится делать по исходнику: write() ходит в PostgreSQL, которого в
+  // юнит-прогоне нет.
+  const fs = require('node:fs');
+  const path = require('node:path');
+  const source = fs.readFileSync(path.join(__dirname, '..', 'src', 'store.js'), 'utf8')
+    .split('\n').filter(line => !line.trim().startsWith('//')).join('\n');
+  assert.match(source, /const denied = [\s\S]{0,400}?denyContext\(ref, ctx, current, effectivePatch\)/,
+    'denyContext не подставляется в строку denied — отказ снова будет без причины');
+});
