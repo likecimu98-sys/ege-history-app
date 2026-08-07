@@ -7,14 +7,14 @@
             signInWithCredential, signOut, initializeFirestore, collection, doc, setDoc, getDoc,
             getDocs, addDoc, updateDoc, deleteDoc, deleteField, onSnapshot, query, where,
             orderBy, limit, runTransaction, arrayUnion, arrayRemove, vpsApiFetch, refreshVpsAuth
-        } from "./vps-sync-compat.js?v=20260803-1";
+        } from "./vps-sync-compat.js?v=20260808-1";
 
         // jsPDF грузился с cdnjs.cloudflare.com без SRI — то есть посторонний скрипт
         // исполнялся с полными правами страницы, а при недоступности CDN (у части
         // нашей аудитории это обычное дело) экспорт PDF просто не работал. Довод тот
         // же, что и для telegram-web-app.js: своя копия с того же origin.
         // Версия совпадает с прежней CDN-ной — 2.5.1, лежит в vendor/.
-        const VENDOR_JSPDF = 'vendor/jspdf.umd.min.js?v=20260803-1';
+        const VENDOR_JSPDF = 'vendor/jspdf.umd.min.js?v=20260808-1';
 
         const cloudConfig = { projectId: 'vps-postgresql' };
         
@@ -959,7 +959,17 @@
                         // Теперь непринятая запись ОСТАЁТСЯ в выдаче и будет принята при
                         // следующем заходе, когда причина пропуска отпадёт.
                         const handled = [];
-                        const skipped = { revoked: 0, swept: 0, broken: 0, noIngest: 0 };
+                        // 🔴 У КАЖДОЙ записи должна быть названная судьба.
+                        //
+                        // Разбор 07.08.2026: телеметрия «ДЗ пришло, но не принято» приходила
+                        // со ВСЕМИ счётчиками в нуле — то есть ни одна из известных причин
+                        // не объясняла отказ, и разбирать было нечего. Причина оказалась в
+                        // непосчитанной ветке: ingestAssignment возвращает false, когда ДЗ
+                        // У УЧЕНИКА УЖЕ ЕСТЬ (идемпотентность по id). Это здоровый случай —
+                        // повторная чистка выдачи, — а тревога била как на поломке.
+                        // Поэтому «дубль» теперь отдельный счётчик, и сумма всех исходов
+                        // обязана сойтись с размером выдачи.
+                        const skipped = { revoked: 0, swept: 0, broken: 0, noIngest: 0, duplicate: 0 };
                         pending.forEach(rec => {
                             if (!rec || !rec.id) { skipped.broken++; handled.push(rec); return; }
                             // Отозванное и снятое оптом обработано ОСОЗНАННО — такое снимаем.
@@ -973,6 +983,7 @@
                             if (sweepTs && Number(rec.assignedAt) && Number(rec.assignedAt) < sweepTs) { skipped.swept++; handled.push(rec); return; }
                             if (!window.ingestAssignment) { skipped.noIngest++; return; } // оставляем в выдаче
                             if (window.ingestAssignment(rec)) added++;
+                            else skipped.duplicate++; // такое ДЗ у ученика уже есть — это норма, а не отказ
                             handled.push(rec);
                         });
                         // снимаем обработанные записи с документа (точное соответствие объектов)
@@ -980,12 +991,25 @@
                             updateDoc(docSnap.ref, { pendingAssignments: arrayRemove(...handled) })
                                 .catch(e => window.reportSilent && window.reportSilent('очистка выданного ДЗ', e));
                         }
-                        // Выдача была, а не взяли ничего — это ровно та поломка, про которую
-                        // жалуются «пришло и пропало». Пусть скажет о себе сама.
-                        if (!added) {
+                        // Тревожимся только там, где ученик реально остаётся БЕЗ домашки.
+                        //
+                        // Прежнее условие `!added` било и на здоровом случае — когда всё в
+                        // выдаче у ученика уже есть (дубль). Такие ложные тревоги 03–06.08
+                        // и забили телеметрию, из-за чего настоящие поломки в ней тонули.
+                        // Плохих исходов ровно два: битая запись (её мы СНИМАЕМ с документа,
+                        // то есть теряем безвозвратно) и недоступная приёмка. Плюс сверка
+                        // суммы: если чья-то судьба не попала ни в один счётчик, значит в
+                        // разборе снова появилась слепая ветка — и мы хотим узнать об этом
+                        // первыми, а не от ученика.
+                        const counted = added + skipped.revoked + skipped.swept
+                                      + skipped.broken + skipped.noIngest + skipped.duplicate;
+                        if (skipped.broken || skipped.noIngest || counted !== pending.length) {
                             window.reportSilent && window.reportSilent(
                                 'ДЗ пришло, но не принято',
-                                new Error(`в выдаче=${pending.length} отозвано=${skipped.revoked} снято_оптом=${skipped.swept} битых=${skipped.broken} нет_приёмки=${skipped.noIngest} метка=${sweepTs} первое_ДЗ=${(pending[0] && pending[0].assignedAt) || 'нет'}`));
+                                new Error(`в выдаче=${pending.length} принято=${added} дубль=${skipped.duplicate}`
+                                    + ` отозвано=${skipped.revoked} снято_оптом=${skipped.swept} битых=${skipped.broken}`
+                                    + ` нет_приёмки=${skipped.noIngest} без_объяснения=${pending.length - counted}`
+                                    + ` метка=${sweepTs} первое_ДЗ=${(pending[0] && pending[0].assignedAt) || 'нет'}`));
                         }
                         if (added > 0) {
                             if (window.recomputeHwMirror) window.recomputeHwMirror();

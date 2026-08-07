@@ -35,7 +35,13 @@ db.exec(`CREATE TABLE IF NOT EXISTS users (
 for (const col of [
     'notify_hw INTEGER DEFAULT 1', 'notify_duel INTEGER DEFAULT 1', 'last_duel_notify INTEGER DEFAULT 0',
     'notify_hw_done INTEGER DEFAULT 1', 'notify_join INTEGER DEFAULT 1',
-    'notify_streak INTEGER DEFAULT 1', 'notify_digest INTEGER DEFAULT 1', 'notify_alerts INTEGER DEFAULT 1'
+    'notify_streak INTEGER DEFAULT 1', 'notify_digest INTEGER DEFAULT 1', 'notify_alerts INTEGER DEFAULT 1',
+    // Ученик, не начавший диалог с ботом: Telegram запрещает боту писать первым.
+    // Такому доставка не наладится НИКОГДА, сколько ни повторяй, — а раньше это
+    // было видно только в stderr, и учитель просто не знал, почему ученик «не
+    // видел домашку». Замер 07.08.2026: пятеро активных учеников (четверо из
+    // летней школы) не получали ни одного уведомления.
+    'unreachable_at INTEGER DEFAULT 0'
 ]) { try { db.exec(`ALTER TABLE users ADD COLUMN ${col}`); } catch (e) {} }
 db.exec(`CREATE TABLE IF NOT EXISTS seen_assignments (
     student_id TEXT NOT NULL, assignment_id TEXT NOT NULL,
@@ -199,13 +205,65 @@ const sleep = (ms) => new Promise(r => setTimeout(r, ms));
 // ожидание ввода названия группы после нажатия кнопки «Новая группа»
 const awaitingInput = new Map(); // userId -> { type, ts }
 
+// Отметка «боту нельзя писать первым». Отдельная от notify_* флагов: там ВЫБОР
+// человека, а здесь его технически недостижимое состояние. Снимается сама, как
+// только сообщение прошло, — ученик мог нажать «Старт» в любой момент.
+const markUnreachable = db.prepare('UPDATE users SET unreachable_at=? WHERE id=? AND COALESCE(unreachable_at,0)=0');
+const clearUnreachable = db.prepare('UPDATE users SET unreachable_at=0 WHERE id=? AND COALESCE(unreachable_at,0)<>0');
+function isUnreachable(chatId) {
+    const row = db.prepare('SELECT unreachable_at FROM users WHERE id=?').get(chatId);
+    return !!(row && row.unreachable_at);
+}
 async function sendSafe(chatId, text, opts) {
-    try { return await bot.api.sendMessage(chatId, text, opts); }
+    try {
+        const sent = await bot.api.sendMessage(chatId, text, opts);
+        try { clearUnreachable.run(chatId); } catch (e) {}
+        return sent;
+    }
     catch (e) {
         const desc = (e && e.description) || String(e);
         if (/blocked|deactivated|chat not found/i.test(desc)) db.prepare('UPDATE users SET notify_hw=0, notify_duel=0, notify_hw_done=0, notify_join=0 WHERE id=?').run(chatId);
+        else if (/can't initiate conversation/i.test(desc)) {
+            // Повторять бессмысленно: пока человек сам не напишет боту, доставки не
+            // будет. Запоминаем, чтобы сказать об этом учителю ОДИН раз, а не
+            // молчать и не долбиться в закрытую дверь на каждой выдаче ДЗ.
+            try { markUnreachable.run(Date.now(), chatId); } catch (err) {}
+            console.error(`sendSafe ${chatId}: не начинал диалог с ботом — уведомления не дойдут`);
+        }
         else console.error(`sendSafe ${chatId}:`, desc);
         return null;
+    }
+}
+
+// Сказать учителям класса, что до ученика не достучаться.
+// Дедуп делает вызывающий (у него в области видимости delivered_notify_recipients),
+// здесь только текст и рассылка — иначе учитель получит это на каждую выдачу.
+async function warnTeachersUnreachable(classCode, studentId) {
+    // ⚠️ Задание hw_assigned кода класса НЕ несёт (проверено на боевом: 0 из 167
+    // записей, у hw_assigned_bulk — 0 из 2). Поэтому класс выясняем сами по
+    // профилю ученика, а не полагаемся на поле в задании: дописывать его в
+    // клиенте значило бы тянуть выкат приложения ради строки в логе учителя.
+    let code = classCode;
+    if (!code) {
+        try {
+            const snap = await fdb.doc(`${base}/students/${studentId}`).get();
+            code = snap && snap.exists ? (snap.data() || {}).classCode : '';
+        } catch (e) { return; }
+    }
+    if (!code) return;
+    const classCodeText = String(code);
+    const who = db.prepare('SELECT first_name, last_name, username FROM users WHERE id=?').get(Number(studentId)) || {};
+    const name = [who.first_name, who.last_name].filter(Boolean).join(' ')
+        || (who.username ? '@' + who.username : `id ${studentId}`);
+    for (const tid of recipientsForClass(classCodeText)) {
+        if (String(tid) === String(studentId)) continue;
+        await bot.api.sendMessage(tid,
+            `⚠️ ${name} (группа «${classCodeText}») не получил уведомление о домашке.\n\n`
+            + `Он не начинал диалог с ботом, а первым писать боту Telegram не разрешает. `
+            + `Попроси его открыть @${BOT_USERNAME} и нажать «Старт» — после этого уведомления пойдут. `
+            + `Домашка при этом уже назначена и видна в приложении.`
+        ).catch(() => {});
+        await sleep(50);
     }
 }
 
@@ -1111,8 +1169,22 @@ function watchJobs() {
                             const label = TASK_LABELS[j.task] || j.task || 'задание';
                             const dl = j.deadline ? `\n⏰ Дедлайн: ${new Date(j.deadline + 'T00:00:00').toLocaleDateString('ru-RU')}` : '';
                             const sent = await sendSafe(chatId, `📚 Новое домашнее задание!\n${label} — ${j.total || '?'} строк${dl}\n\nОткрывай и решай 👇`, { reply_markup: appKb() });
-                            if (!sent) throw new Error(`notification_send_failed:${chatId}`);
-                            markRecipientDone.run(jobId, String(chatId));
+                            if (!sent) {
+                                // Не начинал диалог с ботом — повторять бесполезно, доставки не
+                                // будет никогда. Вместо молчаливых пяти попыток говорим учителю.
+                                if (isUnreachable(chatId)) {
+                                    const warnKey = `unreachable:${chatId}`;
+                                    if (!isRecipientDone.get(jobId, warnKey)) {
+                                        markRecipientDone.run(jobId, warnKey);
+                                        await warnTeachersUnreachable(j.classCode, chatId);
+                                    }
+                                    markRecipientDone.run(jobId, String(chatId));
+                                } else {
+                                    throw new Error(`notification_send_failed:${chatId}`);
+                                }
+                            } else {
+                                markRecipientDone.run(jobId, String(chatId));
+                            }
                         }
                         markSeen.run(String(j.studentId), dedupeId);
                     }
@@ -1154,6 +1226,22 @@ function watchJobs() {
                                 // Но и «обработанным» такого ученика не помечаем: без пометки
                                 // он попадёт в повтор задания (до 5 попыток с отсрочкой), а
                                 // те, кому уже отправили, отсеются по isSeen.
+                                if (isUnreachable(chatId)) {
+                                    // Исключение: этот не начинал диалог с ботом. Повторять
+                                    // нечего — Telegram не даст написать первым ни на пятой
+                                    // попытке, ни на пятидесятой. Считать это провалом всей
+                                    // рассылки тоже нельзя, иначе один такой ученик гоняет
+                                    // повтор задания для всего класса. Сообщаем учителю.
+                                    const warnKey = `unreachable:${chatId}`;
+                                    if (!isRecipientDone.get(jobId, warnKey)) {
+                                        markRecipientDone.run(jobId, warnKey);
+                                        await warnTeachersUnreachable(j.classCode, chatId);
+                                    }
+                                    markRecipientDone.run(jobId, String(chatId));
+                                    markSeen.run(studentId, dedupeId);
+                                    await sleep(50);
+                                    continue;
+                                }
                                 failed++;
                                 await sleep(50);
                                 continue;
