@@ -441,17 +441,29 @@ async function guardPendingAssignments(client, ref, patch, selfStudentWrite) {
 // что отвечает на «почему»: владелец ли пишущий, учитель ли он и какие поля
 // вышли за учительский белый список. Значений полей по-прежнему НЕ логируем — в
 // патче едут ФИО, код класса и кусок состояния ученика.
+// ⚠️ Эта функция живёт В ПУТИ ОШИБКИ. Упадёт она — и честный 403 превратится в
+// 500: клиент вместо «нельзя» получит «сервер сломался», ученик увидит заставку,
+// а в логе окажется stack вместо причины отказа. Поэтому здесь ничего не берётся
+// на веру: ни что ctx полный, ни что docIds — это Set. Диагностика не имеет права
+// быть опаснее того, что она диагностирует.
 function denyContext(ref, ctx, current, patch) {
-  const own = !!ctx && (ctx.docIds.has(ref.docId) || (!!current?.user_id && current.user_id === ctx.userId));
-  const parts = [`актор=${ctx?.userId || 'гость'}`, `свой=${own ? 'да' : 'нет'}`];
-  if (ref.collection === 'students') {
-    parts.push(`учитель=${ctx?.teacher ? 'да' : 'нет'}`);
-    if (!own) {
-      const extra = Object.keys(patch || {}).filter(key => !TEACHER_STUDENT_WRITE_FIELDS.has(key));
-      if (extra.length) parts.push(`вне_списка_учителя=[${extra.join(',')}]`);
+  try {
+    const ids = ctx && ctx.docIds;
+    const own = !!ctx && (
+      (ids && typeof ids.has === 'function' && ids.has(ref.docId))
+      || (!!current?.user_id && current.user_id === ctx.userId));
+    const parts = [`актор=${ctx?.userId || 'гость'}`, `свой=${own ? 'да' : 'нет'}`];
+    if (ref.collection === 'students') {
+      parts.push(`учитель=${ctx?.teacher ? 'да' : 'нет'}`);
+      if (!own) {
+        const extra = Object.keys(patch || {}).filter(key => !TEACHER_STUDENT_WRITE_FIELDS.has(key));
+        if (extra.length) parts.push(`вне_списка_учителя=[${extra.join(',')}]`);
+      }
     }
+    return parts.join(' ');
+  } catch (error) {
+    return `контекст отказа не собрался: ${error.message}`;
   }
-  return parts.join(' ');
 }
 
 async function authorizeWrite(client, ref, ctx, current, patch, mode, { internal = false } = {}) {
