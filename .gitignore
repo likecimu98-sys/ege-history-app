@@ -14,3 +14,19 @@ tools-and-docs/outputs/
 
 # Временный файл эпопеи с Яндекс-CDN (IP эджа), в репозитории не нужен
 cdn_ip.txt
+
+# Сборка «учебника истории»: скрипты порождают их из данных, в репозитории не нужны.
+# Раньше они лежали неотслеживаемыми и роняли проверку чистоты дерева в
+# deploy-static.ps1 — выкат сайта вставал на ровном месте (07.08.2026).
+output/
+tmp/
+tools-and-docs/__pycache__/
+tools-and-docs/*_draft.md
+tools-and-docs/microtextbook*.md
+tools-and-docs/ege-atlas-*.md
+tools-and-docs/bank-exact-year-atlas.md
+tools-and-docs/history-book-methodical-standard.md
+tools-and-docs/history-key-event-deep-dives.md
+tools-and-docs/modern-history-deep-dives.md
+tools-and-docs/palace-coups-expanded.md
+tools-and-docs/unified-history-book-framework.md
