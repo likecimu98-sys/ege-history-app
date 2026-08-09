@@ -7,14 +7,14 @@
             signInWithCredential, signOut, initializeFirestore, collection, doc, setDoc, getDoc,
             getDocs, addDoc, updateDoc, deleteDoc, deleteField, onSnapshot, query, where,
             orderBy, limit, runTransaction, arrayUnion, arrayRemove, vpsApiFetch, refreshVpsAuth
-        } from "./vps-sync-compat.js?v=20260808-1";
+        } from "./vps-sync-compat.js?v=20260808-2";
 
         // jsPDF грузился с cdnjs.cloudflare.com без SRI — то есть посторонний скрипт
         // исполнялся с полными правами страницы, а при недоступности CDN (у части
         // нашей аудитории это обычное дело) экспорт PDF просто не работал. Довод тот
         // же, что и для telegram-web-app.js: своя копия с того же origin.
         // Версия совпадает с прежней CDN-ной — 2.5.1, лежит в vendor/.
-        const VENDOR_JSPDF = 'vendor/jspdf.umd.min.js?v=20260808-1';
+        const VENDOR_JSPDF = 'vendor/jspdf.umd.min.js?v=20260808-2';
 
         const cloudConfig = { projectId: 'vps-postgresql' };
         
@@ -3451,20 +3451,39 @@
             catch(e) { return null; }
         }
 
-        function mergeVisualProgress(states, key) {
+        // 🔴 `resetAt` здесь не украшение, а единственное, что делает кнопку «Начать
+        // заново» работающей. Слияние — это ОБЪЕДИНЕНИЕ по id: чего нет в одной копии,
+        // берётся из другой. Поэтому «стало пусто» неотличимо от «ещё не приходило», и
+        // после сброса облачная копия возвращала весь выученный прогресс обратно —
+        // ученик решал один памятник и снова видел «раздел выучен» (08.08.2026).
+        // Удаление выражаем временем: запись, выученная ДО последнего сброса, в слияние
+        // не попадает. Метку времени берём из самой записи (`lastUpdated` ставится на
+        // каждом завершённом раунде, `learnedAt` — в момент «выучено»); записи без
+        // отметки считаются дореформенными и после сброса отбрасываются.
+        function mergeVisualProgress(states, key, resetAt) {
             const out = {};
             const score = (v) => {
                 if (!v || typeof v !== 'object') return 0;
                 return (v.learned ? 1000000 : 0) + (v.streak || 0) * 10000 + (v.correct || 0) * 100 + (v.attempts || 0);
             };
+            const stampOf = (v) => Number(v && (v.lastUpdated || v.learnedAt)) || 0;
             states.forEach(s => {
                 Object.entries(s.stats?.[key] || {}).forEach(([id, val]) => {
+                    if (resetAt && stampOf(val) < resetAt) return; // выучено до сброса — не воскрешаем
                     const cur = out[id];
                     out[id] = !cur || score(val) >= score(cur) ? { ...val } : cur;
                 });
             });
             return out;
         }
+
+        // Разделы визуала целиком: прогресс, счётчик решённых и метка сброса — их нельзя
+        // сливать порознь. Счётчик тоже обязан уважать сброс: обычный Math.max вернул бы
+        // старое число с копии, которая о сбросе ещё не знает.
+        const VISUAL_MERGE_GROUPS = [
+            ['visualArchitectureProgress', 'visualArchitectureSolved', 'visualArchitectureResetAt'],
+            ['visualPaintingProgress', 'visualPaintingSolved', 'visualPaintingResetAt'],
+        ];
 
         function deepMergeStates(jsonStrings) {
             const states = jsonStrings.map(parseSavedStateJson).filter(Boolean);
@@ -3477,8 +3496,12 @@
             // Раньше они брались по max и «воскресали» из старой облачной копии: баннер
             // показывал сотни строк долга при пустой вкладке ДЗ. Зеркало пересчитывается
             // ниже из слитых assignments.
+            // ⚠️ visualArchitectureSolved / visualPaintingSolved ОТСЮДА УБРАНЫ намеренно:
+            // они обнуляются кнопкой «Начать заново», а Math.max по всем копиям возвращал
+            // старое число с устройства, которое о сбросе ещё не знает. Их считает блок
+            // разделов визуала ниже — с оглядкой на метку сброса.
             ['totalSolvedEver','streak','bestSpeedrunScore','flashcardsSolved','totalTimeSpent',
-             'egePoints','visualArchitectureSolved','visualPaintingSolved',
+             'egePoints',
              'duelGames','duelWins','duelLosses','duelDraws','matchGames'].forEach(k => {
                 const hasValue = states.some(s => s.stats?.[k] !== undefined);
                 if (hasValue) st[k] = Math.max(...states.map(s => Number(s.stats?.[k]) || 0));
@@ -3551,8 +3574,17 @@
                     });
                 });
             });
-            st.visualArchitectureProgress = mergeVisualProgress(states, 'visualArchitectureProgress');
-            st.visualPaintingProgress = mergeVisualProgress(states, 'visualPaintingProgress');
+            // Разделы визуала: прогресс, счётчик и метка сброса — одним куском.
+            VISUAL_MERGE_GROUPS.forEach(([progressKey, solvedKey, resetKey]) => {
+                const resetAt = Math.max(0, ...states.map(s => Number(s.stats?.[resetKey]) || 0));
+                if (resetAt) st[resetKey] = resetAt;
+                st[progressKey] = mergeVisualProgress(states, progressKey, resetAt);
+                // Счётчик берём только у копий, которые знают о ПОСЛЕДНЕМ сбросе: у
+                // остальных он от прошлого круга и вернул бы «выучено» задним числом.
+                const aware = states.filter(s => (Number(s.stats?.[resetKey]) || 0) === resetAt);
+                const counts = (aware.length ? aware : states).map(s => Number(s.stats?.[solvedKey]) || 0);
+                st[solvedKey] = counts.length ? Math.max(...counts) : 0;
+            });
             // «ВОВ» (задание 8): выученные задания — союз (выучил на любом устройстве → выучено).
             st.vovLearned = {};
             states.forEach(s => Object.entries(s.stats?.vovLearned || {}).forEach(([id, v]) => { if (v) st.vovLearned[id] = true; }));
@@ -3681,7 +3713,8 @@
             'streak','totalSolvedEver','solvedByTask','flashcardsSolved','eraStats','factStreaks',
             'hwFlashcardsToSolve','hwTask1','hwTask3','hwTask4','hwTask5','hwTask7','totalTimeSpent','timeByTask',
             'bestSpeedrunScore','dailyStats','achievements','achievementsData','egePoints',
-            'visualArchitectureProgress','visualArchitectureSolved','visualPaintingProgress','visualPaintingSolved',
+            'visualArchitectureProgress','visualArchitectureSolved','visualArchitectureResetAt',
+            'visualPaintingProgress','visualPaintingSolved','visualPaintingResetAt',
             'duelElo','duelGames','duelWins','duelLosses','duelDraws',
             'matchBestMs','matchGames','vovLearned','mockExams','mockExamMistakes',
             // Круг по банку ФИПИ. Без записи в этом списке поле не уезжает в облако

@@ -20,7 +20,8 @@
     "test:bot-log-noise": "node tools-and-docs/bot-log-noise.selftest.js",
     "test:bot-unreachable": "node tools-and-docs/bot-unreachable.selftest.js",
     "test:hw-inbox": "node tools-and-docs/hw-inbox-telemetry.selftest.js",
-    "check": "npm run test:sw && npm run test:sw-recovery && npm run test:bot-repair && npm run test:duel-cleanup && npm run test:match-fields && npm run test:security-headers && npm run test:homework-table-duel && npm run test:weekly-top && npm run test:bot-log-noise && npm run test:bot-unreachable && npm run test:hw-inbox && npm run test:state-contract && npm run test:scoring && npm run test:bank && npm run lint:design",
+    "test:visual-reset": "node tools-and-docs/visual-reset.selftest.js",
+    "check": "npm run test:sw && npm run test:sw-recovery && npm run test:bot-repair && npm run test:duel-cleanup && npm run test:match-fields && npm run test:security-headers && npm run test:homework-table-duel && npm run test:weekly-top && npm run test:bot-log-noise && npm run test:bot-unreachable && npm run test:hw-inbox && npm run test:visual-reset && npm run test:state-contract && npm run test:scoring && npm run test:bank && npm run lint:design",
     "test:scoring": "node tools-and-docs/exam-scoring.selftest.js",
     "test:bank": "node tools-and-docs/exam-bank.selftest.js",
     "test:state-contract": "node tools-and-docs/state-fields-contract.selftest.js"

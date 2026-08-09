@@ -36,6 +36,11 @@ window.state = {
         visualArchitectureSolved: 0,
         visualPaintingProgress: {},
         visualPaintingSolved: 0,
+        // Когда ученик последний раз жал «Начать заново» в разделе визуала. Без этой
+        // метки сброс не переживает слияние с облаком: объединение по id не умеет
+        // выражать удаление, и выученное возвращается обратно (см. mergeVisualProgress).
+        visualArchitectureResetAt: 0,
+        visualPaintingResetAt: 0,
         achievements: [],
         achievementsData: { nightOwls: 0, earlyBirds: 0, hwDone: 0, hwPerfect: 0, maxMistakes: 0, hwOnTime: 0, hwLate: 0, hwStreak: 0, hwStreakMax: 0 }
     },
@@ -423,8 +428,8 @@ const SAVE_FIELDS = [
     'streak', 'totalSolvedEver', 'solvedByTask', 'flashcardsSolved',
     'eraStats', 'factStreaks', 'hwFlashcardsToSolve', 'totalTimeSpent', 'timeByTask',
     'egePoints', 'hwTask1', 'hwTask3', 'hwTask4', 'hwTask5', 'hwTask7', 'assignments',
-    'visualArchitectureProgress', 'visualArchitectureSolved',
-    'visualPaintingProgress', 'visualPaintingSolved',
+    'visualArchitectureProgress', 'visualArchitectureSolved', 'visualArchitectureResetAt',
+    'visualPaintingProgress', 'visualPaintingSolved', 'visualPaintingResetAt',
     'bestSpeedrunScore', 'dailyStats', 'achievements', 'achievementsData',
     'duelElo', 'duelGames', 'duelWins', 'duelLosses', 'duelDraws',
     'matchBestMs', 'matchGames', 'vovLearned', 'mockExams', 'mockExamMistakes',

@@ -79,6 +79,7 @@ const VISUAL_CATEGORY_CONFIG = {
         icon: '🏛️',
         progressKey: 'visualArchitectureProgress',
         solvedKey: 'visualArchitectureSolved',
+        resetKey: 'visualArchitectureResetAt',
         data: () => (window.visualArchitectureData || []).filter(item => item.type === 'architecture'),
     },
     painting: {
@@ -87,6 +88,7 @@ const VISUAL_CATEGORY_CONFIG = {
         icon: '🖼️',
         progressKey: 'visualPaintingProgress',
         solvedKey: 'visualPaintingSolved',
+        resetKey: 'visualPaintingResetAt',
         excludedFactTypes: ['style'],
         data: () => (window.visualPaintingData || []).filter(item => item.type === 'painting'),
     },
@@ -632,15 +634,23 @@ window.resetVisualTrainer = function() {
 
 window._doResetVisualTrainer = function(category, cfg) {
     haptic('light');
-    if (category) {
-        window.state.stats[cfg.progressKey] = {};
-        window.state.stats[cfg.solvedKey] = 0;
-    } else {
-        Object.values(VISUAL_CATEGORY_CONFIG).forEach(entry => {
-            window.state.stats[entry.progressKey] = {};
-            window.state.stats[entry.solvedKey] = 0;
-        });
-    }
+    // 🔴 Метка сброса обязательна, иначе сброса ФАКТИЧЕСКИ НЕ ПРОИСХОДИТ.
+    //
+    // Прогресс визуала сливается с облаком по принципу «побеждает копия с бо́льшим
+    // весом», а `learned: true` весит миллион. Локально очистили — на сервере всё
+    // ещё «выучено», и первое же слияние возвращает ВЕСЬ прогресс обратно. Ученик
+    // жал «Начать заново», решал один памятник, и тренажёр снова объявлял раздел
+    // выученным (разбор 08.08.2026). Объединение не умеет удалять — значит,
+    // удаление надо выразить временем: всё, что выучено ДО метки, слияние
+    // отбрасывает (см. mergeVisualProgress в cloud-sync.js).
+    const stampedAt = Date.now();
+    const wipe = entry => {
+        window.state.stats[entry.progressKey] = {};
+        window.state.stats[entry.solvedKey] = 0;
+        window.state.stats[entry.resetKey] = stampedAt;
+    };
+    if (category) wipe(cfg);
+    else Object.values(VISUAL_CATEGORY_CONFIG).forEach(wipe);
     window.state.currentVisualId = null;
     window._visualHistory = [];
     window._visualMultiStep = null;

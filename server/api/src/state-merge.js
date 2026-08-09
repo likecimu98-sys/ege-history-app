@@ -21,18 +21,36 @@ function parse(value) {
   try { return normalize(JSON.parse(value)); } catch (_) { return null; }
 }
 
-function mergeProgress(states, key) {
+// Дословный близнец mergeVisualProgress из cloud-sync.js — расходиться им нельзя:
+// клиент и сервер сливают одно и то же состояние, и разные правила означают, что
+// прогресс «мигает» в зависимости от того, кто слил последним.
+//
+// 🔴 `resetAt` делает работающей кнопку «Начать заново». Слияние — ОБЪЕДИНЕНИЕ по id:
+// чего нет в одной копии, берётся из другой, поэтому «стало пусто» неотличимо от
+// «ещё не приходило». Без метки серверная копия возвращала ученику весь выученный
+// раздел: он жал «заново», решал один памятник и снова видел «раздел выучен»
+// (разбор 08.08.2026). Удаление выражаем временем: запись, выученная ДО последнего
+// сброса, в слияние не попадает.
+function mergeProgress(states, key, resetAt) {
   const out = {};
   const score = value => value && typeof value === 'object'
     ? (value.learned ? 1000000 : 0) + (value.streak || 0) * 10000 + (value.correct || 0) * 100 + (value.attempts || 0)
     : 0;
+  const stampOf = value => Number(value && (value.lastUpdated || value.learnedAt)) || 0;
   for (const state of states) {
     for (const [id, value] of Object.entries(state.stats[key] || {})) {
+      if (resetAt && stampOf(value) < resetAt) continue; // выучено до сброса — не воскрешаем
       if (!out[id] || score(value) >= score(out[id])) out[id] = clone(value);
     }
   }
   return out;
 }
+
+// Разделы визуала: прогресс, счётчик решённых и метка сброса — неразделимая тройка.
+const VISUAL_GROUPS = [
+  ['visualArchitectureProgress', 'visualArchitectureSolved', 'visualArchitectureResetAt'],
+  ['visualPaintingProgress', 'visualPaintingSolved', 'visualPaintingResetAt'],
+];
 
 function mergeStateValues(values) {
   const states = values.map(parse).filter(Boolean);
@@ -42,7 +60,11 @@ function mergeStateValues(values) {
 
   const maxFields = [
     'totalSolvedEver', 'streak', 'bestSpeedrunScore', 'flashcardsSolved', 'totalTimeSpent',
-    'egePoints', 'visualArchitectureSolved', 'visualPaintingSolved', 'duelGames', 'duelWins',
+    // ⚠️ visualArchitectureSolved / visualPaintingSolved отсюда убраны намеренно: они
+    // обнуляются кнопкой «Начать заново», а Math.max вернул бы старое число с копии,
+    // которая о сбросе ещё не знает. Их считает блок разделов визуала — с оглядкой
+    // на метку сброса.
+    'egePoints', 'duelGames', 'duelWins',
     'duelLosses', 'duelDraws', 'matchGames'
   ];
   for (const key of maxFields) {
@@ -91,8 +113,16 @@ function mergeStateValues(values) {
     }
   }
 
-  st.visualArchitectureProgress = mergeProgress(states, 'visualArchitectureProgress');
-  st.visualPaintingProgress = mergeProgress(states, 'visualPaintingProgress');
+  for (const [progressKey, solvedKey, resetKey] of VISUAL_GROUPS) {
+    const resetAt = Math.max(0, ...states.map(s => Number(s.stats[resetKey]) || 0));
+    if (resetAt) st[resetKey] = resetAt;
+    st[progressKey] = mergeProgress(states, progressKey, resetAt);
+    // Счётчик берём только у копий, знающих о ПОСЛЕДНЕМ сбросе: у остальных он от
+    // прошлого круга и вернул бы «выучено» задним числом.
+    const aware = states.filter(s => (Number(s.stats[resetKey]) || 0) === resetAt);
+    const counts = (aware.length ? aware : states).map(s => Number(s.stats[solvedKey]) || 0);
+    st[solvedKey] = counts.length ? Math.max(...counts) : 0;
+  }
   st.vovLearned = {};
   for (const state of states) for (const [id, learned] of Object.entries(state.stats.vovLearned || {})) {
     if (learned) st.vovLearned[id] = true;
