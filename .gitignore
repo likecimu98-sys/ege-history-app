@@ -30,3 +30,7 @@ tools-and-docs/history-key-event-deep-dives.md
 tools-and-docs/modern-history-deep-dives.md
 tools-and-docs/palace-coups-expanded.md
 tools-and-docs/unified-history-book-framework.md
+
+# Скрипты сборки учебника: их активно правят между сессиями, и каждая правка
+# блокировала деплой проверкой чистоты дерева. По решению владельца — вне гита.
+tools-and-docs/*.py
