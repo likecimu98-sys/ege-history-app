@@ -644,7 +644,15 @@ window.learnedCountInPeriod = learnedCountInPeriod;
 function hwItemProgress(item) {
     if (!item) return 0;
     // Зубрёжка: прогресс = число выученных в тренажёре фактов (cram:* в factStreaks).
-    if (item.task === 'cram') return Math.min(item.goal || 0, (window.cramLearnedCount ? window.cramLearnedCount(item.yearStart, item.yearEnd) : 0));
+    // ⚠️ cramLearnedCount возвращает null, пока события зубрёжки не загрузились.
+    // Считать это нулём НЕЛЬЗЯ: галочка слетала с давно сделанного этапа, а у
+    // активного ДЗ ноль записывался в it.done и уезжал учителю (жалоба 09.08.2026).
+    // Пока ответа нет — держим последнее известное значение из item.progress.
+    if (item.task === 'cram') {
+        const live = window.cramLearnedCount ? window.cramLearnedCount(item.yearStart, item.yearEnd) : null;
+        const known = typeof live === 'number' ? live : (Number(item.progress) || 0);
+        return Math.min(item.goal || 0, known);
+    }
     // Выучивание = живой счёт выученных фактов периода по ОБЩЕЙ системе приложения (isFactLearned).
     // Уже выученные факты идут в автозачёт; прогресс в ДЗ и в обычной нарешке — один и тот же счётчик.
     if (item.metric === 'learned') return Math.min(item.goal || 0, learnedCountInPeriod(item.task, item.period, item.yearStart, item.yearEnd).learned);
@@ -863,6 +871,16 @@ function refreshHwState() {
     const removedLegacy = (assignmentsBeforeCleanup - s.assignments.length) + tombstoned;
     let anyCompleted = false;
     s.assignments.forEach(a => {
+        // Живой счёт зубрёжки запоминаем у ЛЮБОГО задания, включая уже сданные:
+        // иначе у сданного этапа галочка так и останется снятой до конца времён —
+        // ниже мы для него ничего не пересчитываем, а item.progress остаётся нулём.
+        // Только вверх: счёт бывает временно недоступен, и просадка тут означала бы
+        // ту же потерю галочки, от которой мы и уходим.
+        (a.items || []).forEach(it => {
+            if (!it || it.task !== 'cram') return;
+            const live = window.cramLearnedCount ? window.cramLearnedCount(it.yearStart, it.yearEnd) : null;
+            if (typeof live === 'number') it.progress = Math.max(Number(it.progress) || 0, live);
+        });
         if (a.status !== 'active') return;
         (a.items || []).forEach(it => { it.done = hwItemDone(it); });
         if ((a.items || []).length && a.items.every(it => it.done)) {

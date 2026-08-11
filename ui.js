@@ -1315,16 +1315,28 @@ window.cramMastered = function(payload) {
 };
 
 // Сколько фактов зубрёжки выучено (для ДЗ-метрики). Опционально по префиксу колоды.
+//
+// 🔴 Возвращает null, когда ответить НЕЧЕМ: события зубрёжки грузятся асинхронно, и
+// пока кэш холодный, cramEventIdsInRange отдаёт null — сопоставить ключи с годами
+// нельзя. Раньше в этом случае возвращался НОЛЬ, и «не знаю» было неотличимо от
+// «не выучено ни одного».
+// Чем это оборачивалось (жалоба 09.08.2026): у давно сданного этапа «Зубрёжка дат»
+// галочка появлялась и снова слетала — 0/6 при полностью сделанном задании. А у
+// АКТИВНОГО ДЗ этот ноль ещё и записывался в it.done (refreshHwState) и уезжал
+// учителю: ученик видел «сделано», учитель — «не сдано».
 window.cramLearnedCount = function(deckPrefixOrFrom, maybeTo) {
     const fs = (window.state && window.state.stats && window.state.stats.factStreaks) || {};
     const isRange = Number.isFinite(Number(deckPrefixOrFrom)) && Number.isFinite(Number(maybeTo));
     const rangeIds = isRange ? window.cramEventIdsInRange(deckPrefixOrFrom, maybeTo) : null;
+    // Диапазон спросили, а сопоставить не с чем — честно говорим «не знаю».
+    // Загрузка уже запущена самим cramEventIdsInRange, и по её окончании
+    // _refreshCramDependentUi перерисует всё с настоящим числом.
+    if (isRange && !rangeIds) return null;
     const deckPrefix = isRange ? null : deckPrefixOrFrom;
     let n = 0;
     for (const k in fs) {
         if (k.indexOf('cram:') !== 0) continue;
         if (rangeIds && !rangeIds.has(k.slice(5))) continue;
-        if (isRange && !rangeIds) continue;
         if (deckPrefix && k.indexOf('cram:' + deckPrefix) !== 0) continue;
         if (window.isFactLearned && window.isFactLearned(fs[k])) n++;
     }

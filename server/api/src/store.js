@@ -511,11 +511,34 @@ async function authorizeWrite(client, ref, ctx, current, patch, mode, { internal
     case 'loginTokens':
       return false;
     case 'notifyJobs': {
-      if (mode !== 'create' || !['hw_assigned', 'hw_done'].includes(patch?.type)) return false;
-      if (JSON.stringify(patch || {}).length > 8192) return false;
+      // 🔴 hw_assigned_bulk ОБЯЗАН быть в списке.
+      //
+      // Клиент давно рассылает одним заданием на весь класс (так чинили «уведомление
+      // зависит от того, дошёл ли цикл по ученикам»), и бот этот тип умеет. А сервер —
+      // нет: тип не проходил проверку, запись падала с 403, и уведомлений о новой
+      // домашке не получал НИКТО. Разбор 11.08.2026: в тот день ДЗ летней школы легло
+      // во входящие 107 ученикам, а заданий рассылки за пять дней — ноль, и ровно один
+      // отказ `notifyJobs/... [type,studentIds,...] mode=create`. Учитель при этом
+      // видел уведомления и думал, что всё работает: до него доходили hw_done,
+      // которые разрешены.
+      if (mode !== 'create' || !['hw_assigned', 'hw_assigned_bulk', 'hw_done'].includes(patch?.type)) return false;
+      // Массовому заданию нужен запас: в нём список id всего класса.
+      const sizeLimit = patch.type === 'hw_assigned_bulk' ? 65536 : 8192;
+      if (JSON.stringify(patch || {}).length > sizeLimit) return false;
       if (patch.type === 'hw_assigned') {
         const student = await targetStudent(client, String(patch.studentId || ''));
         return !!ctx.teacher && teacherCanSeeStudent(ctx, student);
+      }
+      if (patch.type === 'hw_assigned_bulk') {
+        if (!ctx.teacher) return false;
+        const ids = Array.isArray(patch.studentIds) ? patch.studentIds.map(String) : [];
+        if (!ids.length || ids.length > 1000) return false;
+        // Одним запросом, а не по ученику в цикле: класс бывает и в полтораста человек.
+        const rows = await client.query('SELECT doc_id,user_id,data FROM student_profiles WHERE doc_id=ANY($1::text[])', [ids]);
+        const found = new Map(rows.rows.map(row => [String(row.doc_id), row]));
+        // Учитель обязан видеть КАЖДОГО адресата: иначе через список чужих id можно
+        // было бы разослать что угодно вне своего класса.
+        return ids.every(id => teacherCanSeeStudent(ctx, found.get(id)));
       }
       const profiles = await client.query('SELECT doc_id,data FROM student_profiles WHERE user_id=$1 OR doc_id=ANY($2::text[])',
         [ctx.userId, [...ctx.docIds]]);
@@ -834,7 +857,7 @@ module.exports = {
   accessContext, publicStudent, COLLECTIONS,
   // Экспортируются ради регрессионных тестов доступа (test/store-access.test.js):
   // права на чтение — самая дорогая ошибка в этом файле, они обязаны быть покрыты.
-  authorizeRead, authorizeCollectionQuery, publicMatch, studentClassView, projectDocument, classDocId,
+  authorizeRead, authorizeWrite, authorizeCollectionQuery, publicMatch, studentClassView, projectDocument, classDocId,
   buildQueryPlan, applyConstraints,
   // Замок на очистку выдачи ДЗ — из-за него домашка перестаёт теряться независимо
   // от версии клиента, поэтому он обязан быть покрыт тестом.

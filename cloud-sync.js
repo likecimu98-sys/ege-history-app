@@ -7,14 +7,14 @@
             signInWithCredential, signOut, initializeFirestore, collection, doc, setDoc, getDoc,
             getDocs, addDoc, updateDoc, deleteDoc, deleteField, onSnapshot, query, where,
             orderBy, limit, runTransaction, arrayUnion, arrayRemove, vpsApiFetch, refreshVpsAuth
-        } from "./vps-sync-compat.js?v=20260808-2";
+        } from "./vps-sync-compat.js?v=20260812-1";
 
         // jsPDF грузился с cdnjs.cloudflare.com без SRI — то есть посторонний скрипт
         // исполнялся с полными правами страницы, а при недоступности CDN (у части
         // нашей аудитории это обычное дело) экспорт PDF просто не работал. Довод тот
         // же, что и для telegram-web-app.js: своя копия с того же origin.
         // Версия совпадает с прежней CDN-ной — 2.5.1, лежит в vendor/.
-        const VENDOR_JSPDF = 'vendor/jspdf.umd.min.js?v=20260808-2';
+        const VENDOR_JSPDF = 'vendor/jspdf.umd.min.js?v=20260812-1';
 
         const cloudConfig = { projectId: 'vps-postgresql' };
         
@@ -1581,23 +1581,32 @@
                 return learned;
             };
             // Зубрёжка: считаем выученные в тренажёре факты (ключи cram:* в factStreaks ученика).
+            // ⚠️ Возвращает null, когда события зубрёжки в браузере УЧИТЕЛЯ ещё не
+            // загрузились: сопоставить ключи cram:* с годами нечем. Ноль здесь означал
+            // бы «ученик не сделал ничего» — и учитель видел бы 0/6 у сданного этапа
+            // просто потому, что кабинет открыли раньше, чем догрузились данные.
             const cramLearnedCount = (item) => {
                 const hasRange = item && item.yearStart && item.yearEnd;
                 const rangeIds = hasRange && window.cramEventIdsInRange
                     ? window.cramEventIdsInRange(item.yearStart, item.yearEnd)
                     : null;
+                if (hasRange && !rangeIds) return null;
                 let n = 0;
                 for (const k in hwStreaks) {
                     if (k.indexOf('cram:') !== 0) continue;
                     if (rangeIds && !rangeIds.has(k.slice(5))) continue;
-                    if (hasRange && !rangeIds) continue;
                     const v = hwStreaks[k];
                     if (v && ((v.level || 0) > 0 || (v.points || 0) >= 3 || (v.streak || 0) >= 3)) n++;
                 }
                 return n;
             };
+            // Пока счёт неизвестен — опираемся на то, что ученик уже сохранил в progress.
+            const cramProgress = (it) => {
+                const live = cramLearnedCount(it);
+                return typeof live === 'number' ? live : (Number(it.progress) || 0);
+            };
             const itemRemaining = (it) => it.task === 'cram'
-                ? Math.max(0, (it.goal || 0) - cramLearnedCount(it))
+                ? Math.max(0, (it.goal || 0) - cramProgress(it))
                 : (it.metric === 'learned'
                     ? Math.max(0, (it.goal || 0) - learnedCountFor(it.task, it.period))
                     : Math.max(0, (it.goal || 0) - (it.progress || 0)));

@@ -12,7 +12,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const {
   authorizeRead, authorizeCollectionQuery, publicStudent, publicMatch, studentClassView,
-  projectDocument, classDocId, DocumentStore, denyContext
+  projectDocument, classDocId, DocumentStore, denyContext, authorizeWrite
 } = require('../src/store');
 const { pool } = require('../src/db');
 
@@ -291,6 +291,72 @@ test('граница недели — полночь по Москве, а не 
 // Сверку формулы с клиентской getMondayOfCurrentWeek держит
 // tools-and-docs/weekly-top.selftest.js: сюда её класть нельзя — deploy-api.ps1
 // гоняет эти тесты на VPS, где клиентского utils.js попросту нет.
+
+// ─────────────── рассылка уведомлений о новом ДЗ (hw_assigned_bulk) ───────────────
+//
+// 🔴 Разбор 11.08.2026. Клиент давно шлёт ОДНО задание рассылки на весь класс, и бот
+// этот тип умеет — а сервер его не знал и отвечал 403. В итоге ДЗ летней школы легло
+// во входящие 107 ученикам, а уведомление не получил НИКТО: заданий рассылки за пять
+// дней ноль, в логе ровно один отказ на notifyJobs. Учитель при этом видел
+// уведомления (до него доходили разрешённые hw_done) и считал, что всё работает.
+
+const bulkJob = (ids) => ({ type: 'hw_assigned_bulk', studentIds: ids, recId: 'a_1', task: 'task4', total: 10, ts: Date.now() });
+const jobRef = ref('notifyJobs', 'job_1');
+// Клиент отдаёт profiles по списку id — здесь достаточно вернуть учеников с классами.
+const clientWithStudents = (byId) => ({
+  query: async (_sql, params) => ({
+    rows: (params[0] || []).map(id => byId[id]).filter(Boolean),
+  }),
+});
+
+test('учитель рассылает уведомление о ДЗ всему своему классу', async () => {
+  const client = clientWithStudents({
+    '111': studentRow('111', '7A'),
+    '222': studentRow('222', '7A'),
+  });
+  assert.equal(await authorizeWrite(client, jobRef, teacherOf7A, null, bulkJob(['111', '222']), 'create'), true,
+    'массовая рассылка своему классу обязана проходить — иначе о новом ДЗ не узнает никто');
+});
+
+test('в рассылку нельзя подмешать ученика чужого класса', async () => {
+  const client = clientWithStudents({
+    '111': studentRow('111', '7A'),
+    '999': studentRow('999', '9B'),   // чужой
+  });
+  assert.equal(await authorizeWrite(client, jobRef, teacherOf7A, null, bulkJob(['111', '999']), 'create'), false,
+    'через список чужих id можно было бы рассылать вне своего класса');
+});
+
+test('несуществующий адресат рассылку не пропускает', async () => {
+  const client = clientWithStudents({ '111': studentRow('111', '7A') });
+  assert.equal(await authorizeWrite(client, jobRef, teacherOf7A, null, bulkJob(['111', 'нет-такого']), 'create'), false);
+});
+
+test('не учитель рассылку не создаёт, пустой список тоже не проходит', async () => {
+  const client = clientWithStudents({ '111': studentRow('111', '7A') });
+  assert.equal(await authorizeWrite(client, jobRef, guest, null, bulkJob(['111']), 'create'), false,
+    'ученик не имеет права рассылать уведомления классу');
+  assert.equal(await authorizeWrite(client, jobRef, teacherOf7A, null, bulkJob([]), 'create'), false,
+    'пустая рассылка — признак ошибки, а не безобидная запись');
+});
+
+test('размер рассылки не режет большую школу, но у списка есть потолок', async () => {
+  // Летняя школа — полторы сотни человек, она влезала и в прежние 8 КБ, поэтому
+  // размер НЕ был причиной поломки. Но у школы на несколько классов список
+  // десятизначных id перевалит за 8 КБ, и рассылка молча упёрлась бы в тот же
+  // потолок. Берём заведомо больший список, иначе проверка ничего не проверяет
+  // (поймано саботажем: со старым лимитом тест на 150 учеников оставался зелёным).
+  const ids = Array.from({ length: 800 }, (_, i) => String(1000000000 + i));
+  assert.ok(JSON.stringify(bulkJob(ids)).length > 8192, 'тест обязан выходить за прежний лимит');
+  const byId = {};
+  for (const id of ids) byId[id] = studentRow(id, '7A');
+  assert.equal(await authorizeWrite(clientWithStudents(byId), jobRef, teacherOf7A, null, bulkJob(ids), 'create'), true,
+    'большая школа обязана пролезать в лимит размера');
+
+  const tooMany = Array.from({ length: 1001 }, (_, i) => String(i));
+  assert.equal(await authorizeWrite(clientWithStudents({}), jobRef, teacherOf7A, null, bulkJob(tooMany), 'create'), false,
+    'тысяча с лишним адресатов — это уже не класс');
+});
 
 // ───────────────────────── объяснение отказа в логе ─────────────────────────
 
