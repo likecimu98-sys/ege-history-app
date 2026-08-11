@@ -1,0 +1,17 @@
+{
+  "name": "Решай обществознание",
+  "short_name": "Обществознание",
+  "description": "Тематический тренажёр ЕГЭ по обществознанию на основе открытого банка ФИПИ",
+  "lang": "ru",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#f7f1e8",
+  "theme_color": "#a9472b",
+  "categories": ["education"],
+  "icons": [
+    { "src": "assets/icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "assets/icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" }
+  ]
+}

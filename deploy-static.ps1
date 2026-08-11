@@ -4,7 +4,7 @@
 # deploy-vps.ps1 (that is the one-time Firebase->PostgreSQL cutover). Use THIS
 # script for routine site changes. ASCII-only to stay codepage-independent.
 param(
-    [string]$Vps = 'root@5.35.94.238',   # Beget с 01.08.2026; прежний AdminVPS 185.198.152.200 держим месяц как откат
+    [string]$Vps = 'root@5.35.94.238',   # Beget since 2026-08-01; old AdminVPS is rollback only
     [string]$KeyPath = (Join-Path $env:USERPROFILE '.ssh\id_ed25519'),
     [string]$KnownHostsPath = (Join-Path $env:USERPROFILE '.ssh\known_hosts')
 )
@@ -50,13 +50,16 @@ try {
     if ($dirty) { throw 'Commit changes before deploying static.' }
 
     Write-Host 'Packing HEAD...'
-    Invoke-Native { git -c $gitTrust -C $repoRoot archive --format=tar.gz -o $archive HEAD } 'git archive failed'
+    # The social-studies PWA has an independent domain, webroot and deploy path.
+    # Exclude it explicitly even if repository attributes are changed later.
+    Invoke-Native { git -c $gitTrust -C $repoRoot archive --format=tar.gz -o $archive HEAD -- . ':(exclude)ege-social-app' ':(exclude)ege-social-app/**' } 'git archive failed'
 
     $entries = & tar -tzf $archive
     if ($LASTEXITCODE -ne 0) { throw 'Cannot read archive.' }
     if (-not ($entries -match '(^|/)index\.html$')) { throw 'index.html missing from archive.' }
     if ($entries -match '(^|/)server/') { throw 'server/ must not be published.' }
     if ($entries -match '(^|/)firebase-sync\.js$') { throw 'firebase-sync.js must not be published.' }
+    if ($entries -match '(^|/)ege-social-app/') { throw 'ege-social-app/ must use deploy-social-static.ps1.' }
 
     Write-Host 'Uploading to VPS...'
     Invoke-Native { & scp @sshOptions $archive "${Vps}:$remoteUploading" } 'Upload failed'
@@ -115,10 +118,8 @@ fi
 # Keep the three most recent release directories - rollback points at them.
 # Migration snapshots ege-app.rollback-* / *.client-rollback-* are NOT touched:
 # they are the 60-day cutover insurance, different name and different lifetime.
-# `|| true` обязателен: при set -Eeuo pipefail отсутствие каталогов делает ls
-# неуспешным, конвейер падает — и ВЕСЬ деплой сообщает об ошибке, хотя вебрут уже
-# переключён. Ровно так упал первый выкат на Beget 01.08.2026: там ещё не было ни
-# одного ege-app.prev-*, уборка «не нашла что убрать» и уронила скрипт.
+# `|| true` is required with pipefail when no old release directory exists.
+# Without it the cleanup pipeline reports failure after a successful webroot swap.
 ls -1dt /var/www/ege-app.release-* 2>/dev/null | tail -n +4 | xargs -r rm -rf || true
 ls -1dt /var/www/ege-app.prev-* 2>/dev/null | tail -n +3 | xargs -r rm -rf || true
 echo "deployed release $STAMP -> $(readlink -f "$LIVE")"
