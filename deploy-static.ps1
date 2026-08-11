@@ -50,16 +50,13 @@ try {
     if ($dirty) { throw 'Commit changes before deploying static.' }
 
     Write-Host 'Packing HEAD...'
-    # The social-studies PWA has an independent domain, webroot and deploy path.
-    # Exclude it explicitly even if repository attributes are changed later.
-    Invoke-Native { git -c $gitTrust -C $repoRoot archive --format=tar.gz -o $archive HEAD -- . ':(exclude)ege-social-app' ':(exclude)ege-social-app/**' } 'git archive failed'
+    Invoke-Native { git -c $gitTrust -C $repoRoot archive --format=tar.gz -o $archive HEAD -- . } 'git archive failed'
 
     $entries = & tar -tzf $archive
     if ($LASTEXITCODE -ne 0) { throw 'Cannot read archive.' }
     if (-not ($entries -match '(^|/)index\.html$')) { throw 'index.html missing from archive.' }
     if ($entries -match '(^|/)server/') { throw 'server/ must not be published.' }
     if ($entries -match '(^|/)firebase-sync\.js$') { throw 'firebase-sync.js must not be published.' }
-    if ($entries -match '(^|/)ege-social-app/') { throw 'ege-social-app/ must use deploy-social-static.ps1.' }
 
     Write-Host 'Uploading to VPS...'
     Invoke-Native { & scp @sshOptions $archive "${Vps}:$remoteUploading" } 'Upload failed'
