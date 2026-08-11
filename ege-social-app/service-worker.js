@@ -1,6 +1,6 @@
 'use strict';
 
-const APP_VERSION = '2026-08-11-social-1';
+const APP_VERSION = '2026-08-11-social-2';
 const SHELL_CACHE = `ege-social-shell-${APP_VERSION}`;
 const RUNTIME_CACHE = `ege-social-runtime-${APP_VERSION}`;
 const CACHE_READ_TIMEOUT_MS = 350;

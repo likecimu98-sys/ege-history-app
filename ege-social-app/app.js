@@ -2,16 +2,18 @@
   'use strict';
 
   const bank = window.EGE_SOCIAL_BANK;
+  const task13Trainers = window.EGE_SOCIAL_TASK13_TRAINERS;
   const core = window.SocialCore;
-  if (!bank || !core) throw new Error('Учебный банк не загрузился');
+  if (!bank || !task13Trainers || !core) throw new Error('Учебный банк не загрузился');
 
-  const RELEASE = '2026-08-11-social-1';
+  const RELEASE = '2026-08-11-social-2';
   const STORAGE = Object.freeze({
     progress: 'ege_social_progress_v1',
     settings: 'ege_social_settings_v1',
     activeSession: 'ege_social_active_session_v1',
     lastSession: 'ege_social_last_session_v1',
-    theme: 'ege_social_theme_v1'
+    theme: 'ege_social_theme_v1',
+    task13Labs: 'ege_social_task13_labs_v1'
   });
   const TYPE_META = Object.freeze({
     task1: { label: 'Задание №1', short: '№1', icon: '1', description: 'Два лишних термина' },
@@ -29,6 +31,7 @@
   const TASK_BY_ID = new Map(bank.tasks.map(task => [task.id, task]));
   const BLOCK_BY_ID = new Map(bank.blocks.map(block => [block.id, block]));
   const TOPIC_BY_CODE = new Map(bank.topics.map(topic => [topic.code, topic]));
+  const TASK13_TRAINER_BY_ID = new Map(task13Trainers.trainers.map(trainer => [trainer.id, trainer]));
 
   const elements = {
     shell: document.getElementById('appShell'),
@@ -95,13 +98,39 @@
     };
   }
 
+  function emptyLabStat() {
+    return { attempts: 0, correct: 0, wrong: 0, timeMs: 0, completions: 0, lastCompletedAt: 0 };
+  }
+
+  function sanitizeLabStat(value) {
+    const source = value && typeof value === 'object' ? value : {};
+    const stat = emptyLabStat();
+    for (const key of Object.keys(stat)) stat[key] = Math.max(0, Number(source[key]) || 0);
+    return stat;
+  }
+
+  function sanitizeTask13Labs(value) {
+    const source = value && typeof value === 'object' ? value : {};
+    const sessions = {};
+    const stats = {};
+    for (const trainer of task13Trainers.trainers) {
+      const sanitized = core.sanitizeMasterySession(source.sessions && source.sessions[trainer.id], trainer);
+      if (sanitized) sessions[trainer.id] = sanitized;
+      stats[trainer.id] = sanitizeLabStat(source.stats && source.stats[trainer.id]);
+    }
+    return { version: 1, sessions, stats };
+  }
+
   let progress = core.sanitizeProgress(loadJson(STORAGE.progress, null));
   let settings = sanitizeSettings(loadJson(STORAGE.settings, null));
   let session = sanitizeSession(loadJson(STORAGE.activeSession, null));
+  let task13Labs = sanitizeTask13Labs(loadJson(STORAGE.task13Labs, null));
+  let activeTrainerId = '';
   let view = session && !session.completed ? 'session' : 'home';
   let sheetOpen = false;
   let topicSearch = '';
   let toastTimer = 0;
+  let labAdvanceTimer = 0;
 
   function escapeHtml(value) {
     return String(value == null ? '' : value)
@@ -143,6 +172,10 @@
     }
   }
 
+  function saveTask13Labs() {
+    saveJson(STORAGE.task13Labs, task13Labs);
+  }
+
   function accuracy(earned, possible) {
     return possible > 0 ? Math.round((earned / possible) * 100) : 0;
   }
@@ -162,6 +195,20 @@
 
   function currentDaily() {
     return progress.daily[core.moscowDayKey(Date.now())] || 0;
+  }
+
+  function labLaunchCards() {
+    return `<div class="lab-launch-grid">${task13Trainers.trainers.map(trainer => {
+      const saved = task13Labs.sessions[trainer.id];
+      const mastered = saved ? saved.mastered.length : 0;
+      const action = saved && !saved.completed ? 'Продолжить' : saved && saved.completed ? 'Пройти снова' : 'Начать';
+      return `<button class="lab-launch-card" type="button" data-action="open-task13-lab" data-trainer="${trainer.id}">
+        <span class="lab-launch-top"><span class="format-icon">13</span><span class="tag tag--muted">${trainer.cards.length} карточек</span></span>
+        <b>${escapeHtml(trainer.title)}</b>
+        <small>${escapeHtml(trainer.description)}</small>
+        <span class="lab-launch-progress"><span><i style="width:${Math.round((mastered / trainer.cards.length) * 100)}%"></i></span><em>${mastered}/${trainer.cards.length} · ${action}</em></span>
+      </button>`;
+    }).join('')}</div>`;
   }
 
   function homeView() {
@@ -214,6 +261,12 @@
                 <small>${escapeHtml(meta.description)}</small>
               </button>`).join('')}
           </div>
+        </section>
+
+        <section class="section task13-intensive-section">
+          <div class="section-head"><div><p class="eyebrow">Внутри задания №13</p><h2>Интенсив по полномочиям</h2></div></div>
+          <p class="lead">Две колоды доводят каждый факт до серии верных ответов. Ошибка возвращает карточку позже и увеличивает требуемую серию.</p>
+          ${labLaunchCards()}
         </section>
 
         <section class="section">
@@ -286,6 +339,12 @@
     const typeRows = core.aggregate(bank.tasks, progress, task => [task.type]);
     const blockRows = core.aggregate(bank.tasks, progress, task => task.blockIds);
     const topicRows = core.aggregate(bank.tasks, progress, task => task.topicCodes);
+    const labRows = task13Trainers.trainers.map(trainer => {
+      const stat = task13Labs.stats[trainer.id] || emptyLabStat();
+      const saved = task13Labs.sessions[trainer.id];
+      const mastered = saved ? saved.mastered.length : 0;
+      return `<div class="breakdown-row"><div class="breakdown-top"><span>${escapeHtml(trainer.title)}</span><span>${mastered}/${trainer.cards.length} · ${accuracy(stat.correct, stat.attempts)}%</span></div><div class="bar"><span style="width:${Math.round((mastered / trainer.cards.length) * 100)}%"></span></div></div>`;
+    }).join('');
     return `
       <section class="view">
         <header class="page-head"><p class="eyebrow">Личный прогресс</p><h1>Статистика</h1><p class="lead">Считаем попытки, точность по позициям и время. Данные пока хранятся только на этом устройстве.</p></header>
@@ -295,6 +354,7 @@
           <article class="stat-card"><span class="stat-label">Минут в тренировках</span><strong class="stat-value">${minutes}</strong></article>
         </div>
         <section class="section"><div class="section-head"><h2>По типам</h2></div><article class="card card--flat">${breakdownRows(typeRows, key => TYPE_META[key].label)}</article></section>
+        <section class="section"><div class="section-head"><h2>Интенсивы №13</h2></div><article class="card card--flat"><div class="breakdown">${labRows}</div></article></section>
         <section class="section"><div class="section-head"><h2>По блокам</h2></div><article class="card card--flat">${breakdownRows(blockRows, key => BLOCK_BY_ID.get(key).short)}</article></section>
         <section class="section"><div class="section-head"><h2>Темы в работе</h2></div><article class="card card--flat">${breakdownRows(topicRows, key => `${key} ${TOPIC_BY_CODE.get(key).name}`, 12)}</article></section>
       </section>`;
@@ -389,6 +449,71 @@
     return task ? sessionTaskView(task) : `<div class="empty-state"><h3>Задание не найдено</h3><button class="button" data-action="finish-session">На главную</button></div>`;
   }
 
+  function activeTrainer() {
+    return TASK13_TRAINER_BY_ID.get(activeTrainerId) || null;
+  }
+
+  function masteryDots(saved, trainer) {
+    const state = saved.cardState[saved.currentId];
+    const errorFlash = saved.feedback && !saved.feedback.correct;
+    return `<div class="lab-mastery-dots" aria-label="Серия: ${state.streak} из ${state.targetStreak}">${Array.from({ length: state.targetStreak }, (_, index) => {
+      const className = errorFlash && index === 0 ? ' is-error' : index < state.streak ? ' is-earned' : '';
+      return `<span class="lab-mastery-dot${className}"></span>`;
+    }).join('')}</div>`;
+  }
+
+  function labFeedback(saved, trainer) {
+    const feedback = saved.feedback;
+    if (!feedback) return '';
+    if (feedback.correct) {
+      const state = saved.cardState[saved.currentId];
+      const left = Math.max(0, state.targetStreak - state.streak);
+      return `<div class="result-box result-box--success lab-result"><strong>${feedback.mastered ? 'Факт выучен' : 'Верно'}</strong><p>${feedback.mastered ? 'Карточка вышла из колоды.' : `Осталось верных ответов подряд: ${left}.`}</p></div>`;
+    }
+    return `<div class="result-box result-box--error lab-result"><strong>Пока нет</strong><p>${trainer.mechanics.revealCorrectOnMistake ? 'Правильный вариант отмечен зелёным. ' : ''}Карточка вернётся позже. Теперь нужна серия из ${feedback.targetStreak}.</p></div>`;
+  }
+
+  function task13LabView() {
+    const trainer = activeTrainer();
+    const saved = trainer && task13Labs.sessions[trainer.id];
+    if (!trainer || !saved) return `<div class="empty-state"><h3>Интенсив не найден</h3><button class="button" data-action="leave-task13-lab">На главную</button></div>`;
+    if (saved.completed) {
+      const stat = task13Labs.stats[trainer.id] || emptyLabStat();
+      return `<section class="view session-shell"><article class="task-card summary lab-summary">
+        <div class="summary-badge">13</div><p class="eyebrow">Интенсив завершён</p>
+        <h1>Все ${trainer.cards.length} фактов выучены</h1>
+        <p>${escapeHtml(trainer.title)}: каждая карточка прошла требуемую серию верных ответов.</p>
+        <div class="summary-grid"><div><strong>${stat.correct}</strong><small>верных</small></div><div><strong>${stat.wrong}</strong><small>ошибок</small></div><div><strong>${stat.completions}</strong><small>прохождений</small></div></div>
+        <div class="task-actions"><button class="button button--ghost" type="button" data-action="leave-task13-lab">На главную</button><button class="button" type="button" data-action="restart-task13-lab">Пройти снова</button></div>
+      </article></section>`;
+    }
+    const card = trainer.cards.find(item => item.id === saved.currentId);
+    if (!card) return `<div class="empty-state"><h3>Карточка не найдена</h3><button class="button" data-action="leave-task13-lab">На главную</button></div>`;
+    const feedback = saved.feedback;
+    const percent = Math.round((saved.mastered.length / trainer.cards.length) * 100);
+    const queueCount = saved.queue.length + (!feedback || feedback.mastered ? 1 : 0);
+    return `<section class="view session-shell task13-lab-shell">
+      <header class="session-head">
+        <button class="icon-button" type="button" data-action="leave-task13-lab" aria-label="Закрыть интенсив">×</button>
+        <div class="session-progress"><strong>Выучено ${saved.mastered.length} из ${trainer.cards.length}</strong><div class="progress-track"><span style="width:${percent}%"></span></div></div>
+        <span class="lab-queue-count" aria-label="Карточек в колоде">${saved.queue.length + 1}</span>
+      </header>
+      <article class="task-card lab-task-card${feedback ? ' is-answering' : ''}">
+        <div class="task-meta"><span class="tag">Задание №13</span><span class="tag tag--muted">${escapeHtml(trainer.shortTitle)}</span></div>
+        ${masteryDots(saved, trainer)}
+        <div class="task-prompt lab-prompt"><p>${escapeHtml(card.text)}</p></div>
+        <div class="lab-answer-grid lab-answer-grid--${trainer.answers.length}">${trainer.answers.map((answer, index) => {
+          const classes = ['lab-answer'];
+          if (feedback && feedback.selected === answer.id) classes.push(feedback.correct ? 'is-correct' : 'is-wrong');
+          if (feedback && !feedback.correct && trainer.mechanics.revealCorrectOnMistake && feedback.expected === answer.id) classes.push('is-correct', 'is-revealed');
+          return `<button class="${classes.join(' ')}" type="button" data-action="answer-task13-lab" data-answer="${answer.id}" aria-pressed="${Boolean(feedback && feedback.selected === answer.id)}" ${feedback ? 'disabled' : ''}><span class="lab-answer-number">${index + 1}</span><span><b>${escapeHtml(answer.label)}</b><small>${escapeHtml(answer.hint)}</small></span></button>`;
+        }).join('')}</div>
+        ${labFeedback(saved, trainer)}
+        <p class="lab-rule">Карточка считается выученной после ${trainer.mechanics.initialTarget} верных ответов подряд. Ошибка увеличивает серию до ${trainer.mechanics.mistakeTarget}.</p>
+      </article>
+    </section>`;
+  }
+
   function setupSheet() {
     if (!sheetOpen) return '';
     const filters = { mode: settings.mode, types: settings.types, blocks: settings.blocks, topics: settings.topics };
@@ -417,11 +542,13 @@
   }
 
   function render() {
-    const activeSession = view === 'session';
+    window.clearTimeout(labAdvanceTimer);
+    const activeSession = view === 'session' || view === 'task13-lab';
     setSessionChrome(activeSession);
     if (view === 'topics') elements.main.innerHTML = topicsView();
     else if (view === 'stats') elements.main.innerHTML = statsView();
     else if (view === 'session') elements.main.innerHTML = sessionView();
+    else if (view === 'task13-lab') elements.main.innerHTML = task13LabView();
     else elements.main.innerHTML = homeView();
     elements.overlay.innerHTML = setupSheet();
     document.body.style.overflow = sheetOpen ? 'hidden' : '';
@@ -430,10 +557,11 @@
       else button.removeAttribute('aria-current');
     }
     updateThemeButton();
+    if (view === 'task13-lab') scheduleLabAdvance();
   }
 
   function changeView(next) {
-    if (!['home', 'topics', 'stats', 'session'].includes(next)) return;
+    if (!['home', 'topics', 'stats', 'session', 'task13-lab'].includes(next)) return;
     view = next;
     sheetOpen = false;
     render();
@@ -474,6 +602,71 @@
     saveSession();
     sheetOpen = false;
     changeView('session');
+  }
+
+  function startTask13Lab(trainerId, forceRestart) {
+    const trainer = TASK13_TRAINER_BY_ID.get(trainerId);
+    if (!trainer) return;
+    let saved = task13Labs.sessions[trainer.id];
+    if (!saved || saved.completed || forceRestart) {
+      saved = core.createMasterySession(trainer);
+      task13Labs.sessions[trainer.id] = saved;
+      saveTask13Labs();
+    }
+    activeTrainerId = trainer.id;
+    changeView('task13-lab');
+  }
+
+  function answerTask13Lab(selected) {
+    const trainer = activeTrainer();
+    const saved = trainer && task13Labs.sessions[trainer.id];
+    if (!trainer || !saved || saved.feedback || saved.completed) return;
+    const now = Date.now();
+    const answered = core.answerMasteryCard(saved, trainer, selected, undefined, now);
+    if (!answered) return;
+    task13Labs.sessions[trainer.id] = answered.session;
+    const stat = task13Labs.stats[trainer.id] || emptyLabStat();
+    stat.attempts += 1;
+    stat.correct += answered.outcome.correct ? 1 : 0;
+    stat.wrong += answered.outcome.correct ? 0 : 1;
+    stat.timeMs += Math.max(0, Math.min(60 * 60 * 1000, now - saved.cardShownAt));
+    task13Labs.stats[trainer.id] = stat;
+    progress = core.recordDailyActivity(progress, 1, now);
+    saveTask13Labs();
+    saveProgress();
+    render();
+  }
+
+  function advanceTask13Lab() {
+    const trainer = activeTrainer();
+    const saved = trainer && task13Labs.sessions[trainer.id];
+    if (!trainer || !saved || !saved.feedback) return;
+    const next = core.advanceMasterySession(saved, trainer, Date.now());
+    if (!next) return;
+    if (!saved.completed && next.completed) {
+      const stat = task13Labs.stats[trainer.id] || emptyLabStat();
+      stat.completions += 1;
+      stat.lastCompletedAt = Date.now();
+      task13Labs.stats[trainer.id] = stat;
+    }
+    task13Labs.sessions[trainer.id] = next;
+    saveTask13Labs();
+    render();
+  }
+
+  function scheduleLabAdvance() {
+    const trainer = activeTrainer();
+    const saved = trainer && task13Labs.sessions[trainer.id];
+    if (!trainer || !saved || !saved.feedback) return;
+    const delay = Math.max(0, saved.feedback.advanceAt - Date.now());
+    labAdvanceTimer = window.setTimeout(advanceTask13Lab, delay);
+  }
+
+  function leaveTask13Lab() {
+    window.clearTimeout(labAdvanceTimer);
+    saveTask13Labs();
+    changeView('home');
+    showToast('Прогресс интенсива сохранён');
   }
 
   function currentTask() {
@@ -567,7 +760,11 @@
       return;
     }
     const action = target.dataset.action;
-    if (action === 'open-setup') { sheetOpen = true; render(); }
+    if (action === 'open-task13-lab') startTask13Lab(target.dataset.trainer, false);
+    else if (action === 'answer-task13-lab') answerTask13Lab(target.dataset.answer);
+    else if (action === 'restart-task13-lab') startTask13Lab(activeTrainerId, true);
+    else if (action === 'leave-task13-lab') leaveTask13Lab();
+    else if (action === 'open-setup') { sheetOpen = true; render(); }
     else if (action === 'close-setup') {
       if (event.target.closest('[data-sheet]') && !event.target.closest('.close-button')) return;
       sheetOpen = false; render();
@@ -614,6 +811,15 @@
 
   document.addEventListener('keydown', event => {
     if (event.key === 'Escape' && sheetOpen) { sheetOpen = false; render(); return; }
+    if (view === 'task13-lab') {
+      if (event.key === 'Escape') { event.preventDefault(); leaveTask13Lab(); return; }
+      const trainer = activeTrainer();
+      const saved = trainer && task13Labs.sessions[trainer.id];
+      if (!trainer || !saved || saved.feedback || saved.completed || !/^\d$/.test(event.key)) return;
+      const answer = trainer.answers[Number(event.key) - 1];
+      if (answer) { event.preventDefault(); answerTask13Lab(answer.id); }
+      return;
+    }
     if (view !== 'session' || !session || session.completed || event.altKey || event.ctrlKey || event.metaKey) return;
     const task = currentTask();
     const checked = task && session.checked[task.id];

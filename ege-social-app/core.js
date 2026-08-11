@@ -239,6 +239,184 @@
     return filterTasks(tasks, { mode: 'review' }, progressValue, nowValue).length;
   }
 
+  function recordDailyActivity(progressValue, countValue, nowValue) {
+    const progress = sanitizeProgress(progressValue);
+    const count = Math.max(0, Number(countValue) || 0);
+    const now = Number(nowValue) || Date.now();
+    const day = moscowDayKey(now);
+    progress.daily[day] = (progress.daily[day] || 0) + count;
+    progress.updatedAt = now;
+    return progress;
+  }
+
+  function trainerCardMap(trainer) {
+    return new Map((trainer && trainer.cards || []).map(card => [card.id, card]));
+  }
+
+  function createMasterySession(trainer, random, nowValue) {
+    const now = Number(nowValue) || Date.now();
+    const ids = shuffle((trainer && trainer.cards || []).map(card => card.id), random);
+    const cardState = {};
+    for (const id of ids) {
+      cardState[id] = {
+        streak: 0,
+        errorStreak: 0,
+        targetStreak: trainer.mechanics.initialTarget
+      };
+    }
+    return {
+      version: 1,
+      trainerId: trainer.id,
+      queue: ids.slice(1),
+      currentId: ids[0] || null,
+      cardState,
+      mastered: [],
+      attempts: 0,
+      correct: 0,
+      wrong: 0,
+      startedAt: now,
+      cardShownAt: now,
+      feedback: null,
+      completed: ids.length === 0
+    };
+  }
+
+  function sanitizeMasterySession(value, trainer, nowValue) {
+    if (!trainer || !trainer.mechanics || !Array.isArray(trainer.cards)) return null;
+    if (!value || typeof value !== 'object' || value.trainerId !== trainer.id) return null;
+    const now = Number(nowValue) || Date.now();
+    const cards = trainerCardMap(trainer);
+    const known = new Set(cards.keys());
+    const mastered = [...new Set(Array.isArray(value.mastered) ? value.mastered : [])].filter(id => known.has(id));
+    const unavailable = new Set(mastered);
+    const hasFeedback = Boolean(value.feedback && typeof value.feedback === 'object');
+    let currentId = known.has(value.currentId) && (!unavailable.has(value.currentId) || hasFeedback) ? value.currentId : null;
+    if (currentId && !hasFeedback) unavailable.add(currentId);
+    const queue = [];
+    for (const id of Array.isArray(value.queue) ? value.queue : []) {
+      if (!known.has(id) || unavailable.has(id)) continue;
+      unavailable.add(id);
+      queue.push(id);
+    }
+    if (currentId) unavailable.add(currentId);
+    for (const id of known) {
+      if (!unavailable.has(id)) queue.push(id);
+    }
+    if (!currentId && queue.length) currentId = queue.shift();
+
+    const cardState = {};
+    const sourceState = value.cardState && typeof value.cardState === 'object' ? value.cardState : {};
+    for (const id of known) {
+      const state = sourceState[id] && typeof sourceState[id] === 'object' ? sourceState[id] : {};
+      cardState[id] = {
+        streak: Math.max(0, Math.min(trainer.mechanics.mistakeTarget, Number(state.streak) || 0)),
+        errorStreak: Math.max(0, Number(state.errorStreak) || 0),
+        targetStreak: Math.max(
+          trainer.mechanics.initialTarget,
+          Math.min(trainer.mechanics.mistakeTarget, Number(state.targetStreak) || trainer.mechanics.initialTarget)
+        )
+      };
+    }
+
+    let feedback = null;
+    if (value.feedback && typeof value.feedback === 'object' && currentId) {
+      feedback = {
+        selected: String(value.feedback.selected || ''),
+        expected: String(value.feedback.expected || ''),
+        correct: Boolean(value.feedback.correct),
+        mastered: Boolean(value.feedback.mastered),
+        targetStreak: Math.max(0, Number(value.feedback.targetStreak) || 0),
+        answeredAt: Math.max(0, Number(value.feedback.answeredAt) || now),
+        advanceAt: Math.max(0, Number(value.feedback.advanceAt) || now)
+      };
+    }
+
+    const completed = mastered.length === cards.size && !feedback;
+    return {
+      version: 1,
+      trainerId: trainer.id,
+      queue,
+      currentId: completed ? null : currentId,
+      cardState,
+      mastered,
+      attempts: Math.max(0, Number(value.attempts) || 0),
+      correct: Math.max(0, Number(value.correct) || 0),
+      wrong: Math.max(0, Number(value.wrong) || 0),
+      startedAt: Math.max(0, Number(value.startedAt) || now),
+      cardShownAt: Math.max(0, Number(value.cardShownAt) || now),
+      feedback: completed ? null : feedback,
+      completed
+    };
+  }
+
+  function reinsertMasteryCard(queue, id, distanceValue, random) {
+    if (!queue.length) {
+      queue.push(id);
+      return;
+    }
+    const distance = Math.min(Math.max(0, Number(distanceValue) || 0), queue.length);
+    const rng = typeof random === 'function' ? random : Math.random;
+    const index = Math.floor(rng() * (queue.length - distance + 1)) + distance;
+    queue.splice(index, 0, id);
+  }
+
+  function answerMasteryCard(value, trainer, selectedValue, random, nowValue) {
+    const now = Number(nowValue) || Date.now();
+    const session = sanitizeMasterySession(value, trainer, now);
+    if (!session || session.completed || session.feedback || !session.currentId) return null;
+    const card = trainerCardMap(trainer).get(session.currentId);
+    if (!card) return null;
+    const selected = String(selectedValue || '');
+    const correct = selected === card.answer;
+    const state = session.cardState[card.id];
+    let mastered = false;
+
+    session.attempts += 1;
+    if (correct) {
+      session.correct += 1;
+      state.streak += 1;
+      state.errorStreak = 0;
+      mastered = state.streak >= state.targetStreak;
+      if (mastered) session.mastered.push(card.id);
+      else reinsertMasteryCard(session.queue, card.id, trainer.mechanics.reinsertDistance, random);
+    } else {
+      session.wrong += 1;
+      state.streak = 0;
+      state.errorStreak += 1;
+      if (state.errorStreak >= trainer.mechanics.mistakesBeforePenalty) {
+        state.targetStreak = trainer.mechanics.mistakeTarget;
+      }
+      reinsertMasteryCard(session.queue, card.id, trainer.mechanics.reinsertDistance, random);
+    }
+
+    const delay = correct ? trainer.mechanics.correctDelayMs : trainer.mechanics.wrongDelayMs;
+    session.feedback = {
+      selected,
+      expected: card.answer,
+      correct,
+      mastered,
+      targetStreak: state.targetStreak,
+      answeredAt: now,
+      advanceAt: now + delay
+    };
+    return { session, outcome: { correct, expected: card.answer, selected, mastered, targetStreak: state.targetStreak } };
+  }
+
+  function advanceMasterySession(value, trainer, nowValue) {
+    const now = Number(nowValue) || Date.now();
+    const session = sanitizeMasterySession(value, trainer, now);
+    if (!session || session.completed) return session;
+    session.feedback = null;
+    if (!session.queue.length) {
+      session.currentId = null;
+      session.completed = true;
+      return session;
+    }
+    session.currentId = session.queue.shift();
+    session.cardShownAt = now;
+    return session;
+  }
+
   return Object.freeze({
     REVIEW_INTERVALS,
     digits,
@@ -250,6 +428,11 @@
     filterTasks,
     buildSession,
     aggregate,
-    dueCount
+    dueCount,
+    recordDailyActivity,
+    createMasterySession,
+    sanitizeMasterySession,
+    answerMasteryCard,
+    advanceMasterySession
   });
 });
