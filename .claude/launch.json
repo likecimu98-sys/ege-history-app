@@ -8,6 +8,12 @@
       "port": 8123
     },
     {
+      "name": "social-app",
+      "runtimeExecutable": "python",
+      "runtimeArgs": ["-m", "http.server", "8124", "--directory", "../ege-social-app-main/app"],
+      "port": 8124
+    },
+    {
       "name": "fipi-parser",
       "runtimeExecutable": "node",
       "runtimeArgs": ["tools/fipi-parser/server.js"],

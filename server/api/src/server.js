@@ -4,13 +4,13 @@ const http = require('http');
 const { WebSocket, WebSocketServer } = require('ws');
 const { env, originAllowed } = require('./env');
 const { pool, tx, runMigrations } = require('./db');
-const { verifyInitData } = require('./initdata');
+const { verifyInitData, verifyInitDataAny } = require('./initdata');
 const { timingSafeEqualText, randomToken, sha256 } = require('./crypto');
 const { json, redirect, readJson, requestIp, safeReturnTo, parseCookies } = require('./http');
 const {
   resolveIdentity, loadUser, createSession, sessionCookies, clearSessionCookies, getSession,
   revokeSession, extendSession, csrfValid, userForClient, createGuest, createGoogleStart, finishGoogle,
-  claimLegacyDocument,
+  claimLegacyDocument, originForRequest, googleRedirectUri,
 } = require('./auth');
 const { mergeStateValues } = require('./state-merge');
 const { DocumentStore, accessContext } = require('./store');
@@ -19,6 +19,9 @@ const { quotaState, consumeQuota, clampAmount } = require('./quota');
 const { recordClientError, recordEvents, metricsSummary, MAX_EVENTS_PER_MINUTE } = require('./telemetry');
 const { countStaleGuests, deleteStaleGuests } = require('./guest-cleanup');
 const { startFirebaseMirror } = require('./firebase-mirror');
+const { mondayStr } = require('./moscow-time');
+const { leaderboardName } = require('./display-name');
+const { handleSocial, PREFIX: SOCIAL_PREFIX } = require('./subjects/social/routes');
 
 // Метка выката, которую отдаёт /api/v1/health. Раньше здесь стояла константа
 // '1.0.0', и по ответу нельзя было понять, доехал ли деплой API: у статики версия
@@ -59,35 +62,11 @@ function requireSession(session) {
   return session;
 }
 
-// В рейтинге человека видят посторонние, поэтому полное имя туда уходить не должно.
-// Ученики вводят «Фамилия Имя» (плейсхолдер онбординга — «Иванов Иван, 11 'А'»),
-// класс иногда дописывают через запятую. Показываем имя и инициал фамилии: «Иван И.».
-function leaderboardName(raw) {
-  const cleaned = String(raw == null ? '' : raw).split(',')[0].trim().replace(/\s+/g, ' ');
-  if (!cleaned) return 'Аноним';
-  const parts = cleaned.split(' ').filter(Boolean);
-  // Одно слово — это обычно ник («Ученик»), а не фамилия; сокращать нечего.
-  if (parts.length < 2) return parts[0].slice(0, 32);
-  return `${parts[1].slice(0, 32)} ${parts[0][0].toUpperCase()}.`;
-}
-
-// Дословная копия getMondayOfCurrentWeek из utils.js — по этой строке сервер
-// отбирает недельный топ, а клиент её же кладёт в weekStartStr. Разъедутся —
-// топ ломается молча, и это уже случалось.
-//
-// 🔴 Только по Москве, НЕ по часам процесса. VPS живёт в Etc/UTC, ученики — в
-// MSK: с 00:00 до 03:00 понедельника по Москве сервер считал, что ещё
-// воскресенье, и продолжал отдавать прошлонедельный топ, а всякий открывший
-// приложение ученик писал себе weekStartStr новой недели и из этого топа
-// исчезал. Москва круглый год UTC+3, перевода часов нет с 2014-го.
-const MSK_OFFSET_MS = 3 * 60 * 60 * 1000;
-function mondayStr(now = new Date()) {
-  const msk = new Date(now.getTime() + MSK_OFFSET_MS);
-  const day = msk.getUTCDay() || 7;
-  const monday = new Date(msk.getTime() - (day - 1) * 86400000);
-  const pad = value => String(value).padStart(2, '0');
-  return `${monday.getUTCFullYear()}-${pad(monday.getUTCMonth() + 1)}-${pad(monday.getUTCDate())}`;
-}
+// leaderboardName (сокращение имени для рейтинга) и mondayStr (понедельник по
+// Москве) переехали в src/display-name.js и src/moscow-time.js: их же использует
+// предметный рейтинг обществознания, а копия правил приватности и границы недели
+// разъезжается с оригиналом молча. Реэкспорт внизу файла сохранён — на них
+// ссылаются существующие тесты.
 
 // Единственный публичный источник рейтинга. Раньше клиент сам ходил в коллекцию
 // students через store.query — то есть ради двадцати строк таблицы вычитывал реестр
@@ -263,6 +242,52 @@ async function handleInternal(req, res, url) {
     });
     return json(res, 200, { jobs: claimed.map(row => ({ id: row.doc_id, ...row.data })) });
   }
+  // Выдача роли учителя в обществознании. Внутренний маршрут под
+  // INTERNAL_API_TOKEN — это единственный способ создать ПЕРВОГО учителя
+  // предмета: пользовательского маршрута, повышающего самого себя, нет и быть
+  // не должно.
+  //
+  // Бот знает человека только по Telegram ID, поэтому принимаем и его — иначе
+  // администратору пришлось бы руками искать uuid в базе на каждого учителя.
+  if (req.method === 'POST' && url.pathname === '/internal/v1/subjects/social/roles') {
+    const body = await readJson(req, 4096);
+    const socialStore = require('./subjects/social/store');
+    let userId = String(body.userId || '');
+    if (!userId && body.telegramId) {
+      const found = await socialStore.whoIs(String(body.telegramId));
+      if (!found) throw Object.assign(new Error('user_not_found'), { statusCode: 404 });
+      userId = found.userId;
+    }
+    if (!userId) throw Object.assign(new Error('user_not_found'), { statusCode: 404 });
+    const updated = await socialStore.setRole(userId, String(body.role || 'teacher'));
+    await pool.query('INSERT INTO audit_events(actor_user_id,action,target,details) VALUES(NULL,$1,$2,$3)',
+      ['social.role.set', userId, JSON.stringify({ role: updated.role })]);
+    return json(res, 200, { userId: updated.user_id, role: updated.role });
+  }
+  // Кто это по Telegram ID. Бот показывает учителю ссылку на кабинет, а
+  // ученику — нет; без этого он не отличит одного от другого.
+  if (req.method === 'POST' && url.pathname === '/internal/v1/subjects/social/whoami') {
+    const body = await readJson(req, 4096);
+    const socialStore = require('./subjects/social/store');
+    return json(res, 200, { user: await socialStore.whoIs(String(body.telegramId || '')) });
+  }
+  // 🔴 Очередь уведомлений предмета — ОТДЕЛЬНАЯ от notification_jobs истории.
+  // Общая очередь разбирается ботом истории: попади туда социальное задание, он
+  // попытается отправить его своим токеном, и ученик обществознания не получит
+  // ничего. Разные маршруты и разные таблицы делают такую ошибку невозможной.
+  if (req.method === 'POST' && url.pathname === '/internal/v1/subjects/social/notifications/claim') {
+    const body = await readJson(req, 4096).catch(() => ({}));
+    const socialStore = require('./subjects/social/store');
+    return json(res, 200, { jobs: await socialStore.claimNotifications(body.limit) });
+  }
+  const socialAck = url.pathname.match(/^\/internal\/v1\/subjects\/social\/notifications\/(\d+)\/(ack|fail)$/);
+  if (req.method === 'POST' && socialAck) {
+    const body = await readJson(req, 4096).catch(() => ({}));
+    const socialStore = require('./subjects/social/store');
+    if (socialAck[2] === 'ack') await socialStore.ackNotification(socialAck[1]);
+    else await socialStore.failNotification(socialAck[1], body.error);
+    return json(res, 200, { ok: true });
+  }
   const ack = url.pathname.match(/^\/internal\/v1\/notifications\/([^/]+)\/(ack|fail)$/);
   if (req.method === 'POST' && ack) {
     const body = await readJson(req);
@@ -340,10 +365,14 @@ async function handle(req, res) {
       return json(res, 200, { user: userForClient(result.user) }, headers);
     }
     if (req.method === 'POST' && (url.pathname === '/api/v1/auth/telegram' || url.pathname === '/auth/telegram')) {
-      if (!env.botToken) throw Object.assign(new Error('telegram_not_configured'), { statusCode: 503 });
+      // Токенов может быть два: у истории и у обществознания разные боты, а
+      // значит и разная подпись initData. Telegram ID человека один на оба, так
+      // что вход через любой бот ведёт в один и тот же аккаунт.
+      const botTokens = [env.botToken, env.socialBotToken].filter(Boolean);
+      if (!botTokens.length) throw Object.assign(new Error('telegram_not_configured'), { statusCode: 503 });
       if (!limiter.take(`${ip}:auth`, 20).ok) return json(res, 429, { error: 'rate_limited' });
       const body = await readJson(req, 32768);
-      const verified = verifyInitData(String(body.initData || ''), env.botToken, { maxAgeSec: 86400 });
+      const verified = verifyInitDataAny(String(body.initData || ''), botTokens, { maxAgeSec: 86400 });
       if (!verified.ok) throw Object.assign(new Error(verified.reason || 'telegram_invalid'), { statusCode: 401 });
       const tgUser = verified.user || {};
       const userId = await resolveIdentity({
@@ -362,15 +391,17 @@ async function handle(req, res) {
       }
       if (!limiter.take(`${ip}:google`, 10, 10 * 60 * 1000).ok) return json(res, 429, { error: 'rate_limited' });
       const returnTo = safeReturnTo(url.searchParams.get('returnTo') || '/');
-      return redirect(res, await createGoogleStart(session, returnTo));
+      // Уходим и возвращаемся на ТОТ ЖЕ хост: кука сессии принадлежит хосту, и
+      // возврат на другой оставил бы человека невошедшим — молча.
+      return redirect(res, await createGoogleStart(session, returnTo, googleRedirectUri(req)));
     }
     if (req.method === 'GET' && url.pathname === '/api/v1/auth/google/callback') {
       const code = url.searchParams.get('code') || '';
       const state = url.searchParams.get('state') || '';
-      const result = await finishGoogle(req, code, state);
+      const result = await finishGoogle(req, code, state, googleRedirectUri(req));
       if (session) await revokeSession(req);
       const separator = result.returnTo.includes('?') ? '&' : '?';
-      return redirect(res, `${env.publicOrigin}${result.returnTo}${separator}auth=google`, sessionCookies(result.session));
+      return redirect(res, `${originForRequest(req)}${result.returnTo}${separator}auth=google`, sessionCookies(result.session));
     }
     if (req.method === 'POST' && url.pathname === '/api/v1/auth/logout') {
       requireMutationAuth(req, session);
@@ -430,6 +461,14 @@ async function handle(req, res) {
         tgId: String(target.data?.tgId || target.data?.knownTgId || (/^\d+$/.test(target.doc_id) ? target.doc_id : '')),
         state: merged,
       });
+    }
+
+    // Предмет «обществознание». Отдельная ветка целиком: свои таблицы, своя
+    // квота, свой рейтинг. Вход в неё возможен только по префиксу маршрута —
+    // ниже по файлу маршруты истории, и пересечения между ними нет.
+    // При SOCIAL_API=0 ветка отвечает 404 и не трогает базу вовсе.
+    if (url.pathname === SOCIAL_PREFIX || url.pathname.startsWith(`${SOCIAL_PREFIX}/`)) {
+      return await handleSocial(req, res, url, session, { json, readJson, requireMutationAuth, limiter, scope });
     }
 
     requireSession(session);
@@ -545,7 +584,9 @@ async function handle(req, res) {
           "DELETE FROM notification_jobs WHERE data->>'studentId' = ANY($1::text[]) RETURNING id", [docIds]);
         counts.notifications = jobs.rowCount;
         // Остальное уходит каскадом по user_id: user_identities, user_sessions,
-        // student_assignments, usage_counters.
+        // student_assignments, usage_counters, а также ВСЕ social_* таблицы
+        // обществознания — они заведены с ON DELETE CASCADE именно для этого
+        // (см. migrations/005_social_subject.sql).
         await client.query('DELETE FROM app_users WHERE id=$1', [session.userId]);
         return counts;
       });

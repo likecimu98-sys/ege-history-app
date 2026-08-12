@@ -27,4 +27,28 @@ function verifyInitData(initData, botToken, opts = {}) {
   return { ok: true, user, authDate, tgId: String(user.id) };
 }
 
-module.exports = { verifyInitData };
+// У обществознания свой бот, а значит и свой токен: подпись initData у него
+// другая. Telegram ID при этом ГЛОБАЛЬНЫЙ — один и тот же человек в обоих ботах
+// имеет один id, поэтому вход через любой из них ведёт в один аккаунт
+// (provider='telegram', subject=tgId). Именно так и выполняется обещание
+// «ученик входит в тот же аккаунт, что и в приложении истории».
+//
+// Проверяем по очереди и возвращаем первый успех. Токенов два-три, каждая
+// проверка — один HMAC; перебирать безопасно: подпись чужим токеном валидной не
+// станет.
+function verifyInitDataAny(initData, botTokens, opts = {}) {
+  const tokens = (Array.isArray(botTokens) ? botTokens : [botTokens]).filter(Boolean);
+  if (!tokens.length) return { ok: false, reason: 'no_bot_token' };
+  let last = { ok: false, reason: 'bad_hash' };
+  for (const token of tokens) {
+    const result = verifyInitData(initData, token, opts);
+    if (result.ok) return result;
+    // Причина «просрочено» или «нет пользователя» относится к самим данным, а
+    // не к токену: перебирать дальше бессмысленно и только запутает лог.
+    if (result.reason !== 'bad_hash' && result.reason !== 'no_bot_token') return result;
+    last = result;
+  }
+  return last;
+}
+
+module.exports = { verifyInitData, verifyInitDataAny };

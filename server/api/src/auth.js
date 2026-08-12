@@ -1,7 +1,7 @@
 'use strict';
 
 const { OAuth2Client } = require('google-auth-library');
-const { env, originAllowed } = require('./env');
+const { env, originAllowed, allowedOrigins } = require('./env');
 const { pool, tx } = require('./db');
 const { randomToken, sha256, base64url } = require('./crypto');
 const { parseCookies, cookie, requestIp } = require('./http');
@@ -234,7 +234,31 @@ async function createGuest(req, existingSession = null) {
   return { session, user: await loadUser(userId) };
 }
 
-async function createGoogleStart(currentSession, returnTo) {
+// 🔴 Google-вход обязан вернуться НА ТОТ ЖЕ ХОСТ, с которого ушёл.
+// Кука сессии принадлежит хосту, который её выдал. Пока приложение было одно,
+// адрес можно было держать константой; с появлением обществознания на отдельном
+// поддомене константа стала ошибкой: ученик уходит с obschestvo.*, callback
+// приходит на reshay-istoriyu.ru, кука ложится туда — и человек возвращается на
+// обществознание по-прежнему не вошедшим, без единого сообщения об ошибке.
+//
+// Хост берётся из запроса, но только если он есть в закрытом списке
+// разрешённых: Host приходит от клиента, и доверять ему без проверки нельзя —
+// иначе чужой Host увёл бы OAuth-callback на чужой адрес.
+function originForRequest(req) {
+  const host = String((req && req.headers && req.headers.host) || '').trim();
+  const candidate = `https://${host}`;
+  return host && allowedOrigins.has(candidate) ? candidate : env.publicOrigin;
+}
+
+function googleRedirectUri(req) {
+  const origin = originForRequest(req);
+  // Основной адрес истории оставляем ровно таким, каким он настроен в консоли
+  // Google: там может быть указан путь, отличный от нашего шаблона.
+  if (origin === env.publicOrigin) return env.googleRedirectUri;
+  return `${origin}/api/v1/auth/google/callback`;
+}
+
+async function createGoogleStart(currentSession, returnTo, redirectUri) {
   if (!env.googleClientId || !env.googleClientSecret) throw new Error('google_not_configured');
   const state = randomToken(32);
   const verifier = randomToken(48);
@@ -242,7 +266,7 @@ async function createGoogleStart(currentSession, returnTo) {
   await pool.query(`INSERT INTO oauth_states(state_hash,user_id,verifier,return_to,expires_at)
     VALUES($1,$2,$3,$4,now()+interval '10 minutes')`,
     [sha256(state), currentSession ? currentSession.userId : null, verifier, returnTo]);
-  const oauth = new OAuth2Client(env.googleClientId, env.googleClientSecret, env.googleRedirectUri);
+  const oauth = new OAuth2Client(env.googleClientId, env.googleClientSecret, redirectUri || env.googleRedirectUri);
   return oauth.generateAuthUrl({
     access_type: 'online',
     scope: ['openid', 'email', 'profile'],
@@ -253,12 +277,16 @@ async function createGoogleStart(currentSession, returnTo) {
   });
 }
 
-async function finishGoogle(req, code, state) {
+async function finishGoogle(req, code, state, redirectUri) {
   const stateResult = await pool.query('DELETE FROM oauth_states WHERE state_hash=$1 AND expires_at>now() RETURNING *', [sha256(state)]);
   if (!stateResult.rowCount) throw new Error('oauth_state_invalid');
   const oauthState = stateResult.rows[0];
-  const oauth = new OAuth2Client(env.googleClientId, env.googleClientSecret, env.googleRedirectUri);
-  const tokenResult = await oauth.getToken({ code, codeVerifier: oauthState.verifier, redirect_uri: env.googleRedirectUri });
+  // redirect_uri при обмене кода обязан ДОСЛОВНО совпадать с тем, что уходил в
+  // запросе авторизации, иначе Google отвечает redirect_uri_mismatch. Callback
+  // приходит на тот же хост, поэтому вычисляем его из запроса тем же способом.
+  const uri = redirectUri || env.googleRedirectUri;
+  const oauth = new OAuth2Client(env.googleClientId, env.googleClientSecret, uri);
+  const tokenResult = await oauth.getToken({ code, codeVerifier: oauthState.verifier, redirect_uri: uri });
   const idToken = tokenResult.tokens.id_token;
   if (!idToken) throw new Error('google_id_token_missing');
   const ticket = await oauth.verifyIdToken({ idToken, audience: env.googleClientId });
@@ -275,5 +303,5 @@ async function finishGoogle(req, code, state) {
 module.exports = {
   canonicalFor, mergeUsers, resolveIdentity, loadUser, createSession, sessionCookies, clearSessionCookies,
   getSession, revokeSession, extendSession, csrfValid, userForClient, createGuest, createGoogleStart, finishGoogle,
-  claimLegacyDocument,
+  claimLegacyDocument, originForRequest, googleRedirectUri,
 };
