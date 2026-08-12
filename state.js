@@ -653,15 +653,44 @@ function hwItemProgress(item) {
         const known = typeof live === 'number' ? live : (Number(item.progress) || 0);
         return Math.min(item.goal || 0, known);
     }
+    // Потолок — УРЕЗАННАЯ цель (hwItemGoal), иначе на экране осталось бы «24 из 25»
+    // у этапа, который уже закрыт: доступных строк всего 24.
+    const goal = hwItemGoal(item);
     // Выучивание = живой счёт выученных фактов периода по ОБЩЕЙ системе приложения (isFactLearned).
     // Уже выученные факты идут в автозачёт; прогресс в ДЗ и в обычной нарешке — один и тот же счётчик.
-    if (item.metric === 'learned') return Math.min(item.goal || 0, learnedCountInPeriod(item.task, item.period, item.yearStart, item.yearEnd).learned);
-    return Math.min(item.goal || 0, item.progress || 0);
+    if (item.metric === 'learned') return Math.min(goal, learnedCountInPeriod(item.task, item.period, item.yearStart, item.yearEnd).learned);
+    return Math.min(goal, item.progress || 0);
 }
 window.hwItemProgress = hwItemProgress;
-function hwItemDone(item) { return hwItemProgress(item) >= (item.goal || 0); }
+// 🔴 Цель этапа не может быть больше, чем строк вообще существует в его рамках.
+//
+// Учитель ставит «решить 25 строк, 862–1054», а подходящих строк в этих годах
+// набирается 24 — и этап не закрыть НИКОГДА. Ученик видит «24 из 25», жмёт
+// «Решать», получает «всё решено» и запирается: следующий этап ждёт закрытия
+// этого. Жалобы 12.08.2026 — Андрей (24 из 25) и «аська» (9 из 10, задание №5,
+// 862–1054). После июльской правки строки вне периода выбрасываются из пула
+// насовсем, так что взять недостающую неоткуда.
+//
+// Считаем доступное тем же счётчиком, что и «выучено» (learnedCountInPeriod
+// возвращает total — число уникальных строк периода), поэтому дедупликация
+// совпадает с той, по которой строки реально отбираются.
+// Ноль означает «данные ещё не загрузились» — тогда цель не трогаем.
+function hwItemAvailable(item) {
+    if (!item || item.task === 'cram') return 0; // зубрёжка живёт по своим ключам
+    try {
+        return learnedCountInPeriod(item.task, item.period, item.yearStart, item.yearEnd).total || 0;
+    } catch (e) { return 0; }
+}
+function hwItemGoal(item) {
+    const goal = Number(item && item.goal) || 0;
+    if (!goal) return 0;
+    const available = hwItemAvailable(item);
+    return available > 0 ? Math.min(goal, available) : goal;
+}
+window.hwItemGoal = hwItemGoal;
+function hwItemDone(item) { return hwItemProgress(item) >= hwItemGoal(item); }
 window.hwItemDone = hwItemDone;
-function hwItemRemaining(item) { return Math.max(0, (item.goal || 0) - hwItemProgress(item)); }
+function hwItemRemaining(item) { return Math.max(0, hwItemGoal(item) - hwItemProgress(item)); }
 window.hwItemRemaining = hwItemRemaining;
 
 // 🔴 Годы АКТИВНОГО этапа ДЗ — источник правды для отбора строк.

@@ -1136,7 +1136,7 @@ window.hwLearnBannerHtml = function() {
     if (!a) return '';
     const it = (a.items || [])[ah.itemIndex];
     if (!it || it.metric !== 'learned') return '';
-    const done = window.hwItemProgress(it), goal = it.goal || 0;
+    const done = window.hwItemProgress(it), goal = window.hwItemGoal(it);
     const pct = goal ? Math.round(done / goal * 100) : 0;
     return `<div style="width:100%;padding:8px 12px;margin-bottom:8px;background:rgba(16,185,129,0.10);border:1px solid rgba(16,185,129,0.35);border-radius:12px">
       <div style="display:flex;justify-content:space-between;font-size:12px;font-weight:800;color:#059669;margin-bottom:5px">
@@ -1384,7 +1384,7 @@ window.updateHwNavBadge = function() {
 function _hwItemRow(it, idx, kind) {
     const m = HW_TASK_META[it.task] || { emoji: '📝', name: it.task };
     const mm = HW_METRIC_META[it.metric] || HW_METRIC_META.lines;
-    const prog = window.hwItemProgress(it), goal = it.goal || 0;
+    const prog = window.hwItemProgress(it), goal = window.hwItemGoal(it);
     const pct = goal ? Math.min(100, Math.round(prog / goal * 100)) : 0;
     const done = window.hwItemDone(it);
     const periodLabel = HWC_RANGE_TASKS.indexOf(it.task) !== -1

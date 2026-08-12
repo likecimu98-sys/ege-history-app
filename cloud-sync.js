@@ -7,14 +7,14 @@
             signInWithCredential, signOut, initializeFirestore, collection, doc, setDoc, getDoc,
             getDocs, addDoc, updateDoc, deleteDoc, deleteField, onSnapshot, query, where,
             orderBy, limit, runTransaction, arrayUnion, arrayRemove, vpsApiFetch, refreshVpsAuth
-        } from "./vps-sync-compat.js?v=20260812-1";
+        } from "./vps-sync-compat.js?v=20260812-2";
 
         // jsPDF грузился с cdnjs.cloudflare.com без SRI — то есть посторонний скрипт
         // исполнялся с полными правами страницы, а при недоступности CDN (у части
         // нашей аудитории это обычное дело) экспорт PDF просто не работал. Довод тот
         // же, что и для telegram-web-app.js: своя копия с того же origin.
         // Версия совпадает с прежней CDN-ной — 2.5.1, лежит в vendor/.
-        const VENDOR_JSPDF = 'vendor/jspdf.umd.min.js?v=20260812-1';
+        const VENDOR_JSPDF = 'vendor/jspdf.umd.min.js?v=20260812-2';
 
         const cloudConfig = { projectId: 'vps-postgresql' };
         
@@ -1421,6 +1421,24 @@
                 if (data) {
                     const op = data[oppKey] || {};
                     const res = { mine: myFinalScore, opp: Number(op.score) || 0, oppElo: Number(op.elo) || fallback.oppElo };
+                    // 🔴 Матч обязан ЗАКРЫВАТЬСЯ, и закрывать его некому, кроме нас.
+                    //
+                    // status:'finished' ставился только при ОТМЕНЕ (cancelDuelDb), а
+                    // доигранный до конца матч оставался playing навсегда. Замер
+                    // 12.08.2026: 168 матчей в базе, все до одного playing, ни один за
+                    // всё время не дошёл до finished — уборщик их не трогает (он чистит
+                    // только waiting старше 2 минут и finished старше суток), слушатель
+                    // не отписывается, и всё, что завязано на конец матча, не срабатывает.
+                    //
+                    // ⚠️ Ставим ТОЛЬКО когда соперник тоже финализировал (op.final).
+                    // Именно поспешный finished когда-то обрывал слушателя второго
+                    // игрока и давал «у одного победа, у другого ничья» — см. коммент
+                    // выше. Когда оба final, обрывать уже нечего.
+                    if (op.final && data.status !== 'finished') {
+                        try { await updateDoc(ref, { status: 'finished' }); } catch (e) {
+                            console.warn('[Duel] не удалось закрыть матч:', e && e.message);
+                        }
+                    }
                     if (op.final || data.status === 'finished' || i === 5) return res;
                 }
                 await new Promise(r => setTimeout(r, 400));

@@ -719,9 +719,15 @@ async function start() {
   ]).catch(error => log('warn', 'maintenance.cleanup.failed', { message: error.message }));
   await cleanupAuthAndQueues();
   setInterval(cleanupAuthAndQueues, 60 * 60 * 1000).unref();
+  // ⚠️ Третье условие обязательно. Раньше чистились только waiting и finished, а
+  // БРОШЕННЫЙ матч остаётся в playing: игрок закрыл вкладку, соперник не дождался
+  // финала — и запись живёт вечно. Замер 12.08.2026: 168 матчей, все playing, самому
+  // старому три недели. Час без единой записи означает, что играть там уже некому:
+  // сама дуэль укладывается в минуты.
   const cleanupMatches = () => pool.query(`DELETE FROM duel_matches
     WHERE (data->>'status'='waiting' AND updated_at<now()-interval '2 minutes')
-       OR (data->>'status'='finished' AND updated_at<now()-interval '1 day')`).catch(() => {});
+       OR (data->>'status'='finished' AND updated_at<now()-interval '1 day')
+       OR (data->>'status'='playing' AND updated_at<now()-interval '1 hour')`).catch(() => {});
   cleanupMatches();
   setInterval(cleanupMatches, 60000).unref();
   server.listen(env.port, env.host, () => log('info', 'server.started', { host: env.host, port: env.port }));
