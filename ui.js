@@ -1381,7 +1381,17 @@ window.updateHwNavBadge = function() {
     else badge.classList.add('hidden');
 };
 
-function _hwItemRow(it, idx, kind) {
+// 🔴 Этап можно выбрать РУКАМИ — это не украшение, а выход из тупика.
+//
+// Раньше «Начать» вело строго на ПЕРВЫЙ незакрытый этап (startAssignment), и если он
+// по какой-то причине не закрывался, ученик запирался целиком: остальные этапы,
+// которые он мог сделать, оставались недоступны. Жалобы 12.08.2026 — Андрей «24 из 25,
+// второй этап не нажимается» и «аська» (9 из 10). Причину застревания ещё ищем, но
+// заложник ситуации быть не должен: пусть берёт любой этап.
+//
+// Сданный этап тоже открываем: перерешать на закреплении — нормальное желание, лишний
+// прогресс ничего не портит (счёт упирается в цель).
+function _hwItemRow(it, idx, kind, assignmentId) {
     const m = HW_TASK_META[it.task] || { emoji: '📝', name: it.task };
     const mm = HW_METRIC_META[it.metric] || HW_METRIC_META.lines;
     const prog = window.hwItemProgress(it), goal = window.hwItemGoal(it);
@@ -1394,8 +1404,10 @@ function _hwItemRow(it, idx, kind) {
     const unit = it.task === 'match' ? 'пар' : mm.unit;
     const verb = it.task === 'match' ? 'Собрать' : mm.verb;
     const tick = done ? '✅' : '▢';
-    return `
-      <div style="display:flex;gap:8px;align-items:center;padding:6px 0">
+    // Кликабельны этапы активного и просроченного ДЗ. У сданного тоже — но там кнопки
+    // «Начать» нет, и запускать этап из архива значило бы воскрешать закрытое задание.
+    const clickable = !!assignmentId && kind !== 'done';
+    const inner = `
         <span style="font-size:14px;width:18px;flex-shrink:0">${tick}</span>
         <div style="flex:1;min-width:0">
           <div style="font-size:12px;font-weight:800;color:#111;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" class="dark:text-gray-100">${m.emoji} ${m.name}</div>
@@ -1405,7 +1417,25 @@ function _hwItemRow(it, idx, kind) {
           </div>
         </div>
         <span style="font-size:11px;font-weight:900;color:${done ? 'var(--c-success)' : '#6b7280'};flex-shrink:0;min-width:42px;text-align:right">${prog}/${goal}</span>
-      </div>`;
+        ${clickable ? '<span style="font-size:12px;color:#9ca3af;flex-shrink:0;margin-left:2px">›</span>' : ''}`;
+    if (!clickable) {
+        return `<div style="display:flex;gap:8px;align-items:center;padding:6px 0">${inner}</div>`;
+    }
+    // Кнопка, а не div с onclick: нужен фокус с клавиатуры и внятная роль для
+    // скринридера — этап теперь полноценное действие, а не строка отчёта.
+    return `
+      <button type="button" onclick="window.startHwItem&&window.startHwItem('${assignmentId}',${idx})"
+        aria-label="Открыть этап: ${_hwEsc(m.name)}, ${verb.toLowerCase()} ${goal} ${unit}"
+        style="display:flex;gap:8px;align-items:center;padding:6px 4px;width:100%;background:none;border:none;border-radius:var(--r-sm);text-align:left;cursor:pointer;font:inherit"
+        onmouseover="this.style.background='rgba(128,128,128,0.08)'" onmouseout="this.style.background='none'">
+        ${inner}
+      </button>`;
+}
+// Имя задания подставляется в aria-label — экранируем, чтобы кавычка в названии
+// не разорвала атрибут.
+function _hwEsc(v) {
+    return String(v == null ? '' : v).replace(/[<>&"']/g, c => (
+        { '<': '&lt;', '>': '&gt;', '&': '&amp;', '"': '&quot;', "'": '&#39;' }[c]));
 }
 
 window.openHwTab = function() {
@@ -1450,7 +1480,7 @@ window.openHwTab = function() {
             ${headBadge}
           </div>
           ${kind === 'done' ? `<div style="font-size:10px;color:#9ca3af;margin-bottom:4px">Выполнено ${a.completedAt ? new Date(a.completedAt).toLocaleDateString('ru-RU') : ''} · срок: ${_hwFmtDate(a.deadline)}</div>` : ''}
-          <div>${items.map((it, i) => _hwItemRow(it, i, kind)).join('')}</div>
+          <div>${items.map((it, i) => _hwItemRow(it, i, kind, a.id)).join('')}</div>
           ${btn}
         </div>`;
     };
@@ -1518,6 +1548,11 @@ window.startHwItem = function(id, idx) {
     if (!a) return;
     const it = (a.items || [])[idx];
     if (!it) return;
+    // Закрываем вкладку ДЗ здесь, а не только в startAssignment: теперь этап
+    // запускают и прямым тапом по строке, и без этого список остался бы висеть
+    // поверх тренажёра.
+    const ov = document.getElementById('hw-tab-overlay');
+    if (ov) ov.remove();
     window.state.activeHw = { id, itemIndex: idx };
     // Зубрёжка: запускаем тренажёр дат вместо обычного задания.
     if (it.task === 'cram') {
