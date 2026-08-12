@@ -580,8 +580,14 @@ async function handle(req, res) {
            WHERE data->'player1'->>'uid' = ANY($1::text[])
               OR data->'player2'->>'uid' = ANY($1::text[]) RETURNING doc_id`, [docIds]);
         counts.matches = matches.rowCount;
+        // 🔴 RETURNING doc_id, а НЕ id: у notification_jobs первичный ключ
+        // называется doc_id (001_initial.sql), колонки id там нет. С `RETURNING
+        // id` весь DELETE /api/v1/me падал с 500 «column "id" does not exist» —
+        // то есть право на удаление аккаунта было заявлено политикой и не
+        // работало ни разу. Обнаружено 12.08.2026 при проверке каскадного
+        // удаления social_*.
         const jobs = await client.query(
-          "DELETE FROM notification_jobs WHERE data->>'studentId' = ANY($1::text[]) RETURNING id", [docIds]);
+          "DELETE FROM notification_jobs WHERE data->>'studentId' = ANY($1::text[]) RETURNING doc_id", [docIds]);
         counts.notifications = jobs.rowCount;
         // Остальное уходит каскадом по user_id: user_identities, user_sessions,
         // student_assignments, usage_counters, а также ВСЕ social_* таблицы
