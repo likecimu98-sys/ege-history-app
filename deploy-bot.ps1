@@ -224,11 +224,14 @@ done
 chmod 600 "$MANIFEST"
 rm -rf "$REL" /root/ege-bot.tar.gz
 
-# Keep three attics, drop older ones.
-ls -1dt "$LIVE"/attic/* 2>/dev/null | tail -n +4 | xargs -r rm -rf
+# Keep three attics, drop older ones. The pipeline runs under `set -o pipefail`,
+# and on a deploy that changed nothing there is no attic/ at all: ls then exits 2
+# and takes the whole script down AFTER a perfectly successful release. Swallow it.
+{ ls -1dt "$LIVE"/attic/* 2>/dev/null || true; } | tail -n +4 | xargs -r rm -rf || true
 
 echo "bot release $STAMP ($GIT_SHA) OK"
-tail -n 4 /root/.pm2/logs/hist-bot-error.log 2>/dev/null | cut -c1-160
+{ tail -n 4 /root/.pm2/logs/hist-bot-error.log 2>/dev/null || true; } | cut -c1-160 || true
+exit 0
 '@
     $remote = $remote.Replace('@@NAMES@@', $names).Replace('@@BOT_FILES@@', $botFiles).Replace('@@TOKEN_FILES@@', $tokenFiles).Replace('@@FORCE@@', $forceFlag).Replace('@@GIT_SHA@@', $gitSha)
     [IO.File]::WriteAllText($runner, ($remote -replace "`r`n", "`n"), (New-Object Text.UTF8Encoding $false))
