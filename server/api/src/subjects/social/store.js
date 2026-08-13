@@ -162,10 +162,15 @@ async function addWeeklyScores(client, userId, events) {
 // Активные ДЗ ученика: только его классы, только невыданное задним числом.
 async function activeAssignmentsFor(client, userId) {
   const result = await client.query(
-    `SELECT a.id, a.types, a.blocks, a.topics, a.question_goal, a.include_images, a.issued_at, a.due_at, a.title, a.class_id
+    `SELECT a.id, a.types, a.blocks, a.topics, a.question_goal, a.include_images, a.issued_at, a.due_at, a.title, a.class_id,
+            a.source, COALESCE(t.ids, ARRAY[]::text[]) AS task_ids
      FROM social_assignments a
      JOIN social_class_members m ON m.class_id = a.class_id AND m.user_id = $1 AND m.status = 'active'
      JOIN social_classes c ON c.id = a.class_id AND c.status = 'active'
+     LEFT JOIN LATERAL (
+       SELECT array_agg(at.custom_task_id::text) AS ids
+       FROM social_assignment_tasks at WHERE at.assignment_id = a.id
+     ) t ON true
      WHERE a.status = 'active'`,
     [userId]);
   return result.rows;
@@ -199,6 +204,9 @@ async function recomputeAssignment(client, assignment, userId) {
          AND (cardinality($6::text[]) = 0 OR e.block_ids && $6::text[])
          AND (cardinality($7::text[]) = 0 OR e.topic_codes && $7::text[])
          AND ($8::boolean OR e.has_images = false)
+         -- Вариант учителя: засчитываются РОВНО его задания. У обычного ДЗ
+         -- список пуст, и условие не влияет ни на что.
+         AND (cardinality($9::text[]) = 0 OR e.task_id = ANY($9::text[]))
        ORDER BY e.task_id, e.attempted_at
      ) d
      ON CONFLICT (assignment_id, user_id) DO UPDATE SET
@@ -210,7 +218,8 @@ async function recomputeAssignment(client, assignment, userId) {
        completed_at = COALESCE(social_assignment_progress.completed_at, EXCLUDED.completed_at)
      RETURNING earned, possible, questions, status, completed_at`,
     [assignment.id, userId, assignment.question_goal, assignment.issued_at,
-      assignment.types || [], assignment.blocks || [], assignment.topics || [], assignment.include_images]);
+      assignment.types || [], assignment.blocks || [], assignment.topics || [], assignment.include_images,
+      assignment.task_ids || []]);
   return result.rows[0];
 }
 
@@ -480,21 +489,147 @@ async function myClasses(userId, { db = pool } = {}) {
 // Домашние задания
 // ---------------------------------------------------------------------------
 
-async function createAssignment(teacherUserId, data, { db = pool } = {}) {
+// Выдача ДЗ. Вариант учителя пишется в ОДНОЙ транзакции с составом: задание без
+// состава — это домашка, которую нельзя выполнить, и ученик увидел бы «0 из 5»
+// без единого вопроса.
+async function createAssignment(teacherUserId, data, { db = pool, transact = tx } = {}) {
   await ownedClass(teacherUserId, data.classId, { db });
+  if (data.source !== 'custom') {
+    const result = await db.query(
+      `INSERT INTO social_assignments(class_id, teacher_user_id, title, types, blocks, topics, question_goal, include_images, due_at, source)
+       VALUES ($1,$2,$3,$4::text[],$5::text[],$6::text[],$7,$8,$9,'bank')
+       RETURNING id, class_id, title, types, blocks, topics, question_goal, include_images, due_at, status, issued_at, source`,
+      [data.classId, teacherUserId, data.title, data.types, data.blocks, data.topics,
+        data.questionGoal, data.includeImages, data.dueAt]);
+    return assignmentForClient(result.rows[0]);
+  }
+  return transact(async client => {
+    // Чужое задание в свой вариант не попадёт: выбираем только собственные и
+    // сверяем количество. Молча выдать вариант из четырёх заданий вместо пяти
+    // нельзя — учитель этого не заметит, а ученик не сможет его закрыть.
+    const owned = await client.query(
+      `SELECT id FROM social_custom_tasks
+       WHERE teacher_user_id = $1 AND status = 'active' AND id = ANY($2::uuid[])`,
+      [teacherUserId, data.taskIds]);
+    if (owned.rowCount !== data.taskIds.length) fail('task_not_found', 404);
+    const created = await client.query(
+      `INSERT INTO social_assignments(class_id, teacher_user_id, title, types, blocks, topics, question_goal, include_images, due_at, source)
+       VALUES ($1,$2,$3,'{}'::text[],'{}'::text[],'{}'::text[],$4,false,$5,'custom')
+       RETURNING id, class_id, title, types, blocks, topics, question_goal, include_images, due_at, status, issued_at, source`,
+      [data.classId, teacherUserId, data.title, data.questionGoal, data.dueAt]);
+    const assignment = created.rows[0];
+    // Порядок — это индекс в списке учителя: вариант является
+    // последовательностью, а не мешком. Строки перечисляются явно, потому что
+    // позиция каждой равна её месту в присланном массиве.
+    const values = data.taskIds.map((_, index) => `($1, $${index + 2}::uuid, ${index})`).join(', ');
+    await client.query(
+      `INSERT INTO social_assignment_tasks(assignment_id, custom_task_id, position) VALUES ${values}`,
+      [assignment.id, ...data.taskIds]);
+    return { ...assignmentForClient(assignment), taskIds: data.taskIds };
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Свои задания учителя
+// ---------------------------------------------------------------------------
+
+function customTaskForClient(row, { withAnswer = true } = {}) {
+  return {
+    id: row.id,
+    type: row.type,
+    prompt: row.prompt || '',
+    options: Array.isArray(row.options) ? row.options : [],
+    targets: Array.isArray(row.targets) ? row.targets : [],
+    ...(withAnswer ? { answer: row.answer || '' } : {}),
+    blocks: row.blocks || [],
+    topics: row.topics || [],
+    status: row.status,
+    createdAt: row.created_at ? new Date(row.created_at).getTime() : null,
+  };
+}
+
+async function listCustomTasks(teacherUserId, { db = pool, includeArchived = false } = {}) {
   const result = await db.query(
-    `INSERT INTO social_assignments(class_id, teacher_user_id, title, types, blocks, topics, question_goal, include_images, due_at)
-     VALUES ($1,$2,$3,$4::text[],$5::text[],$6::text[],$7,$8,$9)
-     RETURNING id, class_id, title, types, blocks, topics, question_goal, include_images, due_at, status, issued_at`,
-    [data.classId, teacherUserId, data.title, data.types, data.blocks, data.topics,
-      data.questionGoal, data.includeImages, data.dueAt]);
-  return assignmentForClient(result.rows[0]);
+    `SELECT id, type, prompt, options, targets, answer, blocks, topics, status, created_at
+     FROM social_custom_tasks
+     WHERE teacher_user_id = $1 AND ($2::boolean OR status = 'active')
+     ORDER BY created_at DESC LIMIT 500`,
+    [teacherUserId, includeArchived]);
+  return result.rows.map(row => customTaskForClient(row));
+}
+
+async function createCustomTask(teacherUserId, data, { db = pool } = {}) {
+  const result = await db.query(
+    `INSERT INTO social_custom_tasks(teacher_user_id, type, prompt, options, targets, answer, blocks, topics)
+     VALUES ($1,$2,$3,$4::jsonb,$5::jsonb,$6,$7::text[],$8::text[])
+     RETURNING id, type, prompt, options, targets, answer, blocks, topics, status, created_at`,
+    [teacherUserId, data.type, data.prompt, JSON.stringify(data.options), JSON.stringify(data.targets),
+      data.answer, data.blocks, data.topics]);
+  return customTaskForClient(result.rows[0]);
+}
+
+async function updateCustomTask(teacherUserId, taskId, data, { db = pool } = {}) {
+  const result = await db.query(
+    `UPDATE social_custom_tasks
+     SET type=$3, prompt=$4, options=$5::jsonb, targets=$6::jsonb, answer=$7, blocks=$8::text[], topics=$9::text[], updated_at=now()
+     WHERE id=$1 AND teacher_user_id=$2 AND status='active'
+     RETURNING id, type, prompt, options, targets, answer, blocks, topics, status, created_at`,
+    [taskId, teacherUserId, data.type, data.prompt, JSON.stringify(data.options), JSON.stringify(data.targets),
+      data.answer, data.blocks, data.topics]);
+  if (!result.rowCount) fail('task_not_found', 404);
+  return customTaskForClient(result.rows[0]);
+}
+
+// Задание не удаляется, а архивируется. Удаление сняло бы его и с уже выданных
+// вариантов (ON DELETE CASCADE в составе), то есть переписало бы прошлую
+// домашку задним числом.
+async function archiveCustomTask(teacherUserId, taskId, { db = pool } = {}) {
+  const result = await db.query(
+    `UPDATE social_custom_tasks SET status='archived', updated_at=now()
+     WHERE id=$1 AND teacher_user_id=$2 RETURNING id, status`,
+    [taskId, teacherUserId]);
+  if (!result.rowCount) fail('task_not_found', 404);
+  return { id: result.rows[0].id, status: result.rows[0].status };
+}
+
+// Задания варианта глазами ученика. Доступ — только участнику класса, которому
+// это ДЗ выдано: иначе по идентификатору чужого задания вытягивался бы весь
+// чужой вариант вместе с ответами.
+async function assignmentTasksForStudent(userId, assignmentId, { db = pool } = {}) {
+  const result = await db.query(
+    `SELECT t.id, t.type, t.prompt, t.options, t.targets, t.answer, t.blocks, t.topics, t.status, t.created_at
+     FROM social_assignment_tasks at
+     JOIN social_assignments a ON a.id = at.assignment_id AND a.status = 'active'
+     JOIN social_classes c ON c.id = a.class_id AND c.status = 'active'
+     JOIN social_class_members m ON m.class_id = a.class_id AND m.user_id = $1 AND m.status = 'active'
+     JOIN social_custom_tasks t ON t.id = at.custom_task_id
+     WHERE at.assignment_id = $2
+     ORDER BY at.position`,
+    [userId, assignmentId]);
+  if (!result.rowCount) fail('assignment_not_found', 404);
+  return result.rows.map(row => customTaskForClient(row));
+}
+
+// Те же задания для учителя — чтобы кабинет показывал состав выданного варианта.
+async function assignmentTasksForTeacher(teacherUserId, assignmentId, { db = pool } = {}) {
+  await ownedAssignment(teacherUserId, assignmentId, { db });
+  const result = await db.query(
+    `SELECT t.id, t.type, t.prompt, t.options, t.targets, t.answer, t.blocks, t.topics, t.status, t.created_at
+     FROM social_assignment_tasks at
+     JOIN social_custom_tasks t ON t.id = at.custom_task_id
+     WHERE at.assignment_id = $1
+     ORDER BY at.position`,
+    [assignmentId]);
+  return result.rows.map(row => customTaskForClient(row));
 }
 
 function assignmentForClient(row) {
   return {
     id: row.id,
     classId: row.class_id,
+    // Источник нужен клиенту: у варианта учителя задания приходят с сервера, а
+    // не собираются из локального банка ФИПИ.
+    source: row.source === 'custom' ? 'custom' : 'bank',
     title: row.title || '',
     types: row.types || [],
     blocks: row.blocks || [],
@@ -510,7 +645,7 @@ function assignmentForClient(row) {
 async function ownedAssignment(teacherUserId, assignmentId, { db = pool } = {}) {
   const result = await db.query(
     `SELECT id, class_id, teacher_user_id, title, types, blocks, topics, question_goal,
-            include_images, due_at, status, issued_at
+            include_images, due_at, status, issued_at, source
      FROM social_assignments WHERE id=$1 AND teacher_user_id=$2`,
     [assignmentId, teacherUserId]);
   if (!result.rowCount) fail('assignment_not_found', 404);
@@ -520,7 +655,7 @@ async function ownedAssignment(teacherUserId, assignmentId, { db = pool } = {}) 
 async function listAssignments(teacherUserId, { db = pool, classId = null } = {}) {
   const params = [teacherUserId];
   let sql = `SELECT a.id, a.class_id, a.title, a.types, a.blocks, a.topics, a.question_goal,
-                    a.include_images, a.due_at, a.status, a.issued_at,
+                    a.include_images, a.due_at, a.status, a.issued_at, a.source,
                     (SELECT COUNT(*) FROM social_assignment_progress p
                       WHERE p.assignment_id = a.id AND p.status='done') AS done_count,
                     (SELECT COUNT(*) FROM social_class_members m
@@ -628,16 +763,21 @@ async function assignmentResults(teacherUserId, assignmentId, { db = pool } = {}
 async function studentAssignments(userId, { db = pool } = {}) {
   const result = await db.query(
     `SELECT a.id, a.class_id, a.title, a.types, a.blocks, a.topics, a.question_goal,
-            a.include_images, a.due_at, a.status, a.issued_at,
+            a.include_images, a.due_at, a.status, a.issued_at, a.source,
             c.title AS class_title,
             COALESCE(pr.earned,0) AS earned, COALESCE(pr.possible,0) AS possible,
             COALESCE(pr.questions,0) AS questions, COALESCE(pr.status,'active') AS progress_status,
             pr.completed_at,
-            COALESCE(counted.ids, ARRAY[]::text[]) AS counted_ids
+            COALESCE(counted.ids, ARRAY[]::text[]) AS counted_ids,
+            COALESCE(own.ids, ARRAY[]::text[]) AS task_ids
      FROM social_assignments a
      JOIN social_classes c ON c.id = a.class_id AND c.status='active'
      JOIN social_class_members m ON m.class_id = a.class_id AND m.user_id = $1 AND m.status='active'
      LEFT JOIN social_assignment_progress pr ON pr.assignment_id = a.id AND pr.user_id = $1
+     LEFT JOIN LATERAL (
+       SELECT array_agg(at.custom_task_id::text) AS ids
+       FROM social_assignment_tasks at WHERE at.assignment_id = a.id
+     ) own ON true
      LEFT JOIN LATERAL (
        SELECT array_agg(DISTINCT e.task_id) AS ids
        FROM social_attempt_events e
@@ -647,6 +787,7 @@ async function studentAssignments(userId, { db = pool } = {}) {
          AND (cardinality(a.blocks) = 0 OR e.block_ids && a.blocks)
          AND (cardinality(a.topics) = 0 OR e.topic_codes && a.topics)
          AND (a.include_images OR e.has_images = false)
+         AND (own.ids IS NULL OR e.task_id = ANY(own.ids))
      ) counted ON true
      WHERE a.status = 'active'
      ORDER BY a.issued_at DESC LIMIT 100`,
@@ -655,6 +796,7 @@ async function studentAssignments(userId, { db = pool } = {}) {
     ...assignmentForClient(row),
     classTitle: row.class_title || '',
     countedTaskIds: Array.isArray(row.counted_ids) ? row.counted_ids : [],
+    taskIds: Array.isArray(row.task_ids) ? row.task_ids : [],
     progress: {
       earned: numeric(row.earned),
       possible: numeric(row.possible),
@@ -684,6 +826,9 @@ async function enqueueAssignmentNotifications(assignment, { db = pool } = {}) {
     title: assignment.title || '',
     questionGoal: assignment.questionGoal,
     dueAt: assignment.dueAt || null,
+    // Вариант учителя ученик узнаёт по сообщению: это не «порешай что угодно
+    // из банка», а конкретные задания, которые он составил.
+    source: assignment.source === 'custom' ? 'custom' : 'bank',
   };
   const result = await db.query(
     `INSERT INTO social_notification_jobs(assignment_id, user_id, telegram_id, kind, payload)
@@ -768,5 +913,7 @@ module.exports = {
   createClass, listClasses, ownedClass, updateClass, rotateJoinCode, classStudents, joinClass, myClasses,
   createAssignment, listAssignments, ownedAssignment, updateAssignment, cancelAssignment,
   assignmentResults, studentAssignments,
+  listCustomTasks, createCustomTask, updateCustomTask, archiveCustomTask,
+  assignmentTasksForStudent, assignmentTasksForTeacher,
   randomJoinCode, MOSCOW_TODAY,
 };

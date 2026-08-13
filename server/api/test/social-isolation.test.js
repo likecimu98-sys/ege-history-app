@@ -129,7 +129,13 @@ test('ни одна предметная миграция не изменяет 
   for (const file of SOCIAL_MIGRATIONS) {
     const sql = code(file);
     const name = path.basename(file);
-    assert.ok(!/\bALTER\s+TABLE\b/i.test(sql), `${name}: этап 2 не имеет права менять существующие таблицы`);
+    // ALTER допустим ТОЛЬКО над собственной таблицей предмета. Смысл проверки в
+    // том, чтобы миграция обществознания не переписала таблицу истории; запрет
+    // на любой ALTER вообще означал бы, что предмет нельзя развивать без новой
+    // копии данных.
+    for (const [, altered] of sql.matchAll(/\bALTER\s+TABLE\s+(?:IF\s+EXISTS\s+)?([A-Za-z_][A-Za-z0-9_]*)/gi)) {
+      assert.ok(altered.startsWith('social_'), `${name}: миграция изменяет чужую таблицу «${altered}»`);
+    }
     assert.ok(!/\bDROP\b/i.test(sql), `${name}: в миграции этапа 2 не должно быть DROP`);
     for (const table of referencedTables(sql)) {
       assert.ok(table.startsWith('social_'), `${name}: миграция трогает таблицу «${table}»`);

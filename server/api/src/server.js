@@ -271,6 +271,38 @@ async function handleInternal(req, res, url) {
     const socialStore = require('./subjects/social/store');
     return json(res, 200, { user: await socialStore.whoIs(String(body.telegramId || '')) });
   }
+  // Классы глазами бота. Бот знает человека только по Telegram ID, поэтому
+  // маршрут сам находит аккаунт и сам проверяет роль: у бота нет ни сессии, ни
+  // куки, а право вести класс — серверный факт, а не решение бота.
+  if (req.method === 'POST' && url.pathname === '/internal/v1/subjects/social/classes') {
+    const body = await readJson(req, 4096).catch(() => ({}));
+    const socialStore = require('./subjects/social/store');
+    const found = await socialStore.whoIs(String(body.telegramId || ''));
+    if (!found) throw Object.assign(new Error('user_not_found'), { statusCode: 404 });
+    const teacher = found.role === 'teacher' || found.role === 'admin';
+    const action = String(body.action || 'list');
+    if (action === 'create') {
+      if (!teacher) throw Object.assign(new Error('teacher_required'), { statusCode: 403 });
+      const created = await socialStore.createClass(found.userId, {
+        title: String(body.title || '').trim().slice(0, 80) || 'Класс',
+      });
+      return json(res, 200, { class: { id: created.id, title: created.title, joinCode: created.join_code, students: 0 } });
+    }
+    if (action === 'join') {
+      // 🔴 Учителя по ученической ссылке в класс НЕ записываем. В истории это
+      // уже стоило залипших учителей: свою же ссылку открывают постоянно, и
+      // каждое открытие делало учителя учеником собственной группы — с чужими
+      // ДЗ, строкой в списке класса и без способа выйти.
+      if (teacher) return json(res, 200, { joined: false, reason: 'teacher' });
+      const joined = await socialStore.joinClass(found.userId, String(body.code || '').trim().toUpperCase());
+      return json(res, 200, { joined: true, class: joined });
+    }
+    const [owned, member] = await Promise.all([
+      teacher ? socialStore.listClasses(found.userId) : Promise.resolve([]),
+      socialStore.myClasses(found.userId),
+    ]);
+    return json(res, 200, { user: found, owned, member });
+  }
   // 🔴 Очередь уведомлений предмета — ОТДЕЛЬНАЯ от notification_jobs истории.
   // Общая очередь разбирается ботом истории: попади туда социальное задание, он
   // попытается отправить его своим токеном, и ученик обществознания не получит

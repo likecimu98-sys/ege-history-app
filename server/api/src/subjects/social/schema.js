@@ -203,21 +203,35 @@ function assignmentCreate(body, { now = Date.now() } = {}) {
   const source = body && typeof body === 'object' ? body : {};
   const unknown = Object.keys(source).filter(key => ![
     'classId', 'title', 'types', 'blocks', 'topics', 'questionGoal', 'includeImages', 'dueAt',
+    'source', 'taskIds',
   ].includes(key));
   if (unknown.length) fail('assignment_unknown_field', 400, { fields: unknown.slice(0, 5) });
 
   const classId = text(source.classId, { max: 64, field: 'classId', required: true });
+  // Вариант учителя. Фильтры банка при этом не имеют смысла и обнуляются: иначе
+  // в пересчёт выполнения попали бы посторонние задания, решённые в это же время.
+  const origin = String(source.source || 'bank') === 'custom' ? 'custom' : 'bank';
+  if (origin === 'custom') {
+    const taskIds = customTaskIds(source.taskIds);
+    return {
+      classId,
+      source: 'custom',
+      taskIds,
+      title: text(source.title, { max: 120, field: 'title' }),
+      types: [], blocks: [], topics: [],
+      // Цель варианта — все его задания: «сдал вариант» означает «решил всё».
+      questionGoal: taskIds.length,
+      includeImages: false,
+      dueAt: dueAtOf(source, now),
+    };
+  }
   const types = typeList(source.types);
   const blocks = blockList(source.blocks);
   const topics = topicList(source.topics);
-  // Пустой фильтр означает «весь банк» — это законное ДЗ «порешай что угодно».
-  // А вот срок в прошлом законным не бывает: ученик увидит задание уже
-  // просроченным и не поймёт, что делать.
-  const dueAt = source.dueAt == null || source.dueAt === '' ? null : Number(new Date(source.dueAt));
-  if (dueAt !== null && (!Number.isFinite(dueAt) || dueAt <= now)) fail('due_at_must_be_future');
-
   return {
     classId,
+    source: 'bank',
+    taskIds: [],
     title: text(source.title, { max: 120, field: 'title' }),
     types,
     blocks,
@@ -227,8 +241,18 @@ function assignmentCreate(body, { now = Date.now() } = {}) {
     // Boolean(undefined) === false, поэтому забытое поле не может включить
     // графики случайно.
     includeImages: Boolean(source.includeImages),
-    dueAt: dueAt === null ? null : new Date(dueAt).toISOString(),
+    dueAt: dueAtOf(source, now),
   };
+}
+
+// Пустой фильтр означает «весь банк» — это законное ДЗ «порешай что угодно».
+// А вот срок в прошлом законным не бывает: ученик увидит задание уже
+// просроченным и не поймёт, что делать.
+function dueAtOf(source, now) {
+  if (source.dueAt == null || source.dueAt === '') return null;
+  const dueAt = Number(new Date(source.dueAt));
+  if (!Number.isFinite(dueAt) || dueAt <= now) fail('due_at_must_be_future');
+  return new Date(dueAt).toISOString();
 }
 
 function assignmentPatch(body, { now = Date.now() } = {}) {
@@ -257,6 +281,114 @@ function assignmentPatch(body, { now = Date.now() } = {}) {
   return out;
 }
 
+// ---------------------------------------------------------------------------
+// Свои задания учителя
+// ---------------------------------------------------------------------------
+
+// Метки строк соответствия — те же, что в банке ФИПИ и в приложении. Латиница
+// сюда попадать не должна: «A» и «А» на экране неразличимы, а ответ по ним
+// сравнивается строкой.
+const TARGET_LABELS = Object.freeze(['А', 'Б', 'В', 'Г', 'Д', 'Е']);
+const MATCHING_TYPES = Object.freeze(['matching', 'task13']);
+
+function optionList(value) {
+  if (!Array.isArray(value)) fail('options_must_be_array');
+  const list = value
+    .map(item => (item && typeof item === 'object' ? item : { text: item }))
+    .map((item, index) => ({
+      n: integer(item.n, { min: 1, max: 9, fallback: index + 1 }),
+      text: text(item.text, { max: 400, field: 'option_text' }),
+    }))
+    .filter(item => item.text);
+  if (list.length < 2) fail('options_need_two');
+  if (list.length > 9) fail('options_too_many');
+  // Номера — это и есть ответ. Повтор номера означал бы, что ответ «1» указывает
+  // сразу на два разных варианта, и проверить такое задание нельзя.
+  const numbers = new Set(list.map(item => item.n));
+  if (numbers.size !== list.length) fail('options_numbers_must_differ');
+  return list;
+}
+
+function targetList(value) {
+  if (!Array.isArray(value)) fail('targets_must_be_array');
+  const list = value
+    .map(item => (item && typeof item === 'object' ? item : { text: item }))
+    .map((item, index) => ({
+      label: TARGET_LABELS.includes(String(item.label || '').trim())
+        ? String(item.label).trim()
+        : TARGET_LABELS[index] || '',
+      text: text(item.text, { max: 400, field: 'target_text' }),
+    }))
+    .filter(item => item.text && item.label);
+  if (list.length < 2) fail('targets_need_two');
+  if (list.length > TARGET_LABELS.length) fail('targets_too_many');
+  const labels = new Set(list.map(item => item.label));
+  if (labels.size !== list.length) fail('targets_labels_must_differ');
+  return list;
+}
+
+// 🔴 Ответ проверяется против вариантов ЗДЕСЬ, а не в кабинете. Задание с
+// ответом «5» при четырёх вариантах невозможно решить правильно: ученик увидит
+// его как неберущееся, а учитель — как «все ошиблись». Такую опечатку нельзя
+// поймать глазами в таблице результатов, поэтому она отвергается на входе.
+function customAnswer(raw, type, options, targets) {
+  const answer = String(raw == null ? '' : raw).replace(/[^0-9]/g, '');
+  if (!answer) fail('answer_required');
+  const numbers = new Set(options.map(option => String(option.n)));
+  for (const digit of answer) {
+    if (!numbers.has(digit)) fail('answer_out_of_options', 400, { digit });
+  }
+  if (MATCHING_TYPES.includes(type)) {
+    // По цифре на строку и ровно в том же порядке, в каком идут строки.
+    if (answer.length !== targets.length) fail('answer_length_must_match_targets');
+    return answer;
+  }
+  if (answer.length < 1 || answer.length > 6) fail('answer_length_invalid');
+  // Порядок в ответе выбора не значим: «13» и «31» — один и тот же ответ.
+  // Приводим к одному виду, иначе проверка зависела бы от того, как учитель
+  // набрал цифры.
+  return [...new Set(answer)].sort().join('');
+}
+
+function customTask(body) {
+  const source = body && typeof body === 'object' ? body : {};
+  const unknown = Object.keys(source).filter(key => ![
+    'type', 'prompt', 'options', 'targets', 'answer', 'blocks', 'topics',
+  ].includes(key));
+  if (unknown.length) fail('task_unknown_field', 400, { fields: unknown.slice(0, 5) });
+
+  const type = text(source.type, { max: 20, field: 'type', required: true });
+  if (!TASK_TYPES.includes(type)) fail('task_type_unknown');
+  const options = optionList(source.options);
+  const targets = MATCHING_TYPES.includes(type) ? targetList(source.targets) : [];
+  return {
+    type,
+    prompt: text(source.prompt, { max: 2000, field: 'prompt', required: true }),
+    options,
+    targets,
+    answer: customAnswer(source.answer, type, options, targets),
+    blocks: blockList(source.blocks),
+    topics: topicList(source.topics),
+  };
+}
+
+// Список заданий варианта. Пустой список — это ДЗ, которое нельзя выполнить,
+// поэтому он отвергается, а не сохраняется «пока пустым».
+function customTaskIds(value) {
+  if (!Array.isArray(value) || !value.length) fail('task_ids_required');
+  const ids = [];
+  const seen = new Set();
+  for (const item of value) {
+    const id = String(item == null ? '' : item).trim();
+    if (!id || seen.has(id)) continue;
+    seen.add(id);
+    ids.push(id);
+  }
+  if (!ids.length) fail('task_ids_required');
+  if (ids.length > 100) fail('task_ids_too_many');
+  return ids;
+}
+
 // Код приглашения набирают руками с доски, поэтому из алфавита убраны символы,
 // которые путаются: 0/O, 1/I/L. Восемь знаков — это 32^8 вариантов.
 const JOIN_CODE_ALPHABET = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
@@ -269,9 +401,10 @@ function joinCode(value) {
 }
 
 module.exports = {
-  TASK_TYPES, BLOCK_IDS, ATTEMPT_KINDS, ALLOWED_SETTING_KEYS,
+  TASK_TYPES, BLOCK_IDS, ATTEMPT_KINDS, ALLOWED_SETTING_KEYS, TARGET_LABELS, MATCHING_TYPES,
   MAX_EVENTS_PER_REQUEST, MAX_STATE_BYTES, JOIN_CODE_ALPHABET, JOIN_CODE_RE,
   fail, text, integer, typeList, blockList, topicList, settings,
   profilePatch, statePut, attemptEvent, attemptBatch,
   classCreate, classPatch, assignmentCreate, assignmentPatch, joinCode,
+  customTask, customTaskIds, optionList, targetList,
 };

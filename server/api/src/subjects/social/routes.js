@@ -129,6 +129,15 @@ async function handleSocial(req, res, url, session, deps) {
     return json(res, 200, { assignments: await store.studentAssignments(userId, {}) });
   }
 
+  // Задания варианта, выданного этому ученику. Банк ФИПИ лежит в самом
+  // приложении, а свои задания учителя приходят только отсюда и только тому,
+  // кому это ДЗ выдано.
+  const myTasksMatch = path.match(/^\/me\/assignments\/([^/]+)\/tasks$/);
+  if (myTasksMatch && method === 'GET') {
+    const assignmentId = uuid(decodeURIComponent(myTasksMatch[1]), 'assignment_not_found');
+    return json(res, 200, { tasks: await store.assignmentTasksForStudent(userId, assignmentId, {}) });
+  }
+
   if (method === 'GET' && path === '/me/classes') {
     return json(res, 200, { classes: await store.myClasses(userId, {}) });
   }
@@ -207,6 +216,30 @@ async function handleSocial(req, res, url, session, deps) {
       const classId = uuid(decodeURIComponent(codeMatch[1]), 'class_not_found');
       const rotated = await store.rotateJoinCode(userId, classId, {});
       return json(res, 200, { classId: rotated.id, joinCode: rotated.join_code });
+    }
+
+    // ------------------------------------------- свои задания учителя --
+    if (method === 'GET' && path === '/teacher/tasks') {
+      return json(res, 200, { tasks: await store.listCustomTasks(userId, {}) });
+    }
+    if (method === 'POST' && path === '/teacher/tasks') {
+      requireMutationAuth(req, session);
+      const data = schema.customTask(await readJson(req, 32768));
+      return json(res, 200, { task: await store.createCustomTask(userId, data, {}) });
+    }
+    const taskMatch = path.match(/^\/teacher\/tasks\/([^/]+)$/);
+    if (taskMatch && (method === 'PUT' || method === 'DELETE')) {
+      requireMutationAuth(req, session);
+      const taskId = uuid(decodeURIComponent(taskMatch[1]), 'task_not_found');
+      if (method === 'DELETE') return json(res, 200, await store.archiveCustomTask(userId, taskId, {}));
+      const data = schema.customTask(await readJson(req, 32768));
+      return json(res, 200, { task: await store.updateCustomTask(userId, taskId, data, {}) });
+    }
+
+    const assignmentTasksMatch = path.match(/^\/teacher\/assignments\/([^/]+)\/tasks$/);
+    if (assignmentTasksMatch && method === 'GET') {
+      const assignmentId = uuid(decodeURIComponent(assignmentTasksMatch[1]), 'assignment_not_found');
+      return json(res, 200, { tasks: await store.assignmentTasksForTeacher(userId, assignmentId, {}) });
     }
 
     if (method === 'GET' && path === '/teacher/assignments') {
