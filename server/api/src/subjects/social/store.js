@@ -530,6 +530,103 @@ async function createAssignment(teacherUserId, data, { db = pool, transact = tx 
 }
 
 // ---------------------------------------------------------------------------
+// Слияние аккаунтов
+// ---------------------------------------------------------------------------
+
+// 🔴 Вызывается из mergeUsers (src/auth.js) в ЕГО транзакции.
+//
+// 13.08.2026: mergeUsers переносил только таблицы истории — он был написан до
+// появления предмета. Любое слияние аккаунтов (вход через Google поверх
+// telegram-сессии, привязка legacy-документа) молча оставляло на отключаемом
+// аккаунте весь прогресс обществознания, роль учителя, классы, домашки и свои
+// задания. Заметить это можно только постфактум: человек входит и видит пустой
+// предмет, а данные лежат у аккаунта, которого больше нет в выдаче.
+//
+// Здесь же, а не в auth.js, потому что весь SQL предмета обязан жить в одном
+// файле — иначе следующая таблица social_* снова окажется забытой.
+async function mergeUserData(client, primaryId, secondaryId) {
+  // Попытки — источник правды по баллам, у них свой первичный ключ (event_id),
+  // поэтому переносятся целиком и без конфликтов.
+  await client.query('UPDATE social_attempt_events SET user_id=$1 WHERE user_id=$2', [primaryId, secondaryId]);
+  // Всё, что человек ведёт как учитель, переезжает без вопросов: у этих таблиц
+  // владелец — одна колонка.
+  for (const table of ['social_classes', 'social_assignments', 'social_custom_tasks']) {
+    await client.query(`UPDATE ${table} SET teacher_user_id=$1 WHERE teacher_user_id=$2`, [primaryId, secondaryId]);
+  }
+  await client.query('UPDATE social_notification_jobs SET user_id=$1 WHERE user_id=$2', [primaryId, secondaryId]);
+
+  // Профиль: роль повышаем, но никогда не понижаем. Учитель, слитый в аккаунт
+  // ученика, обязан остаться учителем — иначе слияние молча отнимает доступ.
+  await client.query(
+    `INSERT INTO social_profiles(user_id, display_name, role, settings)
+     SELECT $1, display_name, role, settings FROM social_profiles WHERE user_id=$2
+     ON CONFLICT (user_id) DO UPDATE SET
+       display_name = CASE WHEN social_profiles.display_name = '' THEN EXCLUDED.display_name ELSE social_profiles.display_name END,
+       role = CASE
+         WHEN social_profiles.role = 'admin' OR EXCLUDED.role = 'admin' THEN 'admin'
+         WHEN social_profiles.role = 'teacher' OR EXCLUDED.role = 'teacher' THEN 'teacher'
+         ELSE social_profiles.role END,
+       updated_at = now()`,
+    [primaryId, secondaryId]);
+
+  // Снимок прогресса переносим ТОЛЬКО если у основного аккаунта его нет. Слить
+  // два блоба здесь нечем: этим занимается core.mergeProgress на клиенте, и он
+  // сделает это при ближайшей синхронизации.
+  await client.query(
+    `INSERT INTO social_states(user_id, data, revision)
+     SELECT $1, data, revision FROM social_states WHERE user_id=$2
+     ON CONFLICT (user_id) DO NOTHING`,
+    [primaryId, secondaryId]);
+
+  await client.query(
+    `INSERT INTO social_class_members(class_id, user_id, status, joined_at)
+     SELECT class_id, $1, status, joined_at FROM social_class_members WHERE user_id=$2
+     ON CONFLICT (class_id, user_id) DO UPDATE SET
+       status = CASE WHEN social_class_members.status = 'active' OR EXCLUDED.status = 'active' THEN 'active' ELSE 'removed' END,
+       updated_at = now()`,
+    [primaryId, secondaryId]);
+
+  // Выполнение ДЗ: берём лучшее из двух. Слияние не имеет права ухудшить уже
+  // засчитанную работу — учитель увидел бы откат оценки без причины.
+  await client.query(
+    `INSERT INTO social_assignment_progress(assignment_id, user_id, earned, possible, questions, status, completed_at)
+     SELECT assignment_id, $1, earned, possible, questions, status, completed_at
+     FROM social_assignment_progress WHERE user_id=$2
+     ON CONFLICT (assignment_id, user_id) DO UPDATE SET
+       earned = GREATEST(social_assignment_progress.earned, EXCLUDED.earned),
+       possible = GREATEST(social_assignment_progress.possible, EXCLUDED.possible),
+       questions = GREATEST(social_assignment_progress.questions, EXCLUDED.questions),
+       status = CASE WHEN social_assignment_progress.status = 'done' OR EXCLUDED.status = 'done' THEN 'done' ELSE 'active' END,
+       completed_at = LEAST(social_assignment_progress.completed_at, EXCLUDED.completed_at),
+       updated_at = now()`,
+    [primaryId, secondaryId]);
+
+  // Квота и рейтинг складываются: это работа одного человека с двух устройств,
+  // а не двух разных людей.
+  await client.query(
+    `INSERT INTO social_usage_counters(user_id, day, kind, count)
+     SELECT $1, day, kind, count FROM social_usage_counters WHERE user_id=$2
+     ON CONFLICT (user_id, day, kind) DO UPDATE SET
+       count = social_usage_counters.count + EXCLUDED.count, updated_at = now()`,
+    [primaryId, secondaryId]);
+  await client.query(
+    `INSERT INTO social_weekly_scores(user_id, week_start, points, questions)
+     SELECT $1, week_start, points, questions FROM social_weekly_scores WHERE user_id=$2
+     ON CONFLICT (user_id, week_start) DO UPDATE SET
+       points = social_weekly_scores.points + EXCLUDED.points,
+       questions = social_weekly_scores.questions + EXCLUDED.questions,
+       updated_at = now()`,
+    [primaryId, secondaryId]);
+
+  // Остатки на втором аккаунте удаляем явно: строки с составным ключом выше
+  // копировались, а не переносились, и без этого они уехали бы в каскад при
+  // следующем удалении аккаунта — то есть исчезли бы вместе с ним.
+  for (const table of ['social_class_members', 'social_assignment_progress', 'social_usage_counters', 'social_weekly_scores', 'social_states', 'social_profiles']) {
+    await client.query(`DELETE FROM ${table} WHERE user_id=$1`, [secondaryId]);
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Свои задания учителя
 // ---------------------------------------------------------------------------
 
@@ -913,6 +1010,7 @@ module.exports = {
   createClass, listClasses, ownedClass, updateClass, rotateJoinCode, classStudents, joinClass, myClasses,
   createAssignment, listAssignments, ownedAssignment, updateAssignment, cancelAssignment,
   assignmentResults, studentAssignments,
+  mergeUserData,
   listCustomTasks, createCustomTask, updateCustomTask, archiveCustomTask,
   assignmentTasksForStudent, assignmentTasksForTeacher,
   randomJoinCode, MOSCOW_TODAY,

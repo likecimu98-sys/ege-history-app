@@ -15,6 +15,12 @@ function canonicalFor(provider, subject) {
   return String(subject);
 }
 
+// Модуль предмета подключается лениво: auth.js грузится раньше него, и обычный
+// require наверху файла замкнул бы зависимости в кольцо.
+function socialStore() {
+  return require('./subjects/social/store');
+}
+
 async function mergeUsers(client, primaryId, secondaryId) {
   if (!secondaryId || primaryId === secondaryId) return primaryId;
   const primary = await client.query('SELECT * FROM app_users WHERE id=$1 FOR UPDATE', [primaryId]);
@@ -33,6 +39,12 @@ async function mergeUsers(client, primaryId, secondaryId) {
       progress=student_assignments.progress || EXCLUDED.progress,
       updated_at=GREATEST(student_assignments.updated_at,EXCLUDED.updated_at)`, [primaryId, secondaryId]);
   await client.query('DELETE FROM student_assignments WHERE student_user_id=$1', [secondaryId]);
+  // 🔴 Предметные данные переносит сам предмет. До 13.08.2026 их здесь не было
+  // вовсе — mergeUsers написан до появления обществознания, и любое слияние
+  // молча оставляло на отключаемом аккаунте прогресс, роль учителя, классы,
+  // домашки и свои задания. Весь SQL предмета живёт в одном файле намеренно:
+  // перечисляя таблицы здесь, следующую забудут.
+  await socialStore().mergeUserData(client, primaryId, secondaryId);
   await client.query('UPDATE user_identities SET user_id=$1 WHERE user_id=$2', [primaryId, secondaryId]);
   await client.query(`UPDATE app_users SET
       display_name=CASE WHEN length(display_name) >= length($2) THEN display_name ELSE $2 END,
@@ -64,7 +76,34 @@ async function claimLegacyDocument(currentUserId, docId) {
   });
 }
 
-async function resolveIdentity({ provider, subject, displayName = '', email = '', profile = {}, linkUserId = null }) {
+// 🔴 Аккаунт из эпохи Firebase узнаётся по ПОЧТЕ, а не по subject.
+//
+// При переезде с Firebase google-личности импортировались с firebase uid в
+// поле subject (`JLYb4xm6…`), а настоящий Google присылает числовой `sub`
+// (`10830…`). Совпадения нет — и первый же вход через Google заводил человеку
+// ВТОРОЙ, пустой аккаунт: весь прогресс, роль учителя и классы оставались на
+// старом. На 13.08.2026 таких личностей 14 из 15, и один человек уже попался.
+//
+// Условия связывания намеренно узкие, потому что ошибка здесь означает выдачу
+// чужих данных:
+//   * почта подтверждена самим Google (`email_verified` проверяется выше);
+//   * у кандидата УЖЕ есть google-личность — то есть этой почтой он входил и
+//     раньше, просто под старым идентификатором;
+//   * кандидат ровно один. Двое — значит, мы не знаем, кто из них тот самый,
+//     и заводим новый аккаунт, как раньше.
+async function findLegacyAccountByEmail(client, email) {
+  const address = String(email || '').trim().toLowerCase();
+  if (!address) return null;
+  const result = await client.query(
+    `SELECT u.id FROM app_users u
+     WHERE u.disabled_at IS NULL AND lower(u.email) = $1
+       AND EXISTS (SELECT 1 FROM user_identities i WHERE i.user_id = u.id AND i.provider = 'google')
+     FOR UPDATE`,
+    [address]);
+  return result.rowCount === 1 ? result.rows[0].id : null;
+}
+
+async function resolveIdentity({ provider, subject, displayName = '', email = '', profile = {}, linkUserId = null, linkByVerifiedEmail = false }) {
   subject = String(subject || '').trim();
   if (!subject) throw new Error('identity_subject_missing');
   return tx(async client => {
@@ -79,6 +118,14 @@ async function resolveIdentity({ provider, subject, displayName = '', email = ''
     } else if (linkUserId) {
       const link = await client.query('SELECT id FROM app_users WHERE id=$1 AND disabled_at IS NULL FOR UPDATE', [linkUserId]);
       userId = link.rowCount ? linkUserId : null;
+    }
+    if (!userId && linkByVerifiedEmail) {
+      const legacyId = await findLegacyAccountByEmail(client, email);
+      if (legacyId) {
+        userId = legacyId;
+        await client.query('INSERT INTO audit_events(actor_user_id,action,target,details) VALUES($1,$2,$3,$4)',
+          [userId, 'identity.link.email', subject, JSON.stringify({ provider })]);
+      }
     }
     if (!userId) {
       const created = await client.query(
@@ -295,6 +342,10 @@ async function finishGoogle(req, code, state, redirectUri) {
   const userId = await resolveIdentity({
     provider: 'google', subject: payload.sub, displayName: payload.name || '', email: payload.email || '',
     profile: { name: payload.name || '', picture: payload.picture || '' }, linkUserId: oauthState.user_id,
+    // Почту подтвердил сам Google (проверка `email_verified` строкой выше),
+    // поэтому по ней можно найти аккаунт эпохи Firebase — см. комментарий
+    // у findLegacyAccountByEmail. Для остальных провайдеров этого делать нельзя.
+    linkByVerifiedEmail: true,
   });
   const session = await createSession(userId, req);
   return { session, user: await loadUser(userId), returnTo: oauthState.return_to || '/' };
