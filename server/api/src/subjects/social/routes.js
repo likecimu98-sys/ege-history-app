@@ -289,6 +289,16 @@ async function handleSocial(req, res, url, session, deps) {
       return json(res, 200, await store.assignmentResults(userId, assignmentId, {}));
     }
 
+    // Разбор домашки по одному ученику. Отдельный маршрут, а не поле в общем
+    // ответе: класс может быть большой, и таскать все попытки всех учеников в
+    // таблицу результатов незачем.
+    const detailMatch = path.match(/^\/teacher\/assignments\/([^/]+)\/results\/([^/]+)$/);
+    if (detailMatch && method === 'GET') {
+      const assignmentId = uuid(decodeURIComponent(detailMatch[1]), 'assignment_not_found');
+      const studentId = uuid(decodeURIComponent(detailMatch[2]), 'student_not_found');
+      return json(res, 200, await store.assignmentStudentDetail(userId, assignmentId, studentId, {}));
+    }
+
     // Назначение роли. Только админ предмета, и только явным маршрутом —
     // учитель не может расплодить учителей, ученик не может стать учителем.
     if (method === 'POST' && path === '/teacher/roles') {

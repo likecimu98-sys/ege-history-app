@@ -849,6 +849,80 @@ async function assignmentResults(teacherUserId, assignmentId, { db = pool } = {}
   };
 }
 
+// Разбор домашки по одному ученику: какие задания зачтены, что из этого верно
+// и сколько времени ушло. Итог в таблице результатов отвечает «сколько», а
+// учителю нужно «что именно не получилось» — без этого он видит процент и не
+// знает, объяснять ли тему заново.
+//
+// 🔴 Выборка обязана повторять правило зачёта из recomputeAssignment: ПЕРВАЯ
+// попытка по каждому заданию после выдачи, с теми же фильтрами. Иначе разбор
+// покажет одно, а колонка «Баллы» — другое, и доверия не будет ни к тому, ни к
+// другому.
+async function assignmentStudentDetail(teacherUserId, assignmentId, studentUserId, { db = pool } = {}) {
+  const assignment = await ownedAssignment(teacherUserId, assignmentId, { db });
+  const member = await db.query(
+    `SELECT m.user_id, COALESCE(p.display_name,'') AS display_name
+     FROM social_class_members m
+     LEFT JOIN social_profiles p ON p.user_id = m.user_id
+     WHERE m.class_id = $1 AND m.user_id = $2 AND m.status = 'active'`,
+    [assignment.class_id, studentUserId]);
+  if (!member.rowCount) {
+    const error = new Error('student_not_found');
+    error.statusCode = 404;
+    error.code = 'student_not_found';
+    throw error;
+  }
+  const attempts = await db.query(
+    `SELECT DISTINCT ON (e.task_id) e.task_id, e.task_type, e.exam_line, e.topic_codes, e.block_ids,
+            e.correct, e.earned, e.possible, e.elapsed_ms, e.attempted_at
+     FROM social_attempt_events e
+     WHERE e.user_id = $1
+       AND e.attempted_at >= $2
+       AND (cardinality($3::text[]) = 0 OR e.task_type = ANY($3::text[]))
+       AND (cardinality($4::text[]) = 0 OR e.block_ids && $4::text[])
+       AND (cardinality($5::text[]) = 0 OR e.topic_codes && $5::text[])
+       AND ($6::boolean OR e.has_images = false)
+       AND (cardinality($7::text[]) = 0 OR e.task_id = ANY($7::text[]))
+     ORDER BY e.task_id, e.attempted_at`,
+    [studentUserId, assignment.issued_at, assignment.types || [], assignment.blocks || [],
+      assignment.topics || [], assignment.include_images, assignment.task_ids || []]);
+  const rows = attempts.rows.map(row => ({
+    taskId: row.task_id,
+    taskType: row.task_type,
+    examLine: numeric(row.exam_line),
+    topicCodes: row.topic_codes || [],
+    blockIds: row.block_ids || [],
+    correct: row.correct === true,
+    earned: numeric(row.earned),
+    possible: numeric(row.possible),
+    elapsedMs: numeric(row.elapsed_ms),
+    attemptedAt: row.attempted_at ? new Date(row.attempted_at).getTime() : null,
+  }));
+  // Порядок — по времени ответа: учителю важна последовательность занятия, а не
+  // алфавит идентификаторов, по которому шла выборка первой попытки.
+  rows.sort((a, b) => (a.attemptedAt || 0) - (b.attemptedAt || 0));
+  const spent = rows.reduce((sum, row) => sum + row.elapsedMs, 0);
+  return {
+    assignment: assignmentForClient(assignment),
+    student: { studentId: studentUserId, displayName: member.rows[0].display_name || 'Без имени' },
+    attempts: rows,
+    totals: {
+      questions: rows.length,
+      wrong: rows.filter(row => !row.correct).length,
+      earned: rows.reduce((sum, row) => sum + row.earned, 0),
+      possible: rows.reduce((sum, row) => sum + row.possible, 0),
+      elapsedMs: spent,
+      // Медиана, а не среднее: одна вкладка, забытая открытой на полчаса, сдвигает
+      // среднее так, что число перестаёт что-либо значить.
+      medianMs: rows.length
+        ? [...rows].map(row => row.elapsedMs).sort((a, b) => a - b)[Math.floor(rows.length / 2)]
+        : 0,
+      firstAt: rows.length ? rows[0].attemptedAt : null,
+      lastAt: rows.length ? rows[rows.length - 1].attemptedAt : null,
+    },
+  };
+}
+
 // ДЗ глазами ученика: активные и завершённые, с собственным прогрессом. Чужих
 // результатов здесь нет — ученик видит только свою строку.
 //
@@ -1009,7 +1083,7 @@ module.exports = {
   weeklyLeaderboard,
   createClass, listClasses, ownedClass, updateClass, rotateJoinCode, classStudents, joinClass, myClasses,
   createAssignment, listAssignments, ownedAssignment, updateAssignment, cancelAssignment,
-  assignmentResults, studentAssignments,
+  assignmentResults, assignmentStudentDetail, studentAssignments,
   mergeUserData,
   listCustomTasks, createCustomTask, updateCustomTask, archiveCustomTask,
   assignmentTasksForStudent, assignmentTasksForTeacher,
