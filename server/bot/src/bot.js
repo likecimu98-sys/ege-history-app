@@ -186,6 +186,54 @@ bot.use(async (ctx, next) => {
     await next();
 });
 
+// ---------- Кнопка «открыть тренажёр» вне лички ----------
+// Telegram разрешает web_app-кнопки ТОЛЬКО в приватных чатах. В группе такое
+// сообщение не уходит вовсе: API отвечает BUTTON_TYPE_INVALID, grammY бросает,
+// bot.catch пишет строчку в лог — а человек не получает вообще ничего. Типом
+// чата не интересуется ни один из двадцати обработчиков, поэтому /start и /menu,
+// набранные в группе, просто молчали: 26 таких отказов с 08.08 по 12.08.2026.
+//
+// Правим на выходе из API, а не в каждом обработчике: так под защитой оказывается
+// и любая будущая клавиатура. В личке не меняется ничего — там ветка не работает.
+//
+// Ведём на чат с ботом, а не на APP_URL: тренажёр — Mini App, ему нужны initData
+// от Telegram, и прямая ссылка на сайт открыла бы его в браузере неавторизованным.
+const BOT_CHAT_LINK = `https://t.me/${BOT_USERNAME}`;
+
+// Осторожно в одну сторону: правим, только когда точно видно НЕличный чат.
+// У групп, супергрупп и каналов id отрицательный, у канала по имени — «@name».
+// Если chat_id не разобрать (или его нет — например, правка inline-сообщения),
+// не трогаем ничего: лучше оставить как есть, чем сломать работающий путь.
+function isNonPrivateTarget(chatId) {
+    if (typeof chatId === 'number') return chatId < 0;
+    const raw = String(chatId === undefined || chatId === null ? '' : chatId);
+    return raw.startsWith('-') || raw.startsWith('@');
+}
+
+// web_app → обычная url-кнопка с той же надписью. Прочие кнопки не трогаем.
+function withoutWebAppButtons(markup) {
+    const rows = markup && markup.inline_keyboard;
+    if (!Array.isArray(rows)) return markup;
+    let changed = false;
+    const safe = rows.map(row => (Array.isArray(row) ? row : []).map(btn => {
+        if (!btn || !btn.web_app) return btn;
+        changed = true;
+        const { web_app, ...rest } = btn;
+        return { ...rest, url: BOT_CHAT_LINK };
+    }));
+    return changed ? { inline_keyboard: safe } : markup;
+}
+
+bot.api.config.use(async (prev, method, payload, signal) => {
+    if (payload && payload.reply_markup && isNonPrivateTarget(payload.chat_id)) {
+        const fixed = withoutWebAppButtons(payload.reply_markup);
+        if (fixed !== payload.reply_markup) {
+            return prev(method, { ...payload, reply_markup: fixed }, signal);
+        }
+    }
+    return prev(method, payload, signal);
+});
+
 const appKb = () => new InlineKeyboard().webApp('🚀 Открыть тренажёр', APP_URL);
 
 // Клавиатура вызова на дуэль. Второй кнопкой — выключить эти уведомления.

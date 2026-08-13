@@ -29,7 +29,58 @@ set +a
 # тревогу. Деплой укладывается в секунды, реальная авария — нет.
 : "${FAIL_THRESHOLD:=3}"
 
+# Бэкапы. Снимок раз в шесть часов, поэтому девять — это уже точно не «не успел».
+: "${BACKUP_DIR:=/var/backups/ege-history}"
+: "${BACKUP_MAX_AGE_HOURS:=9}"
+: "${BACKUP_STATE_FILE:=/var/lib/ege-history/backup-watch.state}"
+: "${BACKUP_UNIT:=ege-backup-local.service}"
+
 mkdir -p "$(dirname "$STATE_FILE")"
+
+# ---------- Живы ли бэкапы ----------
+# 🔴 Дважды подряд бэкапы умирали ТИХО. В июле — неделю (после переезда на Beget
+# в /usr/local/sbin не оказалось скриптов, юниты падали с 203/EXEC). 12.08.2026 —
+# снова: миграции обществознания завели таблицы, на которые у роли ege_backup нет
+# прав, и pg_dump стал падать целиком. Оба раза таймер бодро тикал, юнит бодро
+# падал, и никто об этом не знал, пока не полезли смотреть руками.
+#
+# Сторож проверяет два разных отказа. Упавший юнит виден за две минуты. Свежесть
+# архива ловит то, чего состояние юнита не покажет вовсе: выключенный или
+# сломанный таймер — тогда юнит не падает, он просто не запускается.
+check_backups() {
+  local prev newest now age_h reason=''
+  prev="$(cat "$BACKUP_STATE_FILE" 2>/dev/null || echo fresh)"
+
+  if [[ "$(systemctl is-failed "$BACKUP_UNIT" 2>/dev/null || true)" == 'failed' ]]; then
+    reason="последний запуск $BACKUP_UNIT завершился ошибкой"
+  fi
+
+  newest="$(find "$BACKUP_DIR" -name '*.age' -printf '%T@\n' 2>/dev/null | sort -n | tail -1 || true)"
+  if [[ -z "$newest" ]]; then
+    reason="${reason:-в $BACKUP_DIR нет ни одного архива}"
+  else
+    now="$(date +%s)"
+    age_h=$(( (now - ${newest%.*}) / 3600 ))
+    if (( age_h >= BACKUP_MAX_AGE_HOURS )); then
+      reason="${reason:-свежему архиву уже ${age_h} ч}"
+    fi
+  fi
+
+  if [[ -n "$reason" ]]; then
+    # Об одной и той же беде сообщаем один раз, а не каждые две минуты.
+    if [[ "$prev" != 'stale' ]]; then
+      send "🔴 Бэкапы «Решай Историю» не делаются: ${reason}.
+База цела, но восстанавливаться сейчас не из чего.
+Смотреть: systemctl status ${BACKUP_UNIT}"
+      printf 'stale\n' > "$BACKUP_STATE_FILE"
+    fi
+  else
+    if [[ "$prev" == 'stale' ]]; then
+      send "✅ Бэкапы «Решай Историю» снова делаются (свежему архиву ${age_h:-0} ч)."
+    fi
+    printf 'fresh\n' > "$BACKUP_STATE_FILE"
+  fi
+}
 
 send() {
   [[ -n "${TELEGRAM_BOT_TOKEN:-}" && -n "${BACKUP_ADMIN_CHAT_ID:-}" ]] || return 0
@@ -38,6 +89,9 @@ send() {
     -d "chat_id=${BACKUP_ADMIN_CHAT_ID}" \
     --data-urlencode "text=$1" >/dev/null || true
 }
+
+# Раньше проверки API: у той есть ветка с exit 0, и после неё сюда уже не дойдёт.
+check_backups
 
 read -r prev_state prev_fails < <(cat "$STATE_FILE" 2>/dev/null || echo "up 0")
 prev_fails="${prev_fails:-0}"

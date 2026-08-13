@@ -31,8 +31,28 @@ function extract(source, header, name, where) {
 
 const clientMonday = extract(read('utils.js'),
   'function getMondayOfCurrentWeek', 'getMondayOfCurrentWeek', 'utils.js');
-const serverMonday = extract(read('server/api/src/server.js'),
-  'function mondayStr', 'mondayStr', 'server.js');
+
+// Серверная половина 12.08.2026 переехала из server.js в отдельный moscow-time.js:
+// обществознанию она нужна тоже, а копия неизбежно разъезжается с оригиналом. Тест
+// об этом не знал и падал на «mondayStr не найдена в server.js», хотя логика была
+// цела, — то есть неделю не охранял никто. Модуль ничего не тянет за собой и не
+// открывает соединений, поэтому берём его напрямую, а не вырезаем текстом:
+// текстовая вырезка ломается от любого такого переезда.
+const serverMonday = require(path.join(root, 'server/api/src/moscow-time')).mondayStr;
+
+// ── 0. Формула на сервере должна остаться в единственном экземпляре ──────────
+// Ровно ради этого её и выносили: две копии на два предмета разойдутся молча.
+{
+  const dir = path.join(root, 'server/api/src');
+  const walk = (at) => fs.readdirSync(at, { withFileTypes: true }).flatMap(e =>
+    e.isDirectory() ? walk(path.join(at, e.name)) : [path.join(at, e.name)]);
+  const definers = walk(dir)
+    .filter(f => f.endsWith('.js'))
+    .filter(f => /function mondayStr\s*\(/.test(fs.readFileSync(f, 'utf8')))
+    .map(f => path.relative(root, f));
+  assert.deepEqual(definers, [path.join('server', 'api', 'src', 'moscow-time.js')],
+    `формула понедельника объявлена не там, где ожидается: ${definers.join(', ') || '(нигде)'}`);
+}
 
 // ── 1. Граница недели — полночь по Москве ────────────────────────────────────
 const boundary = [
