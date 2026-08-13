@@ -21,13 +21,34 @@ module.exports = function initEngagement(ctx) {
     // клиентов. Дайджесты обходят всех учеников, поэтому читаем приватную коллекцию
     // целиком с кэшем на 10 минут, а collect() берёт приватный блоб | публичный.
     const privBase = base.replace('/public/data', '/private/data');
+
+    // ── Обход коллекции целиком ──
+    // 🔴 store/query отдаёт максимум 500 строк, если лимит не запрошен ЯВНО, и
+    // делает это молча: ни ошибки, ни признака обрезки. Учеников давно больше.
+    // 13.08.2026 утренний «Пульс» доложил «решено вчера: 0 строк» — на самом деле
+    // 1070 строк у 16 человек. Ровно ноль, а не «часть», по злой причине: без
+    // ORDER BY срез забирает 500 САМЫХ СТАРЫХ записей, а неравенства (lastActive
+    // > …) фильтруются уже ПОСЛЕ среза — активных там нет вовсе. По той же причине
+    // стрик-пинг и дедлайн-пинг каждый день писали в лог «0» и не слали ничего.
+    //
+    // Просим потолок явно и кричим, когда в него упёрлись. Молча больше не будет.
+    const SCAN_CAP = 5000; // выше API не отдаёт (store.js: Math.min(5000, …))
+    async function scanAll(what, ref) {
+        const q = await ref.limit(SCAN_CAP).get();
+        if (q.docs.length >= SCAN_CAP) {
+            console.error(`[engage] ВНИМАНИЕ: обход «${what}» упёрся в потолок ${SCAN_CAP} — ` +
+                'сводки неполные, нужна постраничная выборка');
+        }
+        return q;
+    }
+
     let _privCache = { at: 0, map: new Map() };
     async function privBlobs() {
         const fdb = getFdb(); if (!fdb) return _privCache.map;
         if (Date.now() - _privCache.at < 10 * 60 * 1000) return _privCache.map;
         const m = new Map();
         try {
-            const q = await fdb.collection(`${privBase}/state`).get();
+            const q = await scanAll('приватные состояния', fdb.collection(`${privBase}/state`));
             q.forEach(s => { const j = (s.data() || {}).fullStateJson; if (j && j.length > 10) m.set(String(s.id), j); });
             _privCache = { at: Date.now(), map: m };
         } catch (e) { console.error('[engage] privBlobs:', e.message); }
@@ -122,7 +143,7 @@ module.exports = function initEngagement(ctx) {
 
     async function loadClassStudents(code) {
         const fdb = getFdb(); if (!fdb) return [];
-        const q = await fdb.collection(`${base}/students`).where('classCode', '==', code).get();
+        const q = await scanAll(`группа ${code}`, fdb.collection(`${base}/students`).where('classCode', '==', code));
         await privBlobs();
         const out = [];
         q.forEach(s => { const d = s.data() || {}; if (d._mergedInto) return; out.push(collect(s.id, d)); });
@@ -190,7 +211,7 @@ module.exports = function initEngagement(ctx) {
         const fdb = getFdb(); if (!fdb) return;
         if (!redirect && !flagOn('streak_ping')) return;
         const cutoff = Date.now() - 2 * 86400000; // только недавно активные — не будим спящих
-        const q = await fdb.collection(`${base}/students`).where('lastActive', '>', cutoff).get();
+        const q = await scanAll('ученики (недавно активные)', fdb.collection(`${base}/students`).where('lastActive', '>', cutoff));
         await privBlobs();
         let pinged = 0;
         for (const s of q.docs) {
@@ -265,7 +286,7 @@ module.exports = function initEngagement(ctx) {
         const fdb = getFdb(); if (!fdb) return;
         if (!redirect && !flagOn('dl_ping')) return;
         const cutoff = Date.now() - 30 * 86400000; // совсем спящих не трогаем
-        const q = await fdb.collection(`${base}/students`).where('lastActive', '>', cutoff).get();
+        const q = await scanAll('ученики (недавно активные)', fdb.collection(`${base}/students`).where('lastActive', '>', cutoff));
         await privBlobs();
         const today = todayKey();
         let pinged = 0;
@@ -292,7 +313,7 @@ module.exports = function initEngagement(ctx) {
     // ~1200 чтений/день, для Firestore это копейки.
     async function runAdminPulse(redirect) {
         const fdb = getFdb(); if (!fdb || !ADMIN_ID) return;
-        const q = await fdb.collection(`${base}/students`).get();
+        const q = await scanAll('все ученики', fdb.collection(`${base}/students`));
         await privBlobs();
         const now = Date.now(); const yest = daysAgoKey(1);
         let total = 0, active24 = 0, active7 = 0, solvedYest = 0, streak3 = 0, hwPending = 0;
