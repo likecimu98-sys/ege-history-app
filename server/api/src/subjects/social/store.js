@@ -14,7 +14,7 @@
 
 const crypto = require('crypto');
 const { pool, tx } = require('../../db');
-const { mondayStr } = require('../../moscow-time');
+const { mondayStr, moscowDayStr } = require('../../moscow-time');
 const { leaderboardName } = require('../../display-name');
 const { JOIN_CODE_ALPHABET, fail } = require('./schema');
 
@@ -979,6 +979,97 @@ async function studentAssignments(userId, { db = pool } = {}) {
 }
 
 // ---------------------------------------------------------------------------
+// Сводки для бота
+// ---------------------------------------------------------------------------
+
+// Что бот может рассказать ученику о нём самом. До этой сводки бот умел ровно
+// две вещи: открыть приложение и записать в класс, а на вопрос «как у меня
+// дела» отвечал именем и Telegram ID — сведениями, которые ученику не нужны.
+//
+// Считается по событиям попыток, а не по снимку прогресса: снимок присылает
+// клиент, и доверять ему в цифрах, которые видит учитель, нельзя.
+async function studentDigest(userId, { db = pool } = {}) {
+  const totals = await db.query(
+    `SELECT COUNT(DISTINCT task_id)::int AS solved,
+            COUNT(*)::int AS attempts,
+            COALESCE(SUM(earned), 0)::int AS earned,
+            COALESCE(SUM(possible), 0)::int AS possible,
+            COALESCE(SUM(elapsed_ms), 0)::bigint AS elapsed_ms
+     FROM social_attempt_events WHERE user_id = $1`, [userId]);
+  const week = await db.query(
+    `SELECT COALESCE(points, 0)::int AS points, COALESCE(questions, 0)::int AS questions
+     FROM social_weekly_scores WHERE user_id = $1 AND week_start = $2`, [userId, mondayStr()]);
+  // Дни активности берём списком и считаем серию в коде: месяц строк дешевле,
+  // чем рекурсивный запрос, и правило «серия рвётся» видно глазами.
+  const days = await db.query(
+    `SELECT DISTINCT msk_day FROM social_attempt_events
+     WHERE user_id = $1 AND msk_day > (now() AT TIME ZONE 'Europe/Moscow')::date - 90
+     ORDER BY msk_day DESC`, [userId]);
+  const today = moscowDayStr();
+  let streak = 0;
+  for (const row of days.rows) {
+    const day = String(row.msk_day instanceof Date ? row.msk_day.toISOString().slice(0, 10) : row.msk_day);
+    const expected = shiftDay(today, -streak);
+    // Пропуск сегодняшнего дня серию не рвёт: человек мог ещё не сесть за
+    // занятия, и обнулять счёт с утра — значит наказывать ни за что.
+    if (day === expected) { streak += 1; continue; }
+    if (streak === 0 && day === shiftDay(today, -1)) { streak = 1; continue; }
+    break;
+  }
+  const row = totals.rows[0] || {};
+  const possible = numeric(row.possible);
+  return {
+    solved: numeric(row.solved),
+    attempts: numeric(row.attempts),
+    earned: numeric(row.earned),
+    possible,
+    percent: possible > 0 ? Math.round((numeric(row.earned) / possible) * 100) : 0,
+    elapsedMs: Number(row.elapsed_ms || 0),
+    weekPoints: numeric((week.rows[0] || {}).points),
+    weekQuestions: numeric((week.rows[0] || {}).questions),
+    streak,
+  };
+}
+
+function shiftDay(iso, delta) {
+  const date = new Date(`${iso}T00:00:00Z`);
+  date.setUTCDate(date.getUTCDate() + delta);
+  return date.toISOString().slice(0, 10);
+}
+
+// Что бот может рассказать учителю, не открывая кабинет: по каждой активной
+// домашке — сколько человек сдали и как класс справляется. Это ровно тот
+// вопрос, ради которого учитель лезет в кабинет с телефона.
+async function teacherDigest(userId, { db = pool } = {}) {
+  const result = await db.query(
+    `SELECT a.id, a.title, a.due_at, a.question_goal, c.title AS class_title,
+            (SELECT COUNT(*)::int FROM social_class_members m
+             WHERE m.class_id = a.class_id AND m.status = 'active') AS students,
+            (SELECT COUNT(*)::int FROM social_assignment_progress pr
+             WHERE pr.assignment_id = a.id AND pr.status = 'done') AS done,
+            (SELECT COALESCE(SUM(pr.earned), 0)::int FROM social_assignment_progress pr
+             WHERE pr.assignment_id = a.id) AS earned,
+            (SELECT COALESCE(SUM(pr.possible), 0)::int FROM social_assignment_progress pr
+             WHERE pr.assignment_id = a.id) AS possible
+     FROM social_assignments a
+     JOIN social_classes c ON c.id = a.class_id AND c.status = 'active'
+     WHERE c.teacher_user_id = $1 AND a.status = 'active'
+     ORDER BY a.issued_at DESC LIMIT 20`, [userId]);
+  return result.rows.map(item => {
+    const possible = numeric(item.possible);
+    return {
+      assignmentId: item.id,
+      title: item.title || 'Домашнее задание',
+      classTitle: item.class_title || '',
+      dueAt: item.due_at ? new Date(item.due_at).getTime() : null,
+      students: numeric(item.students),
+      done: numeric(item.done),
+      percent: possible > 0 ? Math.round((numeric(item.earned) / possible) * 100) : 0,
+    };
+  });
+}
+
+// ---------------------------------------------------------------------------
 // Уведомления (бот обществознания)
 // ---------------------------------------------------------------------------
 
@@ -1156,7 +1247,7 @@ module.exports = {
   weeklyLeaderboard,
   createClass, listClasses, ownedClass, updateClass, rotateJoinCode, classStudents, joinClass, myClasses,
   createAssignment, listAssignments, ownedAssignment, updateAssignment, cancelAssignment,
-  assignmentResults, assignmentStudentDetail, studentAssignments,
+  assignmentResults, assignmentStudentDetail, studentAssignments, studentDigest, teacherDigest,
   mergeUserData,
   listCustomTasks, createCustomTask, updateCustomTask, archiveCustomTask,
   assignmentTasksForStudent, assignmentTasksForTeacher,

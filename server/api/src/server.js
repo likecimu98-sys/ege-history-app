@@ -274,6 +274,34 @@ async function handleInternal(req, res, url) {
   }
   // Кто это по Telegram ID. Бот показывает учителю ссылку на кабинет, а
   // ученику — нет; без этого он не отличит одного от другого.
+  // Сводка для бота: что показать человеку, не заставляя открывать приложение.
+  // Раньше бот знал про человека только имя и роль, поэтому и рассказать мог
+  // лишь очевидное — «откройте тренажёр».
+  if (req.method === 'POST' && url.pathname === '/internal/v1/subjects/social/digest') {
+    const body = await readJson(req, 4096);
+    const socialStore = require('./subjects/social/store');
+    const found = await socialStore.whoIs(String(body.telegramId || ''));
+    if (!found) throw Object.assign(new Error('user_not_found'), { statusCode: 404 });
+    const teacher = found.role === 'teacher' || found.role === 'admin';
+    const [progress, assignments, teaching] = await Promise.all([
+      socialStore.studentDigest(found.userId),
+      socialStore.studentAssignments(found.userId),
+      teacher ? socialStore.teacherDigest(found.userId) : Promise.resolve([]),
+    ]);
+    return json(res, 200, {
+      user: found,
+      progress,
+      // Учителю его собственные домашки как ученику не нужны, а вот классы — да.
+      assignments: assignments.map(item => ({
+        id: item.id, title: item.title, classTitle: item.classTitle, dueAt: item.dueAt,
+        questionGoal: item.questionGoal, source: item.source,
+        done: item.progress.questions, status: item.progress.status,
+        earned: item.progress.earned, possible: item.progress.possible,
+      })),
+      teaching,
+    });
+  }
+
   if (req.method === 'POST' && url.pathname === '/internal/v1/subjects/social/whoami') {
     const body = await readJson(req, 4096);
     const socialStore = require('./subjects/social/store');
