@@ -82,9 +82,15 @@ $runner = "$stage.sh"
 try {
     $gitTrust = "safe.directory=$($repoRoot -replace '\\', '/')"
     if (-not $SkipDirtyCheck) {
-        $dirty = & git -c $gitTrust -C $repoRoot status --porcelain
+        # Scoped to the files this script actually ships, not the whole tree. The bundle
+        # is built from HEAD, so an uncommitted change elsewhere (the API, the web client,
+        # another agent mid-edit) cannot leak into it - refusing on those would only teach
+        # the operator to reach for -SkipDirtyCheck, which is the guard itself.
+        # An uncommitted change to a BOT file is a different matter: the committed version
+        # would ship and whatever sits on disk would be silently discarded.
+        $dirty = & git -c $gitTrust -C $repoRoot status --porcelain -- @($FILES.Keys)
         if ($LASTEXITCODE -ne 0) { throw 'git status failed' }
-        if ($dirty) { throw 'Commit changes before deploying the bot.' }
+        if ($dirty) { throw "Commit these bot files before deploying:`n$($dirty -join "`n")" }
     }
 
     Write-Host 'Staging bot files from HEAD...'
