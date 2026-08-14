@@ -7,14 +7,14 @@
             signInWithCredential, signOut, initializeFirestore, collection, doc, setDoc, getDoc,
             getDocs, addDoc, updateDoc, deleteDoc, deleteField, onSnapshot, query, where,
             orderBy, limit, runTransaction, arrayUnion, arrayRemove, vpsApiFetch, refreshVpsAuth
-        } from "./vps-sync-compat.js?v=20260812-3";
+        } from "./vps-sync-compat.js?v=20260814-1";
 
         // jsPDF грузился с cdnjs.cloudflare.com без SRI — то есть посторонний скрипт
         // исполнялся с полными правами страницы, а при недоступности CDN (у части
         // нашей аудитории это обычное дело) экспорт PDF просто не работал. Довод тот
         // же, что и для telegram-web-app.js: своя копия с того же origin.
         // Версия совпадает с прежней CDN-ной — 2.5.1, лежит в vendor/.
-        const VENDOR_JSPDF = 'vendor/jspdf.umd.min.js?v=20260812-3';
+        const VENDOR_JSPDF = 'vendor/jspdf.umd.min.js?v=20260814-1';
 
         const cloudConfig = { projectId: 'vps-postgresql' };
         
@@ -1189,6 +1189,39 @@
             duel.localSeq = (Number(duel.localSeq) || 0) + 1;
             return duel.localSeq;
         }
+        // ─── Сердцебиение ждущего ───────────────────────────────────────────
+        // Пока человек ищет соперника, его матч обязан выглядеть живым: и для других
+        // клиентов (они пропускают старые матчи и удаляют брошенные), и для сервера
+        // (тот убирает waiting-матчи, не менявшиеся две минуты). Отметка идёт раз в
+        // 20 секунд — с запасом внутри обоих окон.
+        //
+        // Отказ не роняет поиск: старый сервер aliveAt не разрешает, и тогда всё
+        // работает как раньше — матч живёт две минуты. Поэтому после первой же ошибки
+        // просто перестаём стучаться, а не повторяем отказ каждые 20 секунд.
+        let _duelHeartbeatTimer = null;
+        function _stopDuelHeartbeat() {
+            if (_duelHeartbeatTimer) { clearInterval(_duelHeartbeatTimer); _duelHeartbeatTimer = null; }
+        }
+        function _startDuelHeartbeat(matchId) {
+            _stopDuelHeartbeat();
+            const matchesRef = collection(db, 'artifacts', appId, 'public', 'data', 'matches');
+            let reported = false;
+            _duelHeartbeatTimer = setInterval(async () => {
+                const duel = window.state.duel;
+                if (!duel || !duel.searching || duel.matchId !== matchId) { _stopDuelHeartbeat(); return; }
+                try {
+                    await updateDoc(doc(matchesRef, matchId), { aliveAt: Date.now() });
+                } catch (e) {
+                    _ddbg('сердцебиение отклонено:', e && (e.code || e.message));
+                    if (!reported && window.reportSilent) {
+                        reported = true;
+                        window.reportSilent('сердцебиение поиска дуэли отклонено', e);
+                    }
+                    _stopDuelHeartbeat();
+                }
+            }, 20000);
+        }
+
         window.startDuelSearchDb = async function(mode) {
             // 'auto' — обычный вход с кнопки: присоединяемся к ЛЮБОМУ играбельному режиму,
             // а если соперника нет и создаём матч сами — бросаем монетку свайп/подбор.
@@ -1215,7 +1248,15 @@
                 let staleIds = [];
                 snapshot.forEach(docSnap => {
                     const data = docSnap.data();
-                    const age = now - (data.createdAt || 0);
+                    // Возраст считаем от ПОСЛЕДНЕГО ПРИЗНАКА ЖИЗНИ, а не от создания.
+                    // Поиск стал фоновым и бессрочным: ждущий держит матч сердцебиением
+                    // aliveAt. По createdAt он через минуту выглядел бы брошенным — его
+                    // пропускали бы как кандидата и удаляли как мусор, и «бесконечный»
+                    // поиск не пережил бы и двух минут.
+                    // Старый сервер aliveAt не отдаёт — тогда откат на createdAt, то есть
+                    // ровно прежнее поведение. Порядок выката клиента и API не важен.
+                    const seenAt = Number(data.aliveAt) || Number(data.createdAt) || 0;
+                    const age = now - seenAt;
                     // Брошенный матч (приложение закрыли во время поиска) — на уборку,
                     // иначе очередь разрастается и ломает выборку у всех.
                     if (data.player2 == null && age > 45000) { staleIds.push(docSnap.id); return; }
@@ -1300,6 +1341,7 @@
                     });
                     window.state.duel.matchId = newMatch.id;
                     _ddbg('создал свой матч', newMatch.id, '— жду соперника/авто-стыковки');
+                    _startDuelHeartbeat(newMatch.id);
                     listenToDuel(newMatch.id, myUid);
                 }
             } catch(e) {
@@ -1335,6 +1377,7 @@
                 
                 if (data.status === 'playing' && window.state.duel.searching) {
                     window.state.duel.searching = false;
+                    _stopDuelHeartbeat(); // соперник найден — ждать больше нечего
                     if (window.hideDuelChallenge) window.hideDuelChallenge(); // соперник найден — чужие вызовы убираем сразу
                     const opp = window.state.duel.isPlayer1 ? data.player2 : data.player1;
                     window.state.duel.oppName = opp ? opp.name : 'Соперник';
@@ -1449,6 +1492,9 @@
         window.cancelDuelDb = async function() {
             // ✅ FIX: Всегда чистим слушатель первым делом, вне зависимости от состояния
             if (duelUnsubscribe) { try { duelUnsubscribe(); } catch(e) {} duelUnsubscribe = null; }
+            // Сердцебиение гасим здесь же: иначе оно ещё до 20 секунд стучалось бы в
+            // матч, который мы прямо сейчас удаляем.
+            _stopDuelHeartbeat();
             if (!db || !window.state.duel.matchId) return;
             
             try {

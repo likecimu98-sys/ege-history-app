@@ -9,29 +9,83 @@
 let duelSearchTimer = null;
 let duelSearchSeconds = 0;
 
+// ─── Плашка «ищем соперника» ────────────────────────────────────────────────
+// Поиск идёт ФОНОМ и БЕЗ СРОКА. Раньше он держал модалку на весь экран и сам
+// сдавался через 30 секунд с «Никого нет в сети 😢»: заниматься в это время было
+// нельзя, а тридцати секунд в летней школе на 145 подписчиков не хватает почти
+// никогда. Решение владельца 14.08.2026: ждёт столько, сколько человек готов, а
+// бросить можно одной очевидной кнопкой сверху.
+//
+// Ждущий при этом ценен сам по себе: пока он висит, следующий нажавший «Дуэли»
+// состыкуется с ним мгновенно.
+const DUEL_BAR_ID = 'duel-search-bar';
+function _duelBarEl() {
+    let el = document.getElementById(DUEL_BAR_ID);
+    if (el) return el;
+    el = document.createElement('div');
+    el.id = DUEL_BAR_ID;
+    el.style.cssText = 'position:fixed;left:50%;top:calc(env(safe-area-inset-top,0px) + 8px);'
+        + 'transform:translateX(-50%) translateY(-160%);z-index:9600;display:flex;align-items:center;'
+        + 'gap:10px;max-width:94vw;padding:9px 12px;border-radius:14px;'
+        + 'background:linear-gradient(135deg,#4f46e5,#7c3aed);color:#fff;'
+        + 'box-shadow:0 10px 30px rgba(79,70,229,.45);font-size:12px;font-weight:800;'
+        + 'transition:transform .35s cubic-bezier(.2,.9,.3,1.2)';
+    const dot = document.createElement('span');
+    dot.textContent = '⚔️';
+    dot.style.cssText = 'font-size:15px;line-height:1';
+    const text = document.createElement('span');
+    text.id = 'duel-search-bar-text';
+    text.textContent = 'Ищем соперника…';
+    // Кнопка отмены — не «крестик в углу», а подписанная кнопка: бросить поиск
+    // должно быть так же очевидно, как его начать.
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.id = 'duel-search-bar-cancel';
+    btn.textContent = 'Отменить';
+    btn.setAttribute('aria-label', 'Отменить поиск соперника');
+    btn.style.cssText = 'margin-left:2px;padding:5px 10px;border:0;border-radius:999px;'
+        + 'background:rgba(255,255,255,.22);color:#fff;font-size:11px;font-weight:900;'
+        + 'cursor:pointer;white-space:nowrap';
+    btn.onclick = () => window.cancelDuelSearch('Поиск соперника отменён');
+    el.append(dot, text, btn);
+    document.body.appendChild(el);
+    return el;
+}
+function _duelBarShow() {
+    const el = _duelBarEl();
+    requestAnimationFrame(() => { el.style.transform = 'translateX(-50%) translateY(0)'; });
+}
+function _duelBarHide() {
+    const el = document.getElementById(DUEL_BAR_ID);
+    if (!el) return;
+    el.style.transform = 'translateX(-50%) translateY(-160%)';
+    setTimeout(() => { try { el.remove(); } catch (e) {} }, 400);
+}
+window.hideDuelSearchBar = _duelBarHide;
+function _duelBarTime(sec) {
+    const m = Math.floor(sec / 60);
+    return m ? `${m}:${String(sec % 60).padStart(2, '0')}` : `${sec}с`;
+}
+
 window.startDuelSearch = function(mode) {
     // Без аргумента — 'auto': присоединяемся к любому играбельному режиму, а свой матч
     // создаём свайпом или подбором по жребию (см. startDuelSearchDb). Явный режим
     // оставлен для отладки; классика живёт в коде, но кнопкой не вызывается.
     mode = mode || 'auto';
     haptic('medium');
-    showModal('duel-search-modal');
-    $('duel-search-status').innerText = mode === 'swipe' ? 'Поиск соперника (свайп)...'
-        : mode === 'match' ? 'Поиск соперника (подбор)...' : 'Поиск соперника...';
-    // Рейтинг Elo в окне поиска: видно, за что играем
-    const eloEl = $('duel-my-elo');
-    if (eloEl) {
-        const s = window.state.stats;
-        eloEl.textContent = `🏅 Твой рейтинг: ${Number(s.duelElo) || 1000}${(Number(s.duelGames) || 0) > 0 ? ` · ${s.duelWins || 0}П / ${s.duelLosses || 0}Пр` : ' · первый матч!'}`;
-        eloEl.classList.remove('hidden');
-    }
+    const s = window.state.stats;
+    const elo = Number(s.duelElo) || 1000;
     duelSearchSeconds = 0;
-    $('duel-search-timer').innerText = `Ожидание: 0с`;
-    duelSearchTimer = setInterval(() => {
-        duelSearchSeconds++;
-        $('duel-search-timer').innerText = `Ожидание: ${duelSearchSeconds}с`;
-        if (duelSearchSeconds > 30) window.cancelDuelSearch('Никого нет в сети 😢');
-    }, 1000);
+    _duelBarShow();
+    const paint = () => {
+        const t = document.getElementById('duel-search-bar-text');
+        if (t) t.textContent = `Ищем соперника · ${_duelBarTime(duelSearchSeconds)} · 🏅${elo}`;
+    };
+    paint();
+    clearInterval(duelSearchTimer);
+    // Ограничения по времени НЕТ намеренно. Матч на сервере живёт, пока клиент
+    // подтверждает, что ещё здесь (сердцебиение aliveAt в cloud-sync.js).
+    duelSearchTimer = setInterval(() => { duelSearchSeconds++; paint(); }, 1000);
     if (window.startDuelSearchDb) window.startDuelSearchDb(mode);
 };
 
@@ -40,10 +94,15 @@ window.startDuelSearch = function(mode) {
 window.cancelDuelSearch = function(msg) {
     haptic('light');
     clearInterval(duelSearchTimer);
+    duelSearchTimer = null;
+    _duelBarHide();
+    // Модалка остаётся у ПРИНЯТИЯ чужого вызова (acceptDuelChallenge) — там ожидание
+    // короткое и осмысленно держать внимание. Здесь закрываем на всякий случай.
     hideModal('duel-search-modal');
     if (msg) showToast('ℹ️', msg, 'bg-blue-500', 'border-blue-700');
     if (window.cancelDuelDb) window.cancelDuelDb();
 };
+
 
 // Принять вызов из всплывающего баннера
 window.acceptDuelChallenge = async function(matchId) {
@@ -61,7 +120,13 @@ window.acceptDuelChallenge = async function(matchId) {
 
 window.initDuelStart = function(startTime) {
     clearInterval(duelSearchTimer);
+    duelSearchTimer = null;
     haptic('success');
+    // Поиск шёл фоном — человек мог в этот момент решать таблицу. Убираем плашку и
+    // ПОКАЗЫВАЕМ модалку с отсчётом: без неё дуэль начиналась бы рывком, посреди
+    // чужого экрана, и первые секунды матча уходили бы на «что происходит».
+    _duelBarHide();
+    showModal('duel-search-modal');
     $('duel-search-status').innerText = "СОПЕРНИК НАЙДЕН!";
     $('cancel-duel-btn').classList.add('hidden');
     $('duel-search-timer').innerText = (window.state.duel.oppName || 'Соперник') + " готовится...";

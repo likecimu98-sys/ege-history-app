@@ -37,7 +37,12 @@ const PUBLIC_STUDENT_FIELDS = new Set([
 // игрока — это Telegram ID, и раздавать его посторонним нельзя. Клиенту от чужого
 // матча нужны только имя, рейтинг и ответ на вопрос «это мой собственный вызов?»,
 // который сервер считает сам (поле self) — см. publicMatch.
-const PUBLIC_MATCH_FIELDS = ['status', 'mode', 'createdAt', 'startTime', 'swipeSections'];
+// aliveAt — отметка «ищущий ещё здесь». Поиск соперника стал фоновым и
+// бесконечным (решение владельца 14.08.2026): человек продолжает заниматься, а
+// вызов висит, пока он сам не отменит. Без этой отметки отличить ждущего от
+// закрывшего вкладку нечем — клиент считал брошенным всё старше 45 секунд и
+// удалял, поэтому «бесконечный» поиск умирал бы через минуту.
+const PUBLIC_MATCH_FIELDS = ['status', 'mode', 'createdAt', 'startTime', 'swipeSections', 'aliveAt'];
 
 // 🔴 Поля, с которыми ученик имеет право СОЗДАТЬ матч. Перечень белый и строгий:
 // лишнее поле отвергает запрос ЦЕЛИКОМ, а не вырезается.
@@ -496,7 +501,10 @@ async function authorizeWrite(client, ref, ctx, current, patch, mode, { internal
           && fields.every(key => ['status', 'player2', 'startTime'].includes(key));
       }
       const actorKey = player1Own ? 'player1' : 'player2';
-      if (!Object.keys(patch || {}).every(key => key === actorKey || key === 'status')) return false;
+      // aliveAt правит только сам ждущий и только у своего матча — это его
+      // сердцебиение во время фонового поиска. Ничего, кроме времени, оно не несёт.
+      if (!Object.keys(patch || {}).every(key => key === actorKey || key === 'status' || key === 'aliveAt')) return false;
+      if (patch?.aliveAt !== undefined && !Number.isFinite(Number(patch.aliveAt))) return false;
       if (patch?.[actorKey] && String(patch[actorKey].uid || '') !== String(before[actorKey]?.uid || '')) return false;
       if (patch?.status && patch.status !== 'finished') return false;
       return true;
