@@ -989,12 +989,15 @@ async function studentAssignments(userId, { db = pool } = {}) {
 // Считается по событиям попыток, а не по снимку прогресса: снимок присылает
 // клиент, и доверять ему в цифрах, которые видит учитель, нельзя.
 async function studentDigest(userId, { db = pool } = {}) {
+  // Вклад одной попытки в «время за занятиями» ограничен десятью минутами:
+  // время меряет клиент от показа задания до ответа, и забытая открытой
+  // вкладка добавляла часы. На двух решённых заданиях это уже показывало час.
   const totals = await db.query(
     `SELECT COUNT(DISTINCT task_id)::int AS solved,
             COUNT(*)::int AS attempts,
             COALESCE(SUM(earned), 0)::int AS earned,
             COALESCE(SUM(possible), 0)::int AS possible,
-            COALESCE(SUM(elapsed_ms), 0)::bigint AS elapsed_ms
+            COALESCE(SUM(LEAST(elapsed_ms, 600000)), 0)::bigint AS elapsed_ms
      FROM social_attempt_events WHERE user_id = $1`, [userId]);
   const week = await db.query(
     `SELECT COALESCE(points, 0)::int AS points, COALESCE(questions, 0)::int AS questions
