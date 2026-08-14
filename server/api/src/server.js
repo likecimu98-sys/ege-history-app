@@ -258,6 +258,14 @@ async function handleInternal(req, res, url) {
       if (!found) throw Object.assign(new Error('user_not_found'), { statusCode: 404 });
       userId = found.userId;
     }
+    // Поиск по почте — для тех, кто вошёл через Google и бота не открывал.
+    // whoIs знает только telegram-личности, и таким людям бот отвечал «ещё не
+    // открывал тренажёр», хотя человек занимается каждый день.
+    if (!userId && body.email) {
+      const found = await socialStore.whoIsByEmail(String(body.email));
+      if (!found) throw Object.assign(new Error('user_not_found'), { statusCode: 404 });
+      userId = found.userId;
+    }
     if (!userId) throw Object.assign(new Error('user_not_found'), { statusCode: 404 });
     const updated = await socialStore.setRole(userId, String(body.role || 'teacher'));
     await pool.query('INSERT INTO audit_events(actor_user_id,action,target,details) VALUES(NULL,$1,$2,$3)',

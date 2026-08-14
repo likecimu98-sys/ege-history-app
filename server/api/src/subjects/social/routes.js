@@ -85,6 +85,14 @@ async function handleSocial(req, res, url, session, deps) {
         displayName: session.user.displayName,
         email: session.user.email,
         isAnonymous: session.user.isAnonymous,
+        // Каких способов входа НЕ хватает — знание клиента, а не догадка. По
+        // одному isAnonymous «телеграм + гугл» и «только телеграм» неразличимы,
+        // и приложение не может предложить привязать второй способ. Ровно
+        // из-за этого ученик, занимавшийся в браузере под Google, открывал
+        // мини-апп, попадал в пустой аккаунт и не видел ни одной подсказки,
+        // как соединить их обратно.
+        hasGoogle: (session.user.identities || []).some(item => item.provider === 'google'),
+        hasTelegram: (session.user.identities || []).some(item => item.provider === 'telegram'),
       },
       profile: {
         displayName: profile.display_name || '',
@@ -93,6 +101,19 @@ async function handleSocial(req, res, url, session, deps) {
       },
       serverTime: now,
     });
+  }
+
+  // Заявка на роль учителя, поданная С САЙТА. До неё заявка существовала только
+  // кнопкой в боте: человек, вошедший через Google и не открывавший бота, не мог
+  // ни попросить роль, ни получить её — выдача шла по telegram id.
+  if (method === 'POST' && path === '/me/teacher-request') {
+    requireMutationAuth(req, session);
+    // Гость живёт в одном браузере и исчезает вместе с ним. Классы и домашние
+    // задания пережили бы такого учителя, а он их — нет.
+    if (session.user.isAnonymous) throw fail('sign_in_required', 403);
+    const result = await store.requestTeacherRole(session.userId, [...env.adminTelegramIds], {});
+    if (result.status === 'unknown') throw fail('user_not_found', 404);
+    return json(res, 200, result);
   }
 
   if (method === 'PATCH' && path === '/me/profile') {

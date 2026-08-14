@@ -1061,6 +1061,79 @@ async function failNotification(id, error, { db = pool } = {}) {
 // Кто это по Telegram ID: нужно боту, который знает человека только так.
 // Роль отдаём, чтобы бот мог показать учителю ссылку на кабинет и не показывать
 // её ученику. Ничего, кроме имени и роли, наружу не уходит.
+// Кто это по почте. Нужен, чтобы выдать роль человеку, вошедшему через Google:
+// whoIs умеет искать только по telegram-личности, и для такого человека бот
+// отвечал «ещё не открывал тренажёр» — неправду.
+//
+// 🔴 Ровно один кандидат, иначе отказ. Почта в user_identities приходит от
+// провайдера, в app_users могла остаться от переноса из Firebase, и совпадений
+// может оказаться несколько. Выдать роль учителя не тому человеку — это доступ
+// к чужим классам, поэтому при неоднозначности лучше не сделать ничего.
+async function whoIsByEmail(email, { db = pool } = {}) {
+  const needle = String(email || '').trim().toLowerCase();
+  if (!needle || !needle.includes('@')) return null;
+  const result = await db.query(
+    `SELECT DISTINCT u.id AS user_id, COALESCE(p.display_name, u.display_name, '') AS display_name,
+            COALESCE(p.role, 'student') AS role
+     FROM app_users u
+     LEFT JOIN user_identities i ON i.user_id = u.id
+     LEFT JOIN social_profiles p ON p.user_id = u.id
+     WHERE u.disabled_at IS NULL AND (lower(u.email) = $1 OR lower(i.email) = $1)`,
+    [needle]);
+  if (result.rowCount !== 1) return null;
+  const row = result.rows[0];
+  return { userId: row.user_id, displayName: row.display_name, role: row.role };
+}
+
+// Заявка на роль учителя, поданная С САЙТА. До неё заявку можно было отправить
+// только кнопкой в боте, то есть человеку без Telegram — никак: и заявку не
+// подать, и роль ему не выдать, потому что выдача шла по telegram id.
+//
+// Заявка кладётся в ту же очередь уведомлений — по одному заданию на каждого
+// админа. Своей доставки у API нет, а бот очередь и так разбирает.
+//
+// user_id у задания — ЗАЯВИТЕЛЬ, а не получатель: получатель здесь админ, и его
+// в app_users может не быть вовсе. Благодаря этому заявка исчезает вместе с
+// удалённым аккаунтом и переезжает при слиянии аккаунтов.
+async function requestTeacherRole(userId, adminTelegramIds, { db = pool } = {}) {
+  const admins = [...new Set((adminTelegramIds || []).map(String).filter(Boolean))];
+  const who = await db.query(
+    `SELECT COALESCE(p.display_name, u.display_name, '') AS display_name, COALESCE(u.email, '') AS email,
+            COALESCE(p.role, 'student') AS role,
+            EXISTS(SELECT 1 FROM user_identities i WHERE i.user_id = u.id AND i.provider = 'telegram') AS has_telegram
+     FROM app_users u LEFT JOIN social_profiles p ON p.user_id = u.id
+     WHERE u.id = $1 AND u.disabled_at IS NULL`, [userId]);
+  if (!who.rowCount) return { status: 'unknown' };
+  const row = who.rows[0];
+  if (row.role === 'teacher' || row.role === 'admin') return { status: 'already', role: row.role };
+  if (!admins.length) return { status: 'no_admins' };
+
+  // Повторное нажатие не должно будить всех админов заново.
+  const pending = await db.query(
+    `SELECT 1 FROM social_notification_jobs
+     WHERE kind = 'teacher_request' AND user_id = $1 AND status IN ('pending', 'processing') LIMIT 1`,
+    [userId]);
+  if (pending.rowCount) return { status: 'pending' };
+
+  const payload = {
+    userId: String(userId),
+    displayName: row.display_name || '',
+    email: row.email || '',
+    hasTelegram: row.has_telegram === true,
+  };
+  const recipients = admins.map((_, index) => `(${index + 3})`).join(', ');
+  const inserted = await db.query(
+    // 🔴 Список админов разворачивается в VALUES, а не в unnest: проверка
+    // изоляции читает «FROM unnest» как обращение к таблице и падает. Значения
+    // всё равно параметризованы, в текст запроса не подставляется ничего.
+    `INSERT INTO social_notification_jobs(assignment_id, user_id, telegram_id, kind, payload)
+     SELECT NULL, $1, list.admin, 'teacher_request', $2::jsonb
+     FROM (VALUES ${recipients}) AS list(admin)
+     RETURNING id`,
+    [userId, JSON.stringify(payload), ...admins]);
+  return { status: 'sent', delivered: inserted.rowCount };
+}
+
 async function whoIs(telegramId, { db = pool } = {}) {
   const result = await db.query(
     `SELECT u.id AS user_id, COALESCE(p.display_name, u.display_name, '') AS display_name,
@@ -1075,7 +1148,7 @@ async function whoIs(telegramId, { db = pool } = {}) {
 }
 
 module.exports = {
-  ensureProfile, patchProfile, roleOf, setRole, whoIs,
+  ensureProfile, patchProfile, roleOf, setRole, whoIs, whoIsByEmail, requestTeacherRole,
   enqueueAssignmentNotifications, claimNotifications, ackNotification, failNotification,
   getState, putState,
   saveAttempts, insertEvents, recomputeAssignment, activeAssignmentsFor,
