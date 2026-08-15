@@ -1163,20 +1163,28 @@ async function failNotification(id, error, { db = pool } = {}) {
 // провайдера, в app_users могла остаться от переноса из Firebase, и совпадений
 // может оказаться несколько. Выдать роль учителя не тому человеку — это доступ
 // к чужим классам, поэтому при неоднозначности лучше не сделать ничего.
+// 🔴 Сначала ищем СРЕДИ УЧЕНИКОВ ОБЩЕСТВОЗНАНИЯ и только потом среди всех. База
+// общая с историей: одна и та же почта живёт и там, и здесь, поэтому «ровно один
+// кандидат» на общей выборке легко превращается в двух — и роль не выдаётся
+// никому, хотя в обществознании человек ровно один. Запасной проход по всем
+// оставлен намеренно: он позволяет выдать роль заранее, ещё до первого захода.
 async function whoIsByEmail(email, { db = pool } = {}) {
   const needle = String(email || '').trim().toLowerCase();
   if (!needle || !needle.includes('@')) return null;
-  const result = await db.query(
-    `SELECT DISTINCT u.id AS user_id, COALESCE(p.display_name, u.display_name, '') AS display_name,
-            COALESCE(p.role, 'student') AS role
-     FROM app_users u
-     LEFT JOIN user_identities i ON i.user_id = u.id
-     LEFT JOIN social_profiles p ON p.user_id = u.id
-     WHERE u.disabled_at IS NULL AND (lower(u.email) = $1 OR lower(i.email) = $1)`,
-    [needle]);
-  if (result.rowCount !== 1) return null;
-  const row = result.rows[0];
-  return { userId: row.user_id, displayName: row.display_name, role: row.role };
+  const lookup = async socialOnly => {
+    const result = await db.query(
+      `SELECT DISTINCT u.id AS user_id, COALESCE(p.display_name, u.display_name, '') AS display_name,
+              COALESCE(p.role, 'student') AS role
+       FROM app_users u
+       LEFT JOIN user_identities i ON i.user_id = u.id
+       ${socialOnly ? 'JOIN' : 'LEFT JOIN'} social_profiles p ON p.user_id = u.id
+       WHERE u.disabled_at IS NULL AND (lower(u.email) = $1 OR lower(i.email) = $1)`,
+      [needle]);
+    if (result.rowCount !== 1) return null;
+    const row = result.rows[0];
+    return { userId: row.user_id, displayName: row.display_name, role: row.role };
+  };
+  return (await lookup(true)) || lookup(false);
 }
 
 // Заявка на роль учителя, поданная С САЙТА. До неё заявку можно было отправить
