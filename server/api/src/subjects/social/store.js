@@ -127,13 +127,15 @@ async function insertEvents(client, userId, events) {
     const result = await client.query(
       `INSERT INTO social_attempt_events(
          event_id, user_id, task_id, task_type, block_ids, topic_codes, has_images,
-         correct, earned, possible, elapsed_ms, kind, exam_line, attempted_at, msk_day, week_start)
-       VALUES ($1,$2,$3,$4,$5::text[],$6::text[],$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)
+         correct, earned, possible, elapsed_ms, kind, exam_line, attempted_at, msk_day, week_start,
+         given_answer)
+       VALUES ($1,$2,$3,$4,$5::text[],$6::text[],$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17)
        ON CONFLICT (event_id) DO NOTHING
        RETURNING event_id`,
       [event.eventId, userId, event.taskId, event.taskType, event.blockIds, event.topicCodes,
         event.hasImages, event.correct, event.earned, event.possible, event.elapsedMs,
-        event.kind, event.examLine, new Date(event.attemptedAt).toISOString(), event.mskDay, event.weekStart]);
+        event.kind, event.examLine, new Date(event.attemptedAt).toISOString(), event.mskDay, event.weekStart,
+        event.givenAnswer || '']);
     if (result.rowCount) accepted.push(event);
   }
   return accepted;
@@ -874,7 +876,7 @@ async function assignmentStudentDetail(teacherUserId, assignmentId, studentUserI
   }
   const attempts = await db.query(
     `SELECT DISTINCT ON (e.task_id) e.task_id, e.task_type, e.exam_line, e.topic_codes, e.block_ids,
-            e.correct, e.earned, e.possible, e.elapsed_ms, e.attempted_at
+            e.correct, e.earned, e.possible, e.elapsed_ms, e.attempted_at, e.given_answer
      FROM social_attempt_events e
      WHERE e.user_id = $1
        AND e.attempted_at >= $2
@@ -897,6 +899,9 @@ async function assignmentStudentDetail(teacherUserId, assignmentId, studentUserI
     possible: numeric(row.possible),
     elapsedMs: numeric(row.elapsed_ms),
     attemptedAt: row.attempted_at ? new Date(row.attempted_at).getTime() : null,
+    // Пусто у попыток, сделанных до появления колонки: восстановить их неоткуда,
+    // и кабинет обязан сказать «ответ не сохранён», а не показать пустоту.
+    givenAnswer: row.given_answer || '',
   }));
   // Порядок — по времени ответа: учителю важна последовательность занятия, а не
   // алфавит идентификаторов, по которому шла выборка первой попытки.

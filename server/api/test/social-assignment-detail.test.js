@@ -91,3 +91,38 @@ test('маршрут разбора отдельный и разбирает о�
   assert.ok(routesSource.includes('store.assignmentStudentDetail(userId, assignmentId, studentId'),
     'маршрут обязан передавать учителя из сессии, а не из запроса');
 });
+
+// 🔴 Тест того же класса, что поймал 08P01 в заявке на учителя: сверяем число
+// плейсхолдеров с числом параметров, собирая запрос по-настоящему. Строковая
+// проверка «в запросе есть given_answer» пропустила бы сдвиг нумерации.
+test('вставка попытки: плейсхолдеров ровно столько же, сколько параметров', async () => {
+  const store = require('../src/subjects/social/store');
+  const seen = [];
+  const client = {
+    async query(text, params) {
+      seen.push({ text, params });
+      return { rowCount: 1, rows: [{ event_id: 'e1' }] };
+    },
+  };
+  const event = {
+    eventId: 'e1', taskId: 'fipi-1', taskType: 'choice', blockIds: ['1'], topicCodes: ['1.1'],
+    hasImages: false, correct: false, earned: 0, possible: 2, elapsedMs: 1000,
+    kind: 'homework', examLine: 5, attemptedAt: Date.now(),
+    mskDay: '2026-08-15', weekStart: '2026-08-10', givenAnswer: '134',
+  };
+  const accepted = await store.insertEvents(client, '11111111-1111-1111-1111-111111111111', [event]);
+  assert.equal(accepted.length, 1, 'событие должно приняться');
+
+  const insert = seen.find(call => /INSERT INTO social_attempt_events/.test(call.text));
+  assert.ok(insert, 'вставка обязана случиться');
+  const placeholders = new Set(insert.text.match(/\$\d+/g) || []);
+  assert.equal(placeholders.size, insert.params.length,
+    'у каждого параметра обязан быть свой плейсхолдер, иначе Postgres ответит 08P01');
+  assert.ok(insert.params.includes('134'), 'ответ ученика обязан уехать в базу');
+});
+
+test('разбор отдаёт ответ ученика', () => {
+  const fn = storeSource.slice(storeSource.indexOf('async function assignmentStudentDetail('));
+  assert.ok(fn.includes('e.given_answer'), 'ответ обязан выбираться из события');
+  assert.ok(fn.includes('givenAnswer: row.given_answer'), 'и доезжать до кабинета');
+});

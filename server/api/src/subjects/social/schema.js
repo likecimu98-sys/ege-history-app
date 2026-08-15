@@ -153,6 +153,11 @@ function attemptEvent(raw, { now = Date.now() } = {}) {
     possible,
     elapsedMs: integer(source.elapsedMs, { min: 0, max: 60 * 60 * 1000, fallback: 0 }),
     kind: ATTEMPT_KINDS.includes(String(source.kind)) ? String(source.kind) : 'practice',
+    // Что ученик ответил. Нужно учителю в разборе: без этого видно только
+    // «неверно», и объяснять классу нечего. Длина с запасом — обычно это
+    // последовательность цифр, но у задания учителя вариантов может быть
+    // больше, а молча обрезанный ответ хуже отсутствующего.
+    givenAnswer: text(source.givenAnswer, { max: 40, field: 'givenAnswer' }),
     examLine: integer(source.examLine, { min: 0, max: 16, fallback: 0 }),
     attemptedAt,
     mskDay: moscowDayStr(attemptedAt),
