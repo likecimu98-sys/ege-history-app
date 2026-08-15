@@ -69,6 +69,36 @@ test('заявка кладётся в очередь по одному зада
   assert.ok(fn.includes('$1, list.admin'), 'в задании заявитель и получатель — разные поля');
 });
 
+// 🔴 Этот тест появился после того, как заявка с сайта падала с 500 ВСЕГДА, с
+// первого дня: строка собирала «VALUES (3)» — число вместо плейсхолдера $3.
+// Postgres находил в запросе два параметра, получал три и отвечал 08P01.
+// Проверка по тексту запроса («есть FROM (VALUES») этого не видела, поэтому
+// здесь запрос собирается по-настоящему и сверяется с числом параметров.
+test('очередь получает ровно столько параметров, сколько плейсхолдеров', async () => {
+  const store = require('../src/subjects/social/store');
+  const seen = [];
+  const db = {
+    async query(text, params) {
+      seen.push({ text, params });
+      if (/INSERT INTO social_notification_jobs/.test(text)) return { rowCount: 2, rows: [{ id: 1 }, { id: 2 }] };
+      if (/FROM app_users/.test(text)) {
+        return { rowCount: 1, rows: [{ display_name: 'Тест', email: 'a@example.com', role: 'student', has_telegram: false }] };
+      }
+      return { rowCount: 0, rows: [] };
+    },
+  };
+  const result = await store.requestTeacherRole('11111111-1111-1111-1111-111111111111', ['111', '222'], { db });
+  assert.equal(result.status, 'sent', 'заявка обязана дойти до очереди');
+
+  const insert = seen.find(call => /INSERT INTO social_notification_jobs/.test(call.text));
+  assert.ok(insert, 'вставка в очередь должна была случиться');
+  const placeholders = new Set(insert.text.match(/\$\d+/g) || []);
+  assert.equal(placeholders.size, insert.params.length,
+    'у каждого параметра обязан быть свой плейсхолдер, иначе Postgres отвечает 08P01');
+  assert.ok(/VALUES \(\$\d/.test(insert.text), 'в VALUES стоят плейсхолдеры, а не числа');
+  assert.deepEqual(insert.params.slice(2), ['111', '222'], 'получатели уходят параметрами');
+});
+
 test('заявку не принимают у гостя', () => {
   const start = routesSource.indexOf("path === '/me/teacher-request'");
   assert.notEqual(start, -1, 'маршрут заявки должен существовать');

@@ -1223,7 +1223,12 @@ async function requestTeacherRole(userId, adminTelegramIds, { db = pool } = {}) 
     email: row.email || '',
     hasTelegram: row.has_telegram === true,
   };
-  const recipients = admins.map((_, index) => `(${index + 3})`).join(', ');
+  // 🔴 Плейсхолдеры, а не значения: было `(${index + 3})`, что давало SQL
+  // «VALUES (3)» — литеральное число вместо параметра. Postgres видел в запросе
+  // два параметра, получал три и отвечал 08P01, то есть заявка с сайта падала
+  // с 500 ВСЕГДА, с первого дня. Тип задаём явно: у VALUES его вывести не из
+  // чего, а telegram_id — текст.
+  const recipients = admins.map((_, index) => `($${index + 3}::text)`).join(', ');
   const inserted = await db.query(
     // 🔴 Список админов разворачивается в VALUES, а не в unnest: проверка
     // изоляции читает «FROM unnest» как обращение к таблице и падает. Значения
