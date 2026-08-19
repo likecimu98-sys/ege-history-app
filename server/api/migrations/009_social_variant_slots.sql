@@ -29,6 +29,13 @@
 
 BEGIN;
 
+-- 🔴 Порядок здесь не косметический. PostgreSQL отказывается снимать NOT NULL с
+-- колонки, входящей в первичный ключ («column is in a primary key»), поэтому
+-- ключ снимается ПЕРВЫМ. Обратный порядок роняет всю миграцию, а вместе с ней —
+-- и запуск сервера: миграции прогоняются при старте.
+ALTER TABLE social_assignment_tasks
+  DROP CONSTRAINT IF EXISTS social_assignment_tasks_pkey;
+
 ALTER TABLE social_assignment_tasks
   ALTER COLUMN custom_task_id DROP NOT NULL;
 
@@ -38,8 +45,6 @@ ALTER TABLE social_assignment_tasks
 ALTER TABLE social_assignment_tasks
   ADD COLUMN IF NOT EXISTS exam_line integer NOT NULL DEFAULT 0;
 
-ALTER TABLE social_assignment_tasks
-  DROP CONSTRAINT IF EXISTS social_assignment_tasks_pkey;
 ALTER TABLE social_assignment_tasks
   ADD CONSTRAINT social_assignment_tasks_pkey PRIMARY KEY (assignment_id, position);
 

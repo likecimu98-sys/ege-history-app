@@ -279,4 +279,16 @@ test('миграция состава идемпотентна и не теря�
   // Значения по умолчанию обязательны: у всех уже выданных вариантов состав
   // записан без номеров, и без DEFAULT миграция уронила бы существующие строки.
   assert.ok(!/DROP\s+(TABLE|COLUMN)/i.test(sql), 'миграция не удаляет ни таблиц, ни колонок');
+
+  // 🔴 Порядок команд. PostgreSQL отказывается снимать NOT NULL с колонки,
+  // входящей в первичный ключ: «column "custom_task_id" is in a primary key».
+  // Миграции прогоняются при СТАРТЕ сервера, поэтому обратный порядок валит не
+  // только миграцию, но и весь запуск — API уходит в перезапуск по кругу.
+  // Ровно это и случилось 19.08.2026 при первой выкатке.
+  const dropKey = sql.indexOf('DROP CONSTRAINT IF EXISTS social_assignment_tasks_pkey');
+  const dropNotNull = sql.indexOf('ALTER COLUMN custom_task_id DROP NOT NULL');
+  const addKey = sql.indexOf('ADD CONSTRAINT social_assignment_tasks_pkey');
+  assert.ok(dropKey > 0 && dropNotNull > 0 && addKey > 0, 'все три команды ключа на месте');
+  assert.ok(dropKey < dropNotNull, 'ключ снимается ДО снятия NOT NULL');
+  assert.ok(dropNotNull < addKey, 'новый ключ ставится после');
 });
