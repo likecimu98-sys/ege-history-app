@@ -136,7 +136,14 @@ test('ни одна предметная миграция не изменяет 
     for (const [, altered] of sql.matchAll(/\bALTER\s+TABLE\s+(?:IF\s+EXISTS\s+)?([A-Za-z_][A-Za-z0-9_]*)/gi)) {
       assert.ok(altered.startsWith('social_'), `${name}: миграция изменяет чужую таблицу «${altered}»`);
     }
-    assert.ok(!/\bDROP\b/i.test(sql), `${name}: в миграции этапа 2 не должно быть DROP`);
+    // Запрет на DROP защищает ДАННЫЕ: таблицу, колонку, схему, индекс. Снятие
+    // ограничения (NOT NULL, первичный ключ) данных не теряет — 009 переносит
+    // ключ состава варианта с задания на место в бланке, потому что старый ключ
+    // физически не мог удержать строку из банка ФИПИ. Запрет на любое слово
+    // DROP означал бы, что однажды написанное ограничение нельзя исправить.
+    const destructive = sql.match(/\bDROP\s+(TABLE|COLUMN|SCHEMA|DATABASE|INDEX|VIEW)\b/i);
+    assert.ok(!destructive, `${name}: миграция уничтожает «${destructive && destructive[0]}»`);
+    assert.ok(!/\bTRUNCATE\b/i.test(sql), `${name}: в миграции предмета не должно быть TRUNCATE`);
     for (const table of referencedTables(sql)) {
       assert.ok(table.startsWith('social_'), `${name}: миграция трогает таблицу «${table}»`);
     }

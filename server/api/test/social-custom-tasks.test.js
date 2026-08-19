@@ -147,7 +147,7 @@ test('задание архивируется, а не удаляется', () =
 });
 
 test('состав варианта считается по позиции, а не по случайному порядку', () => {
-  assert.match(storeSource, /INSERT INTO social_assignment_tasks\(assignment_id, custom_task_id, position\)/);
+  assert.match(storeSource, /INSERT INTO social_assignment_tasks\(assignment_id, custom_task_id, position, bank_task_id, exam_line\)/);
   assert.match(storeSource, /ORDER BY at\.position/);
 });
 

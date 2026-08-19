@@ -208,7 +208,7 @@ function assignmentCreate(body, { now = Date.now() } = {}) {
   const source = body && typeof body === 'object' ? body : {};
   const unknown = Object.keys(source).filter(key => ![
     'classId', 'title', 'types', 'blocks', 'topics', 'questionGoal', 'includeImages', 'dueAt',
-    'source', 'taskIds',
+    'source', 'taskIds', 'tasks',
   ].includes(key));
   if (unknown.length) fail('assignment_unknown_field', 400, { fields: unknown.slice(0, 5) });
 
@@ -217,15 +217,22 @@ function assignmentCreate(body, { now = Date.now() } = {}) {
   // в пересчёт выполнения попали бы посторонние задания, решённые в это же время.
   const origin = String(source.source || 'bank') === 'custom' ? 'custom' : 'bank';
   if (origin === 'custom') {
-    const taskIds = customTaskIds(source.taskIds);
+    // Собранный вариант: у каждого задания есть место в бланке, и часть мест
+    // занимают задания ФИПИ. Плоский taskIds — прежний способ выдать несколько
+    // своих заданий без номеров; он остаётся, потому что так выданные домашки
+    // уже живут у классов.
+    const slots = source.tasks != null
+      ? variantSlots(source.tasks)
+      : customTaskIds(source.taskIds).map(id => ({ line: 0, customTaskId: id, bankTaskId: '' }));
     return {
       classId,
       source: 'custom',
-      taskIds,
+      taskIds: slots.filter(slot => slot.customTaskId).map(slot => slot.customTaskId),
+      slots,
       title: text(source.title, { max: 120, field: 'title' }),
       types: [], blocks: [], topics: [],
       // Цель варианта — все его задания: «сдал вариант» означает «решил всё».
-      questionGoal: taskIds.length,
+      questionGoal: slots.length,
       includeImages: false,
       dueAt: dueAtOf(source, now),
     };
@@ -237,6 +244,7 @@ function assignmentCreate(body, { now = Date.now() } = {}) {
     classId,
     source: 'bank',
     taskIds: [],
+    slots: [],
     title: text(source.title, { max: 120, field: 'title' }),
     types,
     blocks,
@@ -377,6 +385,43 @@ function customTask(body) {
   };
 }
 
+// Состав собранного варианта: место в бланке и задание, которое на нём стоит.
+//
+// 🔴 На строке ровно один источник — своё задание учителя ИЛИ задание ФИПИ.
+// Строка без источника это вопрос, который нечем показать; строка с двумя —
+// вопрос, который непонятно как считать. Номер строки задаёт и вес: №3 стоит
+// балл, №6 — два, хотя механика у них одна.
+function variantSlots(value) {
+  if (!Array.isArray(value) || !value.length) fail('task_ids_required');
+  if (value.length > 16) fail('variant_too_long');
+  const slots = [];
+  const lines = new Set();
+  const tasks = new Set();
+  for (const item of value) {
+    const source = item && typeof item === 'object' ? item : {};
+    const unknown = Object.keys(source).filter(key => !['line', 'customTaskId', 'bankTaskId'].includes(key));
+    if (unknown.length) fail('variant_unknown_field', 400, { fields: unknown.slice(0, 5) });
+    const line = integer(source.line, { min: 0, max: 16, fallback: 0 });
+    if (!line) fail('variant_line_required');
+    if (lines.has(line)) fail('variant_line_repeats', 400, { line });
+    lines.add(line);
+    const customTaskId = text(source.customTaskId, { max: 64, field: 'customTaskId' });
+    const bankTaskId = text(source.bankTaskId, { max: 80, field: 'bankTaskId' });
+    if (Boolean(customTaskId) === Boolean(bankTaskId)) fail('variant_needs_one_source', 400, { line });
+    if (bankTaskId && !TASK_ID_RE.test(bankTaskId)) fail('variant_bank_task_unknown', 400, { line });
+    // Одно и то же задание дважды в варианте — это потерянный вопрос: вторая
+    // попытка по нему не считается, и «сдал всё» станет недостижимым.
+    const key = customTaskId || bankTaskId;
+    if (tasks.has(key)) fail('variant_task_repeats', 400, { line });
+    tasks.add(key);
+    slots.push({ line, customTaskId, bankTaskId });
+  }
+  // Порядок в варианте — порядок бланка, а не порядок, в котором учитель
+  // заполнял строки.
+  slots.sort((left, right) => left.line - right.line);
+  return slots;
+}
+
 // Список заданий варианта. Пустой список — это ДЗ, которое нельзя выполнить,
 // поэтому он отвергается, а не сохраняется «пока пустым».
 function customTaskIds(value) {
@@ -411,5 +456,5 @@ module.exports = {
   fail, text, integer, typeList, blockList, topicList, settings,
   profilePatch, statePut, attemptEvent, attemptBatch,
   classCreate, classPatch, assignmentCreate, assignmentPatch, joinCode,
-  customTask, customTaskIds, optionList, targetList,
+  customTask, customTaskIds, variantSlots, optionList, targetList,
 };

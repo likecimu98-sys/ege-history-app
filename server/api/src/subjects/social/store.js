@@ -170,7 +170,7 @@ async function activeAssignmentsFor(client, userId) {
      JOIN social_class_members m ON m.class_id = a.class_id AND m.user_id = $1 AND m.status = 'active'
      JOIN social_classes c ON c.id = a.class_id AND c.status = 'active'
      LEFT JOIN LATERAL (
-       SELECT array_agg(at.custom_task_id::text) AS ids
+       SELECT array_agg(COALESCE(at.custom_task_id::text, at.bank_task_id)) AS ids
        FROM social_assignment_tasks at WHERE at.assignment_id = a.id
      ) t ON true
      WHERE a.status = 'active'`,
@@ -509,11 +509,14 @@ async function createAssignment(teacherUserId, data, { db = pool, transact = tx 
     // Чужое задание в свой вариант не попадёт: выбираем только собственные и
     // сверяем количество. Молча выдать вариант из четырёх заданий вместо пяти
     // нельзя — учитель этого не заметит, а ученик не сможет его закрыть.
-    const owned = await client.query(
-      `SELECT id FROM social_custom_tasks
-       WHERE teacher_user_id = $1 AND status = 'active' AND id = ANY($2::uuid[])`,
-      [teacherUserId, data.taskIds]);
-    if (owned.rowCount !== data.taskIds.length) fail('task_not_found', 404);
+    const ownIds = data.slots.filter(slot => slot.customTaskId).map(slot => slot.customTaskId);
+    if (ownIds.length) {
+      const owned = await client.query(
+        `SELECT id FROM social_custom_tasks
+         WHERE teacher_user_id = $1 AND status = 'active' AND id = ANY($2::uuid[])`,
+        [teacherUserId, ownIds]);
+      if (owned.rowCount !== ownIds.length) fail('task_not_found', 404);
+    }
     const created = await client.query(
       `INSERT INTO social_assignments(class_id, teacher_user_id, title, types, blocks, topics, question_goal, include_images, due_at, source)
        VALUES ($1,$2,$3,'{}'::text[],'{}'::text[],'{}'::text[],$4,false,$5,'custom')
@@ -523,10 +526,20 @@ async function createAssignment(teacherUserId, data, { db = pool, transact = tx 
     // Порядок — это индекс в списке учителя: вариант является
     // последовательностью, а не мешком. Строки перечисляются явно, потому что
     // позиция каждой равна её месту в присланном массиве.
-    const values = data.taskIds.map((_, index) => `($1, $${index + 2}::uuid, ${index})`).join(', ');
+    //
+    // 🔴 Задание банка ФИПИ хранится конкретным ID, а не «подставь любое при
+    // выдаче». Вариант класс решает и разбирает вместе, и №9 обязан быть одним
+    // и тем же у всех — иначе разбирать нечего.
+    const params = [assignment.id];
+    const values = data.slots.map((slot, index) => {
+      const own = params.push(slot.customTaskId || null);
+      const bank = params.push(slot.bankTaskId || '');
+      return `($1, $${own}::uuid, ${index}, $${bank}::text, ${Number(slot.line) || 0})`;
+    }).join(', ');
     await client.query(
-      `INSERT INTO social_assignment_tasks(assignment_id, custom_task_id, position) VALUES ${values}`,
-      [assignment.id, ...data.taskIds]);
+      `INSERT INTO social_assignment_tasks(assignment_id, custom_task_id, position, bank_task_id, exam_line)
+       VALUES ${values}`,
+      params);
     return { ...assignmentForClient(assignment), taskIds: data.taskIds };
   });
 }
@@ -647,6 +660,20 @@ function customTaskForClient(row, { withAnswer = true } = {}) {
   };
 }
 
+// Строка варианта глазами клиента. Задание ФИПИ уезжает одним идентификатором:
+// весь банк уже лежит в приложении ученика, и присылать текст задания второй
+// раз незачем — а на сервере его и нет.
+//
+// 🔴 Форма ответа одна и та же для обоих источников: у строки всегда есть id,
+// examLine и source. Приложение решает по source, где взять содержимое.
+function variantSlotForClient(row) {
+  const examLine = numeric(row.exam_line);
+  if (row.bank_task_id) {
+    return { id: row.bank_task_id, source: 'bank', examLine };
+  }
+  return { ...customTaskForClient(row), source: 'custom', examLine };
+}
+
 async function listCustomTasks(teacherUserId, { db = pool, includeArchived = false } = {}) {
   const result = await db.query(
     `SELECT id, type, prompt, options, targets, answer, blocks, topics, status, created_at
@@ -696,30 +723,32 @@ async function archiveCustomTask(teacherUserId, taskId, { db = pool } = {}) {
 // чужой вариант вместе с ответами.
 async function assignmentTasksForStudent(userId, assignmentId, { db = pool } = {}) {
   const result = await db.query(
-    `SELECT t.id, t.type, t.prompt, t.options, t.targets, t.answer, t.blocks, t.topics, t.status, t.created_at
+    `SELECT at.bank_task_id, at.exam_line,
+            t.id, t.type, t.prompt, t.options, t.targets, t.answer, t.blocks, t.topics, t.status, t.created_at
      FROM social_assignment_tasks at
      JOIN social_assignments a ON a.id = at.assignment_id AND a.status = 'active'
      JOIN social_classes c ON c.id = a.class_id AND c.status = 'active'
      JOIN social_class_members m ON m.class_id = a.class_id AND m.user_id = $1 AND m.status = 'active'
-     JOIN social_custom_tasks t ON t.id = at.custom_task_id
+     LEFT JOIN social_custom_tasks t ON t.id = at.custom_task_id
      WHERE at.assignment_id = $2
      ORDER BY at.position`,
     [userId, assignmentId]);
   if (!result.rowCount) fail('assignment_not_found', 404);
-  return result.rows.map(row => customTaskForClient(row));
+  return result.rows.map(row => variantSlotForClient(row));
 }
 
 // Те же задания для учителя — чтобы кабинет показывал состав выданного варианта.
 async function assignmentTasksForTeacher(teacherUserId, assignmentId, { db = pool } = {}) {
   await ownedAssignment(teacherUserId, assignmentId, { db });
   const result = await db.query(
-    `SELECT t.id, t.type, t.prompt, t.options, t.targets, t.answer, t.blocks, t.topics, t.status, t.created_at
+    `SELECT at.bank_task_id, at.exam_line,
+            t.id, t.type, t.prompt, t.options, t.targets, t.answer, t.blocks, t.topics, t.status, t.created_at
      FROM social_assignment_tasks at
-     JOIN social_custom_tasks t ON t.id = at.custom_task_id
+     LEFT JOIN social_custom_tasks t ON t.id = at.custom_task_id
      WHERE at.assignment_id = $1
      ORDER BY at.position`,
     [assignmentId]);
-  return result.rows.map(row => customTaskForClient(row));
+  return result.rows.map(row => variantSlotForClient(row));
 }
 
 function assignmentForClient(row) {
