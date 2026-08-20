@@ -22,6 +22,8 @@ const TOPIC_RE = /^[1-5]\.\d{1,2}$/;
 const TASK_ID_RE = /^[A-Za-z0-9_-]{4,80}$/;
 // UUID любой версии либо совместимый по форме идентификатор из очереди клиента.
 const EVENT_ID_RE = /^[A-Za-z0-9_-]{16,64}$/;
+// Домашка, внутри которой дан ответ. Строго uuid: это ключ чужой таблицы.
+const UUID_RE = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/;
 
 const ATTEMPT_KINDS = Object.freeze(['practice', 'exam', 'topic', 'mistakes', 'review', 'lab', 'homework']);
 const MAX_EVENTS_PER_REQUEST = 50;
@@ -159,6 +161,11 @@ function attemptEvent(raw, { now = Date.now() } = {}) {
     // больше, а молча обрезанный ответ хуже отсутствующего.
     givenAnswer: text(source.givenAnswer, { max: 40, field: 'givenAnswer' }),
     examLine: integer(source.examLine, { min: 0, max: 16, fallback: 0 }),
+    // Домашка, в которой дан ответ. Пусто — свободная тренировка: она
+    // засчитывается всякой подходящей домашке, ответ внутри ДЗ — только своей.
+    // Кривой id не роняет пачку, а просто теряет принадлежность: потерять
+    // сотню ответов из-за одного испорченного поля хуже.
+    assignmentId: UUID_RE.test(String(source.assignmentId || '')) ? String(source.assignmentId) : '',
     attemptedAt,
     mskDay: moscowDayStr(attemptedAt),
     weekStart: mondayStr(attemptedAt),

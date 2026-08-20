@@ -128,14 +128,14 @@ async function insertEvents(client, userId, events) {
       `INSERT INTO social_attempt_events(
          event_id, user_id, task_id, task_type, block_ids, topic_codes, has_images,
          correct, earned, possible, elapsed_ms, kind, exam_line, attempted_at, msk_day, week_start,
-         given_answer)
-       VALUES ($1,$2,$3,$4,$5::text[],$6::text[],$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17)
+         given_answer, assignment_id)
+       VALUES ($1,$2,$3,$4,$5::text[],$6::text[],$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18)
        ON CONFLICT (event_id) DO NOTHING
        RETURNING event_id`,
       [event.eventId, userId, event.taskId, event.taskType, event.blockIds, event.topicCodes,
         event.hasImages, event.correct, event.earned, event.possible, event.elapsedMs,
         event.kind, event.examLine, new Date(event.attemptedAt).toISOString(), event.mskDay, event.weekStart,
-        event.givenAnswer || '']);
+        event.givenAnswer || '', event.assignmentId || null]);
     if (result.rowCount) accepted.push(event);
   }
   return accepted;
@@ -195,9 +195,23 @@ async function recomputeAssignment(client, assignment, userId) {
   // status после апсерта означало бы слать учителю уведомление на каждый такой
   // повтор.
   const before = await client.query(
-    'SELECT completed_at FROM social_assignment_progress WHERE assignment_id=$1 AND user_id=$2',
+    `SELECT earned, possible, questions, status, completed_at
+     FROM social_assignment_progress WHERE assignment_id=$1 AND user_id=$2`,
     [assignment.id, userId]);
   const wasIncomplete = !before.rowCount || !before.rows[0].completed_at;
+
+  // 🔴 Сданная домашка замирает. Она пересчитывалась при каждой новой попытке
+  // ученика — и продолжала расти неделями после сдачи: у ученицы ДЗ с целью 20
+  // показывало «36 отвечено», потому что впитывало всю последующую свободную
+  // тренировку по тем же блокам. Учителю такие числа объяснить нечем, а
+  // «36 из 20» выглядит поломкой счёта, а не усердием.
+  //
+  // Замирает целиком — вместе с баллом: иначе оценка за сданную работу менялась
+  // бы задним числом. Возврат без изменений, и justCompleted здесь всегда
+  // false: сдана она была раньше, уведомление учителю уже ушло.
+  if (!wasIncomplete) {
+    return { ...before.rows[0], justCompleted: false };
+  }
   const result = await client.query(
     `INSERT INTO social_assignment_progress(assignment_id, user_id, earned, possible, questions, status, updated_at, completed_at)
      SELECT $1, $2,
@@ -219,6 +233,12 @@ async function recomputeAssignment(client, assignment, userId) {
          -- Вариант учителя: засчитываются РОВНО его задания. У обычного ДЗ
          -- список пуст, и условие не влияет ни на что.
          AND (cardinality($9::text[]) = 0 OR e.task_id = ANY($9::text[]))
+         -- 🔴 Ответ, данный ВНУТРИ другой домашки, этой не принадлежит. Без
+         -- условия одна работа закрывала два задания сразу: у ученицы ДЗ с
+         -- целью 20 показывало 36, потому что впитывало и работу по
+         -- следующему ДЗ. Свободная тренировка (assignment_id IS NULL)
+         -- по-прежнему идёт в зачёт любой подходящей домашке.
+         AND (e.assignment_id IS NULL OR e.assignment_id = $1)
        ORDER BY e.task_id, e.attempted_at
      ) d
      ON CONFLICT (assignment_id, user_id) DO UPDATE SET
@@ -1113,6 +1133,10 @@ async function studentAssignments(userId, { db = pool } = {}) {
          AND (cardinality(a.topics) = 0 OR e.topic_codes && a.topics)
          AND (a.include_images OR e.has_images = false)
          AND (own.ids IS NULL OR e.task_id = ANY(own.ids))
+         -- Тот же отбор, что и в recomputeAssignment: список зачтённого обязан
+         -- совпадать с тем, что реально засчитано, иначе клиент прячет задания,
+         -- которые домашке не зачлись.
+         AND (e.assignment_id IS NULL OR e.assignment_id = a.id)
      ) counted ON true
      WHERE a.status = 'active'
      ORDER BY a.issued_at DESC LIMIT 100`,

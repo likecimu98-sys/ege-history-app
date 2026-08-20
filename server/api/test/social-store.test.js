@@ -60,7 +60,7 @@ function fakeDb({ knownEvents = [], assignments = [], state = null } = {}) {
       if (flat.includes('FROM social_assignments a')) return { rows: assignments, rowCount: assignments.length };
       // «Только что сдал» читается ДО апсерта — см. store.js. Ни одна фикстура
       // здесь не доводит ДЗ до 'done', так что это всегда «раньше не сдавал».
-      if (flat.startsWith('SELECT completed_at FROM social_assignment_progress')) return { rows: [], rowCount: 0 };
+      if (flat.startsWith('SELECT earned, possible, questions, status, completed_at FROM social_assignment_progress')) return { rows: [], rowCount: 0 };
       if (flat.startsWith('INSERT INTO social_assignment_progress')) {
         return { rows: [{ earned: 3, possible: 5, questions: 4, status: 'active', completed_at: null }], rowCount: 1 };
       }

@@ -166,7 +166,7 @@ test('учитель узнаёт о сдаче ТОЛЬКО при перехо
   const client = {
     query: async (text, params) => {
       calls.push({ text, params });
-      if (text.includes('SELECT completed_at FROM social_assignment_progress')) return already;
+      if (text.includes('FROM social_assignment_progress WHERE assignment_id')) return already;
       if (text.includes('INSERT INTO social_assignment_progress')) {
         return { rowCount: 1, rows: [{ earned: 10, possible: 10, questions: 5, status: 'done', completed_at: already.rows[0].completed_at }] };
       }
@@ -181,7 +181,7 @@ test('учитель узнаёт о сдаче ТОЛЬКО при перехо
 test('первый переход в done помечен для уведомления', async () => {
   const client = {
     query: async text => {
-      if (text.includes('SELECT completed_at FROM social_assignment_progress')) return { rowCount: 0, rows: [] };
+      if (text.includes('FROM social_assignment_progress WHERE assignment_id')) return { rowCount: 0, rows: [] };
       if (text.includes('INSERT INTO social_assignment_progress')) {
         return { rowCount: 1, rows: [{ earned: 10, possible: 10, questions: 5, status: 'done', completed_at: new Date() }] };
       }
