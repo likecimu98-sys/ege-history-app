@@ -1092,7 +1092,15 @@ async function studentAssignments(userId, { db = pool } = {}) {
      JOIN social_class_members m ON m.class_id = a.class_id AND m.user_id = $1 AND m.status='active'
      LEFT JOIN social_assignment_progress pr ON pr.assignment_id = a.id AND pr.user_id = $1
      LEFT JOIN LATERAL (
-       SELECT array_agg(at.custom_task_id::text) AS ids
+       -- 🔴 COALESCE обязателен, и ровно такой же стоит в activeAssignmentsFor.
+       -- Задание ФИПИ лежит в bank_task_id, а custom_task_id у него NULL. Без
+       -- COALESCE список заданий варианта состоял из NULL-ов, сравнение
+       -- e.task_id = ANY(...) не совпадало никогда — и ни одно задание из банка
+       -- не попадало в counted. Клиент не знал, что оно уже зачтено, и выдавал
+       -- вариант заново: ученик решал одни и те же задания по кругу, а балл
+       -- при этом считался правильно, потому что начисление читает ДРУГОЙ
+       -- запрос. Два определения «заданий домашки» разошлись — теперь одно.
+       SELECT array_agg(COALESCE(at.custom_task_id::text, at.bank_task_id)) AS ids
        FROM social_assignment_tasks at WHERE at.assignment_id = a.id
      ) own ON true
      LEFT JOIN LATERAL (
