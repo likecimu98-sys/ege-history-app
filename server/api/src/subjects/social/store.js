@@ -165,7 +165,7 @@ async function addWeeklyScores(client, userId, events) {
 async function activeAssignmentsFor(client, userId) {
   const result = await client.query(
     `SELECT a.id, a.types, a.blocks, a.topics, a.question_goal, a.include_images, a.issued_at, a.due_at, a.title, a.class_id,
-            a.source, COALESCE(t.ids, ARRAY[]::text[]) AS task_ids
+            a.source, a.teacher_user_id, c.title AS class_title, COALESCE(t.ids, ARRAY[]::text[]) AS task_ids
      FROM social_assignments a
      JOIN social_class_members m ON m.class_id = a.class_id AND m.user_id = $1 AND m.status = 'active'
      JOIN social_classes c ON c.id = a.class_id AND c.status = 'active'
@@ -188,6 +188,16 @@ async function activeAssignmentsFor(client, userId) {
 //     кэш и пересчёт всегда сходятся.
 // Суммы клиента при этом не используются вообще: источник — таблица событий.
 async function recomputeAssignment(client, assignment, userId) {
+  // 🔴 «Только что сдал» читаем ДО апсерта, не после. completed_at внутри
+  // апсерта хранится через COALESCE и, однажды выставленный, больше не
+  // меняется — а status пересчитывается заново на КАЖДУЮ попытку и остаётся
+  // 'done' даже когда ученик просто перерешивает задания сверх цели. Сравнивать
+  // status после апсерта означало бы слать учителю уведомление на каждый такой
+  // повтор.
+  const before = await client.query(
+    'SELECT completed_at FROM social_assignment_progress WHERE assignment_id=$1 AND user_id=$2',
+    [assignment.id, userId]);
+  const wasIncomplete = !before.rowCount || !before.rows[0].completed_at;
   const result = await client.query(
     `INSERT INTO social_assignment_progress(assignment_id, user_id, earned, possible, questions, status, updated_at, completed_at)
      SELECT $1, $2,
@@ -222,7 +232,39 @@ async function recomputeAssignment(client, assignment, userId) {
     [assignment.id, userId, assignment.question_goal, assignment.issued_at,
       assignment.types || [], assignment.blocks || [], assignment.topics || [], assignment.include_images,
       assignment.task_ids || []]);
-  return result.rows[0];
+  const progress = result.rows[0];
+  return { ...progress, justCompleted: wasIncomplete && progress.status === 'done' };
+}
+
+// Уведомление учителю: ученик сдал домашку. Ставится в ту же очередь, что и
+// рассылка о выдаче, — тем же ботом, тем же циклом опроса.
+//
+// 🔴 Получатель ищется по teacher_user_id САМОГО задания, а не текущего
+// владельца класса: класс мог сменить учителя, но выдал вариант конкретный
+// человек, и знать о его судьбе должен он.
+async function enqueueCompletionNotification(client, assignment, studentUserId) {
+  const teacher = await client.query(
+    `SELECT i.subject AS telegram_id FROM user_identities i
+     WHERE i.user_id = $1 AND i.provider = 'telegram' LIMIT 1`,
+    [assignment.teacher_user_id]);
+  // Учитель без Telegram (только сайт через Google) — уведомлять некуда:
+  // писать в бот нечем, других каналов у предмета нет.
+  if (!teacher.rowCount) return;
+  const student = await client.query(
+    'SELECT COALESCE(display_name, \'\') AS display_name FROM social_profiles WHERE user_id = $1',
+    [studentUserId]);
+  const payload = {
+    assignmentId: assignment.id,
+    title: assignment.title || '',
+    className: assignment.class_title || '',
+    studentName: (student.rows[0] && student.rows[0].display_name) || 'Без имени',
+  };
+  await client.query(
+    `INSERT INTO social_notification_jobs(assignment_id, user_id, telegram_id, kind, payload, dedup_key)
+     VALUES ($1, $2, $3, 'completion', $4::jsonb, $5)
+     ON CONFLICT (dedup_key) WHERE dedup_key <> '' DO NOTHING`,
+    [assignment.id, assignment.teacher_user_id, teacher.rows[0].telegram_id, JSON.stringify(payload),
+      `completion:${assignment.id}:${studentUserId}`]);
 }
 
 async function saveAttempts(userId, events, { db = pool, transact = tx } = {}) {
@@ -237,6 +279,12 @@ async function saveAttempts(userId, events, { db = pool, transact = tx } = {}) {
     for (const assignment of assignments) {
       const progress = await recomputeAssignment(client, assignment, userId);
       if (!progress) continue;
+      if (progress.justCompleted) {
+        // Провал уведомления не должен отменять зачтённую домашку: ученик её
+        // решил, а недоставленное сообщение — забота бота, не его.
+        try { await enqueueCompletionNotification(client, assignment, userId); }
+        catch (_) { /* учитель узнает при следующей проверке результатов */ }
+      }
       touched.push({
         assignmentId: assignment.id,
         title: assignment.title,
@@ -716,6 +764,70 @@ async function archiveCustomTask(teacherUserId, taskId, { db = pool } = {}) {
     [taskId, teacherUserId]);
   if (!result.rowCount) fail('task_not_found', 404);
   return { id: result.rows[0].id, status: result.rows[0].status };
+}
+
+// ---------------------------------------------------------------------------
+// Сохранённые варианты
+// ---------------------------------------------------------------------------
+//
+// 🔴 Задание внутри слота может исчезнуть (архивировано, автор его удалил из
+// вида — хотя своё задание не удаляется физически, чужой шаблон трогать
+// нельзя вовсе). Шаблон при этом не чинится молча: дыра остаётся видимой,
+// кабинет покажет «задание недоступно», и учитель решает сам — убрать строку
+// или заменить. Тихая починка задним числом означала бы выдать не то, что он
+// когда-то составил.
+
+function variantTemplateForClient(row) {
+  return {
+    id: row.id,
+    title: row.title || '',
+    slots: Array.isArray(row.slots) ? row.slots : [],
+    createdAt: row.created_at ? new Date(row.created_at).getTime() : null,
+    updatedAt: row.updated_at ? new Date(row.updated_at).getTime() : null,
+  };
+}
+
+async function listVariantTemplates(teacherUserId, { db = pool } = {}) {
+  const result = await db.query(
+    `SELECT id, title, slots, created_at, updated_at
+     FROM social_variant_templates
+     WHERE teacher_user_id = $1
+     ORDER BY updated_at DESC LIMIT 200`,
+    [teacherUserId]);
+  return result.rows.map(row => variantTemplateForClient(row));
+}
+
+async function createVariantTemplate(teacherUserId, data, { db = pool } = {}) {
+  const result = await db.query(
+    `INSERT INTO social_variant_templates(teacher_user_id, title, slots)
+     VALUES ($1, $2, $3::jsonb)
+     RETURNING id, title, slots, created_at, updated_at`,
+    [teacherUserId, data.title, JSON.stringify(data.slots)]);
+  return variantTemplateForClient(result.rows[0]);
+}
+
+async function updateVariantTemplate(teacherUserId, templateId, patch, { db = pool } = {}) {
+  const result = await db.query(
+    `UPDATE social_variant_templates SET
+       title = COALESCE($3, title),
+       slots = COALESCE($4::jsonb, slots),
+       updated_at = now()
+     WHERE id=$1 AND teacher_user_id=$2
+     RETURNING id, title, slots, created_at, updated_at`,
+    [templateId, teacherUserId, patch.title ?? null, patch.slots ? JSON.stringify(patch.slots) : null]);
+  if (!result.rowCount) fail('variant_template_not_found', 404);
+  return variantTemplateForClient(result.rows[0]);
+}
+
+// Удаляется физически, не архивируется. Шаблон не привязан к выданным
+// домашкам ничем — их состав скопирован в social_assignment_tasks при выдаче,
+// поэтому удаление шаблона не трогает ни одну прошлую или текущую домашку.
+async function deleteVariantTemplate(teacherUserId, templateId, { db = pool } = {}) {
+  const result = await db.query(
+    'DELETE FROM social_variant_templates WHERE id=$1 AND teacher_user_id=$2 RETURNING id',
+    [templateId, teacherUserId]);
+  if (!result.rowCount) fail('variant_template_not_found', 404);
+  return { id: result.rows[0].id };
 }
 
 // Задания варианта глазами ученика. Доступ — только участнику класса, которому
@@ -1292,7 +1404,7 @@ module.exports = {
   ensureProfile, patchProfile, roleOf, setRole, whoIs, whoIsByEmail, requestTeacherRole,
   enqueueAssignmentNotifications, claimNotifications, ackNotification, failNotification,
   getState, putState,
-  saveAttempts, insertEvents, recomputeAssignment, activeAssignmentsFor,
+  saveAttempts, insertEvents, recomputeAssignment, enqueueCompletionNotification, activeAssignmentsFor,
   quotaState, consumeQuota,
   weeklyLeaderboard,
   createClass, listClasses, ownedClass, updateClass, rotateJoinCode, classStudents, joinClass, myClasses,
@@ -1300,6 +1412,7 @@ module.exports = {
   assignmentResults, assignmentStudentDetail, studentAssignments, studentDigest, teacherDigest,
   mergeUserData,
   listCustomTasks, createCustomTask, updateCustomTask, archiveCustomTask,
+  listVariantTemplates, createVariantTemplate, updateVariantTemplate, deleteVariantTemplate,
   assignmentTasksForStudent, assignmentTasksForTeacher,
   randomJoinCode, MOSCOW_TODAY,
 };

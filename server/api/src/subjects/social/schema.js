@@ -439,6 +439,36 @@ function customTaskIds(value) {
   return ids;
 }
 
+// 🔴 Сохранённый вариант. До сих пор вариант жил только как состав уже
+// выданной домашки — чтобы дать его другому классу, приходилось тащить
+// «Выдать ещё раз» из прошлой выдачи или собирать заново. Здесь он —
+// самостоятельная вещь с именем: составил один раз, выдаёшь сколько угодно
+// раз скольким угодно классам. Состав — та же variantSlots, что и у выдачи:
+// формат строки один и тот же, второй проверки не нужно.
+function variantTemplateCreate(body) {
+  const source = body && typeof body === 'object' ? body : {};
+  const unknown = Object.keys(source).filter(key => !['title', 'tasks'].includes(key));
+  if (unknown.length) fail('variant_template_unknown_field', 400, { fields: unknown.slice(0, 5) });
+  return {
+    title: text(source.title, { max: 120, field: 'title', required: true }),
+    slots: variantSlots(source.tasks),
+  };
+}
+
+// Правка — переименование, пересборка состава или оба действия сразу. Ни одно
+// поле не обязательно поодиночке, но хотя бы одно должно быть — иначе запрос
+// ничего не просит изменить.
+function variantTemplatePatch(body) {
+  const source = body && typeof body === 'object' ? body : {};
+  const unknown = Object.keys(source).filter(key => !['title', 'tasks'].includes(key));
+  if (unknown.length) fail('variant_template_unknown_field', 400, { fields: unknown.slice(0, 5) });
+  const out = {};
+  if ('title' in source) out.title = text(source.title, { max: 120, field: 'title', required: true });
+  if ('tasks' in source) out.slots = variantSlots(source.tasks);
+  if (!Object.keys(out).length) fail('nothing_to_update');
+  return out;
+}
+
 // Код приглашения набирают руками с доски, поэтому из алфавита убраны символы,
 // которые путаются: 0/O, 1/I/L. Восемь знаков — это 32^8 вариантов.
 const JOIN_CODE_ALPHABET = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
@@ -456,5 +486,5 @@ module.exports = {
   fail, text, integer, typeList, blockList, topicList, settings,
   profilePatch, statePut, attemptEvent, attemptBatch,
   classCreate, classPatch, assignmentCreate, assignmentPatch, joinCode,
-  customTask, customTaskIds, variantSlots, optionList, targetList,
+  customTask, customTaskIds, variantSlots, variantTemplateCreate, variantTemplatePatch, optionList, targetList,
 };

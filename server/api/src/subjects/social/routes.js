@@ -257,6 +257,24 @@ async function handleSocial(req, res, url, session, deps) {
       return json(res, 200, { task: await store.updateCustomTask(userId, taskId, data, {}) });
     }
 
+    // ------------------------------------------ сохранённые варианты ---
+    if (method === 'GET' && path === '/teacher/variants') {
+      return json(res, 200, { variants: await store.listVariantTemplates(userId, {}) });
+    }
+    if (method === 'POST' && path === '/teacher/variants') {
+      requireMutationAuth(req, session);
+      const data = schema.variantTemplateCreate(await readJson(req, 32768));
+      return json(res, 200, { variant: await store.createVariantTemplate(userId, data, {}) });
+    }
+    const variantMatch = path.match(/^\/teacher\/variants\/([^/]+)$/);
+    if (variantMatch && (method === 'PATCH' || method === 'DELETE')) {
+      requireMutationAuth(req, session);
+      const templateId = uuid(decodeURIComponent(variantMatch[1]), 'variant_template_not_found');
+      if (method === 'DELETE') return json(res, 200, await store.deleteVariantTemplate(userId, templateId, {}));
+      const patch = schema.variantTemplatePatch(await readJson(req, 32768));
+      return json(res, 200, { variant: await store.updateVariantTemplate(userId, templateId, patch, {}) });
+    }
+
     const assignmentTasksMatch = path.match(/^\/teacher\/assignments\/([^/]+)\/tasks$/);
     if (assignmentTasksMatch && method === 'GET') {
       const assignmentId = uuid(decodeURIComponent(assignmentTasksMatch[1]), 'assignment_not_found');
