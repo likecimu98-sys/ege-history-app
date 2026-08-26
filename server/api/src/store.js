@@ -60,6 +60,25 @@ const MATCH_CREATE_FIELDS = new Set([
   'status', 'mode', 'swipeSections', 'matchRounds', 'createdAt', 'player1', 'player2', 'startTime',
 ]);
 
+// Сколько длится матч в каждом режиме — держать в согласии с клиентом:
+// SWIPE_DUEL_MS (swipe-mode.js), MATCH_DUEL_MS (match-mode.js),
+// CLASSIC_DUEL_MS (modes.js). Незнакомый режим получает самый долгий срок:
+// ошибиться в сторону «дали доиграть» безопаснее, чем оборвать живой матч.
+const DUEL_DURATION_MS = Object.freeze({ swipe: 45000, match: 45000, classic: 60000 });
+const DUEL_MAX_DURATION_MS = 60000;
+// Запас поверх длительности. Закрывающая запись идёт уже после таймера:
+// 400 мс на «Считаем очки…», до шести попыток finalizeDuelScores по 400 мс,
+// плюс сеть. Минуты хватает с большим избытком, и при этом она не позволяет
+// «доигрывать» — ровно та жалоба, с которой начался этот замок.
+const DUEL_WRITE_GRACE_MS = 60000;
+function duelWriteWindowOver(before) {
+  const startedAt = Number(before?.playingAt);
+  // Матч не начинался или это старая запись без серверной отметки — не мешаем.
+  if (!Number.isFinite(startedAt) || startedAt <= 0) return false;
+  const dur = DUEL_DURATION_MS[String(before?.mode || '')] || DUEL_MAX_DURATION_MS;
+  return Date.now() > startedAt + dur + DUEL_WRITE_GRACE_MS;
+}
+
 // Документ класса читает и учитель, и УЧЕНИК этого класса: в нём лежит журнал ДЗ
 // (pullClassAssignments), граница «дошли до года» и признак безлимита. Поэтому
 // «читать может только учитель» было бы тихой поломкой всей выдачи домашних
@@ -357,6 +376,15 @@ function mergeMatchData(current, next, patch) {
   const statusRank = { waiting: 1, playing: 2, finished: 3 };
   if ((statusRank[current.status] || 0) > (statusRank[next.status] || 0)) next.status = current.status;
   if (Number(current.startTime) > 0 && Number(next.startTime) !== Number(current.startTime)) next.startTime = current.startTime;
+  // 🔴 Момент начала матча ПО ЧАСАМ СЕРВЕРА, а не по startTime.
+  //
+  // startTime приходит от клиента, который присоединился к матчу, и сверять с ним
+  // конец дуэли нельзя: у школьника со сбитыми часами (а таких хватает) сервер
+  // рвал бы концовку собственных матчей — законные записи счёта улетали бы в 403.
+  // Поэтому отметку ставит сервер, один раз, при переходе в playing; дальше она
+  // переживает любые merge и служит единственной точкой отсчёта для DUEL_MAX_MS.
+  if (Number(current.playingAt) > 0) next.playingAt = current.playingAt;
+  else if (next.status === 'playing' && current.status !== 'playing') next.playingAt = Date.now();
   for (const key of ['player1', 'player2']) {
     if (!patch?.[key] || !current[key] || !next[key] || String(current[key].uid || '') !== String(next[key].uid || '')) continue;
     const before = current[key];
@@ -507,6 +535,13 @@ async function authorizeWrite(client, ref, ctx, current, patch, mode, { internal
       if (patch?.aliveAt !== undefined && !Number.isFinite(Number(patch.aliveAt))) return false;
       if (patch?.[actorKey] && String(patch[actorKey].uid || '') !== String(before[actorKey]?.uid || '')) return false;
       if (patch?.status && patch.status !== 'finished') return false;
+      // ⏱ Очки после конца матча не принимаем. Клиентский таймер — просьба, а не
+      // гарантия: он замирает в фоне, его можно остановить отладчиком, и до этого
+      // замка ничто не мешало доигрывать матч сколько угодно долго, дописывая счёт
+      // уже проигранной дуэли. Закрытие матча (status:'finished') и сердцебиение
+      // поиска пропускаем ВСЕГДА: иначе доигранный матч навсегда застрянет в
+      // playing — ровно та поломка, которую чинили 12.08.2026.
+      if (patch?.[actorKey] !== undefined && duelWriteWindowOver(before)) return false;
       return true;
     }
     case 'loginSessions':

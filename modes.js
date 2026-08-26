@@ -9,6 +9,12 @@
 let duelSearchTimer = null;
 let duelSearchSeconds = 0;
 
+// Длительность классической дуэли. Свайп и подбор держат свои сроки у себя
+// (SWIPE_DUEL_MS / MATCH_DUEL_MS) — сервер знает все три, см. DUEL_DURATION_MS
+// в server/api/src/store.js: разъедутся значения — сервер начнёт рвать концовку.
+const CLASSIC_DUEL_MS = 60000;
+window.CLASSIC_DUEL_MS = CLASSIC_DUEL_MS;
+
 // ─── Плашка «ищем соперника» ────────────────────────────────────────────────
 // Поиск идёт ФОНОМ и БЕЗ СРОКА. Раньше он держал модалку на весь экран и сам
 // сдавался через 30 секунд с «Никого нет в сети 😢»: заниматься в это время было
@@ -28,7 +34,7 @@ function _duelBarEl() {
         + 'transform:translateX(-50%) translateY(-160%);z-index:9600;display:flex;align-items:center;'
         + 'gap:10px;max-width:94vw;padding:9px 12px;border-radius:14px;'
         + 'background:linear-gradient(135deg,#4f46e5,#7c3aed);color:#fff;'
-        + 'box-shadow:0 10px 30px rgba(79,70,229,.45);font-size:12px;font-weight:800;'
+        + 'box-shadow:var(--e-3);font-size:12px;font-weight:800;'
         + 'transition:transform .35s cubic-bezier(.2,.9,.3,1.2)';
     const dot = document.createElement('span');
     dot.textContent = '⚔️';
@@ -179,7 +185,6 @@ window.startDuelGame = function() {
     $('filter-task').value = 'task4';
     window.state.currentMode = 'duel';
     Object.assign(window.state.duel, { active: true, myScore: 0, myCombo: 0, oppScore: 0, oppCombo: 0 });
-    window.state.timeLeft = 60;
 
     $('game-header').classList.add('hidden');
     $('duel-header').classList.remove('hidden');
@@ -188,12 +193,46 @@ window.startDuelGame = function() {
     window.updateDuelUI();
     window.generateTable();
 
-    window.state.timerInterval = setInterval(() => {
-        window.state.timeLeft--;
+    // 🔴 Время матча считается ПО ЧАСАМ, а не по числу сработавших тиков.
+    //
+    // Было `timeLeft = 60` и `timeLeft--` раз в секунду. setInterval не обещает
+    // ни одного тика, пока вкладка в фоне: свернул Telegram, погас экран,
+    // переключился на другое приложение — таймер замирает, а по возвращении
+    // продолжает с того же числа. Шестьдесят «секунд» растягивались на реальные
+    // минуты, и матч не заканчивался — человек доигрывал уже после времени, а
+    // соперник в это время видел законченную дуэль. Свайп и подбор считали
+    // правильно с самого начала (endsAt), классика — нет.
+    //
+    // Точка отсчёта — startTime из документа матча, общий для обеих сторон,
+    // поэтому дуэль кончается у обоих одновременно.
+    const endsAt = (window.state.duel.startTime || Date.now()) + CLASSIC_DUEL_MS;
+    window.state.duel.endsAt = endsAt;
+    const tick = () => {
+        const left = Math.max(0, endsAt - Date.now());
+        window.state.timeLeft = Math.ceil(left / 1000);
         $('duel-timer').innerText = window.state.timeLeft;
-        if (window.state.timeLeft <= 0) window.endDuel();
-    }, 1000);
+        if (left <= 0) window.endDuel();
+    };
+    tick();
+    window.state.timerInterval = setInterval(tick, 250);
+    // Возврат из фона — пересчитываем немедленно, не дожидаясь следующего тика:
+    // именно в этот момент чаще всего и выясняется, что время давно вышло.
+    _duelVisibilityWatch(tick);
 };
+
+// Пересчёт таймера при возвращении на вкладку. Слушатель снимается сам, когда
+// дуэль закончилась, — иначе они копились бы по одному за матч.
+function _duelVisibilityWatch(tick) {
+    const onVis = () => {
+        if (document.visibilityState !== 'visible') return;
+        if (!window.state.duel || !window.state.duel.active) {
+            document.removeEventListener('visibilitychange', onVis);
+            return;
+        }
+        tick();
+    };
+    document.addEventListener('visibilitychange', onVis);
+}
 
 window.updateDuelUI = function() {
     if (!window.state.duel?.active) return;
