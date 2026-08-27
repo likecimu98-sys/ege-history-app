@@ -141,8 +141,18 @@ test('ни одна предметная миграция не изменяет 
     // ключ состава варианта с задания на место в бланке, потому что старый ключ
     // физически не мог удержать строку из банка ФИПИ. Запрет на любое слово
     // DROP означал бы, что однажды написанное ограничение нельзя исправить.
-    const destructive = sql.match(/\bDROP\s+(TABLE|COLUMN|SCHEMA|DATABASE|INDEX|VIEW)\b/i);
+    const destructive = sql.match(/\bDROP\s+(TABLE|COLUMN|SCHEMA|DATABASE|VIEW)\b/i);
     assert.ok(!destructive, `${name}: миграция уничтожает «${destructive && destructive[0]}»`);
+    // Индекс — производное от строк, а не строки: пересоздать его можно, а
+    // потерять с ним нечего. Зато уникальный индекс — это ПРАВИЛО, и правило
+    // может оказаться неверным: 006 запрещал две строки на пару (задание,
+    // telegram), из-за чего второй сдавший ученик ронял сохранение ответов
+    // всего класса (013). Запрет трогать индексы означал бы, что такое правило
+    // нельзя исправить никогда. Ограничение остаётся жёстким в главном: индекс
+    // обязан быть своим, предметным.
+    for (const [, index] of sql.matchAll(/\bDROP\s+INDEX\s+(?:CONCURRENTLY\s+)?(?:IF\s+EXISTS\s+)?([A-Za-z_][A-Za-z0-9_]*)/gi)) {
+      assert.ok(index.startsWith('social_'), `${name}: миграция удаляет чужой индекс «${index}»`);
+    }
     assert.ok(!/\bTRUNCATE\b/i.test(sql), `${name}: в миграции предмета не должно быть TRUNCATE`);
     for (const table of referencedTables(sql)) {
       assert.ok(table.startsWith('social_'), `${name}: миграция трогает таблицу «${table}»`);

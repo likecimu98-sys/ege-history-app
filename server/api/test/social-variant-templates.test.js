@@ -216,11 +216,18 @@ test('учитель без Telegram не роняет пересчёт — пр
 });
 
 test('провал уведомления не отменяет зачтённую домашку', () => {
+  // 🔴 Здесь проверялся голый try/catch — и это была проверка НЕ ТОГО. Ошибка
+  // внутри транзакции обрывает транзакцию целиком, поэтому перехват на стороне
+  // JS оставлял соединение мёртвым: следующий запрос падал с 25P02, весь POST
+  // с ответами уходил в 500, а очередь ученика застревала навсегда. Обещание
+  // из названия держит только точка отката — см. social-notification-poison.
   const storeSource = fs.readFileSync(path.join(__dirname, '..', 'src', 'subjects', 'social', 'store.js'), 'utf8');
   const start = storeSource.indexOf('async function saveAttempts(');
   const block = storeSource.slice(start, storeSource.indexOf('\n// ---', start + 1) > -1
     ? storeSource.indexOf('\n// ---', start + 1) : storeSource.length);
-  assert.match(block, /try \{ await enqueueCompletionNotification/);
+  assert.match(block, /await notifyCompletionSafely\(client, assignment, userId\);/);
+  assert.ok(!/try \{ await enqueueCompletionNotification/.test(storeSource),
+    'голый try/catch оборванную транзакцию не чинит');
 });
 
 test('дедупликация уведомлений — ключ и частичный уникальный индекс', () => {

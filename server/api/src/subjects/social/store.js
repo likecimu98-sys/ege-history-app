@@ -287,6 +287,28 @@ async function enqueueCompletionNotification(client, assignment, studentUserId) 
       `completion:${assignment.id}:${studentUserId}`]);
 }
 
+// 🔴 SAVEPOINT, а не try/catch. Провал уведомления не должен отменять зачтённую
+// домашку — так было написано, и так оно НЕ работало: ошибка внутри транзакции
+// обрывает не запрос, а транзакцию целиком. Перехваченное на стороне JS
+// исключение оставляло соединение в состоянии «aborted», следующий же запрос
+// падал с 25P02, и вся пачка ответов уходила в 500. Клиент при 5xx честно
+// оставляет очередь на потом — и повторял ту же ошибку до бесконечности:
+// 27.08.2026 ученица решила 31 задание, ни одно не доехало (см. миграцию 013).
+//
+// Точка отката возвращает транзакцию в рабочее состояние, и обещание из
+// комментария наконец становится правдой: недоставленное сообщение — забота
+// бота, а ответы сохраняются в любом случае.
+async function notifyCompletionSafely(client, assignment, studentUserId) {
+  await client.query('SAVEPOINT completion_notice');
+  try {
+    await enqueueCompletionNotification(client, assignment, studentUserId);
+    await client.query('RELEASE SAVEPOINT completion_notice');
+  } catch (_) {
+    // Учитель узнает при следующей проверке результатов.
+    await client.query('ROLLBACK TO SAVEPOINT completion_notice');
+  }
+}
+
 async function saveAttempts(userId, events, { db = pool, transact = tx } = {}) {
   return transact(async client => {
     const accepted = await insertEvents(client, userId, events);
@@ -300,10 +322,7 @@ async function saveAttempts(userId, events, { db = pool, transact = tx } = {}) {
       const progress = await recomputeAssignment(client, assignment, userId);
       if (!progress) continue;
       if (progress.justCompleted) {
-        // Провал уведомления не должен отменять зачтённую домашку: ученик её
-        // решил, а недоставленное сообщение — забота бота, не его.
-        try { await enqueueCompletionNotification(client, assignment, userId); }
-        catch (_) { /* учитель узнает при следующей проверке результатов */ }
+        await notifyCompletionSafely(client, assignment, userId);
       }
       touched.push({
         assignmentId: assignment.id,
@@ -1279,7 +1298,9 @@ async function enqueueAssignmentNotifications(assignment, { db = pool } = {}) {
      FROM social_class_members m
      JOIN user_identities i ON i.user_id = m.user_id AND i.provider = 'telegram'
      WHERE m.class_id = $3 AND m.status = 'active'
-     ON CONFLICT (assignment_id, telegram_id) WHERE assignment_id IS NOT NULL DO NOTHING
+     -- Предикат обязан совпадать с индексом (миграция 013): арбитр выводится
+     -- по нему, и без «dedup_key = ''» Postgres не найдёт индекс вовсе.
+     ON CONFLICT (assignment_id, telegram_id) WHERE assignment_id IS NOT NULL AND dedup_key = '' DO NOTHING
      RETURNING id`,
     [assignment.id, JSON.stringify(payload), assignment.classId]);
   return result.rowCount;
@@ -1436,7 +1457,8 @@ module.exports = {
   ensureProfile, patchProfile, roleOf, setRole, whoIs, whoIsByEmail, requestTeacherRole,
   enqueueAssignmentNotifications, claimNotifications, ackNotification, failNotification,
   getState, putState,
-  saveAttempts, insertEvents, recomputeAssignment, enqueueCompletionNotification, activeAssignmentsFor,
+  saveAttempts, insertEvents, recomputeAssignment, enqueueCompletionNotification, notifyCompletionSafely,
+  activeAssignmentsFor,
   quotaState, consumeQuota,
   weeklyLeaderboard,
   createClass, listClasses, ownedClass, updateClass, rotateJoinCode, classStudents, joinClass, myClasses,
