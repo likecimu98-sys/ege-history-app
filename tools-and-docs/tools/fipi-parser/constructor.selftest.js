@@ -83,10 +83,12 @@ c.annotateTaskGroups(legacySourceTriple);
 const legacySourceClasses = legacySourceTriple.map((t) => c.classify(t));
 assert.deepStrictEqual(legacySourceClasses.map((x) => x.kim), [13, 14, null]);
 assert.strictEqual(legacySourceClasses[2].outdated, true, 'третий вопрос старой группы источника должен быть устаревшим');
+// связанные задания по общему материалу (карта/источник) идут строго вместе:
+// выбрали хотя бы одно задание группы — подборка должна включить всю группу целиком
 assert.deepStrictEqual(
   c.selectTasks({ tasks: mapTasks.map((t) => ({ ...t, periods: [3], outdated: false, kim: c.classify(t).kim })) }, { exam: 'ege', subject: 'История', kims: [9] }).map((t) => t.groupOrder),
-  [1],
-  'при выборе № 9 конструктор не должен добавлять № 10–12 из той же группы'
+  [1, 2, 3, 4],
+  'при выборе № 9 конструктор должен добавить всю группу карты (№ 9–12), иначе вопросы по одной схеме окажутся разорваны'
 );
 
 // устаревшие форматы (нет в КИМ 2026) помечаются outdated

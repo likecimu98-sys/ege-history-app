@@ -599,17 +599,24 @@ function selectTasks(library, filter) {
 
   const pool = library.tasks.filter((t) => t.exam === exam && t.subject === subject);
 
+  // отсекаем устаревшие ДО отбора по номеру/теме/типу — иначе можно случайно
+  // воскресить скрытую группу через расширение ниже
+  let base = pool;
+  if (outdatedMode === 'hide') base = base.filter((t) => !t.outdated);
+  else if (outdatedMode === 'only') base = base.filter((t) => t.outdated);
+
   // задания, прошедшие фильтр пользователя
-  let matched = pool;
-  if (outdatedMode === 'hide') matched = matched.filter((t) => !t.outdated);
-  else if (outdatedMode === 'only') matched = matched.filter((t) => t.outdated);
+  let matched = base;
   if (kims.length) matched = matched.filter((t) => t.kim != null && kims.includes(t.kim));
   if (periods.length) matched = matched.filter((t) => t.periods.some((p) => periods.includes(p)));
   if (types.length) matched = matched.filter((t) => types.includes(t.answerType));
 
-  // Общий материал уже скопирован в каждую запись группы. Поэтому при выборе,
-  // например, только № 9 берём именно № 9 с картой, а не весь блок 9–12.
-  let tasks = [...matched];
+  // СВЯЗАННЫЕ ЗАДАНИЯ ИДУТ ТОЛЬКО ВМЕСТЕ: если в отбор попало хотя бы одно
+  // задание группы (общая карта/источник) — берём ВСЮ группу целиком, иначе
+  // вопросы по одному материалу окажутся разорваны между разными подборками.
+  const gids = new Set(matched.map((t) => t.groupId).filter(Boolean));
+  const matchedSet = new Set(matched);
+  let tasks = base.filter((t) => matchedSet.has(t) || (t.groupId && gids.has(t.groupId)));
 
   // сортировка: группы держим вместе и по внутреннему порядку (Задание №N)
   const gKey = {}; // groupId -> {kim, period}

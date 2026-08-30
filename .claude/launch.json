@@ -16,7 +16,7 @@
     {
       "name": "fipi-parser",
       "runtimeExecutable": "node",
-      "runtimeArgs": ["tools/fipi-parser/server.js"],
+      "runtimeArgs": ["tools-and-docs/tools/fipi-parser/server.js"],
       "port": 3777,
       "autoPort": true
     }
