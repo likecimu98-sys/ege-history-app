@@ -27,7 +27,7 @@ assert.match(modes, /localStorage\.getItem\('class_second_part'\) === '1'/,
   'Доступность читается не из того места, куда её кладут');
 
 // ── 2. Раздел показывается только включённым классам ───────────────────────
-const row = modes.slice(modes.indexOf('window.secondPartRow = function'), modes.indexOf('window.openSecondPart = function'));
+const row = modes.slice(modes.indexOf('window.secondPartRow = function'), modes.indexOf('window.openSecondPart = async function'));
 assert.ok(row.length > 100, 'secondPartRow не найдена');
 assert.match(row, /if \(!window\.secondPartAvailable\(\)\) return '';/,
   'Раздел рисуется всем — классы без второй части увидят чужой инструмент');
@@ -39,7 +39,7 @@ assert.match(ui, /&& !\(window\.secondPartAvailable && window\.secondPartAvailab
   'При пустой первой части экран скажет «домашних заданий нет» над разделом второй части');
 
 // ── 4. Подпись уходит сообщением, а не адресом ──────────────────────────────
-const open = modes.slice(modes.indexOf('window.openSecondPart = function'));
+const open = modes.slice(modes.indexOf('window.openSecondPart = async function'));
 assert.ok(open.length > 400, 'openSecondPart не найдена');
 assert.doesNotMatch(open, /SECOND_PART_SRC \+.*initData|initData.*\+ SECOND_PART_SRC|\?initData=|&initData=/,
   'Подпись подставляется в адрес — она осядет в логах, истории и реферерах');
@@ -54,10 +54,22 @@ assert.match(open, /if \(e\.origin !== SECOND_PART_ORIGIN\) return;/,
 const posts = (open.match(/postMessage\([\s\S]{0,200}?SECOND_PART_ORIGIN\)/g) || []).length;
 assert.strictEqual(posts, 2, `Отправок с точным адресом ${posts}, а должно быть две (подпись и тема)`);
 
-// ── 6. Вход без Telegram объясняется, а не показывает пустую рамку ─────────
-assert.match(open, /if \(!initData\) \{/,
-  'Без подписи всё равно открывается рамка — человек увидит чужой экран входа внутри нашего');
-assert.match(open, /Вторая часть открывается из Telegram/, 'Тупик без подписи ничего не объясняет');
+// ── 6. Компьютер работает: билет вместо подписи ────────────────────────────
+// initData существует ТОЛЬКО внутри мини-аппа Telegram. Ученик, вошедший на ПК
+// по QR-коду, тренажёру известен, и упираться в «откройте из Telegram» он не
+// должен. Поэтому просим ещё и билет, а тупик оставляем лишь тому, у кого нет
+// вообще ничего.
+assert.match(modes, /async function _secondPartTicket\(\)/, 'Функции запроса билета нет');
+// Существования функции мало: вырезав ВЫЗОВ, объявление оставляют на месте, и
+// проверка «функция есть» остаётся зелёной, пока компьютер не работает.
+assert.match(open, /const ticket = await _secondPartTicket\(\);/,
+  'Билет не запрашивается при открытии — на компьютере раздел не откроется');
+assert.match(modes, /X-CSRF-Token/, 'Запрос билета уйдёт без CSRF и получит отказ');
+assert.match(open, /\{ type: 'proverochnaya:init', initData, ticket, theme:/,
+  'Билет не передаётся в рукопожатии — их сторона о нём не узнает');
+assert.match(open, /if \(!initData && !ticket\) \{/,
+  'Тупик показывается при одной лишь нехватке подписи — компьютер отвалится, хотя билет есть');
+assert.match(open, /Нужен привязанный Telegram/, 'Тупик ничего не объясняет');
 
 // ── 7. Закрытие убирает за собой ────────────────────────────────────────────
 // Слушатель окна и наблюдатель темы переживают снятие узла: без снятия они

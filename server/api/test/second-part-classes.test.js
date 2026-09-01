@@ -95,6 +95,41 @@ test('склеенный дубль аккаунта не выдаётся за 
   assert.match(fn, /_mergedInto/, 'Склеенные документы попадут в состав вторым лицом того же человека');
 });
 
+test('билет одноразовый и живёт минуту', () => {
+  // 🔴 Билет заменяет initData, чтобы вторая часть открывалась и с компьютера:
+  // подпись существует только внутри мини-аппа Telegram, а ученик, вошедший по
+  // QR-коду, тренажёру известен ничуть не хуже.
+  //
+  // Одноразовость и срок — свойства, которых не видно ни на экране, ни в
+  // тексте: подсмотренный билет обязан протухнуть, а не работать вечно.
+  const fn = server.slice(server.indexOf('function issueSecondPartTicket'),
+    server.indexOf('// ── Состав классов'));
+  assert.ok(fn.length > 200, 'Выдача билета не найдена');
+  assert.match(fn, /secondPartTickets\.delete\(String\(ticket\)\);/,
+    'Билет не гасится при обмене — подсмотренный сработает второй раз');
+  assert.match(fn, /return item\.exp > Date\.now\(\) \? item\.tgId : null;/,
+    'Срок билета не проверяется — он будет действовать вечно');
+  assert.match(fn, /randomToken\(32\)/, 'Билет предсказуем');
+  assert.match(server, /const SECOND_PART_TICKET_MS = 60 \* 1000;/, 'Срок жизни билета изменён без обсуждения');
+});
+
+test('обмен билета закрыт тем же узким ключом', () => {
+  const route = server.slice(server.indexOf("url.pathname === '/api/v1/second-part/whoami'"),
+    server.indexOf("if (req.method === 'POST' && url.pathname === '/api/v1/csp-report'"));
+  assert.match(route, /timingSafeEqualText\(key, env\.secondPartKey\)/,
+    'Обмен билета не закрыт ключом — личность узнает кто угодно');
+  assert.doesNotMatch(route, /internalApiToken/, 'Обмен пускает по мастер-ключу');
+});
+
+test('билет не выдаётся без Telegram и без сессии', () => {
+  const route = server.slice(server.indexOf("url.pathname === '/api/v1/second-part/ticket'"),
+    server.indexOf("url.pathname === '/api/v1/me'"));
+  assert.match(route, /requireSession\(session\)/, 'Билет выдаётся без сессии — представиться сможет любой');
+  assert.match(route, /requireMutationAuth\(req, session\)/, 'Нет защиты от постороннего сайта (CSRF)');
+  assert.match(route, /if \(!tgIds\.length\) return json\(res, 409/,
+    'Без привязанного Telegram выдаётся билет в никуда — «Проверочная» узнаёт людей по Telegram ID');
+});
+
 test('архивные классы не выдаются', () => {
   const fn = server.slice(server.indexOf('async function handleSecondPartClasses'),
     server.indexOf('async function handleInternal'));

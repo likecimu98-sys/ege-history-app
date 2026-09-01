@@ -52,12 +52,35 @@ window.secondPartRow = function() {
     </div>`;
 };
 
-window.openSecondPart = function() {
+// Билет вместо подписи — чтобы вторая часть открывалась и с компьютера.
+//
+// initData существует ТОЛЬКО внутри мини-аппа Telegram. Ученик, вошедший на ПК
+// по QR-коду, тренажёру прекрасно известен, но подписи у него нет никогда, и
+// без билета он упирался бы в «откройте из Telegram» на ровном месте.
+// Просим оба: у кого есть подпись — уйдёт и она, «Проверочная» возьмёт то, что
+// умеет. Так её сторона внедряет обмен когда угодно, без общего дня перехода.
+async function _secondPartTicket() {
+    try {
+        // Тот же CSRF-токен из куки, что и у остальных мутаций (vps-sync-compat.js);
+        // apiFetch оттуда наружу не выставлен, а modes.js — обычный скрипт.
+        const raw = document.cookie.split(';').map(v => v.trim()).find(v => v.startsWith('ege_csrf='));
+        const headers = {};
+        if (raw) { try { headers['X-CSRF-Token'] = decodeURIComponent(raw.slice(raw.indexOf('=') + 1)); } catch (e) {} }
+        const r = await fetch('/api/v1/second-part/ticket',
+            { method: 'POST', headers, credentials: 'same-origin', cache: 'no-store' });
+        if (!r.ok) { _dbgSecondPart('билет не выдан, код', r.status); return ''; }
+        const j = await r.json();
+        return String(j.ticket || '');
+    } catch (e) { _dbgSecondPart('билет не выдан', e); return ''; }
+}
+
+window.openSecondPart = async function() {
     haptic('light');
     const id = 'second-part-overlay';
     if (document.getElementById(id)) return;
 
     const initData = _secondPartInitData();
+    const ticket = await _secondPartTicket();
     const overlay = document.createElement('div');
     overlay.id = id;
     overlay.style.cssText = 'position:fixed;inset:0;z-index:10100;background:var(--bg,#f7f7f8);display:flex;flex-direction:column';
@@ -75,13 +98,15 @@ window.openSecondPart = function() {
     bar.appendChild(close);
     overlay.appendChild(bar);
 
-    if (!initData) {
-        // Честный тупик вместо пустой рамки.
+    // Тупик — только когда нечем представиться ВООБЩЕ. Билет выдаётся и на
+    // компьютере после входа по QR, поэтому сюда попадает лишь тот, у кого
+    // Telegram не привязан ни одним способом.
+    if (!initData && !ticket) {
         const msg = document.createElement('div');
         msg.style.cssText = 'flex:1;display:flex;align-items:center;justify-content:center;padding:32px 22px;text-align:center;color:#6b7280';
         msg.innerHTML = '<div><div style="font-size:40px;margin-bottom:10px">📱</div>'
-            + '<div style="font-size:14px;font-weight:800;color:#374151" class="dark:text-gray-300">Вторая часть открывается из Telegram</div>'
-            + '<div style="font-size:12px;margin-top:6px;max-width:34ch">Работы подписываются вашим Telegram-аккаунтом. Откройте тренажёр через бота — здесь же вход через Google этого не даёт.</div></div>';
+            + '<div style="font-size:14px;font-weight:800;color:#374151" class="dark:text-gray-300">Нужен привязанный Telegram</div>'
+            + '<div style="font-size:12px;margin-top:6px;max-width:34ch">Работы второй части подписываются Telegram-аккаунтом. Войдите через бота или привяжите Telegram в профиле — с компьютера тоже работает, по QR-коду.</div></div>';
         overlay.appendChild(msg);
         document.body.appendChild(overlay);
         return;
@@ -106,7 +131,7 @@ window.openSecondPart = function() {
         if (!e.data || e.data.type !== 'proverochnaya:ready') return;
         try {
             frame.contentWindow.postMessage(
-                { type: 'proverochnaya:init', initData, theme: _secondPartTheme() },
+                { type: 'proverochnaya:init', initData, ticket, theme: _secondPartTheme() },
                 SECOND_PART_ORIGIN);
         } catch (err) { _dbgSecondPart('не удалось передать подпись', err); }
     };

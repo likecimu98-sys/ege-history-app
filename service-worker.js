@@ -1,7 +1,7 @@
 'use strict';
 
-const APP_VERSION = '2026-09-01-vps-96';
-const RELEASE_ASSET_VERSION = '20260901-1';
+const APP_VERSION = '2026-09-01-vps-97';
+const RELEASE_ASSET_VERSION = '20260901-2';
 // ⚠️ Версия НАБОРА КАРТИНОК, а не версия приложения. Поднимай её ТОЛЬКО когда
 // меняется состав offline-assets.json — добавились, удалились или переснялись
 // файлы. От бампа APP_VERSION она не зависит и зависеть не должна.

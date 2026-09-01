@@ -208,6 +208,39 @@ async function refreshPremium(tgId) {
   await pool.query('UPDATE student_profiles SET data=$2,version=version+1,updated_at=now() WHERE doc_id=$1', [tgId, JSON.stringify(data)]);
 }
 
+// ── Билет во вторую часть ЕГЭ ───────────────────────────────────────────────
+//
+// 🔴 Зачем билет, когда есть initData. Тот существует ТОЛЬКО внутри мини-аппа
+// Telegram: на компьютере его нет никогда, и ученик, вошедший по QR-коду,
+// упирался бы в «откройте из Telegram», хотя тренажёр прекрасно знает, кто он.
+//
+// И вторая причина, независимая от первой: initData — полноценные учётные
+// данные Telegram, действительные сутки, ими можно представиться где угодно,
+// где доверяют этому боту. Отдавать их соседней системе — больше, чем ей нужно.
+// Билет живёт минуту, гасится при первом обмене и не говорит ни о чём, кроме
+// «это вот тот человек».
+//
+// Хранится в памяти процесса намеренно: время жизни минута, API работает одним
+// процессом (см. инвариант про рейт-лимитер), а рестарт всего лишь заставит
+// клиента попросить новый билет.
+const SECOND_PART_TICKET_MS = 60 * 1000;
+const secondPartTickets = new Map();
+function issueSecondPartTicket(tgId) {
+  const now = Date.now();
+  // Подчистка просроченных заодно: отдельный таймер ради минутных записей не нужен.
+  for (const [key, item] of secondPartTickets) if (item.exp <= now) secondPartTickets.delete(key);
+  const ticket = randomToken(32);
+  secondPartTickets.set(ticket, { tgId: String(tgId), exp: now + SECOND_PART_TICKET_MS });
+  return { ticket, expiresIn: Math.floor(SECOND_PART_TICKET_MS / 1000) };
+}
+function redeemSecondPartTicket(ticket) {
+  const item = secondPartTickets.get(String(ticket || ''));
+  if (!item) return null;
+  // Гасим в любом случае: и удачный обмен, и просроченный билет — одноразовые.
+  secondPartTickets.delete(String(ticket));
+  return item.exp > Date.now() ? item.tgId : null;
+}
+
 // ── Состав классов для «Проверочной» (вторая часть ЕГЭ) ─────────────────────
 //
 // Зачем отдельный маршрут, а не копирование классов на их сторону: копия
@@ -480,6 +513,17 @@ async function handle(req, res) {
     if (req.method === 'GET' && url.pathname === '/api/v1/second-part/classes') {
       return await handleSecondPartClasses(req, res);
     }
+    // Обмен билета на личность. Ходит «Проверочная» своим узким ключом —
+    // тем же, что и за составом класса: способ представиться у неё один.
+    if (req.method === 'GET' && url.pathname === '/api/v1/second-part/whoami') {
+      const key = String(req.headers['x-trainer-key'] || '');
+      if (!env.secondPartKey || !timingSafeEqualText(key, env.secondPartKey)) {
+        return json(res, 404, { error: 'not_found' });
+      }
+      const tgId = redeemSecondPartTicket(url.searchParams.get('ticket'));
+      if (!tgId) return json(res, 401, { error: 'ticket_invalid' });
+      return json(res, 200, { tg_user_id: Number(tgId) });
+    }
     // Приёмник нарушений CSP. Нужен, чтобы сутки в режиме Report-Only имели
     // смысл: иначе нарушения остаются в консолях чужих телефонов и мы их не
     // увидим. Без сессии и без CSRF — браузер шлёт отчёт сам, без наших кук.
@@ -699,6 +743,19 @@ async function handle(req, res) {
     // student_profiles и student_states в базе с user_id = NULL — то есть ФИО,
     // @username и весь прогресс никуда бы не делись, просто стали бы
     // «ничейными». Поэтому документы стираются по своим doc_id.
+    // Билет во вторую часть: ученик просит его сам, под своей сессией.
+    // Работает и в мини-аппе, и на компьютере после входа по QR — именно
+    // ради компьютера билет и заведён.
+    if (req.method === 'POST' && url.pathname === '/api/v1/second-part/ticket') {
+      requireSession(session);
+      requireMutationAuth(req, session);
+      const tgIds = (session.user.identities || [])
+        .filter(i => i.provider === 'telegram').map(i => String(i.subject));
+      // «Проверочная» узнаёт людей по Telegram ID. Нет его — билет выдавать
+      // нечему: пусть клиент скажет об этом словами, а не покажет пустую рамку.
+      if (!tgIds.length) return json(res, 409, { error: 'telegram_required' });
+      return json(res, 200, issueSecondPartTicket(tgIds[0]));
+    }
     if (req.method === 'DELETE' && url.pathname === '/api/v1/me') {
       requireMutationAuth(req, session);
       const body = await readJson(req, 1024).catch(() => ({}));
