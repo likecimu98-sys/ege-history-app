@@ -29,8 +29,9 @@
     "test:bot-deploy": "node tools-and-docs/bot-deploy-manifest.selftest.js",
     "test:duel-search": "node tools-and-docs/duel-search-background.selftest.js",
     "test:duel-deadline": "node tools-and-docs/duel-deadline.selftest.js",
+    "test:second-part": "node tools-and-docs/second-part-queue.selftest.js",
     "test:health-watch": "node tools-and-docs/health-watch.selftest.js",
-    "check": "npm run test:sw && npm run test:sw-recovery && npm run test:bot-repair && npm run test:duel-cleanup && npm run test:match-fields && npm run test:security-headers && npm run test:homework-table-duel && npm run test:weekly-top && npm run test:bot-log-noise && npm run test:bot-unreachable && npm run test:bot-groups && npm run test:engage-scan && npm run test:bot-deploy && npm run test:duel-search && npm run test:duel-deadline && npm run test:health-watch && npm run test:hw-inbox && npm run test:visual-reset && npm run test:cram-hw && npm run test:hw-goal-cap && npm run test:hw-stage-picker && npm run test:state-contract && npm run test:scoring && npm run test:bank && npm run lint:design",
+    "check": "npm run test:sw && npm run test:sw-recovery && npm run test:bot-repair && npm run test:duel-cleanup && npm run test:match-fields && npm run test:security-headers && npm run test:homework-table-duel && npm run test:weekly-top && npm run test:bot-log-noise && npm run test:bot-unreachable && npm run test:bot-groups && npm run test:engage-scan && npm run test:bot-deploy && npm run test:duel-search && npm run test:duel-deadline && npm run test:second-part && npm run test:health-watch && npm run test:hw-inbox && npm run test:visual-reset && npm run test:cram-hw && npm run test:hw-goal-cap && npm run test:hw-stage-picker && npm run test:state-contract && npm run test:scoring && npm run test:bank && npm run lint:design",
     "test:scoring": "node tools-and-docs/exam-scoring.selftest.js",
     "test:bank": "node tools-and-docs/exam-bank.selftest.js",
     "test:state-contract": "node tools-and-docs/state-fields-contract.selftest.js"

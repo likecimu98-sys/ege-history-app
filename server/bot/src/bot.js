@@ -19,6 +19,13 @@ const ADMIN_ID = Number(process.env.ADMIN_ID || 0);
 const FB_APP_ID = process.env.FB_APP_ID || 'ege-history-bot';
 const HISTORY_API_URL = process.env.HISTORY_API_URL || 'http://127.0.0.1:8792';
 const INTERNAL_API_TOKEN = process.env.INTERNAL_API_TOKEN || '';
+// «Проверочная» — вторая часть ЕГЭ. Её ученику пишет ЭТОТ бот, а не её
+// собственный: у ученика тренажёра второго бота нет и быть не должно, иначе про
+// одно задание придут два сообщения от двух разных ботов. Поэтому мы забираем
+// её очередь и отправляем сами — заодно достаётся вся закалка sendSafe.
+// Пусто — опрос не запускается вовсе (так и живём, пока ключа нет).
+const SECOND_PART_URL = process.env.SECOND_PART_URL || 'http://127.0.0.1:8793';
+const SECOND_PART_HOST_KEY = process.env.SECOND_PART_HOST_KEY || '';
 
 if (!BOT_TOKEN) {
     console.error('BOT_TOKEN is not set in .env');
@@ -1328,6 +1335,90 @@ function watchJobs() {
     attach();
 }
 
+// ---------- Очередь второй части ЕГЭ («Проверочная») ----------
+//
+// Ученику тренажёра пишет ЭТОТ бот. У «Проверочной» свой бот, но он только для
+// кураторов: будь иначе, про одно задание приходили бы два сообщения от двух
+// разных ботов, и человек не понял бы, какой из них его.
+//
+// Забираем мы, а не они присылают, по двум причинам. Их запись в наш
+// notifyJobs авторизуется КАК УЧИТЕЛЬ (ctx.teacher + teacherCanSeeStudent), а
+// сервер учительской сессией не обладает — пришлось бы пробивать дыру в
+// авторизации боевого приложения. И здесь уже готова доставка: sendSafe гасит
+// флаги при блокировке, отдельно распознаёт «не начинал диалог с ботом» и
+// говорит об этом учителю один раз.
+const SECOND_PART_POLL_MS = 20000;
+const SECOND_PART_BATCH_CAP = 200;
+function watchSecondPart() {
+    if (!SECOND_PART_HOST_KEY) {
+        console.log('[2ч] ключ не задан — очередь второй части не опрашивается');
+        return;
+    }
+    const headers = { 'X-Host-Key': SECOND_PART_HOST_KEY };
+    let running = false;
+    let quiet = false;   // о недоступности говорим один раз, а не каждые 20 секунд
+
+    const tick = async () => {
+        if (running) return;
+        running = true;
+        try {
+            const res = await fetch(`${SECOND_PART_URL}/api/host/notifications`, { headers });
+            if (!res.ok) {
+                if (!quiet) { quiet = true; console.error(`[2ч] очередь недоступна: HTTP ${res.status}`); }
+                return;
+            }
+            quiet = false;
+            const body = await res.json().catch(() => null);
+            const items = Array.isArray(body?.notifications) ? body.notifications
+                : Array.isArray(body) ? body : [];
+            if (!items.length) return;
+
+            const done = [];
+            for (const item of items.slice(0, SECOND_PART_BATCH_CAP)) {
+                const id = item?.id;
+                const chatId = Number(item?.tg_user_id);
+                const text = String(item?.text || '').slice(0, 3500);
+                if (id == null || !Number.isFinite(chatId) || !text) { if (id != null) done.push(id); continue; }
+
+                // Отписка общая с домашкой первой части: человек, выключивший
+                // «Домашку», не должен получать её вторую половину.
+                const u = db.prepare('SELECT notify_hw FROM users WHERE id = ?').get(chatId);
+                if (!u || !u.notify_hw) { done.push(id); continue; }
+
+                // 🔴 Текст уходит БЕЗ parse_mode. Он приходит из другой системы, и
+                // разметка в нём — чужой ввод: с parse_mode одна кривая скобка
+                // роняет отправку, а спецсимволы дают чужое оформление.
+                const sent = await sendSafe(chatId, text, { reply_markup: appKb() });
+                if (sent) { done.push(id); await sleep(60); continue; }
+
+                // Подтверждаем и тех, кому доставить НЕЛЬЗЯ НИКОГДА: пока человек
+                // сам не напишет боту, Telegram не даст написать первым ни на
+                // пятой попытке, ни на пятидесятой. Без этого очередь на той
+                // стороне росла бы вечно на одном и том же адресате.
+                if (isUnreachable(chatId)) done.push(id);
+            }
+
+            if (done.length) {
+                const ack = await fetch(`${SECOND_PART_URL}/api/host/notifications/ack`, {
+                    method: 'POST',
+                    headers: { ...headers, 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ ids: done }),
+                });
+                // Не подтвердилось — не страшно: их сторона отдаст это снова.
+                // Прислать дважды лучше, чем потерять, — так и договаривались.
+                if (!ack.ok) console.error(`[2ч] подтверждение отклонено: HTTP ${ack.status}`);
+                else console.log(`[2ч] доставлено и подтверждено: ${done.length}`);
+            }
+        } catch (e) {
+            if (!quiet) { quiet = true; console.error('[2ч] опрос очереди:', e && e.message); }
+        } finally { running = false; }
+    };
+
+    const timer = setInterval(tick, SECOND_PART_POLL_MS);
+    timer.unref?.();
+    tick();
+}
+
 // ---------- Дуэли ----------
 const MAX_WAITING_AGE_MS = 2 * 60 * 1000;
 // Пауза между сообщениями рассылки. 60 мс — это ~17 отправок в секунду, вдвое ниже
@@ -1490,7 +1581,7 @@ setInterval(async () => {
 // ---------- Старт ----------
 try {
     if (initHistoryApi()) {
-        watchTeachers(); watchOrgs(); watchJobs(); watchDuels();
+        watchTeachers(); watchOrgs(); watchJobs(); watchDuels(); watchSecondPart();
         try {
             engage = require('./engage')({
                 bot, db, getFdb: () => fdb, base, sendSafe, sleep, appKb,
