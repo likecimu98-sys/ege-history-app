@@ -208,6 +208,85 @@ async function refreshPremium(tgId) {
   await pool.query('UPDATE student_profiles SET data=$2,version=version+1,updated_at=now() WHERE doc_id=$1', [tgId, JSON.stringify(data)]);
 }
 
+// ── Состав классов для «Проверочной» (вторая часть ЕГЭ) ─────────────────────
+//
+// Зачем отдельный маршрут, а не копирование классов на их сторону: копия
+// расходится с оригиналом в тот же день — пришёл ученик, перевели, отчислили.
+// Состав принадлежит тренажёру, «Проверочная» его читает.
+//
+// Почему собираем здесь, а не тремя запросами у них: единого объекта «класс»
+// в тренажёре нет. Название лежит в карточке преподавателя, состав — на самих
+// учениках (student_profiles.classCode), а документ класса хранит только
+// учебные настройки. Это знание не должно утекать во вторую систему.
+async function handleSecondPartClasses(req, res) {
+  // Без ключа маршрут ведёт себя так, будто его не существует: 404, а не 403 —
+  // отсутствие маршрута не подсказывает, что за ним что-то есть.
+  const key = String(req.headers['x-trainer-key'] || '');
+  if (!env.secondPartKey || !timingSafeEqualText(key, env.secondPartKey)) {
+    return json(res, 404, { error: 'not_found' });
+  }
+
+  // Названия классов живут у преподавателей. Один код может встретиться у
+  // нескольких — берём первое непустое имя, код всё равно один.
+  const names = new Map();
+  const teachers = await pool.query("SELECT data FROM teacher_profiles");
+  for (const row of teachers.rows) {
+    for (const item of (Array.isArray(row.data?.classes) ? row.data.classes : [])) {
+      const code = String((typeof item === 'string' ? item : item?.code) || '').trim();
+      if (!code) continue;
+      const name = typeof item === 'object' ? String(item.name || '').trim() : '';
+      if (!names.has(code) || (!names.get(code) && name)) names.set(code, name);
+    }
+  }
+
+  // Документы классов: признак второй части и архивность.
+  const docs = new Map();
+  const classRows = await pool.query('SELECT doc_id,data FROM classes');
+  for (const row of classRows.rows) docs.set(String(row.doc_id), row.data || {});
+
+  const codes = [...new Set([...names.keys(), ...docs.keys()])]
+    .filter(code => !docs.get(code)?.archived);
+
+  // Состав — ТОЛЬКО у включённых классов: у выключенных он не нужен, а это
+  // сотни учеников через границу на каждый запрос.
+  const enabled = codes.filter(code => docs.get(code)?.secondPart === true);
+  const byClass = new Map(enabled.map(code => [code, []]));
+  const skipped = new Map(enabled.map(code => [code, 0]));
+  if (enabled.length) {
+    const students = await pool.query(
+      `SELECT doc_id,data FROM student_profiles WHERE data->>'classCode' = ANY($1::text[])`, [enabled]);
+    for (const row of students.rows) {
+      const code = String(row.data?.classCode || '');
+      if (!byClass.has(code)) continue;
+      if (row.data?._mergedInto) continue;   // склеенный дубль аккаунта — не человек
+      // 🔴 Сопоставление идёт по Telegram ID, и это не наше решение, а условие
+      // стыка. Но у части учеников его нет: они вошли через Google или гостем,
+      // и doc_id у них не числовой. Такого человека вторая часть не увидит —
+      // молча пропустить его нельзя, поэтому отдаём счётчик, чтобы куратор на
+      // своём экране мог сказать «столько-то без Telegram», а не недосчитаться.
+      if (!/^[0-9]+$/.test(String(row.doc_id))) {
+        skipped.set(code, skipped.get(code) + 1);
+        continue;
+      }
+      byClass.get(code).push({
+        tg_user_id: Number(row.doc_id),
+        name: String(row.data?.name || '').slice(0, 120),
+      });
+    }
+  }
+
+  const classes = codes.map(code => {
+    const on = docs.get(code)?.secondPart === true;
+    const out = { code, name: names.get(code) || code, second_part: on };
+    if (on) {
+      out.students = byClass.get(code) || [];
+      out.students_without_telegram = skipped.get(code) || 0;
+    }
+    return out;
+  });
+  return json(res, 200, { classes });
+}
+
 async function handleInternal(req, res, url) {
   if (!internalRequest(req)) throw Object.assign(new Error('forbidden'), { statusCode: 403 });
   if (req.method === 'POST' && url.pathname === '/internal/v1/store/get') {
@@ -396,6 +475,11 @@ async function handle(req, res) {
 
   try {
     if (url.pathname.startsWith('/internal/')) return await handleInternal(req, res, url);
+    // Состав классов для «Проверочной» (вторая часть ЕГЭ). Только чтение и
+    // только под узким ключом — см. env.secondPartKey, почему не общий.
+    if (req.method === 'GET' && url.pathname === '/api/v1/second-part/classes') {
+      return await handleSecondPartClasses(req, res);
+    }
     // Приёмник нарушений CSP. Нужен, чтобы сутки в режиме Report-Only имели
     // смысл: иначе нарушения остаются в консолях чужих телефонов и мы их не
     // увидим. Без сессии и без CSRF — браузер шлёт отчёт сам, без наших кук.

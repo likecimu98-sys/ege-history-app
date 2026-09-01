@@ -84,7 +84,11 @@ function duelWriteWindowOver(before) {
 // «читать может только учитель» было бы тихой поломкой всей выдачи домашних
 // заданий. Ученику отдаём только эти поля, всё остальное — учителю класса.
 const STUDENT_VISIBLE_CLASS_FIELDS = new Set([
-  'assignments', 'revokedAssignments', 'revokeBefore', 'currentUpto', 'currentPeriod', 'unlimited', 'updatedAt'
+  'assignments', 'revokedAssignments', 'revokeBefore', 'currentUpto', 'currentPeriod', 'unlimited', 'updatedAt',
+  // secondPart — включена ли у класса вторая часть ЕГЭ («Проверочная»).
+  // 🔴 Поле обязано быть в ЭТОМ списке, иначе до ученика оно не доедет: не с
+  // ошибкой, а молча, и вкладка «Домашка» просто никогда не покажет раздел.
+  'secondPart'
 ]);
 
 // Совпадает с _classDocId в cloud-sync.js: код класса и есть id документа.
