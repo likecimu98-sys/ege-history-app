@@ -7,14 +7,14 @@
             signInWithCredential, signOut, initializeFirestore, collection, doc, setDoc, getDoc,
             getDocs, addDoc, updateDoc, deleteDoc, deleteField, onSnapshot, query, where,
             orderBy, limit, runTransaction, arrayUnion, arrayRemove, vpsApiFetch, refreshVpsAuth
-        } from "./vps-sync-compat.js?v=20260826-3";
+        } from "./vps-sync-compat.js?v=20260901-1";
 
         // jsPDF грузился с cdnjs.cloudflare.com без SRI — то есть посторонний скрипт
         // исполнялся с полными правами страницы, а при недоступности CDN (у части
         // нашей аудитории это обычное дело) экспорт PDF просто не работал. Довод тот
         // же, что и для telegram-web-app.js: своя копия с того же origin.
         // Версия совпадает с прежней CDN-ной — 2.5.1, лежит в vendor/.
-        const VENDOR_JSPDF = 'vendor/jspdf.umd.min.js?v=20260826-3';
+        const VENDOR_JSPDF = 'vendor/jspdf.umd.min.js?v=20260901-1';
 
         const cloudConfig = { projectId: 'vps-postgresql' };
         
@@ -3065,6 +3065,12 @@
                     else localStorage.removeItem('class_current_upto');
                     if (data.currentPeriod) localStorage.setItem('class_current_period', data.currentPeriod);
                     else localStorage.removeItem('class_current_period');
+                    // Вторая часть ЕГЭ открывается по классам. Признак приходит из
+                    // документа класса (он же в STUDENT_VISIBLE_CLASS_FIELDS на
+                    // сервере) и кладётся рядом с остальными настройками потока:
+                    // раздел в «Домашке» рисуется по нему, до следующего входа тоже.
+                    if (data.secondPart === true) localStorage.setItem('class_second_part', '1');
+                    else localStorage.removeItem('class_second_part');
                 } catch (e) {}
                 // «С чистого листа»: метка revokeBefore снимает ЛЮБЫЕ невыполненные ДЗ, выданные до неё —
                 // в т.ч. старые legacy-ДЗ со случайными id, которых нет в журнале. Сданные не трогаем.

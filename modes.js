@@ -3,6 +3,144 @@
 'use strict';
 
 // ═══════════════════════════════════════════════════════════
+//  ВТОРАЯ ЧАСТЬ ЕГЭ («Проверочная»)
+// ═══════════════════════════════════════════════════════════
+//
+// Развёрнутые ответы живут в отдельном приложении: там фото до восьми страниц с
+// автоповоротом и сжатием, разбор по критериям ФИПИ, очередь кураторов. Мы его
+// не переписываем, а открываем рамкой внутри «Домашки» — ученику это одно
+// приложение, а не два.
+//
+// Открывается по классам: признак приходит из документа класса (secondPart) и
+// лежит в class_second_part.
+const SECOND_PART_ORIGIN = 'https://hw.reshay-istoriyu.ru';
+const SECOND_PART_SRC = SECOND_PART_ORIGIN + '/student?embed=1';
+
+window.secondPartAvailable = function() {
+    try { return localStorage.getItem('class_second_part') === '1'; } catch (e) { return false; }
+};
+
+// Подпись Telegram — единственный способ, которым «Проверочная» узнаёт человека.
+// Вошедший через Google или гостем её не имеет, и это не поломка, а граница
+// стыка: сказать об этом честно лучше, чем показать пустую рамку.
+function _secondPartInitData() {
+    try {
+        const app = window.Telegram && window.Telegram.WebApp;
+        return (app && app.initData) ? String(app.initData) : '';
+    } catch (e) { return ''; }
+}
+function _secondPartTheme() {
+    return document.documentElement.classList.contains('dark') ? 'dark' : 'light';
+}
+
+window.secondPartRow = function() {
+    if (!window.secondPartAvailable()) return '';
+    return `
+    <div style="margin-bottom:14px">
+      <div style="font-size:11px;font-weight:900;text-transform:uppercase;letter-spacing:.06em;color:#9ca3af;margin:6px 2px 8px">Вторая часть</div>
+      <button type="button" onclick="window.openSecondPart&&window.openSecondPart()"
+        style="width:100%;text-align:left;background:var(--card,#fff);border:1px solid rgba(128,128,128,0.18);
+               border-left:3px solid var(--c-brand,#4f46e5);border-radius:var(--r-md);padding:14px;cursor:pointer;display:flex;
+               align-items:center;gap:12px" class="dark:bg-[#1e1e1e]">
+        <span style="font-size:26px;line-height:1">✍️</span>
+        <span style="flex:1">
+          <span style="display:block;font-size:13px;font-weight:900;color:#111" class="dark:text-white">Развёрнутые ответы</span>
+          <span style="display:block;font-size:11px;color:#6b7280;margin-top:2px">Задания 13–21 · проверяет куратор</span>
+        </span>
+        <span style="font-size:18px;color:#9ca3af">›</span>
+      </button>
+    </div>`;
+};
+
+window.openSecondPart = function() {
+    haptic('light');
+    const id = 'second-part-overlay';
+    if (document.getElementById(id)) return;
+
+    const initData = _secondPartInitData();
+    const overlay = document.createElement('div');
+    overlay.id = id;
+    overlay.style.cssText = 'position:fixed;inset:0;z-index:10100;background:var(--bg,#f7f7f8);display:flex;flex-direction:column';
+
+    const bar = document.createElement('div');
+    bar.style.cssText = 'display:flex;align-items:center;gap:10px;padding:calc(env(safe-area-inset-top,0px) + 10px) 14px 10px;'
+        + 'background:var(--card,#fff);border-bottom:1px solid rgba(128,128,128,.18);flex:0 0 auto';
+    bar.innerHTML = '<span style="font-size:15px;font-weight:900;flex:1">✍️ Вторая часть</span>';
+    const close = document.createElement('button');
+    close.type = 'button';
+    close.textContent = '✕';
+    close.setAttribute('aria-label', 'Закрыть вторую часть');
+    close.style.cssText = 'font-size:22px;color:#aaa;background:none;border:none;cursor:pointer;padding:2px 8px';
+    close.onclick = () => window.closeSecondPart();
+    bar.appendChild(close);
+    overlay.appendChild(bar);
+
+    if (!initData) {
+        // Честный тупик вместо пустой рамки.
+        const msg = document.createElement('div');
+        msg.style.cssText = 'flex:1;display:flex;align-items:center;justify-content:center;padding:32px 22px;text-align:center;color:#6b7280';
+        msg.innerHTML = '<div><div style="font-size:40px;margin-bottom:10px">📱</div>'
+            + '<div style="font-size:14px;font-weight:800;color:#374151" class="dark:text-gray-300">Вторая часть открывается из Telegram</div>'
+            + '<div style="font-size:12px;margin-top:6px;max-width:34ch">Работы подписываются вашим Telegram-аккаунтом. Откройте тренажёр через бота — здесь же вход через Google этого не даёт.</div></div>';
+        overlay.appendChild(msg);
+        document.body.appendChild(overlay);
+        return;
+    }
+
+    const frame = document.createElement('iframe');
+    frame.id = 'second-part-frame';
+    frame.src = SECOND_PART_SRC;
+    frame.title = 'Вторая часть ЕГЭ';
+    frame.setAttribute('allow', 'clipboard-write');
+    frame.style.cssText = 'flex:1;width:100%;border:0;background:transparent';
+    overlay.appendChild(frame);
+    document.body.appendChild(overlay);
+
+    // 🔴 Подпись уходит СООБЩЕНИЕМ и только на точный origin.
+    //
+    // Не адресом: адреса оседают в логах, истории и реферерах, а initData —
+    // это учётные данные. И не '*': с ним подпись достанется любому, кто
+    // окажется в рамке, если адрес когда-нибудь подменят.
+    const onMessage = (e) => {
+        if (e.origin !== SECOND_PART_ORIGIN) return;
+        if (!e.data || e.data.type !== 'proverochnaya:ready') return;
+        try {
+            frame.contentWindow.postMessage(
+                { type: 'proverochnaya:init', initData, theme: _secondPartTheme() },
+                SECOND_PART_ORIGIN);
+        } catch (err) { _dbgSecondPart('не удалось передать подпись', err); }
+    };
+    window.addEventListener('message', onMessage);
+
+    // Тема хозяина ведущая: переключили у нас — меняется и внутри.
+    const themeObserver = new MutationObserver(() => {
+        try {
+            frame.contentWindow.postMessage(
+                { type: 'proverochnaya:theme', theme: _secondPartTheme() }, SECOND_PART_ORIGIN);
+        } catch (err) {}
+    });
+    themeObserver.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });
+
+    window.closeSecondPart = function() {
+        window.removeEventListener('message', onMessage);
+        try { themeObserver.disconnect(); } catch (e) {}
+        const el = document.getElementById(id);
+        if (el) el.remove();
+        // Домашка первой части могла измениться, пока человек был во второй.
+        if (window.updateHwNavBadge) window.updateHwNavBadge();
+    };
+};
+
+window.closeSecondPart = window.closeSecondPart || function() {
+    const el = document.getElementById('second-part-overlay');
+    if (el) el.remove();
+};
+
+function _dbgSecondPart(msg, err) {
+    try { console.warn('[2ч]', msg, err && (err.message || err)); } catch (e) {}
+}
+
+// ═══════════════════════════════════════════════════════════
 //  ДУЭЛЬ (PvP)
 // ═══════════════════════════════════════════════════════════
 

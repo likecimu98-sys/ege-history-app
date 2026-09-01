@@ -1489,7 +1489,11 @@ window.openHwTab = function() {
         ? `<div style="margin-bottom:14px"><div style="font-size:11px;font-weight:900;text-transform:uppercase;letter-spacing:.06em;color:#9ca3af;margin:6px 2px 8px">${title}</div>${items.map(a => card(a, kind)).join('')}</div>`
         : '';
 
-    const empty = (!active.length && !overdue.length && !done.length)
+    // «Заданий нет» не пишем, когда открыта вторая часть: там может лежать
+    // работа, и два взаимоисключающих сообщения на одном экране — хуже, чем ни
+    // одного.
+    const empty = (!active.length && !overdue.length && !done.length
+                   && !(window.secondPartAvailable && window.secondPartAvailable()))
         ? `<div style="text-align:center;padding:40px 16px;color:#9ca3af">
              <div style="font-size:42px;margin-bottom:8px">🎉</div>
              <div style="font-size:14px;font-weight:800;color:#374151" class="dark:text-gray-300">Домашних заданий нет</div>
@@ -1524,6 +1528,7 @@ window.openHwTab = function() {
         <button onclick="document.getElementById('${overlayId}').remove()" style="font-size:22px;color:#aaa;background:none;border:none;cursor:pointer;padding:2px 8px">✕</button>
       </div>
       ${statsLine}
+      ${window.secondPartRow ? window.secondPartRow() : ''}
       ${section('🔴 Просроченные — доделать', overdue, 'overdue')}
       ${section('🟢 Активные', active, 'active')}
       ${section('Выполненные', done, 'done')}
