@@ -60,6 +60,15 @@ for (const { file, policy } of policies) {
       frameSources.includes('https://*.yandex.ru'),
     `${file}: frame-src обязан сохранять карты Яндекса`
   );
+  // 🔴 Вторая часть ЕГЭ живёт на отдельном поддомене и открывается рамкой внутри
+  // «Домашки». Для CSP это чужой origin: нет его во frame-src — рамка не грузится
+  // вовсе, и раздел гаснет молча, без единой ошибки на сервере. Адрес обязан
+  // совпадать с SECOND_PART_ORIGIN в modes.js — там же и подпись отправляется
+  // только на него, поэтому расхождение сломало бы стык дважды.
+  assert.ok(
+    frameSources.includes('https://hw.reshay-istoriyu.ru'),
+    `${file}: frame-src обязан разрешать вторую часть ЕГЭ (hw.reshay-istoriyu.ru)`
+  );
   assert.ok(
     frameAncestors.includes("'self'") &&
       frameAncestors.includes('https://web.telegram.org') &&

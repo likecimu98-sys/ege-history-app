@@ -336,6 +336,7 @@ const CMD_TEACHER = [
     { command: 'newclass', description: '➕ Создать группу' },
     { command: 'myclasses', description: '📚 Мои группы и ссылки' },
     { command: 'msg', description: '📣 Сообщение группе' },
+    { command: 'secondpart', description: '✍️ Вторая часть ЕГЭ' },
     { command: 'delclass', description: '🗑 Удалить группу' },
     { command: 'repair', description: '🛟 Исправить загрузку' },
     { command: 'settings', description: '⚙️ Уведомления' },
@@ -347,6 +348,7 @@ const CMD_OWNER = [
     { command: 'myclasses', description: '📚 Группы школы' },
     { command: 'msg', description: '📣 Сообщение группе' },
     { command: 'inviteteacher', description: '👨‍🏫 Пригласить преподавателя' },
+    { command: 'secondpart', description: '✍️ Вторая часть ЕГЭ' },
     { command: 'delclass', description: '🗑 Удалить группу' },
     { command: 'repair', description: '🛟 Исправить загрузку' },
     { command: 'settings', description: '⚙️ Уведомления' }
@@ -409,6 +411,7 @@ function menuKeyboard(userId) {
     if (isTeacher(userId)) {
         kb.text('➕ Новая группа', 'm_newclass').text('📚 Мои группы', 'm_myclasses').row();
         kb.text('📣 Сообщение группе', 'm_msg').text('🗑 Удалить группу', 'm_delclass').row();
+        kb.text('✍️ Вторая часть', 'm_secondpart').row();
     }
     if (isOrgOwner(userId)) kb.text('👨‍🏫 Пригласить преподавателя', 'm_inviteteacher').row();
     kb.text('⚙️ Уведомления', 'm_settings');
@@ -832,6 +835,70 @@ bot.callbackQuery(/^delclsY:(.+)$/, async (ctx) => {
         await ctx.answerCallbackQuery('Удалено');
         await ctx.editMessageText('✅ Группа удалена из кабинета. Ученики и их прогресс сохранены.');
     } catch (e) { console.error('delclass failed:', e.message); await ctx.answerCallbackQuery('Ошибка'); }
+});
+
+// ---------- Вторая часть ЕГЭ по группам ----------
+//
+// Развёрнутые ответы («Проверочная») открываются НЕ всем сразу, а группам, по
+// одной. Признак живёт в документе группы: поле secondPart. Оно доезжает до
+// ученика через STUDENT_VISIBLE_CLASS_FIELDS и рисует раздел в «Домашке».
+//
+// Раньше включить его было нечем: ни здесь, ни в кабинете учителя, ни в
+// админке — только правкой в базе руками. То есть «открывать выборочно»
+// работало ровно до тех пор, пока рядом был тот, кто умеет писать в базу.
+async function classSecondPart(code) {
+    try {
+        const snap = await fdb.doc(`${base}/classes/${code}`).get();
+        return !!(snap.exists && snap.data() && snap.data().secondPart === true);
+    } catch (e) { return false; }
+}
+
+async function doSecondPart(ctx) {
+    if (!isTeacher(ctx.from.id)) return;
+    if (!fdb) return ctx.reply('Сервис временно недоступен.');
+    const list = teacherClasses(ctx.from.id);
+    if (!list.length) return ctx.reply('У вас нет групп. Создайте: ➕ Новая группа');
+    const kb = new InlineKeyboard();
+    for (const c of list.slice(0, 20)) {
+        const on = await classSecondPart(c.code);
+        kb.text(`${on ? '✅' : '▢'} ${c.name}`.slice(0, 60), `sp:${c.code}`).row();
+    }
+    await ctx.reply(
+        '✍️ Вторая часть ЕГЭ — развёрнутые ответы с проверкой куратора.\n\n'
+        + 'Нажмите на группу, чтобы включить или выключить. У кого включено — '
+        + 'у того в «Домашке» появляется раздел «Развёрнутые ответы».\n\n'
+        + 'Выключение не удаляет уже выданное: работы и проверки остаются, '
+        + 'просто новое в эту группу больше не приходит.',
+        { reply_markup: kb });
+}
+bot.command('secondpart', doSecondPart);
+bot.callbackQuery('m_secondpart', async (ctx) => { await ctx.answerCallbackQuery(); await doSecondPart(ctx); });
+
+bot.callbackQuery(/^sp:(.+)$/, async (ctx) => {
+    if (!fdb) return ctx.answerCallbackQuery('Сервис недоступен');
+    const code = ctx.match[1];
+    // ВЛАДЕНИЕ: та же защита, что у удаления группы. Без неё любой учитель,
+    // зная код, открывал бы вторую часть чужому классу — а вместе с ней и
+    // состав этого класса уезжал бы во вторую систему.
+    const own = teacherClasses(ctx.from.id).find(x => x.code === code);
+    if (!own) return ctx.answerCallbackQuery('Это не ваша группа');
+    try {
+        const next = !(await classSecondPart(code));
+        await fdb.doc(`${base}/classes/${code}`).set(
+            { secondPart: next, secondPartAt: Date.now() }, { merge: true });
+        await ctx.answerCallbackQuery(next ? 'Включено' : 'Выключено');
+        await ctx.editMessageText(
+            `${next ? '✅' : '▢'} «${own.name}» — вторая часть ${next ? 'включена' : 'выключена'}.\n\n`
+            + (next
+                ? 'Ученики увидят раздел «Развёрнутые ответы» в «Домашке» при '
+                  + 'следующем входе. Проверять работы будет куратор.'
+                : 'Раздел у учеников этой группы скроется. Уже сданное и '
+                  + 'проверенное сохраняется.')
+            + '\n\nПоказать список снова: /secondpart');
+    } catch (e) {
+        console.error('secondpart toggle failed:', e.message);
+        await ctx.answerCallbackQuery('Ошибка');
+    }
 });
 
 // ---------- Настройки уведомлений ----------
