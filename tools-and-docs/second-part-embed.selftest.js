@@ -79,4 +79,35 @@ assert.match(open, /window\.removeEventListener\('message', onMessage\)/,
 assert.match(open, /themeObserver\.disconnect\(\)/,
   'Наблюдатель темы не отключается — будет слать в закрытую рамку');
 
+// ── Непросмотренное во второй части доходит до значка ───────────────────────
+// Ученику, которому задали ТОЛЬКО вторую часть, приложение не подавало ни
+// одного признака жизни: значок считает первую половину, строка раздела
+// выглядит одинаково с работой и без. Единственным сигналом было сообщение
+// бота, которое легко пролистать.
+const uiSrc = fs.readFileSync(path.join(root, 'ui.js'), 'utf8');
+const sync = fs.readFileSync(path.join(root, 'cloud-sync.js'), 'utf8');
+
+assert.match(modes, /window\.secondPartHasNews = function\(\)/,
+  'Нет признака «во второй части есть новое»');
+assert.match(uiSrc, /if \(window\.secondPartHasNews && window\.secondPartHasNews\(\)\) n \+= 1;/,
+  'Значок «Домашки» снова не замечает вторую часть');
+assert.match(sync, /Number\(data\.secondPartNewsAt\)/,
+  'Отметка бота не читается из документа ученика — признак никогда не загорится');
+
+// Открыл — увидел. Метка ставится при ОТКРЫТИИ, а не при закрытии: закрыть
+// могут системной кнопкой «назад», и тогда раздел горел бы «новым» всегда.
+assert.match(modes, /if \(document\.getElementById\(id\)\) return;\s*\n\s*(?:\/\/[^\n]*\n\s*)*try \{ localStorage\.setItem\('second_part_seen_at'/,
+  'Отметка о просмотре ставится не сразу при открытии раздела');
+// И она не должна жить только в закрытии: закрыть могут системной кнопкой
+// «назад», обработчик не отработает, и раздел горел бы «новым» вечно.
+assert.doesNotMatch(modes, /window\.closeSecondPart = function\(\)[\s\S]{0,600}?second_part_seen_at/,
+  'Отметка о просмотре привязана к закрытию — при выходе «назад» не поставится');
+
+// 🔴 Ключи привязаны к человеку. На общем компьютере несмытый признак покажет
+// следующему ученику чужой раздел — см. _wipeDeviceIdentity.
+for (const key of ['class_second_part', 'second_part_news_at', 'second_part_seen_at']) {
+  assert.ok(new RegExp(`IDENTITY_WIPE_KEYS[\\s\\S]{0,2000}?'${key}'`).test(sync),
+    `${key} не стирается при смене аккаунта — на общем компьютере утечёт следующему`);
+}
+
 console.log('second-part-embed.selftest: ok');

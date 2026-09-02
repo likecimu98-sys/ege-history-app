@@ -33,11 +33,29 @@ function _secondPartTheme() {
     return document.documentElement.classList.contains('dark') ? 'dark' : 'light';
 }
 
+// Есть ли во второй части непросмотренное. Отметку о новом ставит бот в
+// документе ученика (secondPartNewsAt), «просмотрено» — мы сами при открытии
+// раздела. Точного счётчика нет намеренно: работы живут в другой системе, и
+// выдуманное число врало бы, а «есть новое» — не врёт.
+window.secondPartHasNews = function() {
+    try {
+        if (!window.secondPartAvailable()) return false;
+        const news = Number(localStorage.getItem('second_part_news_at')) || 0;
+        const seen = Number(localStorage.getItem('second_part_seen_at')) || 0;
+        return news > seen;
+    } catch (e) { return false; }
+};
+
 window.secondPartRow = function() {
     if (!window.secondPartAvailable()) return '';
+    const fresh = window.secondPartHasNews();
+    const dot = fresh
+        ? '<span style="display:inline-block;background:#f43f5e;color:#fff;font-size:9px;font-weight:900;'
+          + 'text-transform:uppercase;letter-spacing:.06em;padding:2px 6px;border-radius:999px;margin-left:6px">новое</span>'
+        : '';
     return `
     <div style="margin-bottom:14px">
-      <div style="font-size:11px;font-weight:900;text-transform:uppercase;letter-spacing:.06em;color:#9ca3af;margin:6px 2px 8px">Вторая часть</div>
+      <div style="font-size:11px;font-weight:900;text-transform:uppercase;letter-spacing:.06em;color:#9ca3af;margin:6px 2px 8px">Вторая часть${dot}</div>
       <button type="button" onclick="window.openSecondPart&&window.openSecondPart()"
         style="width:100%;text-align:left;background:var(--card,#fff);border:1px solid rgba(128,128,128,0.18);
                border-left:3px solid var(--c-brand,#4f46e5);border-radius:var(--r-md);padding:14px;cursor:pointer;display:flex;
@@ -78,6 +96,11 @@ window.openSecondPart = async function() {
     haptic('light');
     const id = 'second-part-overlay';
     if (document.getElementById(id)) return;
+
+    // Открыл — значит увидел. Метку ставим здесь, а не при закрытии: закрыть
+    // могут кнопкой «назад» у телефона, и тогда раздел горел бы «новым» вечно.
+    try { localStorage.setItem('second_part_seen_at', String(Date.now())); } catch (e) {}
+    if (window.updateHwNavBadge) window.updateHwNavBadge();
 
     const initData = _secondPartInitData();
     const ticket = await _secondPartTicket();

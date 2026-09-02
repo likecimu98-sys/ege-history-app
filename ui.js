@@ -1376,7 +1376,13 @@ window.countActiveAssignments = function() {
 window.updateHwNavBadge = function() {
     const badge = document.getElementById('hw-nav-badge');
     if (!badge) return;
-    const n = window.countActiveAssignments();
+    let n = window.countActiveAssignments();
+    // Вторая часть считается ОДНИМ делом, сколько бы работ там ни ждало.
+    // Точное число живёт в другой системе, и подставлять сюда выдумку нельзя:
+    // значок, обещающий три дела вместо одного, хуже, чем значок без числа.
+    // Но и молчать нельзя — раньше ученик, которому задали только вторую часть,
+    // не видел в приложении ни одного признака, что его что-то ждёт.
+    if (window.secondPartHasNews && window.secondPartHasNews()) n += 1;
     if (n > 0) { badge.textContent = n > 9 ? '9+' : String(n); badge.classList.remove('hidden'); }
     else badge.classList.add('hidden');
 };

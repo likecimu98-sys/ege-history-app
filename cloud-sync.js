@@ -7,14 +7,14 @@
             signInWithCredential, signOut, initializeFirestore, collection, doc, setDoc, getDoc,
             getDocs, addDoc, updateDoc, deleteDoc, deleteField, onSnapshot, query, where,
             orderBy, limit, runTransaction, arrayUnion, arrayRemove, vpsApiFetch, refreshVpsAuth
-        } from "./vps-sync-compat.js?v=20260901-2";
+        } from "./vps-sync-compat.js?v=20260902-1";
 
         // jsPDF грузился с cdnjs.cloudflare.com без SRI — то есть посторонний скрипт
         // исполнялся с полными правами страницы, а при недоступности CDN (у части
         // нашей аудитории это обычное дело) экспорт PDF просто не работал. Довод тот
         // же, что и для telegram-web-app.js: своя копия с того же origin.
         // Версия совпадает с прежней CDN-ной — 2.5.1, лежит в vendor/.
-        const VENDOR_JSPDF = 'vendor/jspdf.umd.min.js?v=20260901-2';
+        const VENDOR_JSPDF = 'vendor/jspdf.umd.min.js?v=20260902-1';
 
         const cloudConfig = { projectId: 'vps-postgresql' };
         
@@ -195,6 +195,12 @@
             'student_manual_name', 'student_manual_name_at', 'student_class_code',
             'teacher_class_code', 'teacher_filter_class', 'teacher_hw_deadline',
             'class_current_upto', 'class_current_period',
+            // Вторая часть ЕГЭ: открыта ли она группе и есть ли непросмотренное.
+            // И то и другое — про КОНКРЕТНОГО ученика и его группу. Не стереть на
+            // общем компьютере значит показать следующему чужой раздел, а в нём —
+            // чужие работы: рамка спросит билет уже под новым аккаунтом, но сам
+            // раздел мигнёт там, где его быть не должно.
+            'class_second_part', 'second_part_news_at', 'second_part_seen_at',
             'consumed_invite_at', 'seenHwIds',
             // Память об отозванных ДЗ — она про конкретного ученика и его группу.
             // Не стереть при смене аккаунта = чужие задания молча пропадут у нового.
@@ -941,6 +947,18 @@
                             if (window.updateHwNavBadge) window.updateHwNavBadge();
                         }
                     }
+
+                    // ── Вторая часть: есть ли непросмотренное ──
+                    // Отметку ставит бот, когда забирает из очереди «Проверочной»
+                    // домашку, проверку или ответ куратора. Своего счётчика у нас
+                    // нет и быть не может: работы живут в другой системе. Зато
+                    // «есть новое» — правда, и её достаточно, чтобы ученик открыл
+                    // раздел, а не прошёл мимо него в третий раз.
+                    try {
+                        const newsAt = Number(data.secondPartNewsAt) || 0;
+                        if (newsAt) localStorage.setItem('second_part_news_at', String(newsAt));
+                        if (window.updateHwNavBadge) window.updateHwNavBadge();
+                    } catch (e) {}
 
                     // ── Новая модель: список заданий (pendingAssignments) ──
                     const pending = Array.isArray(data.pendingAssignments) ? data.pendingAssignments : [];
