@@ -110,4 +110,15 @@ for (const key of ['class_second_part', 'second_part_news_at', 'second_part_seen
     `${key} не стирается при смене аккаунта — на общем компьютере утечёт следующему`);
 }
 
+// ── Ссылка «Открыть вторую часть» открывает раздел, а не главный экран ──────
+// Кнопка из «Проверочной» вела на корень тренажёра, и человек оказывался на
+// главной: дальше сам ищи «Домашку» и «Развёрнутые ответы».
+assert.match(modes, /window\.maybeOpenSecondPartFromLink = function\(\)/,
+  'Нет разбора ссылки на раздел второй части');
+assert.match(modes, /start_param === 'second'/,
+  'Deep link из Telegram не распознаётся — в мини-аппе строки запроса нет');
+const appSrc = fs.readFileSync(path.join(root, 'app.js'), 'utf8');
+assert.match(appSrc, /maybeOpenSecondPartFromLink\(\)/,
+  'Разбор ссылки объявлен, но при загрузке не вызывается');
+
 console.log('second-part-embed.selftest: ok');

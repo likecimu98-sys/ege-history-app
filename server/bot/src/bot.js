@@ -1434,15 +1434,44 @@ const SECOND_PART_NEWS = new Set([
 // Отметка в документе ученика: «во второй части появилось новое, ты этого ещё
 // не видел». Слиянием и одним полем — документ ученика одновременно правит и он
 // сам, и учитель, и полная перезапись снесла бы выданную домашку.
-async function markSecondPartNews(chatId) {
+//
+// Пишем только когда отметка ДЕЙСТВИТЕЛЬНО новее записанной: опрос идёт каждые
+// 20 секунд, а каждая запись поднимает версию документа и будит клиента.
+const _secondPartNewsSeen = new Map();
+async function markSecondPartNews(chatId, at) {
     if (!fdb) return;
+    const when = Number(at) || Date.now();
+    const key = String(chatId);
+    if ((_secondPartNewsSeen.get(key) || 0) >= when) return;
     try {
-        await fdb.doc(`${base}/students/${chatId}`)
-            .set({ secondPartNewsAt: Date.now() }, { merge: true });
+        await fdb.doc(`${base}/students/${key}`)
+            .set({ secondPartNewsAt: when }, { merge: true });
+        _secondPartNewsSeen.set(key, when);
     } catch (e) {
-        // Не доставленная отметка не должна ронять доставку сообщения: человек
+        // Не поставленная отметка не должна ронять доставку сообщения: человек
         // хотя бы получит текст в Telegram.
         console.error('[2ч] отметка о новом не поставлена:', e && e.message);
+    }
+}
+
+// 🔴 Раздел в приложении зажигается НЕ отправкой сообщения.
+//
+// Сначала отметка ставилась только в миг доставки — и 03.09.2026 домашка,
+// выданная в три часа ночи, не появилась ни у кого: сообщение легло ждать
+// восьми утра (тихие часы «Проверочной»), а приложение о задании так и не
+// узнало. Отметка нужна ровно для тех случаев, когда сообщение не дошло:
+// ночью, при выключенных уведомлениях, при удалённом боте. Поэтому свой
+// опрос, свой маршрут и никакой связи с очередью сообщений.
+async function pollSecondPartNews(headers) {
+    const res = await fetch(`${SECOND_PART_URL}/api/host/news`, { headers });
+    if (!res.ok) return;
+    const items = await res.json().catch(() => null);
+    if (!Array.isArray(items)) return;
+    for (const item of items.slice(0, SECOND_PART_BATCH_CAP)) {
+        const chatId = Number(item?.tg_user_id);
+        const at = Date.parse(String(item?.at || ''));
+        if (!Number.isFinite(chatId) || !Number.isFinite(at)) continue;
+        await markSecondPartNews(chatId, at);
     }
 }
 
@@ -1459,6 +1488,11 @@ function watchSecondPart() {
         if (running) return;
         running = true;
         try {
+            // Сначала новости: они не зависят от тихих часов и от того, дойдёт
+            // ли сообщение. Ошибка здесь не должна мешать доставке очереди.
+            try { await pollSecondPartNews(headers); }
+            catch (e) { if (!quiet) console.error('[2ч] новости:', e && e.message); }
+
             const res = await fetch(`${SECOND_PART_URL}/api/host/notifications`, { headers });
             if (!res.ok) {
                 if (!quiet) { quiet = true; console.error(`[2ч] очередь недоступна: HTTP ${res.status}`); }
@@ -1502,7 +1536,7 @@ function watchSecondPart() {
                 // «Развёрнутые ответы» выглядела одинаково и с работой, и без.
                 // Ставим раньше отправки нарочно: не доставленное сообщение —
                 // не повод скрывать от ученика, что ему задали.
-                if (SECOND_PART_NEWS.has(kind)) await markSecondPartNews(chatId);
+                if (SECOND_PART_NEWS.has(kind)) await markSecondPartNews(chatId, Date.parse(String(item?.created_at || '')) || Date.now());
 
                 const sent = await sendSafe(chatId, text, { reply_markup: appKb() });
                 if (sent) { done.push(id); await sleep(60); continue; }

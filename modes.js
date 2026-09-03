@@ -179,6 +179,38 @@ window.openSecondPart = async function() {
     };
 };
 
+// Открыть раздел сразу — по ссылке «Открыть вторую часть».
+//
+// Кнопка из «Проверочной» и из бота вела на корень тренажёра и высаживала
+// человека на главный экран: дальше он сам должен был догадаться про «Домашку»
+// и «Развёрнутые ответы». Два неочевидных шага после кнопки, которая обещала
+// открыть задание.
+//
+// Ждём признак класса: он приезжает синхронизацией, и сразу после загрузки его
+// может ещё не быть. Ждём недолго и молча сдаёмся — навязывать пустую рамку
+// тому, кому вторую часть не открывали, незачем.
+window.maybeOpenSecondPartFromLink = function() {
+    let wanted = false;
+    try {
+        wanted = new URLSearchParams(location.search).get('second') === '1';
+        if (!wanted) {
+            const tg = window.Telegram && window.Telegram.WebApp;
+            wanted = !!(tg && tg.initDataUnsafe && tg.initDataUnsafe.start_param === 'second');
+        }
+    } catch (e) { return; }
+    if (!wanted) return;
+
+    let waited = 0;
+    const tryOpen = () => {
+        if (window.secondPartAvailable && window.secondPartAvailable()) {
+            if (window.openSecondPart) window.openSecondPart();
+            return;
+        }
+        if ((waited += 500) < 8000) setTimeout(tryOpen, 500);
+    };
+    tryOpen();
+};
+
 window.closeSecondPart = window.closeSecondPart || function() {
     const el = document.getElementById('second-part-overlay');
     if (el) el.remove();

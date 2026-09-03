@@ -768,3 +768,8 @@ document.addEventListener('click', function(e) {
 }, true);
 
 document.addEventListener('DOMContentLoaded', initStorage);
+
+// Пришли по ссылке «Открыть вторую часть» — открываем её, а не главный экран.
+document.addEventListener('DOMContentLoaded', () => {
+    if (window.maybeOpenSecondPartFromLink) window.maybeOpenSecondPartFromLink();
+});
