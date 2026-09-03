@@ -2116,3 +2116,14 @@ button.stat-card:hover { border-color: var(--c-border-2); }
     box-shadow: none !important;
 }
 #lobby-area .card-tile .pb { background: var(--c-card-2) !important; }
+
+/* Кнопки в шапке (достижения, дзен, тема) были 28x28 при норме для пальца 44.
+   Видимый квадрат оставляем маленьким — шапка узкая, — а область нажатия
+   расширяем: вверх, где есть пустое место, и на половину зазора по бокам,
+   чтобы соседние области соприкасались, но не наезжали друг на друга. */
+.hdr-tap { position: relative; }
+.hdr-tap::after {
+    content: '';
+    position: absolute;
+    left: -2px; right: -2px; top: -8px; bottom: -8px;
+}
