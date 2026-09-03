@@ -11,7 +11,11 @@ const assert = require('node:assert');
 const fs = require('node:fs');
 const path = require('node:path');
 
-const ui = fs.readFileSync(path.join(__dirname, '..', 'ui.js'), 'utf8');
+// Переносы строк приводим к одному виду: часть правок делалась на Windows,
+// файл местами стал CRLF, и проверки, ищущие точную последовательность с
+// переносом внутри, начинали падать на живом и работающем коде.
+const ui = fs.readFileSync(path.join(__dirname, '..', 'ui.js'), 'utf8')
+  .split('\r\n').join('\n');
 const code = ui.split('\n').filter(l => !l.trim().startsWith('//')).join('\n');
 
 // ── 1. Строка этапа умеет запускать именно СВОЙ этап ────────────────────────
@@ -43,11 +47,23 @@ assert.match(row, /_hwEsc\(m\.name\)/,
 const si = code.indexOf('window.startHwItem = function');
 assert.ok(si > 0, 'startHwItem не найдена');
 const body = code.slice(si, code.indexOf('\n};', si) + 3);
-assert.match(body, /getElementById\('hw-tab-overlay'\)/,
+assert.match(body, /window\.closeHwTab\(\)/,
   'startHwItem не закрывает вкладку ДЗ — список останется поверх тренажёра');
 // Закрывать надо ДО запуска режима, иначе оверлей перекроет открывшийся тренажёр.
-assert.ok(body.indexOf("hw-tab-overlay") < body.indexOf('window.state.activeHw'),
+assert.ok(body.indexOf('window.closeHwTab()') < body.indexOf('window.state.activeHw'),
   'вкладка закрывается после установки активного этапа — порядок важен');
+
+// 🔴 Закрытие живёт в ОДНОМ месте. Раньше вкладку убирали пятью разными
+// remove() по файлу, и повесить на неё «назад» было некуда: каждый вызов
+// пришлось бы искать и править отдельно, а забытый оставил бы кнопку
+// наполовину рабочей — хуже, чем совсем без неё.
+assert.match(code, /window\.closeHwTab = function\(\) \{[\s\S]{0,200}?getElementById\('hw-tab-overlay'\)/,
+  'closeHwTab не убирает вкладку');
+assert.match(code, /window\.closeHwTab = function\(\) \{[\s\S]{0,300}?popBackHandler\('hw-tab'\)/,
+  'закрытие вкладки не снимает обработчик «назад» — следующее «назад» съест пустой шаг');
+const strays = (code.match(/getElementById\('hw-tab-overlay'\)/g) || []).length;
+assert.ok(strays <= 3,
+  `вкладку ДЗ убирают из ${strays} мест — закрытие должно идти через closeHwTab`);
 
 // ── 6. Экранирование действительно экранирует ───────────────────────────────
 const esc = new Function(`${code.slice(code.indexOf('function _hwEsc('), code.indexOf('\n}', code.indexOf('function _hwEsc(')) + 2)}; return _hwEsc;`)();
