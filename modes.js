@@ -179,6 +179,37 @@ window.openSecondPart = async function() {
     };
 };
 
+// Подсказка на главном экране: «есть новое, вот куда нажать».
+//
+// Значка на вкладке мало. Ученик открывает приложение, видит красный кружок и
+// всё равно не знает, что именно его ждёт и куда идти: первая часть и вторая
+// живут под одной вкладкой «Домашка». Полоска говорит прямо и сама открывает
+// раздел — одно нажатие вместо трёх и догадки.
+window.renderSecondPartHint = function() {
+    const slot = document.getElementById('lobby-main');
+    const existing = document.getElementById('second-part-hint');
+    if (!slot) return;
+    if (!window.secondPartHasNews || !window.secondPartHasNews()) {
+        if (existing) existing.remove();
+        return;
+    }
+    if (existing) return;
+
+    const bar = document.createElement('button');
+    bar.id = 'second-part-hint';
+    bar.type = 'button';
+    bar.onclick = () => { if (window.openSecondPart) window.openSecondPart(); };
+    bar.style.cssText = 'width:100%;text-align:left;display:flex;align-items:center;gap:12px;'
+        + 'padding:13px 14px;border:0;border-radius:var(--r-md);cursor:pointer;'
+        + 'background:linear-gradient(135deg,#4f46e5,#7c3aed);color:#fff;box-shadow:var(--e-2)';
+    bar.innerHTML = '<span style="font-size:22px;line-height:1">✍️</span>'
+        + '<span style="flex:1">'
+        + '<span style="display:block;font-size:13px;font-weight:900">Вторая часть: есть новое</span>'
+        + '<span style="display:block;font-size:11px;opacity:.85;margin-top:2px">Домашка, разбор куратора или ответ на ваш вопрос</span>'
+        + '</span><span style="font-size:18px;opacity:.9">›</span>';
+    slot.prepend(bar);
+};
+
 // Открыть раздел сразу — по ссылке «Открыть вторую часть».
 //
 // Кнопка из «Проверочной» и из бота вела на корень тренажёра и высаживала

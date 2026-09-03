@@ -1385,6 +1385,8 @@ window.updateHwNavBadge = function() {
     if (window.secondPartHasNews && window.secondPartHasNews()) n += 1;
     if (n > 0) { badge.textContent = n > 9 ? '9+' : String(n); badge.classList.remove('hidden'); }
     else badge.classList.add('hidden');
+    // Значок говорит «что-то есть», полоска — «вот что и куда нажать».
+    if (window.renderSecondPartHint) window.renderSecondPartHint();
 };
 
 // 🔴 Этап можно выбрать РУКАМИ — это не украшение, а выход из тупика.
