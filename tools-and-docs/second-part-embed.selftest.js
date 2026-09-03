@@ -105,7 +105,8 @@ assert.doesNotMatch(modes, /window\.closeSecondPart = function\(\)[\s\S]{0,600}?
 
 // 🔴 Ключи привязаны к человеку. На общем компьютере несмытый признак покажет
 // следующему ученику чужой раздел — см. _wipeDeviceIdentity.
-for (const key of ['class_second_part', 'second_part_news_at', 'second_part_seen_at']) {
+for (const key of ['class_second_part', 'second_part_news_at', 'second_part_seen_at',
+                   'second_part_stats']) {
   assert.ok(new RegExp(`IDENTITY_WIPE_KEYS[\\s\\S]{0,2000}?'${key}'`).test(sync),
     `${key} не стирается при смене аккаунта — на общем компьютере утечёт следующему`);
 }
@@ -120,5 +121,18 @@ assert.match(modes, /start_param === 'second'/,
 const appSrc = fs.readFileSync(path.join(root, 'app.js'), 'utf8');
 assert.match(appSrc, /maybeOpenSecondPartFromLink\(\)/,
   'Разбор ссылки объявлен, но при загрузке не вызывается');
+
+// ── Обратный поток: половины видят работу друг друга ────────────────────────
+// Учитель в тренажёре видел, кто сдал тестовую часть, и про вторую не знал
+// ничего: ни кто сдал, ни какие баллы, ни кто застрял. Если учитель и куратор
+// разные люди, половина экзамена шла мимо него.
+assert.match(sync, /secondPart: s\.secondPart \|\| null/,
+  'Сводка второй части не доезжает до строки ученика в кабинете учителя');
+assert.match(sync, /\$\{hwBadge\}\$\{spBadge\}/,
+  'Значок второй части не выведен в карточке ученика');
+assert.match(sync, /localStorage\.setItem\('second_part_stats'/,
+  'Свой итог по второй части не сохраняется — ученик его не увидит');
+assert.match(modes, /function _secondPartSummary\(\)/,
+  'Строка раздела снова не показывает, что там лежит');
 
 console.log('second-part-embed.selftest: ok');

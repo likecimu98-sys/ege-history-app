@@ -59,7 +59,7 @@ assert.match(bot, /async function pollSecondPartNews\(headers\)/,
   'Нет отдельного опроса новостей — ночью раздел снова не загорится');
 assert.match(bot, /\/api\/host\/news/,
   'Опрос новостей не ходит на свой маршрут');
-assert.match(fn, /await pollSecondPartNews\(headers\)[\s\S]{0,400}?\/api\/host\/notifications/,
+assert.match(fn, /await pollSecondPartNews\(headers\)[\s\S]{0,900}?\/api\/host\/notifications/,
   'Новости опрашиваются после очереди сообщений или не опрашиваются вовсе');
 assert.match(bot, /\.set\(\{ secondPartNewsAt: when \}, \{ merge: true \}\)/,
   'Отметка пишется не слиянием — снесёт выданную домашку в документе ученика');
@@ -134,5 +134,18 @@ assert.match(toggle, /\{ merge: true \}/,
   'Признак пишется поверх документа группы — снесёт остальные настройки');
 assert.match(toggle, /secondPart: next/,
   'Переключение не записывает новое значение');
+
+// ── Обратный поток: сводка второй части уезжает в тренажёр ──────────────────
+// Единственный канал, по которому учитель вообще узнаёт о второй части. Реже
+// новостей: она нужна не сию секунду, а когда учитель откроет класс.
+assert.match(bot, /async function pollSecondPartProgress\(headers\)/,
+  'Нет опроса сводки — учитель снова ничего не узнает о второй части');
+assert.match(bot, /\/api\/host\/progress/, 'Сводка запрашивается не по своему маршруту');
+assert.match(bot, /\.set\(\{ secondPart: box \}, \{ merge: true \}\)/,
+  'Сводка пишется не слиянием — снесёт остальное в документе ученика');
+assert.match(bot, /if \(_secondPartProgress\.get\(key\) === sign\) continue;/,
+  'Сводка перезаписывается на каждом опросе — документ ученика будет дёргаться');
+assert.match(fn, /Date\.now\(\) - lastProgress > SECOND_PART_PROGRESS_MS/,
+  'Сводка опрашивается на каждом такте — это втрое чаще, чем нужно');
 
 console.log('second-part-queue.selftest: ok');

@@ -46,6 +46,22 @@ window.secondPartHasNews = function() {
     } catch (e) { return false; }
 };
 
+// Что написать под названием раздела: итог, если он есть, иначе — из чего он
+// вообще состоит. Числа приходят от «Проверочной» через бота (secondPart).
+function _secondPartSummary() {
+    let sp = null;
+    try { sp = JSON.parse(localStorage.getItem('second_part_stats') || 'null'); } catch (e) {}
+    if (!sp || !(sp.todo || sp.waiting || sp.reviewed)) {
+        return 'Задания 13–21 · проверяет куратор';
+    }
+    const parts = [];
+    if (sp.todo) parts.push(`${sp.todo} не сдано`);
+    if (sp.waiting) parts.push(`${sp.waiting} на проверке`);
+    if (sp.reviewed) parts.push(`${sp.reviewed} проверено`);
+    if (sp.maxScore) parts.push(`${sp.score}/${sp.maxScore} б`);
+    return parts.join(' · ');
+}
+
 window.secondPartRow = function() {
     if (!window.secondPartAvailable()) return '';
     const fresh = window.secondPartHasNews();
@@ -63,7 +79,7 @@ window.secondPartRow = function() {
         <span style="font-size:26px;line-height:1">✍️</span>
         <span style="flex:1">
           <span style="display:block;font-size:13px;font-weight:900;color:#111" class="dark:text-white">Развёрнутые ответы</span>
-          <span style="display:block;font-size:11px;color:#6b7280;margin-top:2px">Задания 13–21 · проверяет куратор</span>
+          <span style="display:block;font-size:11px;color:#6b7280;margin-top:2px">${_secondPartSummary()}</span>
         </span>
         <span style="font-size:18px;color:#9ca3af">›</span>
       </button>

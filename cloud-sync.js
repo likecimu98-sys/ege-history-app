@@ -7,14 +7,14 @@
             signInWithCredential, signOut, initializeFirestore, collection, doc, setDoc, getDoc,
             getDocs, addDoc, updateDoc, deleteDoc, deleteField, onSnapshot, query, where,
             orderBy, limit, runTransaction, arrayUnion, arrayRemove, vpsApiFetch, refreshVpsAuth
-        } from "./vps-sync-compat.js?v=20260903-2";
+        } from "./vps-sync-compat.js?v=20260903-3";
 
         // jsPDF грузился с cdnjs.cloudflare.com без SRI — то есть посторонний скрипт
         // исполнялся с полными правами страницы, а при недоступности CDN (у части
         // нашей аудитории это обычное дело) экспорт PDF просто не работал. Довод тот
         // же, что и для telegram-web-app.js: своя копия с того же origin.
         // Версия совпадает с прежней CDN-ной — 2.5.1, лежит в vendor/.
-        const VENDOR_JSPDF = 'vendor/jspdf.umd.min.js?v=20260903-2';
+        const VENDOR_JSPDF = 'vendor/jspdf.umd.min.js?v=20260903-3';
 
         const cloudConfig = { projectId: 'vps-postgresql' };
         
@@ -201,6 +201,7 @@
             // чужие работы: рамка спросит билет уже под новым аккаунтом, но сам
             // раздел мигнёт там, где его быть не должно.
             'class_second_part', 'second_part_news_at', 'second_part_seen_at',
+            'second_part_stats',
             'consumed_invite_at', 'seenHwIds',
             // Память об отозванных ДЗ — она про конкретного ученика и его группу.
             // Не стереть при смене аккаунта = чужие задания молча пропадут у нового.
@@ -957,6 +958,13 @@
                     try {
                         const newsAt = Number(data.secondPartNewsAt) || 0;
                         if (newsAt) localStorage.setItem('second_part_news_at', String(newsAt));
+                        // Свой же итог по второй части — ученику. Раньше строка
+                        // раздела выглядела одинаково и с пятью работами, и без
+                        // единой: понять, есть ли там что-то, можно было только
+                        // открыв рамку.
+                        if (data.secondPart && typeof data.secondPart === 'object') {
+                            localStorage.setItem('second_part_stats', JSON.stringify(data.secondPart));
+                        }
                         if (window.updateHwNavBadge) window.updateHwNavBadge();
                     } catch (e) {}
 
@@ -1770,6 +1778,9 @@
             return { ...s, streak, timeSpentMin, learnedCount, accuracy, eraData, taskStats, wScore, wScoreTask4, wEgePoints, last7, dStat,
                      daysSinceActive, isToday: daysSinceActive === 0, atRisk: daysSinceActive >= 3,
                      lastActiveStr, weakEra, totalCorrect, totalAttempts, hwRemaining, hwDeadline,
+                     // Вторая часть: пишет бот, забирая сводку у «Проверочной».
+                     // Учитель до этого не видел про неё ничего.
+                     secondPart: s.secondPart || null,
                      hwOverdue, hwDoneOnTime, hwDoneLate, hwOnTimeTotal, hwLateTotal, hwStreakMax,
                      hwTotalUnits, hwProgressPct, hwStatus, hwOpenAssignments, hwDoneAssignments,
                      hwTotalAssignments, hwActiveAssignments, hwPendingAssignments, hwOverdueAssignments, hwStartedAssignments,
@@ -1852,6 +1863,16 @@
             const hwTimingBadge = ((s.hwOnTimeTotal||0) || (s.hwLateTotal||0))
                 ? `<span class="tc-badge is-info">⏱ вовремя ${s.hwOnTimeTotal||0}${(s.hwLateTotal||0)?` · опозд. ${s.hwLateTotal}`:''}${(s.hwStreakMax||0)>=3?` · 🔥${s.hwStreakMax}`:''}</span>`
                 : '';
+            // ✍️ Вторая часть. Показываем ТОЛЬКО тем, у кого она открыта: у
+            // остальных сводки нет вовсе, и пустой значок сбивал бы с толку.
+            const sp = s.secondPart;
+            const spBadge = (sp && (sp.todo || sp.waiting || sp.reviewed))
+                ? `<span class="tc-badge ${sp.todo > 0 ? 'is-warn' : 'is-info'}">✍️ 2-я часть: `
+                  + `${sp.reviewed} пров.${sp.waiting ? ` · ${sp.waiting} на проверке` : ''}`
+                  + `${sp.todo ? ` · ${sp.todo} не сдано` : ''}`
+                  + `${sp.maxScore ? ` · ${sp.score}/${sp.maxScore} б` : ''}</span>`
+                : '';
+
             const weakBlock = s.weakEra
                 ? `<div class="tc-foot" style="padding:6px 0 0">📍 Слабая тема: <b>${s.weakEra.name} — ${s.weakEra.pct}%</b></div>` : '';
             const _sbt = s.solvedByTask || {}, _mbt = s.mistakesByTask || {};
@@ -1874,7 +1895,7 @@
                             </div>
                         </div>
                     </div>
-                    <div class="tc-badges">${hwBadge}${hwTimingBadge}${atRiskBadge}${todayBadge}</div>
+                    <div class="tc-badges">${hwBadge}${spBadge}${hwTimingBadge}${atRiskBadge}${todayBadge}</div>
                 </div>
                 <div class="tc-kpis tc-sep" style="border-top:0;border-bottom:1px solid var(--c-border)">
                     <div class="tc-kpi"><span class="k">Решено</span><span class="v">${s.totalSolved||0}</span></div>

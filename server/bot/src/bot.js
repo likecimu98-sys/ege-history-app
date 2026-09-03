@@ -1416,6 +1416,7 @@ function watchJobs() {
 // говорит об этом учителю один раз.
 const SECOND_PART_POLL_MS = 20000;
 const SECOND_PART_BATCH_CAP = 200;
+const SECOND_PART_PROGRESS_MS = 5 * 60 * 1000;
 
 // Что считается РАССЫЛКОЙ и потому подчиняется тумблеру «Домашка»: выдали
 // задание, перенесли срок, сняли, напомнили о сроке. Всё остальное — личное
@@ -1462,6 +1463,46 @@ async function markSecondPartNews(chatId, at) {
 // узнало. Отметка нужна ровно для тех случаев, когда сообщение не дошло:
 // ночью, при выключенных уведомлениях, при удалённом боте. Поэтому свой
 // опрос, свой маршрут и никакой связи с очередью сообщений.
+// 🔴 Обратный поток: как идут дела во второй части — обратно в тренажёр.
+//
+// Учитель видел, кто сдал тестовую часть, и не знал про вторую НИЧЕГО: ни кто
+// сдал, ни какие баллы, ни кто застрял. Если учитель и куратор — разные люди,
+// половина экзамена шла мимо него. Сводку кладём в документ ученика: кабинет
+// учителя и так читает эти документы, отдельного канала заводить не нужно.
+//
+// Пишем только при изменении: опрос идёт каждые 20 секунд, а лишняя запись
+// поднимает версию документа и будит клиента ученика.
+const _secondPartProgress = new Map();
+async function pollSecondPartProgress(headers) {
+    if (!fdb) return;
+    const res = await fetch(`${SECOND_PART_URL}/api/host/progress`, { headers });
+    if (!res.ok) return;
+    const items = await res.json().catch(() => null);
+    if (!Array.isArray(items)) return;
+
+    for (const item of items.slice(0, SECOND_PART_BATCH_CAP)) {
+        const chatId = Number(item?.tg_user_id);
+        if (!Number.isFinite(chatId)) continue;
+        const box = {
+            todo: Number(item.todo) || 0,
+            waiting: Number(item.waiting) || 0,
+            reviewed: Number(item.reviewed) || 0,
+            score: Number(item.score) || 0,
+            maxScore: Number(item.max_score) || 0,
+            lastAt: Date.parse(String(item.last_at || '')) || 0,
+        };
+        const sign = JSON.stringify(box);
+        const key = String(chatId);
+        if (_secondPartProgress.get(key) === sign) continue;
+        try {
+            await fdb.doc(`${base}/students/${key}`).set({ secondPart: box }, { merge: true });
+            _secondPartProgress.set(key, sign);
+        } catch (e) {
+            console.error('[2ч] сводка не записана:', e && e.message);
+        }
+    }
+}
+
 async function pollSecondPartNews(headers) {
     const res = await fetch(`${SECOND_PART_URL}/api/host/news`, { headers });
     if (!res.ok) return;
@@ -1483,6 +1524,7 @@ function watchSecondPart() {
     const headers = { 'X-Host-Key': SECOND_PART_HOST_KEY };
     let running = false;
     let quiet = false;   // о недоступности говорим один раз, а не каждые 20 секунд
+    let lastProgress = 0;
 
     const tick = async () => {
         if (running) return;
@@ -1492,6 +1534,13 @@ function watchSecondPart() {
             // ли сообщение. Ошибка здесь не должна мешать доставке очереди.
             try { await pollSecondPartNews(headers); }
             catch (e) { if (!quiet) console.error('[2ч] новости:', e && e.message); }
+            // Сводка для кабинета учителя. Реже новостей: она нужна не сию
+            // секунду, а когда учитель откроет класс.
+            if (Date.now() - lastProgress > SECOND_PART_PROGRESS_MS) {
+                lastProgress = Date.now();
+                try { await pollSecondPartProgress(headers); }
+                catch (e) { if (!quiet) console.error('[2ч] сводка:', e && e.message); }
+            }
 
             const res = await fetch(`${SECOND_PART_URL}/api/host/notifications`, { headers });
             if (!res.ok) {
