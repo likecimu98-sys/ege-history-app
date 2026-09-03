@@ -148,6 +148,7 @@ window.openSecondPart = async function() {
             + '<div style="font-size:12px;margin-top:6px;max-width:34ch">Работы второй части подписываются Telegram-аккаунтом. Войдите через бота или привяжите Telegram в профиле — с компьютера тоже работает, по QR-коду.</div></div>';
         overlay.appendChild(msg);
         document.body.appendChild(overlay);
+        window.pushBackHandler && window.pushBackHandler('second-part', () => window.closeSecondPart());
         return;
     }
 
@@ -159,6 +160,9 @@ window.openSecondPart = async function() {
     frame.style.cssText = 'flex:1;width:100%;border:0;background:transparent';
     overlay.appendChild(frame);
     document.body.appendChild(overlay);
+    // «Назад» закрывает раздел, а не приложение: раздел открывают из вкладки
+    // «Домашка», то есть человек уже на два окна вглубь.
+    window.pushBackHandler && window.pushBackHandler('second-part', () => window.closeSecondPart());
 
     // 🔴 Подпись уходит СООБЩЕНИЕМ и только на точный origin.
     //
@@ -190,6 +194,7 @@ window.openSecondPart = async function() {
         try { themeObserver.disconnect(); } catch (e) {}
         const el = document.getElementById(id);
         if (el) el.remove();
+        window.popBackHandler && window.popBackHandler('second-part');
         // Домашка первой части могла измениться, пока человек был во второй.
         if (window.updateHwNavBadge) window.updateHwNavBadge();
     };
@@ -261,6 +266,7 @@ window.maybeOpenSecondPartFromLink = function() {
 window.closeSecondPart = window.closeSecondPart || function() {
     const el = document.getElementById('second-part-overlay');
     if (el) el.remove();
+    window.popBackHandler && window.popBackHandler('second-part');
 };
 
 function _dbgSecondPart(msg, err) {

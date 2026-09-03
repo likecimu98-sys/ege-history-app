@@ -25,15 +25,79 @@ if (document.readyState === 'loading') {
     patchHeaderDOM();
 }
 
+// ═══════════════════════════════════════════════════════════
+//  КНОПКА «НАЗАД» ЗАКРЫВАЕТ ОКНО, А НЕ ПРИЛОЖЕНИЕ
+// ═══════════════════════════════════════════════════════════
+//
+// 🔴 Обработки «назад» не было вообще — ни системной кнопки Android, ни
+// стрелки Telegram, ни браузерной. Ученик открывал «Домашку», внутри —
+// «Развёрнутые ответы», жал привычное «назад» и вылетал из приложения
+// целиком: заходи заново и ищи то же место. На телефоне это движение
+// делают десятки раз за занятие.
+//
+// Как устроено: на каждое открытое окно кладём запись в историю и его
+// «закрывалку». «Назад» снимает верхнюю. Закрыли крестиком — снимаем и
+// свою запись истории, иначе следующее «назад» съело бы пустой шаг и со
+// стороны выглядело бы как «кнопка не работает».
+const _backStack = [];
+let _backClosing = false;   // закрываемся ИЗ popstate: историю не трогаем
+let _backExpectPop = false; // мы сами позвали history.back(): не закрывать второе
+
+function _syncTgBackButton() {
+    try {
+        const bb = window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.BackButton;
+        if (!bb) return;
+        if (_backStack.length) bb.show(); else bb.hide();
+    } catch (e) {}
+}
+
+window.pushBackHandler = function(name, close) {
+    if (typeof close !== 'function') return;
+    if (_backStack.some(x => x.name === name)) return;   // уже открыт
+    _backStack.push({ name, close });
+    try { history.pushState({ ege_overlay: name }, ''); } catch (e) {}
+    _syncTgBackButton();
+};
+
+window.popBackHandler = function(name) {
+    if (_backClosing) return;
+    const i = _backStack.findIndex(x => x.name === name);
+    if (i === -1) return;
+    _backStack.splice(i, 1);
+    _syncTgBackButton();
+    try {
+        if (history.state && history.state.ege_overlay) {
+            _backExpectPop = true;
+            history.back();
+        }
+    } catch (e) {}
+};
+
+window.addEventListener('popstate', function() {
+    if (_backExpectPop) { _backExpectPop = false; return; }
+    const item = _backStack.pop();
+    if (!item) return;
+    _backClosing = true;
+    try { item.close(); } catch (e) {} finally { _backClosing = false; }
+    _syncTgBackButton();
+});
+
+try {
+    const bb = window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.BackButton;
+    if (bb && bb.onClick) bb.onClick(() => { if (_backStack.length) history.back(); });
+} catch (e) {}
+
 window.showModal = function(id) {
     const m = document.getElementById(id); if(!m) return;
     m.classList.remove('hidden'); m.classList.add('flex');
     setTimeout(() => m.classList.remove('opacity-0'), 10);
+    window.pushBackHandler('modal:' + id, () => window.hideModal(id));
 };
 window.hideModal = function(id) {
     const m = document.getElementById(id); if(!m) return;
     m.classList.add('opacity-0');
     setTimeout(() => { m.classList.add('hidden'); m.classList.remove('flex'); }, 300);
+    window.popBackHandler('modal:' + id);
 };
 
 // Карта по географическому объекту: метка на координатах из geoDict ([lng, lat]).
@@ -1082,7 +1146,7 @@ window.showHwTasksSequential = function() {
               <div style="font-size:10px;text-transform:uppercase;letter-spacing:.08em;font-weight:700;color:#9ca3af">Домашнее задание</div>
               <div style="font-size:13px;font-weight:900;color:#111;margin-top:2px" class="dark:text-white">${t.emoji} ${t.name}</div>
             </div>
-            <button onclick="document.getElementById('${overlayId}').remove()" style="font-size:20px;color:#aaa;background:none;border:none;cursor:pointer;padding:4px 8px">✕</button>
+            <button onclick="document.getElementById('hw-composer-overlay').remove()" style="font-size:20px;color:#aaa;background:none;border:none;cursor:pointer;padding:4px 8px">✕</button>
           </div>
 
           <div style="background:rgba(239,68,68,0.06);border:1px solid rgba(239,68,68,0.2);border-radius:14px;padding:14px 16px;margin-bottom:14px">
@@ -1526,14 +1590,16 @@ window.openHwTab = function() {
         overlay = document.createElement('div');
         overlay.id = overlayId;
         overlay.style.cssText = 'position:fixed;inset:0;z-index:10000;background:rgba(0,0,0,0.55);display:flex;align-items:flex-end;justify-content:center';
-        overlay.onclick = e => { if (e.target === overlay) overlay.remove(); };
+        overlay.onclick = e => { if (e.target === overlay) window.closeHwTab(); };
         document.body.appendChild(overlay);
+        // «Назад» закрывает вкладку, а не приложение.
+        window.pushBackHandler('hw-tab', () => window.closeHwTab());
     }
     overlay.innerHTML = `
     <div style="background:#f7f7f8;width:100%;max-width:480px;max-height:88vh;overflow-y:auto;border-radius:24px 24px 0 0;padding:18px 16px calc(28px + env(safe-area-inset-bottom, 0px));box-shadow:0 -8px 40px rgba(0,0,0,0.25)" class="dark:bg-[#141414]">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
         <div style="font-size:16px;font-weight:900;color:#111" class="dark:text-white">📚 Домашние задания</div>
-        <button onclick="document.getElementById('${overlayId}').remove()" style="font-size:22px;color:#aaa;background:none;border:none;cursor:pointer;padding:2px 8px">✕</button>
+        <button onclick="window.closeHwTab()" style="font-size:22px;color:#aaa;background:none;border:none;cursor:pointer;padding:2px 8px">✕</button>
       </div>
       ${statsLine}
       ${window.secondPartRow ? window.secondPartRow() : ''}
@@ -1544,11 +1610,18 @@ window.openHwTab = function() {
     </div>`;
 };
 
+// Единственный способ закрыть вкладку ДЗ. Раньше её убирали пятью разными
+// `.remove()` по всему файлу, и добавить «назад» было некуда.
+window.closeHwTab = function() {
+    const ov = document.getElementById('hw-tab-overlay');
+    if (ov) ov.remove();
+    window.popBackHandler('hw-tab');
+};
+
 // Начать ДЗ: запускаем поток с первого невыполненного этапа.
 window.startAssignment = function(id) {
     const a = (window.state.stats.assignments || []).find(x => x.id === id);
-    const ov = document.getElementById('hw-tab-overlay');
-    if (ov) ov.remove();
+    window.closeHwTab();
     if (!a) return;
     const idx = (a.items || []).findIndex(it => !window.hwItemDone(it));
     if (idx === -1) return showToast('✅', 'Это ДЗ уже выполнено', 'bg-emerald-500', 'border-emerald-700');
@@ -1564,8 +1637,7 @@ window.startHwItem = function(id, idx) {
     // Закрываем вкладку ДЗ здесь, а не только в startAssignment: теперь этап
     // запускают и прямым тапом по строке, и без этого список остался бы висеть
     // поверх тренажёра.
-    const ov = document.getElementById('hw-tab-overlay');
-    if (ov) ov.remove();
+    window.closeHwTab();
     window.state.activeHw = { id, itemIndex: idx };
     // Зубрёжка: запускаем тренажёр дат вместо обычного задания.
     if (it.task === 'cram') {
