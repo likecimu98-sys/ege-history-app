@@ -590,6 +590,14 @@ video {
   inset: 0px;
 }
 
+.-right-2\.5 {
+  right: -0.625rem;
+}
+
+.-top-0\.5 {
+  top: -0.125rem;
+}
+
 .bottom-0 {
   bottom: 0px;
 }
@@ -628,10 +636,6 @@ video {
 
 .top-0 {
   top: 0px;
-}
-
-.top-1 {
-  top: 0.25rem;
 }
 
 .top-1\/2 {
@@ -709,6 +713,11 @@ video {
 .-mx-1 {
   margin-left: -0.25rem;
   margin-right: -0.25rem;
+}
+
+.-my-1 {
+  margin-top: -0.25rem;
+  margin-bottom: -0.25rem;
 }
 
 .mx-1 {
@@ -822,6 +831,10 @@ video {
   -webkit-line-clamp: 3;
 }
 
+.\!block {
+  display: block !important;
+}
+
 .block {
   display: block;
 }
@@ -844,6 +857,10 @@ video {
 
 .table {
   display: table;
+}
+
+.\!grid {
+  display: grid !important;
 }
 
 .grid {
@@ -952,6 +969,10 @@ video {
 
 .min-h-\[400px\] {
   min-height: 400px;
+}
+
+.min-h-\[44px\] {
+  min-height: 44px;
 }
 
 .min-h-\[50vh\] {
@@ -1288,6 +1309,10 @@ video {
 
 .gap-2 {
   gap: 0.5rem;
+}
+
+.gap-2\.5 {
+  gap: 0.625rem;
 }
 
 .gap-3 {
@@ -2951,6 +2976,11 @@ video {
   color: rgb(59 130 246 / var(--tw-text-opacity, 1));
 }
 
+.hover\:text-blue-600:hover {
+  --tw-text-opacity: 1;
+  color: rgb(37 99 235 / var(--tw-text-opacity, 1));
+}
+
 .hover\:text-gray-700:hover {
   --tw-text-opacity: 1;
   color: rgb(55 65 81 / var(--tw-text-opacity, 1));
@@ -3046,8 +3076,18 @@ video {
   cursor: not-allowed;
 }
 
+.disabled\:opacity-40:disabled {
+  opacity: 0.4;
+}
+
 .disabled\:opacity-50:disabled {
   opacity: 0.5;
+}
+
+.disabled\:active\:scale-100:active:disabled {
+  --tw-scale-x: 1;
+  --tw-scale-y: 1;
+  transform: translate(var(--tw-translate-x), var(--tw-translate-y)) rotate(var(--tw-rotate)) skewX(var(--tw-skew-x)) skewY(var(--tw-skew-y)) scaleX(var(--tw-scale-x)) scaleY(var(--tw-scale-y));
 }
 
 .group:hover .group-hover\:scale-110 {
@@ -3107,6 +3147,10 @@ video {
 
 .dark\:border-blue-800\/50:is(.dark *) {
   border-color: rgb(30 64 175 / 0.5);
+}
+
+.dark\:border-emerald-800\/50:is(.dark *) {
+  border-color: rgb(6 95 70 / 0.5);
 }
 
 .dark\:border-emerald-900\/40:is(.dark *) {
@@ -3247,6 +3291,10 @@ video {
 
 .dark\:bg-emerald-900\/20:is(.dark *) {
   background-color: rgb(6 78 59 / 0.2);
+}
+
+.dark\:bg-emerald-900\/30:is(.dark *) {
+  background-color: rgb(6 78 59 / 0.3);
 }
 
 .dark\:bg-emerald-950\/30:is(.dark *) {
