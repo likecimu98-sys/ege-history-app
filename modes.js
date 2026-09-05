@@ -33,13 +33,30 @@ function _secondPartTheme() {
     return document.documentElement.classList.contains('dark') ? 'dark' : 'light';
 }
 
+// Сводка второй части: сколько работ ждёт, сколько разборов не прочитано.
+// Кладёт её бот в документ ученика (поле secondPart), забирая с /api/host/progress.
+// Отдаём наружу — по ней значок «Домашки» считает настоящее число дел.
+window.secondPartSummaryData = function() {
+    try {
+        if (!window.secondPartAvailable()) return null;
+        const sp = JSON.parse(localStorage.getItem('second_part_stats') || 'null');
+        return (sp && typeof sp === 'object') ? sp : null;
+    } catch (e) { return null; }
+};
+
 // Есть ли во второй части непросмотренное. Отметку о новом ставит бот в
 // документе ученика (secondPartNewsAt), «просмотрено» — мы сами при открытии
-// раздела. Точного счётчика нет намеренно: работы живут в другой системе, и
-// выдуманное число врало бы, а «есть новое» — не врёт.
+// раздела.
+//
+// 🔴 Непрочитанный разбор считается новостью НАВСЕГДА. Отметка живёт семь дней
+// (столько же окно /api/host/news), и ученик, не заходивший неделю, переставал
+// видеть, что его работу давно проверили и объяснение ждёт. Куратор при этом
+// писал разбор всерьёз. Число unread не протухает — по нему и горим.
 window.secondPartHasNews = function() {
     try {
         if (!window.secondPartAvailable()) return false;
+        const sp = window.secondPartSummaryData();
+        if (sp && (Number(sp.unread) || 0) > 0) return true;
         const news = Number(localStorage.getItem('second_part_news_at')) || 0;
         const seen = Number(localStorage.getItem('second_part_seen_at')) || 0;
         return news > seen;
@@ -55,9 +72,12 @@ function _secondPartSummary() {
         return 'Задания 13–21 · проверяет куратор';
     }
     const parts = [];
+    // Непрочитанный разбор — первым: это единственная строка, которая просит
+    // что-то сделать прямо сейчас, а не рассказывает, как идут дела.
+    if (sp.unread) parts.push(`${sp.unread} разбор${sp.unread === 1 ? '' : 'ов'} не прочитано`);
     if (sp.todo) parts.push(`${sp.todo} не сдано`);
     if (sp.waiting) parts.push(`${sp.waiting} на проверке`);
-    if (sp.reviewed) parts.push(`${sp.reviewed} проверено`);
+    if (sp.reviewed && !sp.unread) parts.push(`${sp.reviewed} проверено`);
     if (sp.maxScore) parts.push(`${sp.score}/${sp.maxScore} б`);
     return parts.join(' · ');
 }

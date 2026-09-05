@@ -1487,6 +1487,13 @@ async function pollSecondPartProgress(headers) {
             todo: Number(item.todo) || 0,
             waiting: Number(item.waiting) || 0,
             reviewed: Number(item.reviewed) || 0,
+            // Проверено, но ученик не открывал. Отметка «есть новое» живёт семь
+            // дней (окно /api/host/news), а это число не протухает: тот, кто
+            // неделю не заходил, обязан по-прежнему видеть, что его ждёт разбор.
+            unread: Number(item.unread) || 0,
+            // Незакрытых ВЫДАЧ. Пачка из пяти заданий — одно дело, и говорить
+            // о ней надо как об одном.
+            packs: Number(item.packs) || 0,
             score: Number(item.score) || 0,
             maxScore: Number(item.max_score) || 0,
             lastAt: Date.parse(String(item.last_at || '')) || 0,
