@@ -63,6 +63,15 @@ window.secondPartHasNews = function() {
     } catch (e) { return false; }
 };
 
+// «2 разбора», а не «2 разборов»: строку читают люди.
+function _plural(n, one, few, many) {
+    const tail = Math.abs(n) % 100, last = tail % 10;
+    if (tail > 10 && tail < 20) return many;
+    if (last === 1) return one;
+    if (last > 1 && last < 5) return few;
+    return many;
+}
+
 // Что написать под названием раздела: итог, если он есть, иначе — из чего он
 // вообще состоит. Числа приходят от «Проверочной» через бота (secondPart).
 function _secondPartSummary() {
@@ -74,7 +83,7 @@ function _secondPartSummary() {
     const parts = [];
     // Непрочитанный разбор — первым: это единственная строка, которая просит
     // что-то сделать прямо сейчас, а не рассказывает, как идут дела.
-    if (sp.unread) parts.push(`${sp.unread} разбор${sp.unread === 1 ? '' : 'ов'} не прочитано`);
+    if (sp.unread) parts.push(`${sp.unread} ${_plural(sp.unread, 'разбор', 'разбора', 'разборов')} не прочитано`);
     if (sp.todo) parts.push(`${sp.todo} не сдано`);
     if (sp.waiting) parts.push(`${sp.waiting} на проверке`);
     if (sp.reviewed && !sp.unread) parts.push(`${sp.reviewed} проверено`);
