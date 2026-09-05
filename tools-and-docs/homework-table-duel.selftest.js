@@ -381,7 +381,10 @@ assert.match(cloudSource, /window\._fetchClassRoster = async function/,
   'нет чтения состава группы по коду — выдать ДЗ второй группе будет нечем');
 assert.match(cloudSource, /if \(d\._mergedInto\) return;/,
   'в состав группы для выдачи попадают влитые документы — один человек получит ДЗ дважды');
-assert.match(cloudSource, /window\._assignBundleToClassDb = async function\(items, deadline, title, codes\)/,
+// Имя параметра — pickedCodes, а НЕ codes: внутри функции `codes` уже занято
+// производным значением, и одноимённый параметр 05.09.2026 обрушил весь
+// cloud-sync.js разом (см. module-syntax.selftest.js).
+assert.match(cloudSource, /window\._assignBundleToClassDb = async function\(items, deadline, title, pickedCodes\)/,
   'выдача не принимает список групп');
 {
   const cancel = cloudSource.slice(cloudSource.indexOf('window.cancelClassAssignment = async function'));

@@ -3596,8 +3596,8 @@
         // codes — коды групп, в которые идёт выдача. Пусто = прежний путь по
         // загруженному списку (режим глобального админа «все классы», где
         // «весь класс» означает всех, кто сейчас на экране; ломать его нельзя).
-        window._assignBundleToClassDb = async function(items, deadline, title, codes) {
-            const wanted = [...new Set((codes || []).map(_classDocId).filter(Boolean))];
+        window._assignBundleToClassDb = async function(items, deadline, title, pickedCodes) {
+            const wanted = [...new Set((pickedCodes || []).map(_classDocId).filter(Boolean))];
             let students;
             if (wanted.length) {
                 // Один и тот же человек может числиться в двух выбранных группах —
