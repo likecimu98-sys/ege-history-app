@@ -330,9 +330,19 @@ assert.match(stateSource, /classCode: rec\.classCode \|\| null/, 'assignment cla
 // телефон, очистка данных, инкогнито) слушатель отрабатывал с пустым кодом, и
 // первый вход оставался без домашки, хотя в журнале класса она лежала.
 // Проверяем именно догрузку в момент, когда код стал известен.
+//
+// 05.09.2026 присвоение переехало в _adoptStudentClass — единственное место,
+// которое меняет группу (см. class-switch.selftest.js). Инвариант тот же:
+// код из облака обязан немедленно повлечь чтение журнала.
 assert.match(cloudSource,
-  /localStorage\.setItem\('student_class_code', bestData\.classCode\);[\s\S]{0,1500}window\.pullClassAssignments\(bestData\.classCode\)/,
-  'restoring classCode from the cloud must immediately pull the class journal');
+  /window\._adoptStudentClass\(bestData\.classCode,/,
+  'restoring classCode from the cloud must go through _adoptStudentClass');
+{
+  const from = cloudSource.indexOf('window._adoptStudentClass = async function');
+  const adopt = cloudSource.slice(from, cloudSource.indexOf('window.pullClassAssignments = async function', from));
+  assert.match(adopt, /window\.pullClassAssignments\(next\)/,
+    'adopting a class must immediately pull its journal');
+}
 // 🔴 Журнал класса обязан записываться ДО персональной рассылки. Пока он шёл
 // последним, обрыв цикла по ученикам (закрытая вкладка, уснувший WebView, сеть)
 // оставлял класс без журнала: 31.07 в летней школе ДЗ получили 13 из 145, а

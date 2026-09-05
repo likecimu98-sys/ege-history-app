@@ -7,14 +7,14 @@
             signInWithCredential, signOut, initializeFirestore, collection, doc, setDoc, getDoc,
             getDocs, addDoc, updateDoc, deleteDoc, deleteField, onSnapshot, query, where,
             orderBy, limit, runTransaction, arrayUnion, arrayRemove, vpsApiFetch, refreshVpsAuth
-        } from "./vps-sync-compat.js?v=20260903-6";
+        } from "./vps-sync-compat.js?v=20260905-7";
 
         // jsPDF грузился с cdnjs.cloudflare.com без SRI — то есть посторонний скрипт
         // исполнялся с полными правами страницы, а при недоступности CDN (у части
         // нашей аудитории это обычное дело) экспорт PDF просто не работал. Довод тот
         // же, что и для telegram-web-app.js: своя копия с того же origin.
         // Версия совпадает с прежней CDN-ной — 2.5.1, лежит в vendor/.
-        const VENDOR_JSPDF = 'vendor/jspdf.umd.min.js?v=20260903-6';
+        const VENDOR_JSPDF = 'vendor/jspdf.umd.min.js?v=20260905-7';
 
         const cloudConfig = { projectId: 'vps-postgresql' };
         
@@ -923,15 +923,25 @@
                     //
                     // ⚠️ В СОСТОЯНИИ ученика classCode нет ни у кого (0 из 177 проверено
                     // 01.08.2026) — он не входит в SAVE_FIELDS. Источник только профиль.
+                    //
+                    // 🔴 05.09.2026 условие «только если ключ пуст» отсюда УБРАНО.
+                    // Оно превращало первый попавший в localStorage код в вечный:
+                    // перевод из летней группы к куратору сервер знал, а клиент —
+                    // нет, и домашка летней шла годами. Решение о группе теперь
+                    // одно на всё приложение — _adoptStudentClass.
+                    //
+                    // ⚠️ ПУСТОЙ classCode здесь НЕ означает выход из группы.
+                    // Профиль приходит и полупустым (гонка первой загрузки,
+                    // документ-дубль), и трактовка пустоты как «выпустили» вышибла
+                    // бы ученика из группы на ровном месте. Выход означает
+                    // leftClassAt — так же считает и сервер (protectTeacherClass-
+                    // Assignment): его ставят leaveClass и учитель, но не гонка.
                     try {
                         const codeFromProfile = String(data.classCode || '').trim();
-                        if (codeFromProfile && !localStorage.getItem('student_class_code')) {
-                            localStorage.setItem('student_class_code', codeFromProfile);
-                            if (window.renderProfileClass) window.renderProfileClass();
-                            if (window.pullClassAssignments) {
-                                Promise.resolve(window.pullClassAssignments(codeFromProfile))
-                                    .catch(e => window.reportSilent && window.reportSilent('догрузка журнала класса', e));
-                            }
+                        if (codeFromProfile) {
+                            Promise.resolve(window._adoptStudentClass(codeFromProfile,
+                                { reason: 'снапшот профиля', authoritative: true }))
+                                .catch(e => window.reportSilent && window.reportSilent('смена группы по снапшоту', e));
                         }
                     } catch (e) { window.reportSilent && window.reportSilent('восстановление класса из профиля', e); }
 
@@ -958,6 +968,19 @@
                     try {
                         const newsAt = Number(data.secondPartNewsAt) || 0;
                         if (newsAt) localStorage.setItem('second_part_news_at', String(newsAt));
+                        // 🔴 Вторая линия к признаку доступности раздела.
+                        //
+                        // Он живёт в документе ГРУППЫ, и до сих пор был единственный
+                        // путь его узнать — прочитать журнал своей группы. Пока код
+                        // группы протухал, признак стирался, и раздел пропадал у
+                        // человека, которому во вторую часть уже выдали домашку.
+                        // Но раз у него есть работы или новости оттуда, раздел ему
+                        // открыт — это факт о нём самом, а не о группе. Включаем;
+                        // выключить по-прежнему может только документ своей группы.
+                        const box = data.secondPart;
+                        const hasWorks = box && typeof box === 'object'
+                            && ((box.todo | 0) || (box.waiting | 0) || (box.reviewed | 0));
+                        if (newsAt || hasWorks) localStorage.setItem('class_second_part', '1');
                         // Свой же итог по второй части — ученику. Раньше строка
                         // раздела выглядела одинаково и с пятью работами, и без
                         // единой: понять, есть ли там что-то, можно было только
@@ -3009,27 +3032,11 @@
             try {
                 // Локальное состояние чистим ПЕРВЫМ: даже если запись в облако не
                 // пройдёт (офлайн), человек уже вышел и ДЗ группы не подтянутся.
-                localStorage.removeItem('student_class_code');
-                localStorage.removeItem('class_current_upto');
-                localStorage.removeItem('class_current_period');
-
-                // Убираем НЕсданные задания этой группы. Без этого выход снимал
-                // только принадлежность, а домашка группы оставалась висеть долгом
-                // навсегда — именно так учитель, случайно попавший в собственную
-                // группу, продолжал видеть чужое ДЗ уже после выхода.
-                // Сданные не трогаем: отметка и достижение остаются за человеком.
-                try {
-                    const snap = await getDoc(doc(db, 'artifacts', appId, 'public', 'data', 'classes', _classDocId(code)));
-                    const journal = snap.exists() && Array.isArray(snap.data().assignments) ? snap.data().assignments : [];
-                    const ids = journal.map(rec => rec && rec.id).filter(Boolean);
-                    if (ids.length && window.reconcileRevokedAssignments) {
-                        const removed = window.reconcileRevokedAssignments(ids);
-                        // Запоминаем локально, иначе на следующем входе облачное
-                        // состояние вернёт их обратно до ответа сервера.
-                        if (window.rememberRevokedHw) window.rememberRevokedHw(ids, 0);
-                        if (removed > 0 && window.recomputeHwMirror) window.recomputeHwMirror();
-                    }
-                } catch (e) { console.warn('[leaveClass] журнал группы не прочитан:', e && e.message); }
+                //
+                // Выход — частный случай смены группы (на пустую), и снятие
+                // несданных долгов прежней группы живёт там же, в
+                // _adoptStudentClass: одна логика на выход и на перевод.
+                await window._adoptStudentClass('', { reason: 'ученик вышел из группы', authoritative: true });
                 const canonicalId = fbUser ? resolveUserId(fbUser) : '';
                 if (canonicalId && db) {
                     // leftClassAt — тот же признак, которым учитель выпускает ученика:
@@ -3047,6 +3054,88 @@
                 console.error('leaveClass error:', e);
                 showToast('⚠️', 'Не удалось сохранить выход — попробуй ещё раз', 'bg-rose-500', 'border-rose-700');
             }
+        };
+
+        // ─── ОДНА точка правды о том, в какой группе ученик ─────────────────
+        //
+        // 🔴 Разбор 05.09.2026: ученика пригласил в летнюю группу админ школы,
+        // потом он перешёл к куратору — а домашка летней продолжала приходить
+        // в группу куратора. Сервер про перевод знал; не знал клиент. Код
+        // группы записывался ТОЛЬКО когда ключ пуст — условие
+        // `&& !localStorage.getItem('student_class_code')` стояло в двух местах
+        // из трёх, — то есть ПЕРВЫЙ попавший туда код жил вечно. Каждый вход
+        // pullClassAssignments читал журнал летней группы и подсовывал её
+        // задания заново, а syncProgressToCloud писал протухший код обратно в
+        // профиль, воскрешая его и на сервере.
+        //
+        // Тем же объясняется «раздел второй части не появляется»: признак
+        // class_second_part ставится по документу той группы, чей код лежит
+        // здесь. Читая летнюю группу без второй части, клиент его СТИРАЛ.
+        //
+        // Теперь student_class_code меняется только тут. Четыре прежних места
+        // (снапшот профиля, загрузка из облака, приглашение учителя, выход из
+        // группы) зовут эту функцию, и решают они одинаково.
+        //
+        // Какой код мы считаем ПРАВДОЙ и о каком отчитываемся серверу. Ставится
+        // из осознанных источников (профиль, приглашение, явный выход), а не из
+        // любого чтения. null — правды ещё не знаем; тогда синхронизация несёт
+        // местное значение, как и раньше, иначе первый вход по ссылке-
+        // приглашению потерял бы группу.
+        window._serverClassCode = null;
+        window._adoptStudentClass = async function(rawCode, opts) {
+            const o = opts || {};
+            const next = _classDocId(rawCode);
+            const prev = _classDocId(localStorage.getItem('student_class_code') || '');
+            if (o.authoritative) window._serverClassCode = next;
+            if (next === prev) return false;
+            console.log(`[Класс] ${prev || '—'} → ${next || '—'} · ${o.reason || 'без причины'}`);
+
+            // Несданное прежней группы снимаем: ученик ушёл — её долги ушли с
+            // ним. Сданное не трогаем, отметка и достижение остаются за
+            // человеком; ровно этим reconcileRevokedAssignments и отличается от
+            // удаления. 🔴 Надгробие, а не delete: иначе слияние с облачной
+            // копией вернёт снятое обратно (инвариант, см. AGENTS.md).
+            if (prev) {
+                try {
+                    const snap = await getDoc(doc(db, 'artifacts', appId, 'public', 'data', 'classes', prev));
+                    const journal = snap.exists() && Array.isArray(snap.data().assignments) ? snap.data().assignments : [];
+                    const ids = journal.map(rec => rec && rec.id).filter(Boolean);
+                    if (ids.length && window.reconcileRevokedAssignments) {
+                        const removed = window.reconcileRevokedAssignments(ids);
+                        // Помним локально: иначе на следующем входе облачное
+                        // состояние вернёт их до ответа сервера.
+                        if (window.rememberRevokedHw) window.rememberRevokedHw(ids, 0);
+                        if (removed > 0) console.log('[Класс] снято несданных ДЗ прежней группы:', removed);
+                    }
+                } catch (e) {
+                    // Журнал не прочитался — код всё равно меняем. Лишний долг на
+                    // экране хуже, чем ученик, застрявший в чужой группе навсегда.
+                    console.warn('[Класс] журнал прежней группы не прочитан:', e && e.message);
+                }
+            }
+
+            // Настройки потока принадлежат ГРУППЕ, а не человеку: уходя, он их
+            // теряет. Признак второй части — тоже: новая группа скажет о себе
+            // сама, когда прочитаем её документ.
+            try {
+                if (next) localStorage.setItem('student_class_code', next);
+                else localStorage.removeItem('student_class_code');
+                localStorage.removeItem('class_current_upto');
+                localStorage.removeItem('class_current_period');
+                localStorage.removeItem('class_second_part');
+            } catch (e) {}
+
+            if (window.renderProfileClass) window.renderProfileClass();
+            if (next && window.pullClassAssignments) {
+                try { await window.pullClassAssignments(next); }
+                catch (e) { window.reportSilent && window.reportSilent('догрузка журнала новой группы', e); }
+            }
+            if (window.recomputeHwMirror) window.recomputeHwMirror();
+            if (window.refreshHwState) window.refreshHwState();
+            saveProgress();
+            if (window.updateGlobalUI) window.updateGlobalUI();
+            if (window.updateHwNavBadge) window.updateHwNavBadge();
+            return true;
         };
 
         window.pullClassAssignments = async function(rawCode) {
@@ -3108,8 +3197,17 @@
                     // документа класса (он же в STUDENT_VISIBLE_CLASS_FIELDS на
                     // сервере) и кладётся рядом с остальными настройками потока:
                     // раздел в «Домашке» рисуется по нему, до следующего входа тоже.
-                    if (data.secondPart === true) localStorage.setItem('class_second_part', '1');
-                    else localStorage.removeItem('class_second_part');
+                    //
+                    // 🔴 Только про СВОЮ группу. Раньше признак снимался по любому
+                    // документу, который попросили прочитать, — а просили в том
+                    // числе протухший код (см. _adoptStudentClass). Ученик группы
+                    // со второй частью читал журнал летней группы без неё, признак
+                    // стирался, и раздел «Развёрнутые ответы» не появлялся вовсе:
+                    // ни строки в «Домашке», ни цифры на значке.
+                    if (_classDocId(localStorage.getItem('student_class_code') || '') === code) {
+                        if (data.secondPart === true) localStorage.setItem('class_second_part', '1');
+                        else localStorage.removeItem('class_second_part');
+                    }
                 } catch (e) {}
                 // «С чистого листа»: метка revokeBefore снимает ЛЮБЫЕ невыполненные ДЗ, выданные до неё —
                 // в т.ч. старые legacy-ДЗ со случайными id, которых нет в журнале. Сданные не трогаем.
@@ -4114,10 +4212,13 @@
             }
             if (!hasInvite) return false;
 
+            // Приглашение — единственный путь, где ПУСТОЙ код означает именно
+            // выход: учитель выпустил ученика. Поэтому здесь пустое значение
+            // применяется, в отличие от снапшота профиля.
             const previousCode = localStorage.getItem('student_class_code') || '';
-            if (inviteCode) localStorage.setItem('student_class_code', inviteCode);
-            else localStorage.removeItem('student_class_code');
-            if (window.renderProfileClass) window.renderProfileClass();
+            Promise.resolve(window._adoptStudentClass(inviteCode,
+                { reason: 'приглашение учителя', authoritative: true }))
+                .catch(e => console.warn('[Класс] приглашение не применилось:', e && e.message));
 
             if (notify) {
                 const lastConsumed = Number(localStorage.getItem('consumed_invite_at') || 0);
@@ -4125,7 +4226,6 @@
                     if (inviteAt > lastConsumed) localStorage.setItem('consumed_invite_at', String(inviteAt));
                     if (inviteCode && previousCode !== inviteCode) {
                         showToast('🎓', `Ты в классе «${inviteCode}»!`, 'bg-emerald-500', 'border-emerald-700');
-                        if (window.pullClassAssignments) window.pullClassAssignments(inviteCode).catch(() => {});
                     } else if (!inviteCode && previousCode) {
                         showToast('🎓', 'Курс завершён — ты больше не в группе', 'bg-blue-500', 'border-blue-700');
                     }
@@ -4368,21 +4468,21 @@
                         if (nameEl) nameEl.value = bestData.name;
                     }
                 }
-                if (bestData?.classCode && !localStorage.getItem('student_class_code')) {
-                    localStorage.setItem('student_class_code', bestData.classCode);
-                    if (window.renderProfileClass) window.renderProfileClass();
-                    // 🔴 Журнал класса тянут ОДИН раз — в слушателе ДЗ, и код класса берётся
-                    // там из localStorage. А приезжает он из облака только здесь, позже.
-                    // Значит на чистом устройстве (новый телефон, очистка данных, другой
-                    // браузер, режим инкогнито) первый вход оставался БЕЗ домашки: слушатель
-                    // уже отработал с пустым кодом, а второго вызова не было до перезапуска.
-                    // Ученик видел «мне ничего не задали», хотя в журнале класса ДЗ лежало.
-                    // Догоняем сразу, как код стал известен: pullClassAssignments идемпотентен
-                    // (ingestAssignment не задваивает уже принятое, revoked-надгробия целы).
-                    if (window.pullClassAssignments) {
-                        Promise.resolve(window.pullClassAssignments(bestData.classCode))
-                            .catch(e => console.warn('[HW] догрузка журнала класса не удалась:', e && e.message));
-                    }
+                // 🔴 Журнал класса тянут ОДИН раз — в слушателе ДЗ, и код класса берётся
+                // там из localStorage. А приезжает он из облака только здесь, позже.
+                // Значит на чистом устройстве (новый телефон, очистка данных, другой
+                // браузер, режим инкогнито) первый вход оставался БЕЗ домашки: слушатель
+                // уже отработал с пустым кодом, а второго вызова не было до перезапуска.
+                // Ученик видел «мне ничего не задали», хотя в журнале класса ДЗ лежало.
+                // Догоняем сразу, как код стал известен: pullClassAssignments идемпотентен
+                // (ingestAssignment не задваивает уже принятое, revoked-надгробия целы).
+                //
+                // Условие «только если ключ пуст» убрано вместе с таким же в
+                // _handleHwSnapshot: см. _adoptStudentClass, там разбор целиком.
+                if (bestData?.classCode) {
+                    Promise.resolve(window._adoptStudentClass(bestData.classCode,
+                        { reason: 'загрузка из облака', authoritative: true }))
+                        .catch(e => console.warn('[HW] смена группы при загрузке не удалась:', e && e.message));
                 }
                 if (bestData?.tgId && /^\d+$/.test(String(bestData.tgId))) localStorage.setItem('known_tg_id', String(bestData.tgId));
                 if (bestData?.knownTgId && /^\d+$/.test(String(bestData.knownTgId))) localStorage.setItem('known_tg_id', String(bestData.knownTgId));
@@ -4566,7 +4666,16 @@
             const payload = {
                 name: localStorage.getItem('student_manual_name') || 'Ученик',
                 nameUpdatedAt: Number(localStorage.getItem('student_manual_name_at')) || 0,
-                classCode: localStorage.getItem('student_class_code') || '',
+                // 🔴 Отправляем то, что сказал СЕРВЕР, а не то, что лежит на
+                // устройстве. Протухший код класса синхронизация писала обратно в
+                // профиль на каждом сохранении — и перевод в другую группу
+                // откатывался сам собой, кругом через клиента. Пока профиль ни
+                // разу не читался (_serverClassCode === null), несём местное
+                // значение как раньше: первый вход по ссылке-приглашению иначе
+                // потерял бы группу.
+                classCode: window._serverClassCode !== null
+                    ? window._serverClassCode
+                    : (localStorage.getItem('student_class_code') || ''),
                 googleEmail: gEmail,
                 knownTgId: knownTg,
                 knownGoogleId: googleId,

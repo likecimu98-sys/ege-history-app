@@ -66,7 +66,11 @@ window.secondPartRow = function() {
     if (!window.secondPartAvailable()) return '';
     const fresh = window.secondPartHasNews();
     const dot = fresh
-        ? '<span style="display:inline-block;background:#f43f5e;color:#fff;font-size:9px;font-weight:900;'
+        // 11px, а не 9: значок «новое» существует ровно затем, чтобы его
+        // заметили и прочли, — набирать его кеглем ниже читаемого на телефоне
+        // значит спорить с собственной задачей. Меньше 11px и design-lint не
+        // пропускает (var(--t-micro)).
+        ? '<span style="display:inline-block;background:#f43f5e;color:#fff;font-size:11px;font-weight:900;'
           + 'text-transform:uppercase;letter-spacing:.06em;padding:2px 6px;border-radius:999px;margin-left:6px">новое</span>'
         : '';
     return `

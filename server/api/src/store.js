@@ -277,11 +277,19 @@ async function accessContext(session, client = pool) {
   // прочитать журнал ДЗ своего класса и не мог — чужого. inviteClassCode учитываем
   // наравне с classCode: между приглашением учителя и первой синхронизацией
   // ученика код живёт именно там, и без этого первый вход остался бы без домашки.
+  //
+  // 🔴 МЁРТВЫЙ ДУБЛЬ прав не даёт. Документ, влитый в другой (`_mergedInto`), —
+  // это надгробие прежней личности того же человека, и код группы в нём
+  // застывает навсегда. 05.09.2026 именно через такой документ у переведённого
+  // ученика оставался читаемым журнал летней группы: клиент просил его по
+  // протухшему коду, а сервер честно отдавал — доступ-то был. Клиента чинит
+  // _adoptStudentClass, но право читать чужую теперь группу закрываем и здесь.
   const ownClasses = new Set();
   if (docIds.size) {
     const profiles = await client.query(
       `SELECT data->>'classCode' AS code, data->>'inviteClassCode' AS invite
-       FROM student_profiles WHERE user_id=$1 OR doc_id=ANY($2::text[])`,
+       FROM student_profiles WHERE (user_id=$1 OR doc_id=ANY($2::text[]))
+         AND data->>'_mergedInto' IS NULL`,
       [session.userId, [...docIds]]);
     for (const row of profiles.rows) {
       if (row.code) ownClasses.add(classDocId(row.code));

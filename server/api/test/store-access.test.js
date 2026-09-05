@@ -12,7 +12,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const {
   authorizeRead, authorizeCollectionQuery, publicStudent, publicMatch, studentClassView,
-  projectDocument, classDocId, DocumentStore, denyContext, authorizeWrite
+  projectDocument, classDocId, DocumentStore, denyContext, authorizeWrite, accessContext
 } = require('../src/store');
 const { pool } = require('../src/db');
 
@@ -440,4 +440,37 @@ test('объяснение отказа реально подставляетс�
     .split('\n').filter(line => !line.trim().startsWith('//')).join('\n');
   assert.match(source, /const denied = [\s\S]{0,400}?denyContext\(ref, ctx, current, effectivePatch\)/,
     'denyContext не подставляется в строку denied — отказ снова будет без причины');
+});
+
+// 🔴 Мёртвый дубль не даёт прав на группу.
+//
+// Разбор 05.09.2026: ученика перевели из летней группы к куратору, а домашка
+// летней продолжала приходить. Клиент просил её журнал по протухшему коду —
+// и сервер честно отдавал, потому что код нашёлся в ВЛИТОМ документе того же
+// человека (`_mergedInto`). Такой документ — надгробие прежней личности:
+// код группы в нём застыл навсегда и правами быть не должен.
+test('accessContext не берёт классы из влитых документов', async () => {
+  const asked = [];
+  const client = {
+    query: async (sql, params) => {
+      asked.push(sql);
+      if (/FROM student_profiles WHERE \(user_id/.test(sql)) {
+        // Живой документ отдаёт свою группу; влитый сюда просто не попадает —
+        // его отсекает сам запрос, и это ровно то, что проверяем.
+        return { rows: [{ code: '7A', invite: null }], rowCount: 1 };
+      }
+      return { rows: [], rowCount: 0 };
+    },
+  };
+  const session = {
+    userId: 42,
+    user: { uid: 'u42', canonicalDocId: '111', identities: [{ provider: 'telegram', subject: '111' }] },
+  };
+  const ctx = await accessContext(session, client);
+
+  const profileQuery = asked.find(sql => /FROM student_profiles WHERE \(user_id/.test(sql));
+  assert.ok(profileQuery, 'запрос за классами ученика не выполнялся вовсе');
+  assert.match(profileQuery, /AND data->>'_mergedInto' IS NULL/,
+    'классы снова собираются по влитым документам — журнал прежней группы останется читаемым');
+  assert.ok(ctx.ownClasses.has('7A'), 'живой документ обязан давать право на свою группу');
 });
