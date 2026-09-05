@@ -261,14 +261,23 @@ async function handleSecondPartClasses(req, res) {
 
   // Названия классов живут у преподавателей. Один код может встретиться у
   // нескольких — берём первое непустое имя, код всё равно один.
+  //
+  // Заодно запоминаем ВЛАДЕЛЬЦА: doc_id карточки преподавателя — это его
+  // Telegram ID, единственный общий ключ двух систем. По нему «Проверочная»
+  // сама закрепляет за новым классом того, кто его завёл, — иначе класс
+  // приезжает без куратора, и его работы встают в очередь ничьими.
   const names = new Map();
-  const teachers = await pool.query("SELECT data FROM teacher_profiles");
+  const owners = new Map();
+  const teachers = await pool.query("SELECT doc_id,data FROM teacher_profiles");
   for (const row of teachers.rows) {
     for (const item of (Array.isArray(row.data?.classes) ? row.data.classes : [])) {
       const code = String((typeof item === 'string' ? item : item?.code) || '').trim();
       if (!code) continue;
       const name = typeof item === 'object' ? String(item.name || '').trim() : '';
       if (!names.has(code) || (!names.get(code) && name)) names.set(code, name);
+      if (!owners.has(code) && /^[0-9]+$/.test(String(row.doc_id))) {
+        owners.set(code, Number(row.doc_id));
+      }
     }
   }
 
@@ -280,9 +289,18 @@ async function handleSecondPartClasses(req, res) {
   const codes = [...new Set([...names.keys(), ...docs.keys()])]
     .filter(code => !docs.get(code)?.archived);
 
-  // Состав — ТОЛЬКО у включённых классов: у выключенных он не нужен, а это
-  // сотни учеников через границу на каждый запрос.
-  const enabled = codes.filter(code => docs.get(code)?.secondPart === true);
+  // 🔴 Вторая часть открыта ВСЕМ классам по умолчанию (решение владельца
+  // 05.09.2026). Раньше её включали по одному тумблером в боте, и на деле она
+  // была открыта ровно одному классу из четырнадцати: про тумблер забывали, а
+  // ученик видел «вторая часть для вашего класса пока не открыта» и считал,
+  // что её нет вовсе. Опт-ин заменён на опт-аут: класс открыт, пока его
+  // явно не закрыли (`secondPart: false` — тот же тумблер, /secondpart).
+  //
+  // Состав теперь возвращается для всех открытых классов. Прежняя оговорка
+  // «сотни учеников через границу» осталась в силе как ограничение: ответ
+  // кэшируется на стороне «Проверочной» (trainer.CACHE_SECONDS), и при росте
+  // школы за пределы пары тысяч человек здесь понадобится страничная выдача.
+  const enabled = codes.filter(code => docs.get(code)?.secondPart !== false);
   const byClass = new Map(enabled.map(code => [code, []]));
   const skipped = new Map(enabled.map(code => [code, 0]));
   if (enabled.length) {
@@ -309,8 +327,11 @@ async function handleSecondPartClasses(req, res) {
   }
 
   const classes = codes.map(code => {
-    const on = docs.get(code)?.secondPart === true;
+    const on = docs.get(code)?.secondPart !== false;
     const out = { code, name: names.get(code) || code, second_part: on };
+    // Кто завёл класс. «Проверочная» закрепит его куратором, если он у неё
+    // заведён с этой ролью; руководителю останется переназначить, если надо.
+    if (owners.has(code)) out.owner_tg_id = owners.get(code);
     if (on) {
       out.students = byClass.get(code) || [];
       out.students_without_telegram = skipped.get(code) || 0;

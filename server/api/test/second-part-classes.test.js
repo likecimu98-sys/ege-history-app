@@ -62,13 +62,33 @@ test('признак второй части доезжает до ученик�
   assert.strictEqual(view.teacherNote, undefined, 'Проекция перестала быть закрытой');
 });
 
-test('состав отдаётся только у включённых классов', () => {
+test('вторая часть открыта всем классам, кроме явно закрытых', () => {
   const fn = server.slice(server.indexOf('async function handleSecondPartClasses'),
     server.indexOf('async function handleInternal'));
-  assert.match(fn, /const enabled = codes\.filter\(code => docs\.get\(code\)\?\.secondPart === true\)/,
-    'Состав собирается не по включённым классам — это сотни учеников через границу зря');
+  // 🔴 Опт-ин заменён на опт-аут (решение владельца 05.09.2026). Пока включали
+  // по одному, вторая часть была открыта ОДНОМУ классу из четырнадцати: про
+  // тумблер забывали, а ученик видел «для вашего класса пока не открыта» и
+  // считал, что её нет вовсе. Класс открыт, пока `secondPart` не равен false.
+  assert.match(fn, /const enabled = codes\.filter\(code => docs\.get\(code\)\?\.secondPart !== false\)/,
+    'Вернулось включение по одному — вторая часть снова окажется открытой одному классу');
+  assert.doesNotMatch(fn, /secondPart === true/,
+    'Где-то осталась старая проверка «включено явно» — класс без тумблера выпадет');
   assert.match(fn, /WHERE data->>'classCode' = ANY\(\$1::text\[\]\)/,
     'Ученики выбираются не одним запросом — на классе в полтораста человек это заметно');
+});
+
+test('класс приезжает с владельцем — иначе он останется без куратора', () => {
+  const fn = server.slice(server.indexOf('async function handleSecondPartClasses'),
+    server.indexOf('async function handleInternal'));
+  // doc_id карточки преподавателя — его Telegram ID, единственный общий ключ
+  // двух систем. Без него «Проверочная» заводит класс ничьим, и его работы
+  // встают в очередь без куратора: их не видит никто, кроме руководителя.
+  assert.match(fn, /SELECT doc_id,data FROM teacher_profiles/,
+    'Владелец класса не читается — закреплять куратора будет не по чему');
+  assert.match(fn, /out\.owner_tg_id = owners\.get\(code\)/,
+    'Владелец не отдаётся наружу');
+  assert.match(fn, /\/\^\[0-9\]\+\$\/\.test\(String\(row\.doc_id\)\)/,
+    'В owner_tg_id может уехать нечисловой doc_id — на той стороне это не Telegram ID');
 });
 
 test('выключенный класс остаётся в выдаче, но без состава', () => {
