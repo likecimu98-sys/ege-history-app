@@ -323,8 +323,14 @@ assert.match(cloudSource, /finally \{[\s\S]{0,400}window\._cloudStateLoaded = tr
   'the cloud-loaded signal must fire in finally, not only on success');
 // Домашка собственной группы не должна висеть на учителе.
 assert.match(cloudSource, /async function _dropOwnClassHomework\(groups\)/, 'teacher own-class HW sweep is missing');
-assert.match(stateSource, /myClasses\.has\(a\.classCode\)/, 'refreshHwState must drop own-class homework');
+// Выдача сразу нескольким группам метку classCode не ставит (она солгала бы
+// половине получателей) — правду там говорит classCodes. Смотреть надо в обе,
+// иначе ДЗ, выданное учителем пяти потокам, вернётся ему самому вечным долгом.
+assert.match(stateSource, /codes\.some\(code => myClasses\.has\(code\)\)/, 'refreshHwState must drop own-class homework');
+assert.match(stateSource, /a\.classCodes\.length\s*\n?\s*\? a\.classCodes : \(a\.classCode \? \[a\.classCode\] : \[\]\)/,
+  'refreshHwState must read both classCodes and the legacy classCode');
 assert.match(stateSource, /classCode: rec\.classCode \|\| null/, 'assignment classCode must survive normalization');
+assert.match(stateSource, /classCodes: Array\.isArray\(rec\.classCodes\)/, 'assignment classCodes must survive normalization');
 // 🔴 Журнал класса тянется в слушателе ДЗ по коду из localStorage, а сам код
 // приезжает из облака ПОЗЖЕ — при загрузке профиля. На чистом устройстве (новый
 // телефон, очистка данных, инкогнито) слушатель отрабатывал с пустым кодом, и
@@ -348,12 +354,41 @@ assert.match(cloudSource,
 // оставлял класс без журнала: 31.07 в летней школе ДЗ получили 13 из 145, а
 // догнать остальных было нечем. Проверяем именно ПОРЯДОК двух записей.
 {
-  const assignBody = cloudSource.slice(cloudSource.indexOf('const codes = [...new Set(students.map'));
+  const assignBody = cloudSource.slice(cloudSource.indexOf('rec.classCodes = codes;'));
   const journalAt = assignBody.indexOf('assignments: arrayUnion(rec)');
+  const notifyAt = assignBody.indexOf("type: 'hw_assigned_bulk'");
   const fanoutAt = assignBody.indexOf('pendingAssignments: arrayUnion(rec)');
   assert.ok(journalAt > -1 && fanoutAt > -1, 'homework assign must write both the journal and per-student records');
   assert.ok(journalAt < fanoutAt,
     'the class journal must be written BEFORE the per-student fan-out, so an interrupted assign is still recoverable');
+  // Та же причина, что и у журнала: список получателей уезжает одной записью до
+  // цикла, иначе обрыв на середине оставляет часть класса без сообщения навсегда.
+  assert.ok(notifyAt > -1 && notifyAt < fanoutAt,
+    'the bulk notification must be queued BEFORE the per-student fan-out');
+  // 🔴 Получателей режем по 1000: столько принимает сервер. Пять групп выходят за
+  // предел, и отказ по одному заданию оставил бы БЕЗ сообщения всех до единого.
+  assert.match(assignBody.slice(0, fanoutAt), /NOTIFY_CHUNK = 1000/,
+    'bulk recipients must be chunked — a multi-group issue can exceed the server cap');
+}
+
+// ─── Одно ДЗ сразу нескольким группам ───────────────────────────────────────
+// Учитель ведёт пять потоков по одной программе и задавал одно и то же пять раз.
+// Запись выдачи одна (общий id), в журнал ложится каждой отмеченной группе,
+// уведомление уходит одно. Отмена обязана снимать во ВСЕХ группах выдачи:
+// вычистить журнал одной и оставить запись живой в остальных — худший исход,
+// учитель считает ДЗ снятым, а половина учеников его решает.
+assert.match(cloudSource, /window\._fetchClassRoster = async function/,
+  'нет чтения состава группы по коду — выдать ДЗ второй группе будет нечем');
+assert.match(cloudSource, /if \(d\._mergedInto\) return;/,
+  'в состав группы для выдачи попадают влитые документы — один человек получит ДЗ дважды');
+assert.match(cloudSource, /window\._assignBundleToClassDb = async function\(items, deadline, title, codes\)/,
+  'выдача не принимает список групп');
+{
+  const cancel = cloudSource.slice(cloudSource.indexOf('window.cancelClassAssignment = async function'));
+  assert.match(cancel.slice(0, 2000), /for \(const code of codes\)/,
+    'отмена ходит по одной группе — в остальных выдача останется живой');
+  assert.match(cancel.slice(0, 2000), /return ok === codes\.length;/,
+    'частичная отмена не должна выдаваться за успешную');
 }
 
 // 🔴 Отказ входа обязан ГОВОРИТЬ, а не молчать.

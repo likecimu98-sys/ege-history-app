@@ -7,14 +7,14 @@
             signInWithCredential, signOut, initializeFirestore, collection, doc, setDoc, getDoc,
             getDocs, addDoc, updateDoc, deleteDoc, deleteField, onSnapshot, query, where,
             orderBy, limit, runTransaction, arrayUnion, arrayRemove, vpsApiFetch, refreshVpsAuth
-        } from "./vps-sync-compat.js?v=20260905-7";
+        } from "./vps-sync-compat.js?v=20260905-8";
 
         // jsPDF грузился с cdnjs.cloudflare.com без SRI — то есть посторонний скрипт
         // исполнялся с полными правами страницы, а при недоступности CDN (у части
         // нашей аудитории это обычное дело) экспорт PDF просто не работал. Довод тот
         // же, что и для telegram-web-app.js: своя копия с того же origin.
         // Версия совпадает с прежней CDN-ной — 2.5.1, лежит в vendor/.
-        const VENDOR_JSPDF = 'vendor/jspdf.umd.min.js?v=20260905-7';
+        const VENDOR_JSPDF = 'vendor/jspdf.umd.min.js?v=20260905-8';
 
         const cloudConfig = { projectId: 'vps-postgresql' };
         
@@ -2585,6 +2585,36 @@
         // Firestore, и МЕДЛЕННЫЙ старый запрос (все классы, 3000 док.) финишировал ПОСЛЕ
         // быстрого фильтрованного, затирая его результат — «только мой класс работал через раз».
         let _loadSeq = 0;
+        // ─── Состав группы по коду: только для выдачи ДЗ ────────────────────
+        //
+        // Кабинет учителя целиком построен вокруг ОДНОЙ выбранной группы
+        // (teacher_class_code, _cachedStudents, аналитика, PDF, отзыв ДЗ), и
+        // переписывать его под мультивыбор — большой радиус поражения ради одной
+        // кнопки. Поэтому несколько групп появляются только в момент ВЫДАЧИ, а
+        // состав для них берётся вот здесь, отдельным лёгким запросом.
+        //
+        // Лёгким — потому что для выдачи нужен только uid: тяжёлые блобы
+        // прогресса (_readPrivateBlob, пачками по 8) тут не читаются вовсе.
+        // Сервер отдаст лишь те группы, которые учитель ведёт (teacherCanSeeStudent).
+        const _rosterCache = new Map();
+        window._fetchClassRoster = async function(rawCode, opts) {
+            const code = _classDocId(rawCode);
+            if (!code || !db) return [];
+            if (!(opts && opts.fresh) && _rosterCache.has(code)) return _rosterCache.get(code);
+            const studentsCol = collection(db, 'artifacts', appId, 'public', 'data', 'students');
+            const snap = await getDocs(query(studentsCol, where('classCode', '==', code), limit(3000)));
+            const list = [];
+            snap.forEach(docSnap => {
+                const d = docSnap.data();
+                // Документ, влитый в другой, — мёртвый дубль одного человека.
+                // Выдать ему ДЗ значит выдать второй раз тому же ученику.
+                if (d._mergedInto) return;
+                list.push({ uid: docSnap.id, classCode: code, name: d.name || '' });
+            });
+            _rosterCache.set(code, list);
+            return list;
+        };
+
         window.loadClassProgress = async function() {
             if (!db) return;
             const roleIsFresh = window.state.isTeacherAdmin === true
@@ -3315,22 +3345,45 @@
         // Пишем ОДНУ запись в документ класса: убираем ДЗ из журнала + ставим «отзыв» (revokedAssignments).
         // Документы учеников НЕ трогаем (их прогресс — в fullStateJson, владелец = сам ученик): каждый ученик
         // при следующем входе через pullClassAssignments сам уберёт невыполненную копию, а сданную оставит.
+        // 🔴 Отменяем во ВСЕХ группах выдачи, а не только в открытой.
+        //
+        // Одно ДЗ уходит сразу нескольким потокам одной записью — общий id лежит в
+        // журнале каждой отмеченной группы. Отмена из списка одной группы
+        // вычищала бы её журнал и оставляла ту же запись живой в остальных: у
+        // учителя ДЗ «снято», а у половины учеников оно на месте. Одна выдача —
+        // одна отмена. Список групп берём из самой записи (classCodes), у старых
+        // записей — единственный classCode либо открытая группа.
         window.cancelClassAssignment = async function(rawCode, id) {
             if (!db || !id) return false;
-            const code = _classDocId(rawCode);
-            if (!code) return false;
+            const opened = _classDocId(rawCode);
+            let codes = [opened].filter(Boolean);
             try {
-                const ref = doc(db, 'artifacts', appId, 'public', 'data', 'classes', code);
-                const snap = await getDoc(ref);
-                const data = snap.exists() ? snap.data() : {};
-                const list = (Array.isArray(data.assignments) ? data.assignments : []).filter(a => a && a.id !== id);
-                const revoked = Array.isArray(data.revokedAssignments) ? data.revokedAssignments.slice() : [];
-                if (!revoked.includes(id)) revoked.push(id);
-                // не даём списку отозванных расти бесконечно
-                const revokedTrimmed = revoked.slice(-300);
-                await setDoc(ref, { assignments: list, revokedAssignments: revokedTrimmed, updatedAt: Date.now() }, { merge: true });
-                return true;
-            } catch (e) { console.error('cancelClassAssignment error:', e); return false; }
+                const cached = (window._hwListCache || []).find(a => a && a.id === id);
+                const fromRec = cached && (Array.isArray(cached.classCodes) && cached.classCodes.length
+                    ? cached.classCodes : (cached.classCode ? [cached.classCode] : []));
+                if (fromRec && fromRec.length) {
+                    codes = [...new Set([...codes, ...fromRec.map(_classDocId)])].filter(Boolean);
+                }
+            } catch (e) {}
+            if (!codes.length) return false;
+            let ok = 0;
+            for (const code of codes) {
+                try {
+                    const ref = doc(db, 'artifacts', appId, 'public', 'data', 'classes', code);
+                    const snap = await getDoc(ref);
+                    const data = snap.exists() ? snap.data() : {};
+                    const list = (Array.isArray(data.assignments) ? data.assignments : []).filter(a => a && a.id !== id);
+                    const revoked = Array.isArray(data.revokedAssignments) ? data.revokedAssignments.slice() : [];
+                    if (!revoked.includes(id)) revoked.push(id);
+                    // не даём списку отозванных расти бесконечно
+                    const revokedTrimmed = revoked.slice(-300);
+                    await setDoc(ref, { assignments: list, revokedAssignments: revokedTrimmed, updatedAt: Date.now() }, { merge: true });
+                    ok++;
+                } catch (e) { console.error('cancelClassAssignment error:', code, e); }
+            }
+            // Успехом считаем только полную отмену: снять в двух журналах из трёх
+            // хуже, чем не снять вовсе, — учитель должен узнать и повторить.
+            return ok === codes.length;
         };
 
         // ─── Учитель: отменить ВСЕ выданные классу ДЗ («с нового листа») ───
@@ -3540,8 +3593,26 @@
             }
         };
 
-        window._assignBundleToClassDb = async function(items, deadline, title) {
-            const students = (window._cachedStudents || []).filter(s => s.uid);
+        // codes — коды групп, в которые идёт выдача. Пусто = прежний путь по
+        // загруженному списку (режим глобального админа «все классы», где
+        // «весь класс» означает всех, кто сейчас на экране; ломать его нельзя).
+        window._assignBundleToClassDb = async function(items, deadline, title, codes) {
+            const wanted = [...new Set((codes || []).map(_classDocId).filter(Boolean))];
+            let students;
+            if (wanted.length) {
+                // Один и тот же человек может числиться в двух выбранных группах —
+                // ДЗ ему полагается одно, а не два. Схлопываем по uid.
+                const byUid = new Map();
+                for (const code of wanted) {
+                    let roster = [];
+                    try { roster = await window._fetchClassRoster(code); }
+                    catch (e) { console.error('roster read error:', code, e); }
+                    roster.forEach(st => { if (st.uid && !byUid.has(st.uid)) byUid.set(st.uid, st); });
+                }
+                students = [...byUid.values()];
+            } else {
+                students = (window._cachedStudents || []).filter(s => s.uid);
+            }
             if (!students.length) { showToast('⚠️', 'Класс не загружен', 'bg-rose-500', 'border-rose-700'); return; }
             // Один общий рекорд (единый id) — чтобы тот же id попал и текущим ученикам, и в журнал класса.
             // Тогда опоздавший подхватит ДЗ из журнала без дублей с теми, кому уже разослали.
@@ -3566,9 +3637,16 @@
                 // иначе метка солгала бы половине получателей. По ней refreshHwState
                 // снимает с учителя домашку его собственной группы.
                 classCode: null,
+                // Все группы выдачи. classCode (одна) остаётся для совместимости
+                // со старыми клиентами и живёт по прежнему правилу; classCodes
+                // говорит правду всегда, и по ней отменяют выдачу целиком.
+                classCodes: [],
                 assignedAt: Date.now()
             };
-            const codes = [...new Set(students.map(s => _classDocId(s.classCode)).filter(Boolean))];
+            const codes = wanted.length
+                ? wanted
+                : [...new Set(students.map(s => _classDocId(s.classCode)).filter(Boolean))];
+            rec.classCodes = codes;
             if (codes.length === 1) rec.classCode = codes[0];
             showToast('⏳', `Выдаю ДЗ ${students.length} ученикам…`, 'bg-blue-500', 'border-blue-700');
             // 🔴 ЖУРНАЛ КЛАССА ПИШЕТСЯ ПЕРВЫМ — до персональной рассылки.
@@ -3599,12 +3677,23 @@
             // Теперь список получателей уезжает одним документом ДО рассылки: оборвётся
             // цикл или нет, бот разошлёт всем. Отправлять список класса целиком нельзя —
             // учитель мог выбрать пятерых из 145, поэтому несём именно выбранных.
+            //
+            // 🔴 Список получателей режем по 1000: столько принимает сервер
+            // (проверка hw_assigned_bulk в store.js). Пять групп легко выходят за
+            // предел, а отказ по одному заданию оставил бы БЕЗ сообщения всех до
+            // единого — при том что ДЗ выдалось. Лучше несколько заданий боту.
             const _sum = _jobSummary(rec);
-            const notifyOk = await window._notifyJob({
-                type: 'hw_assigned_bulk',
-                studentIds: students.map(s => String(s.uid)),
-                recId: rec.id, task: _sum.task, total: _sum.total, deadline: rec.deadline
-            });
+            const NOTIFY_CHUNK = 1000;
+            const allIds = students.map(s => String(s.uid));
+            let notifyOk = true;
+            for (let i = 0; i < allIds.length; i += NOTIFY_CHUNK) {
+                const ok = await window._notifyJob({
+                    type: 'hw_assigned_bulk',
+                    studentIds: allIds.slice(i, i + NOTIFY_CHUNK),
+                    recId: rec.id, task: _sum.task, total: _sum.total, deadline: rec.deadline
+                });
+                if (!ok) notifyOk = false;
+            }
             let ok = 0, fail = 0;
             for (const s of students) {
                 try {

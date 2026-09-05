@@ -151,8 +151,44 @@ window.promptAssignHw = function(studentId, name) {
 window.promptAssignHwClass = function() {
     const students = (window._cachedStudents || []);
     if (!students.length) return showToast('⚠️', 'Сначала загрузите класс', 'bg-rose-500', 'border-rose-700');
-    window.openHwComposer({ type: 'class', count: students.length });
+    // Выдача начинается с открытой группы, а дальше учитель может отметить ещё.
+    // У глобального админа с выключенным фильтром группы нет — тогда codes пуст
+    // и работает прежний путь «всем, кто сейчас на экране».
+    const cur = (document.getElementById('teacher-class-code-input')?.value
+        || localStorage.getItem('teacher_class_code') || '').trim();
+    const mine = Array.isArray(window._teacherGroups) ? window._teacherGroups : [];
+    const codes = (cur && mine.some(g => g && g.code === cur)) ? [cur] : [];
+    window.openHwComposer({ type: 'class', codes, count: students.length });
 };
+
+// Сколько человек в группе — спрашиваем по одному разу и запоминаем. Пока не
+// ответили, показываем «…», а не ноль: ноль читался бы как «группа пустая».
+window._hwcCounts = {};
+window._hwcLoadCount = function(code) {
+    if (!code || window._hwcCounts[code] !== undefined || !window._fetchClassRoster) return;
+    window._hwcCounts[code] = null;   // «спрашиваем»
+    window._fetchClassRoster(code)
+        .then(list => { window._hwcCounts[code] = list.length; _renderHwComposer(); })
+        .catch(() => { window._hwcCounts[code] = 0; _renderHwComposer(); });
+};
+window._hwcToggleGroup = function(code) {
+    const c = window._hwComposer; if (!c || c.target.type !== 'class') return;
+    _hwcSyncDraft();
+    const codes = c.target.codes || (c.target.codes = []);
+    const at = codes.indexOf(code);
+    // Последнюю группу снять нельзя: выдача без получателей — не выдача, а
+    // молчаливая пустая кнопка.
+    if (at !== -1) { if (codes.length > 1) codes.splice(at, 1); }
+    else { codes.push(code); window._hwcLoadCount(code); }
+    _renderHwComposer();
+};
+function _hwcPlural(n, one, few, many) {
+    const a = Math.abs(n) % 100, b = a % 10;
+    if (a > 10 && a < 20) return many;
+    if (b > 1 && b < 5) return few;
+    if (b === 1) return one;
+    return many;
+}
 
 window.openHwComposer = function(target) {
     window._hwComposer = { target, items: [], deadline: null,
@@ -236,6 +272,9 @@ async function _hwlLoad() {
             : await window.listClassAssignments(_hwlCtx.code);
     } catch (e) { console.error(e); }
     _hwListCache = Array.isArray(list) ? list : [];
+    // Отмена живёт в cloud-sync.js, а список групп выдачи (classCodes) есть
+    // только в записи журнала — отдаём кэш наружу, чтобы отменять сразу везде.
+    window._hwListCache = _hwListCache;
     _hwlPaint();
 }
 function _hwlPaint() {
@@ -279,12 +318,17 @@ function _hwlPaint() {
         const issued = a.assignedAt ? 'выдано ' + new Date(a.assignedAt).toLocaleDateString('ru-RU') : '';
         const items = (a.items || []).map(_hwlItemSummary).join(' · ');
         const badge = _hwlCtx.mode === 'student' ? ' ' + _hwlStateBadge(a.state) : '';
+        // Выдача сразу нескольким группам: без этой отметки учитель не отличил бы
+        // её от обычной и не понял бы, почему отмена трогает соседние потоки.
+        const spread = Array.isArray(a.classCodes) && a.classCodes.length > 1
+            ? `<span style="font-size:11px;font-weight:900;color:#4338ca;background:rgba(99,102,241,0.14);border-radius:var(--r-sm);padding:2px 6px;margin-left:6px">${a.classCodes.length} ${_hwcPlural(a.classCodes.length, 'группа', 'группы', 'групп')}</span>`
+            : '';
         const action = _hwlCancellable(a)
             ? `<button onclick="window._hwlAskCancel('${id}')" style="background:rgba(244,63,94,0.1);color:var(--c-danger,#e11d48);border:1px solid rgba(244,63,94,0.35);border-radius:9px;padding:6px 10px;font-size:11px;font-weight:900;cursor:pointer">Отменить</button>`
             : `<span style="font-size:10px;color:#9ca3af;font-weight:800">остаётся</span>`;
         return `
         <div data-row="${id}" style="background:#fff;border:1px solid rgba(128,128,128,0.18);border-radius:14px;padding:10px 12px;margin-bottom:8px" class="dark:bg-[#1e1e1e]">
-          <div style="font-size:13px;font-weight:900;color:#111;margin-bottom:2px" class="dark:text-gray-100">${_hwlEsc(title)}${badge}</div>
+          <div style="font-size:13px;font-weight:900;color:#111;margin-bottom:2px" class="dark:text-gray-100">${_hwlEsc(title)}${badge}${spread}</div>
           <div style="font-size:10px;color:#6b7280;margin-bottom:6px">${_hwlEsc(items)}</div>
           <div style="display:flex;align-items:center;justify-content:space-between;gap:8px">
             <div style="font-size:10px;color:#9ca3af;font-weight:700">${dl} · ${issued}</div>
@@ -296,8 +340,15 @@ function _hwlPaint() {
 window._hwlAskCancel = function(id) {
     const cell = document.querySelector(`#hw-list-body [data-row="${id}"] .hwl-actions`);
     if (!cell) return;
+    // Одна выдача — одна отмена, и если она уходила нескольким потокам, снимется
+    // во всех. Говорим об этом ДО нажатия: узнать постфактум, что снял домашку
+    // ещё двум группам, — худший способ это выяснить.
+    const rec = (_hwListCache || []).find(a => a && a.id === id);
+    const spread = rec && Array.isArray(rec.classCodes) && rec.classCodes.length > 1
+        ? ` Снимется во всех ${rec.classCodes.length} ${_hwcPlural(rec.classCodes.length, 'группе', 'группах', 'группах')}.`
+        : '';
     cell.innerHTML = `
-      <span style="font-size:10px;color:#6b7280;font-weight:800;margin-right:6px">Точно?</span>
+      <span style="font-size:10px;color:#6b7280;font-weight:800;margin-right:6px">Точно?${_hwlEsc(spread)}</span>
       <button onclick="window._hwlDoCancel('${id}')" style="background:var(--c-danger,#e11d48);color:#fff;border:none;border-radius:9px;padding:6px 10px;font-size:11px;font-weight:900;cursor:pointer;margin-right:4px">Да, отменить</button>
       <button onclick="window._hwlRepaint()" style="background:#eee;color:#444;border:none;border-radius:9px;padding:6px 10px;font-size:11px;font-weight:900;cursor:pointer">Нет</button>`;
 };
@@ -547,7 +598,7 @@ window._hwcSubmit = function() {
     const overlay = document.getElementById('hw-composer-overlay');
     if (overlay) overlay.remove();
     if (c.target.type === 'class') {
-        if (window._assignBundleToClassDb) window._assignBundleToClassDb(c.items, c.deadline, null);
+        if (window._assignBundleToClassDb) window._assignBundleToClassDb(c.items, c.deadline, null, c.target.codes);
     } else {
         if (window._assignBundleToStudentDb) window._assignBundleToStudentDb(c.target.id, c.items, c.deadline, null);
     }
@@ -558,9 +609,45 @@ function _renderHwComposer() {
     const c = window._hwComposer;
     const overlay = document.getElementById('hw-composer-overlay');
     if (!c || !overlay) return;
-    const targetName = c.target.type === 'class'
-        ? `Весь класс — ${c.target.count} ${c.target.count === 1 ? 'ученик' : 'учеников'}`
-        : c.target.name;
+    // ─── Кому выдаём ────────────────────────────────────────────────────
+    //
+    // Одно ДЗ на несколько групп: учитель ведёт пять потоков по одной программе
+    // и задавал одно и то же пять раз — пять заходов в кабинет, пять переключений
+    // группы, пять шансов задать по-разному. Запись выдачи одна (общий id), в
+    // журнал она ложится каждой отмеченной группе, а уведомление уходит одно.
+    const myGroups = (c.target.type === 'class' && Array.isArray(window._teacherGroups))
+        ? window._teacherGroups.filter(g => g && g.code) : [];
+    const picked = (c.target.codes || []);
+    const showGroups = myGroups.length > 1 && picked.length > 0;
+    let targetName;
+    if (c.target.type !== 'class') targetName = c.target.name;
+    else if (!picked.length) targetName = `Весь список — ${c.target.count} ${_hwcPlural(c.target.count, 'ученик', 'ученика', 'учеников')}`;
+    else {
+        const known = picked.map(code => window._hwcCounts[code]);
+        const heads = known.reduce((sum, n) => sum + (Number(n) || 0), 0);
+        const waiting = known.some(n => n === null || n === undefined);
+        targetName = picked.length === 1
+            ? `Группа ${picked[0]} — ${waiting ? '…' : heads} ${waiting ? 'учеников' : _hwcPlural(heads, 'ученик', 'ученика', 'учеников')}`
+            : `${picked.length} ${_hwcPlural(picked.length, 'группа', 'группы', 'групп')} · ${waiting ? '…' : heads} ${waiting ? 'учеников' : _hwcPlural(heads, 'ученик', 'ученика', 'учеников')}`;
+    }
+    picked.forEach(code => window._hwcLoadCount(code));
+
+    const groupsHtml = !showGroups ? '' : `
+      <div style="font-size:11px;font-weight:900;text-transform:uppercase;letter-spacing:.05em;color:#9ca3af;margin-bottom:6px">Кому</div>
+      <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px">
+        ${myGroups.map(g => {
+            const on = picked.indexOf(g.code) !== -1;
+            const n = window._hwcCounts[g.code];
+            const tail = on ? ` · ${n === null || n === undefined ? '…' : n}` : '';
+            // Имя группы задаёт учитель и приходит из БД: в разметку его пускать
+            // нельзя (класс с именем вида `<img onerror=...>` исполнил бы скрипт).
+            return `<button type="button" onclick="window._hwcToggleGroup('${_hwlEsc(g.code).replace(/'/g, "\'")}')"
+              style="padding:7px 11px;border-radius:999px;font-size:11px;font-weight:800;cursor:pointer;
+                     border:1px solid ${on ? 'var(--c-brand)' : 'rgba(128,128,128,0.3)'};
+                     background:${on ? 'rgba(59,130,246,0.12)' : 'var(--card,#fff)'};
+                     color:${on ? 'var(--c-brand-strong)' : '#6b7280'}">${on ? '✓ ' : ''}${_hwlEsc(g.name || g.code)}${tail}</button>`;
+        }).join('')}
+      </div>`;
     const taskShort = { task1: '⏳№1', task3: '🔗№3', task4: '📍№4', task5: '👤№5', task7: '🎨№7', cram: '⚡Зубрёжка', match: '🧩Подбор' };
     const periodShort = Object.fromEntries(HWC_PERIODS.map(p => [p.v, p.t]));
     const itemScope = it => HWC_RANGE_TASKS.indexOf(it.task) !== -1
@@ -593,7 +680,7 @@ function _renderHwComposer() {
         <button onclick="document.getElementById('hw-composer-overlay').remove()" style="font-size:22px;color:#aaa;background:none;border:none;cursor:pointer;padding:2px 8px">✕</button>
       </div>
       <div style="font-size:12px;color:#6b7280;font-weight:700;margin-bottom:12px">${targetName}</div>
-
+      ${groupsHtml}
       <div style="font-size:11px;font-weight:900;text-transform:uppercase;letter-spacing:.05em;color:#9ca3af;margin-bottom:6px">Этапы (решаются по очереди)</div>
       ${itemsHtml}
 

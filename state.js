@@ -750,6 +750,11 @@ function normalizeAssignmentRec(rec) {
         // Класс, которому выдали ДЗ. Нужен, чтобы снять с учителя домашку СВОЕЙ же
         // группы (см. refreshHwState) — без него отличить её от чужой нечем.
         classCode: rec.classCode || null,
+        // Все группы выдачи. Одно ДЗ уходит сразу нескольким потокам, и тогда
+        // classCode пуст намеренно; без этого списка нормализация теряла бы
+        // единственный признак принадлежности такой выдачи.
+        classCodes: Array.isArray(rec.classCodes) && rec.classCodes.length
+            ? rec.classCodes.map(String) : (rec.classCode ? [String(rec.classCode)] : []),
         deadline: rec.deadline || null,
         assignedAt: rec.assignedAt || Date.now(),
         status: 'active',
@@ -882,10 +887,17 @@ function refreshHwState() {
     // некуда — принадлежности к классу уже нет, а задания есть. Один такой долг
     // (516 строк на аккаунте владельца) при каждом входе мигал в шапке.
     // Помечаем невыполненные задания тех классов, которые человек сам ведёт.
+    // Выдача на несколько групп метку classCode не ставит (она солгала бы
+    // половине получателей) — там правду говорит classCodes. Смотрим в обе,
+    // иначе домашка, выданная учителем сразу пяти потокам, вернулась бы ему
+    // самому и повисла долгом, от которого некуда деться.
     const myClasses = new Set((window._teacherGroups || []).map(g => g && g.code).filter(Boolean));
     if (myClasses.size) {
         s.assignments.forEach(a => {
-            if (a && a.status === 'active' && a.classCode && myClasses.has(a.classCode)) {
+            if (!a || a.status !== 'active') return;
+            const codes = Array.isArray(a.classCodes) && a.classCodes.length
+                ? a.classCodes : (a.classCode ? [a.classCode] : []);
+            if (codes.some(code => myClasses.has(code))) {
                 a.status = 'revoked'; a.updatedAt = Date.now(); tombstoned++;
             }
         });
