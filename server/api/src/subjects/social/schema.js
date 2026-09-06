@@ -195,7 +195,7 @@ function classCreate(body) {
 
 function classPatch(body) {
   const source = body && typeof body === 'object' ? body : {};
-  const unknown = Object.keys(source).filter(key => !['title', 'status'].includes(key));
+  const unknown = Object.keys(source).filter(key => !['title', 'status', 'backfill'].includes(key));
   if (unknown.length) fail('class_unknown_field', 400, { fields: unknown.slice(0, 5) });
   const out = {};
   if ('title' in source) out.title = text(source.title, { max: 80, field: 'title', required: true });
@@ -203,6 +203,14 @@ function classPatch(body) {
     const status = text(source.status, { max: 16, field: 'status' });
     if (!['active', 'archived'].includes(status)) fail('class_status_unknown');
     out.status = status;
+  }
+  // Что получает ученик, вступивший ПОСЛЕ выдачи домашки: всё ранее выданное,
+  // только непросроченное на момент входа или только новое. Перечень закрыт:
+  // неизвестное значение молча означало бы «правило не применилось».
+  if ('backfill' in source) {
+    const backfill = text(source.backfill, { max: 8, field: 'backfill' });
+    if (!['all', 'undue', 'new'].includes(backfill)) fail('class_backfill_unknown');
+    out.backfill = backfill;
   }
   if (!Object.keys(out).length) fail('nothing_to_update');
   return out;

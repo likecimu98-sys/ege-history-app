@@ -211,7 +211,7 @@ async function handleSocial(req, res, url, session, deps) {
       requireMutationAuth(req, session);
       const data = schema.classCreate(await readJson(req, 8192));
       const created = await store.createClass(userId, data, {});
-      return json(res, 200, { class: { id: created.id, title: created.title, joinCode: created.join_code, status: created.status, students: 0 } });
+      return json(res, 200, { class: { id: created.id, title: created.title, joinCode: created.join_code, status: created.status, backfill: created.backfill, students: 0 } });
     }
 
     const classMatch = path.match(/^\/teacher\/classes\/([^/]+)$/);
@@ -222,7 +222,7 @@ async function handleSocial(req, res, url, session, deps) {
         ? { status: 'archived' }
         : schema.classPatch(await readJson(req, 8192));
       const updated = await store.updateClass(userId, classId, patch, {});
-      return json(res, 200, { class: { id: updated.id, title: updated.title, joinCode: updated.join_code, status: updated.status } });
+      return json(res, 200, { class: { id: updated.id, title: updated.title, joinCode: updated.join_code, status: updated.status, backfill: updated.backfill } });
     }
 
     const studentsMatch = path.match(/^\/teacher\/classes\/([^/]+)\/students$/);

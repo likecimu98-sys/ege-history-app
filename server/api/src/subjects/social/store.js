@@ -161,6 +161,27 @@ async function addWeeklyScores(client, userId, events) {
   }
 }
 
+// 🔴 ОДНО определение «эта домашка выдана этому ученику». Оно нужно в пяти
+// запросах: что видит ученик, что ему засчитывается, кого считать в таблице
+// учителя, чьи задания варианта отдавать и по скольким людям считать сводку
+// бота. Разошедшиеся копии одного правила в этом проекте уже стоили дважды:
+// список заданий варианта без COALESCE и состав домашки в двух местах.
+// Поэтому — константа, а не пять почти одинаковых условий.
+//
+// Псевдонимы обязательны и одинаковы везде: a — домашка, c — класс,
+// m — членство ученика.
+//
+// Последняя ветка важнее остальных: домашка, по которой у ученика УЖЕ есть
+// прогресс, не прячется ни при какой настройке. Иначе смена правила стёрла бы
+// с экрана его собственную сделанную работу — а сделанного мы не отбираем.
+const ASSIGNMENT_VISIBLE_SQL = `(
+       a.issued_at >= m.joined_at
+       OR c.backfill = 'all'
+       OR (c.backfill = 'undue' AND (a.due_at IS NULL OR a.due_at >= m.joined_at))
+       OR EXISTS (SELECT 1 FROM social_assignment_progress pv
+                  WHERE pv.assignment_id = a.id AND pv.user_id = m.user_id)
+     )`;
+
 // Активные ДЗ ученика: только его классы, только невыданное задним числом.
 async function activeAssignmentsFor(client, userId) {
   const result = await client.query(
@@ -173,7 +194,7 @@ async function activeAssignmentsFor(client, userId) {
        SELECT array_agg(COALESCE(at.custom_task_id::text, at.bank_task_id)) AS ids
        FROM social_assignment_tasks at WHERE at.assignment_id = a.id
      ) t ON true
-     WHERE a.status = 'active'`,
+     WHERE a.status = 'active' AND ${ASSIGNMENT_VISIBLE_SQL}`,
     [userId]);
   return result.rows;
 }
@@ -456,7 +477,7 @@ async function createClass(teacherUserId, { title }, { db = pool } = {}) {
     const result = await db.query(
       `INSERT INTO social_classes(teacher_user_id, title, join_code)
        VALUES ($1,$2,$3)
-       RETURNING id, title, join_code, status, created_at`,
+       RETURNING id, title, join_code, status, backfill, created_at`,
       [teacherUserId, title, code]);
     return result.rows[0];
   });
@@ -464,7 +485,7 @@ async function createClass(teacherUserId, { title }, { db = pool } = {}) {
 
 async function listClasses(teacherUserId, { db = pool } = {}) {
   const result = await db.query(
-    `SELECT c.id, c.title, c.join_code, c.status, c.created_at,
+    `SELECT c.id, c.title, c.join_code, c.status, c.backfill, c.created_at,
             (SELECT COUNT(*) FROM social_class_members m WHERE m.class_id = c.id AND m.status='active') AS students
      FROM social_classes c
      WHERE c.teacher_user_id = $1
@@ -475,6 +496,7 @@ async function listClasses(teacherUserId, { db = pool } = {}) {
     title: row.title,
     joinCode: row.join_code,
     status: row.status,
+    backfill: row.backfill,
     students: numeric(row.students),
     createdAt: new Date(row.created_at).getTime(),
   }));
@@ -487,7 +509,7 @@ async function listClasses(teacherUserId, { db = pool } = {}) {
 // факт существования класса.
 async function ownedClass(teacherUserId, classId, { db = pool } = {}) {
   const result = await db.query(
-    'SELECT id, title, join_code, status, teacher_user_id FROM social_classes WHERE id=$1 AND teacher_user_id=$2',
+    'SELECT id, title, join_code, status, backfill, teacher_user_id FROM social_classes WHERE id=$1 AND teacher_user_id=$2',
     [classId, teacherUserId]);
   if (!result.rowCount) fail('class_not_found', 404);
   return result.rows[0];
@@ -499,11 +521,12 @@ async function updateClass(teacherUserId, classId, patch, { db = pool } = {}) {
     `UPDATE social_classes SET
        title = COALESCE($3, title),
        status = COALESCE($4, status),
+       backfill = COALESCE($5, backfill),
        archived_at = CASE WHEN $4 = 'archived' THEN now() ELSE archived_at END,
        updated_at = now()
      WHERE id=$1 AND teacher_user_id=$2
-     RETURNING id, title, join_code, status`,
-    [classId, teacherUserId, patch.title ?? null, patch.status ?? null]);
+     RETURNING id, title, join_code, status, backfill`,
+    [classId, teacherUserId, patch.title ?? null, patch.status ?? null, patch.backfill ?? null]);
   return result.rows[0];
 }
 
@@ -881,7 +904,7 @@ async function assignmentTasksForStudent(userId, assignmentId, { db = pool } = {
      JOIN social_classes c ON c.id = a.class_id AND c.status = 'active'
      JOIN social_class_members m ON m.class_id = a.class_id AND m.user_id = $1 AND m.status = 'active'
      LEFT JOIN social_custom_tasks t ON t.id = at.custom_task_id
-     WHERE at.assignment_id = $2
+     WHERE at.assignment_id = $2 AND ${ASSIGNMENT_VISIBLE_SQL}
      ORDER BY at.position`,
     [userId, assignmentId]);
   if (!result.rowCount) fail('assignment_not_found', 404);
@@ -1002,9 +1025,11 @@ async function assignmentResults(teacherUserId, assignmentId, { db = pool } = {}
             COALESCE(pr.questions,0) AS questions, COALESCE(pr.status,'active') AS status,
             pr.completed_at
      FROM social_class_members m
+     JOIN social_assignments a ON a.id = $2
+     JOIN social_classes c ON c.id = a.class_id
      LEFT JOIN social_profiles p ON p.user_id = m.user_id
      LEFT JOIN social_assignment_progress pr ON pr.assignment_id = $2 AND pr.user_id = m.user_id
-     WHERE m.class_id = $1 AND m.status = 'active'
+     WHERE m.class_id = $1 AND m.status = 'active' AND ${ASSIGNMENT_VISIBLE_SQL}
      ORDER BY COALESCE(pr.questions,0) DESC, p.display_name NULLS LAST`,
     [assignment.class_id, assignmentId]);
   return {
@@ -1157,7 +1182,7 @@ async function studentAssignments(userId, { db = pool } = {}) {
          -- которые домашке не зачлись.
          AND (e.assignment_id IS NULL OR e.assignment_id = a.id)
      ) counted ON true
-     WHERE a.status = 'active'
+     WHERE a.status = 'active' AND ${ASSIGNMENT_VISIBLE_SQL}
      ORDER BY a.issued_at DESC LIMIT 100`,
     [userId]);
   return result.rows.map(row => ({
@@ -1244,7 +1269,8 @@ async function teacherDigest(userId, { db = pool } = {}) {
   const result = await db.query(
     `SELECT a.id, a.title, a.due_at, a.question_goal, c.title AS class_title,
             (SELECT COUNT(*)::int FROM social_class_members m
-             WHERE m.class_id = a.class_id AND m.status = 'active') AS students,
+             WHERE m.class_id = a.class_id AND m.status = 'active'
+               AND ${ASSIGNMENT_VISIBLE_SQL}) AS students,
             (SELECT COUNT(*)::int FROM social_assignment_progress pr
              WHERE pr.assignment_id = a.id AND pr.status = 'done') AS done,
             (SELECT COALESCE(SUM(pr.earned), 0)::int FROM social_assignment_progress pr
