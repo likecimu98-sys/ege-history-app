@@ -485,12 +485,19 @@ test('accessContext не берёт классы из влитых докуме�
 test('владелец организации не дотягивается до чужих классов', () => {
   const src = require('node:fs').readFileSync(
     require('node:path').join(__dirname, '..', 'src', 'store.js'), 'utf8');
-  const read = src.slice(src.indexOf("case 'classes': {"), src.indexOf("case 'matches': {"));
-  assert.doesNotMatch(read, /ctx\.classes\.has\(ref\.docId\) \|\| ctx\.role === 'org_owner'/,
-    'вернулась ветка «любой org_owner читает любой класс»');
-  const write = src.slice(src.indexOf("    case 'classes':\n      // Тот же разбор"));
-  assert.match(write.slice(0, 400), /return !!ctx\.teacher && ctx\.classes\.has\(ref\.docId\);/,
-    'запись в классы снова открыта любому владельцу организации');
-  assert.doesNotMatch(src, /ctx\.orgId === ref\.docId \|\| ctx\.role === 'org_owner'/,
+  // Проверяем ФОРМЫ, а не куски файла: резать по многострочному литералу
+  // нельзя — перевод строки на машине разработчика и на сервере разный, и
+  // тест «проходит локально, падает на выкате» (так и вышло 09.09.2026).
+  assert.doesNotMatch(src, /ctx\.classes\.has\(ref\.docId\)\s*\|\|\s*ctx\.role === 'org_owner'/,
+    'вернулась ветка «любой org_owner дотягивается до любого класса»');
+  assert.doesNotMatch(src, /ctx\.orgId === ref\.docId\s*\|\|\s*ctx\.role === 'org_owner'/,
     'карточка чужой организации снова читается любым владельцем');
+  // А правильная форма — на месте: доступ строго по своим классам.
+  assert.match(src, /return !!ctx\.teacher && ctx\.classes\.has\(ref\.docId\);/,
+    'запись в классы больше не ограничена своими классами');
+  assert.match(src, /if \(!!ctx\.teacher && ctx\.classes\.has\(ref\.docId\)\) return \{ ok: true, full: true \};/,
+    'чтение класса больше не ограничено своими классами');
+  // Законная ветка org_owner (свой орг, по orgId документа) остаётся.
+  assert.match(src, /ctx\.role === 'org_owner' && ctx\.orgId && row\?\.data\?\.orgId === ctx\.orgId/,
+    'потеряна законная проверка «свой орг» для карточек преподавателей');
 });
