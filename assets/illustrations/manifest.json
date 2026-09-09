@@ -1,0 +1,172 @@
+{
+  "varyagi": {
+    "chapter": 1,
+    "filename": "wiki_varyagi.jpg",
+    "query": "Vasnetsov Призвание варягов painting",
+    "file": "File:Варяги.jpg",
+    "license": "Public domain",
+    "artist": "Viktor Vasnetsov",
+    "object": "Invitation of the Varangianslabel QS:Len,\"Invitation of the Varangians\"label QS:Lru,\"Призвание варягов (картина Васнецова)\"",
+    "source": "https://commons.wikimedia.org/wiki/File:%D0%92%D0%B0%D1%80%D1%8F%D0%B3%D0%B8.jpg"
+  },
+  "kreshchenie": {
+    "chapter": 3,
+    "filename": "wiki_kreshchenie.jpg",
+    "query": "Baptism of Vladimir Vasnetsov Kiev painting",
+    "file": "File:Moscou, galerie Tretiakov.-Baptême de la Russie (Vasnetsov).jpg",
+    "license": "Public domain",
+    "artist": "Pierre André Leclercq",
+    "object": "Moscou, galerie Tretiakov.-Baptême de la Russie (Vasnetsov)",
+    "source": "https://commons.wikimedia.org/wiki/File:Moscou,_galerie_Tretiakov.-Bapt%C3%AAme_de_la_Russie_(Vasnetsov).jpg"
+  },
+  "yaroslav": {
+    "chapter": 4,
+    "filename": "wiki_yaroslav.jpg",
+    "query": "Yaroslav the Wise reconstruction Gerasimov",
+    "file": "File:Yaroslav. Gerasimov reconstruction.jpg",
+    "license": "Public domain",
+    "artist": "Unknown authorUnknown author",
+    "object": "Yaroslav. Gerasimov reconstruction",
+    "source": "https://commons.wikimedia.org/wiki/File:Yaroslav._Gerasimov_reconstruction.jpg"
+  },
+  "batu": {
+    "chapter": 7,
+    "filename": "wiki_batu.jpg",
+    "query": "Mongol invasion of Rus miniature chronicle",
+    "file": "File:Capture of the Mongol-Tatars Russian city.jpg",
+    "license": "Public domain",
+    "artist": "Anonymous Russian manuscript illuminators, 1560-1570s Facial Chronicle (Illustrated Chronicle of Ivan the Terrible) (in 10 volumes: pdf, pdf with translation)Public domain image",
+    "object": "Capture of the Mongol-Tatars Russian city",
+    "source": "https://commons.wikimedia.org/wiki/File:Capture_of_the_Mongol-Tatars_Russian_city.jpg"
+  },
+  "kulikovo": {
+    "chapter": 11,
+    "filename": "wiki_kulikovo.jpg",
+    "query": "Dmitry Donskoy in the Battle of Kulikovo",
+    "file": "File:42 History of the Russian state in the image of its sovereign rulers - fragment.jpg",
+    "license": "Public domain",
+    "artist": "Vasily Vereshchagin",
+    "object": "42 History of the Russian state in the image of its sovereign rulers - fragment",
+    "source": "https://commons.wikimedia.org/wiki/File:42_History_of_the_Russian_state_in_the_image_of_its_sovereign_rulers_-_fragment.jpg"
+  },
+  "ivan3": {
+    "chapter": 15,
+    "filename": "wiki_ivan3.jpg",
+    "query": "exact",
+    "file": "File:Ivan III of Russia 3.jpg",
+    "license": "Public domain",
+    "artist": "",
+    "object": "Ivan III of Russia 3",
+    "source": "https://commons.wikimedia.org/wiki/File:Ivan_III_of_Russia_3.jpg"
+  },
+  "ivan4": {
+    "chapter": 22,
+    "filename": "wiki_ivan4.jpg",
+    "query": "Ivan IV by anonim 18th c Kremlin",
+    "file": "File:Ivan IV by anonim (18th c., Kremlin).jpg",
+    "license": "Public domain",
+    "artist": "Anonymous Russian painter (1670s-1917)\nPublic domain image (according to PD-Russia-expired)",
+    "object": "Ivan IV by anonim (18th c., Kremlin)",
+    "source": "https://commons.wikimedia.org/wiki/File:Ivan_IV_by_anonim_(18th_c.,_Kremlin).jpg"
+  },
+  "minin": {
+    "chapter": 26,
+    "filename": "wiki_minin.jpg",
+    "query": "Minin appeal Nizhny Novgorod Makovsky painting",
+    "file": "File:Appeal of Minin.jpg",
+    "license": "Public domain",
+    "artist": "Konstantin Makovsky",
+    "object": "Appeal of Minin label QS:Lpl,\"Przemówienie Minina\"label QS:Len,\"Appeal of Minin\"label QS:Lru,\"Минин на площади Нижнего Новгорода, призывающий народ к пожертвованиям\"label QS:Lde,\"Aufruf von Minin\"",
+    "source": "https://commons.wikimedia.org/wiki/File:Appeal_of_Minin.jpg"
+  },
+  "alexey": {
+    "chapter": 28,
+    "filename": "wiki_alexey.jpg",
+    "query": "Alexis Mikhailovich of Russia portrait",
+    "file": "File:Alexis I of Russia by anonim (Russian museum).jpg",
+    "license": "Public domain",
+    "artist": "Unknown west european master. Неизвестный западноевропейский художник.",
+    "object": "Alexis I of Russia",
+    "source": "https://commons.wikimedia.org/wiki/File:Alexis_I_of_Russia_by_anonim_(Russian_museum).jpg"
+  },
+  "morozova": {
+    "chapter": 30,
+    "filename": "wiki_morozova.jpg",
+    "query": "Boyarynya Morozova Surikov",
+    "file": "File:Surikov Boyarynya Morozova gtg.jpg",
+    "license": "Public domain",
+    "artist": "Vasily Surikov",
+    "object": "Surikov Boyarynya Morozova gtg",
+    "source": "https://commons.wikimedia.org/wiki/File:Surikov_Boyarynya_Morozova_gtg.jpg"
+  },
+  "petr1": {
+    "chapter": 36,
+    "filename": "wiki_petr1.jpg",
+    "query": "exact",
+    "file": "File:Peter I by Kneller.jpg",
+    "license": "Public domain",
+    "artist": "Godfrey Kneller",
+    "object": "Peter the Great, Tsar of Russia (1672-1725) title QS:P1476,en:\"Peter the Great, Tsar of Russia (1672-1725) \"label QS:Len,\"Peter the Great, Tsar of Russia (1672-1725) \"label QS:Lpl,\"Piotr Wielki, Car Rosji (1672–1725)\"label QS:Lnl,\"Portret van tsaar Peter de Grote van Rusland (1672-1725)\"",
+    "source": "https://commons.wikimedia.org/wiki/File:Peter_I_by_Kneller.jpg"
+  },
+  "elizaveta": {
+    "chapter": 38,
+    "filename": "wiki_elizaveta.jpg",
+    "query": "exact",
+    "file": "File:Elizabeth of Russia in black mantilla by Rotari (1756-61, GRM).jpg",
+    "license": "Public domain",
+    "artist": "Pietro Rotari",
+    "object": "Portrait of the Empress Elizabeth Petrovnalabel QS:Lru,\"Портрет императрицы Елизаветы Петровны\"label QS:Lde,\"Porträt der Kaiserin Elisabeth Petrowna\"label QS:Len,\"Portrait of the Empress Elizabeth Petrovna\"",
+    "source": "https://commons.wikimedia.org/wiki/File:Elizabeth_of_Russia_in_black_mantilla_by_Rotari_(1756-61,_GRM).jpg"
+  },
+  "ekaterina2": {
+    "chapter": 39,
+    "filename": "wiki_ekaterina2.jpg",
+    "query": "Catherine II Levitzky portrait",
+    "file": "File:Catherine II by D.Levitskiy (1794, Novgorod museum).jpg",
+    "license": "Public domain",
+    "artist": "Dmitry Levitzky",
+    "object": "Russian:  «Екатерина II »Portrait of Catherine II of Russiatitle QS:P1476,ru:\"Екатерина II \"label QS:Lru,\"Екатерина II \"label QS:Len,\"Portrait of Catherine II of Russia\"label QS:Lde,\"Katharina die Große\"",
+    "source": "https://commons.wikimedia.org/wiki/File:Catherine_II_by_D.Levitskiy_(1794,_Novgorod_museum).jpg"
+  },
+  "borodino": {
+    "chapter": 45,
+    "filename": "wiki_borodino.jpg",
+    "query": "Battle of Borodino painting Hess",
+    "file": "File:Battle of Borodino on 26 August (7 September) 1812 (by Peter von Hess).jpg",
+    "license": "Public domain",
+    "artist": "Peter von Hess",
+    "object": "Battle of Borodino on 26 August (7 September) 1812 label QS:Len,\"The Battle of Borodino\"label QS:Lde,\"Die Schlacht bei Borodino\"",
+    "source": "https://commons.wikimedia.org/wiki/File:Battle_of_Borodino_on_26_August_(7_September)_1812_(by_Peter_von_Hess).jpg"
+  },
+  "burlaki": {
+    "chapter": 53,
+    "filename": "wiki_burlaki.jpg",
+    "query": "Repin Barge Haulers on the Volga",
+    "file": "File:Ilia Efimovich Repin (1844-1930) - Volga Boatmen (1870-1873).jpg",
+    "license": "Public domain",
+    "artist": "Ilya Repin",
+    "object": "Polish:  Burłacy na Wołdze Barge Haulers on the Volgatitle QS:P1476,pl:\"Burłacy na Wołdze \"label QS:Lpl,\"Burłacy na Wołdze \"label QS:Les,\"Los sirgadores del Volga\"label QS:Leu,\"Volgako atoilariak\"label QS:Lca,\"Barge Haulers on the Volga\"label QS:Lde,\"Die Wolgatreidler\"label QS:Lfa,\"باربران کشتی در ساحل ولگا\"label QS:Lzh,\"伏尔加河上的纤夫\"label QS:Lda,\"Pramdragere ved Volga\"label QS:Ltr,\"Volga'da Sal Çekicileri\"label QS:Lja,\"ヴォルガの舟曳き\"label QS:Lsv,\"Pråmdragarna på Volga\"label QS:Luk,\"Бурлаки на Волзі\"label QS:Lko,\"볼가강에서 배를 끄는 인부들\"label QS:Lit,\"I battellieri del Volga\"label QS:Lfr,\"Les Bateliers de la Volga\"label QS:Lhr,\"Burlaci na Volgi\"label QS:Lpt,\"Rebocadores do Volga\"label QS:Llv,\"Volgas strūdzinieki\"label QS:Lfi,\"Volgan lautturit\"label QS:Lsr,\"Тегљачи на Волги\"label QS:Let,\"Burlakid Volgal\"label QS:Lro,\"Edecarii de pe Volga\"label QS:Lsr-ec,\"Тегљачи на Волги\"label QS:Luz,\"Volgadagi burlaklar (Repin)\"label QS:Lru,\"Бурлаки на Волге\"label QS:Larz,\"بحاره على نهر الفولجا\"label QS:Lhy,\"Բուռլակները Վոլգայում\"label QS:Lsh,\"Burlaci na Volgi\"label QS:Lbe-tarask,\"Асначы на Волзе\"label QS:Laz,\"Volqa yedəkçiləri\"label QS:Lnl,\"Barge Haulers on the Volga\"label QS:Lsk,\"Burlaci na Volge\"label QS:Len,\"Barge Haulers on the Volga\"label QS:Lar,\"بحارة على نهر الفولغا\"label QS:Lhe,\"הבורלקים של הוולגה\"label QS:Lcs,\"Burlaci na Volze\"",
+    "source": "https://commons.wikimedia.org/wiki/File:Ilia_Efimovich_Repin_(1844-1930)_-_Volga_Boatmen_(1870-1873).jpg"
+  },
+  "krovavoe": {
+    "chapter": 57,
+    "filename": "wiki_krovavoe.jpg",
+    "query": "Bloody Sunday 1905 Saint Petersburg",
+    "file": "File:BloodySunday1905b.jpg",
+    "license": "Public domain",
+    "artist": "",
+    "object": "BloodySunday1905b",
+    "source": "https://commons.wikimedia.org/wiki/File:BloodySunday1905b.jpg"
+  },
+  "oktyabr": {
+    "chapter": 63,
+    "filename": "wiki_oktyabr.jpg",
+    "query": "Petrograd 1917 revolution photograph",
+    "file": "File:19170704 Riot on Nevsky prosp Petrograd.jpg",
+    "license": "Public domain",
+    "artist": "Viktor Bulla",
+    "object": "19170704 Riot on Nevsky prosp Petrograd",
+    "source": "https://commons.wikimedia.org/wiki/File:19170704_Riot_on_Nevsky_prosp_Petrograd.jpg"
+  }
+}

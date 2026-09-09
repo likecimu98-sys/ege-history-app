@@ -268,8 +268,17 @@ async function handleSecondPartClasses(req, res) {
   // приезжает без куратора, и его работы встают в очередь ничьими.
   const names = new Map();
   const owners = new Map();
+  // Организация класса и её владелец. «Проверочная» по ним показывает
+  // руководителю ТОЛЬКО его школу: без этого он видел все классы сервиса —
+  // у него нет своего понятия «чей класс», школа там считалась одной.
+  const orgs = new Map();      // код класса → orgId
+  const orgOwners = new Map(); // orgId → Telegram ID владельца
   const teachers = await pool.query("SELECT doc_id,data FROM teacher_profiles");
   for (const row of teachers.rows) {
+    const org = row.data?.orgId ? String(row.data.orgId) : '';
+    if (org && row.data?.role === 'org_owner' && /^[0-9]+$/.test(String(row.doc_id))) {
+      orgOwners.set(org, Number(row.doc_id));
+    }
     for (const item of (Array.isArray(row.data?.classes) ? row.data.classes : [])) {
       const code = String((typeof item === 'string' ? item : item?.code) || '').trim();
       if (!code) continue;
@@ -278,6 +287,7 @@ async function handleSecondPartClasses(req, res) {
       if (!owners.has(code) && /^[0-9]+$/.test(String(row.doc_id))) {
         owners.set(code, Number(row.doc_id));
       }
+      if (org && !orgs.has(code)) orgs.set(code, org);
     }
   }
 
@@ -332,6 +342,12 @@ async function handleSecondPartClasses(req, res) {
     // Кто завёл класс. «Проверочная» закрепит его куратором, если он у неё
     // заведён с этой ролью; руководителю останется переназначить, если надо.
     if (owners.has(code)) out.owner_tg_id = owners.get(code);
+    // Чья это школа. Пусто — класс ничей, его видит только глобальный админ.
+    if (orgs.has(code)) {
+      out.org_id = orgs.get(code);
+      const boss = orgOwners.get(orgs.get(code));
+      if (boss) out.org_owner_tg_id = boss;
+    }
     if (on) {
       out.students = byClass.get(code) || [];
       out.students_without_telegram = skipped.get(code) || 0;

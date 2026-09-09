@@ -334,7 +334,9 @@ async function authorizeRead(client, ref, ctx, row, { query = false } = {}) {
       if (ctx.role === 'org_owner' && ctx.orgId && row?.data?.orgId === ctx.orgId) return { ok: true, full: true };
       return { ok: false };
     case 'orgs':
-      return { ok: !!ctx.teacher && (ctx.orgId === ref.docId || ctx.role === 'org_owner'), full: true };
+      // Своя организация — своя. Прежнее `|| org_owner` открывало карточку
+      // любой чужой школы всякому, кто владеет хоть одной своей.
+      return { ok: !!ctx.teacher && !!ctx.orgId && ctx.orgId === ref.docId, full: true };
     case 'notifyJobs':
       return { ok: false };
     case 'loginTokens':
@@ -342,8 +344,15 @@ async function authorizeRead(client, ref, ctx, row, { query = false } = {}) {
     case 'loginSessions':
       return { ok: row?.user_id === ctx.userId, full: true };
     case 'classes': {
-      // Полный документ — учителю этого класса (условие как в authorizeWrite).
-      if (!!ctx.teacher && (ctx.classes.has(ref.docId) || ctx.role === 'org_owner')) return { ok: true, full: true };
+      // Полный документ — учителю ЭТОГО класса (условие как в authorizeWrite).
+      //
+      // 🔴 Здесь стояло `|| ctx.role === 'org_owner'` — без проверки, тот ли
+      // это орг. То есть владелец любой школы мог прочитать документ ЛЮБОГО
+      // класса сервиса, включая чужие организации: настройки потока, отзывы
+      // ДЗ, заметку учителя. Классы своего орга у него и так в ctx.classes —
+      // их туда кладёт accessContext, — значит, отдельная ветка давала ровно
+      // одно: доступ к чужому.
+      if (!!ctx.teacher && ctx.classes.has(ref.docId)) return { ok: true, full: true };
       // Ученику своего класса — только журнал ДЗ и границы потока (studentClassView).
       if (ctx.ownClasses.has(ref.docId)) return { ok: true, full: false };
       return { ok: false };
@@ -523,7 +532,10 @@ async function authorizeWrite(client, ref, ctx, current, patch, mode, { internal
     case 'state':
       return ctx.docIds.has(ref.docId) || current?.user_id === ctx.userId;
     case 'classes':
-      return !!ctx.teacher && (ctx.classes.has(ref.docId) || ctx.role === 'org_owner');
+      // Тот же разбор, что и в authorizeRead: классы своего орга уже лежат в
+      // ctx.classes, а `|| org_owner` открывал ЗАПИСЬ в чужие классы — можно
+      // было снять чужому классу домашку или переписать границы потока.
+      return !!ctx.teacher && ctx.classes.has(ref.docId);
     case 'matches': {
       const before = current?.data || {};
       if (mode === 'create') {
