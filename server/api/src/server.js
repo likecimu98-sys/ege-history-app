@@ -631,7 +631,26 @@ async function handle(req, res) {
     if (req.method === 'GET' && url.pathname === '/api/v1/auth/google/callback') {
       const code = url.searchParams.get('code') || '';
       const state = url.searchParams.get('state') || '';
-      const result = await finishGoogle(req, code, state, googleRedirectUri(req));
+      let result;
+      try {
+        result = await finishGoogle(req, code, state, googleRedirectUri(req));
+      } catch (error) {
+        // 🔴 Протухшая или уже использованная ссылка возврата — обычная жизнь, а
+        // не падение сервера. Метка одноразовая и живёт десять минут: ученик
+        // отвлёкся на выбор аккаунта, обновил страницу, нажал «назад» — и
+        // получал голый 500 вместо входа. 14.09.2026 такое случилось прямо
+        // посреди того, как класс вступал по ссылке: у одного из семи вход
+        // кончился ошибкой сервера, и объяснить её ему было нечем.
+        //
+        // Возвращаем человека в приложение с пометкой: пусть нажмёт «войти» ещё
+        // раз. Код класса ждёт его в sessionStorage той же вкладки, поэтому
+        // после удачного входа он всё равно попадёт в класс.
+        if (error && error.message === 'oauth_state_invalid') {
+          log('warn', 'auth.google.state_stale', { path: url.pathname });
+          return redirect(res, `${originForRequest(req)}/?auth=retry`);
+        }
+        throw error;
+      }
       if (session) await revokeSession(req);
       const separator = result.returnTo.includes('?') ? '&' : '?';
       return redirect(res, `${originForRequest(req)}${result.returnTo}${separator}auth=google`, sessionCookies(result.session));
