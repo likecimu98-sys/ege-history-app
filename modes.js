@@ -91,31 +91,69 @@ function _secondPartSummary() {
     return parts.join(' · ');
 }
 
-window.secondPartRow = function() {
+// Сколько дел во второй части — для значка на вкладке.
+window.secondPartPending = function() {
+    const sp = window.secondPartSummaryData();
+    if (!sp) return window.secondPartHasNews() ? 1 : 0;
+    return (Number(sp.todo) || 0) + (Number(sp.unread) || 0);
+};
+
+// Содержимое вкладки «Вторая часть» в «Домашке».
+//
+// 🔴 Раньше здесь была одна строка-кнопка поверх списка обычных ДЗ, и она
+// терялась: ученица открыла выданную работу, вышла — и найти её больше не
+// смогла («а теперь это дз нигде не отображается», 15.09.2026). Причина была
+// не только в пропадавшем признаке класса: раздел и правда выглядел как
+// баннер, а не как место, куда возвращаются. Теперь это вкладка с
+// собственными числами: видно, сколько не сдано и сколько разборов ждёт.
+window.secondPartPanel = function() {
     if (!window.secondPartAvailable()) return '';
-    const fresh = window.secondPartHasNews();
-    const dot = fresh
-        // 11px, а не 9: значок «новое» существует ровно затем, чтобы его
-        // заметили и прочли, — набирать его кеглем ниже читаемого на телефоне
-        // значит спорить с собственной задачей. Меньше 11px и design-lint не
-        // пропускает (var(--t-micro)).
-        ? '<span style="display:inline-block;background:#f43f5e;color:#fff;font-size:11px;font-weight:900;'
-          + 'text-transform:uppercase;letter-spacing:.06em;padding:2px 6px;border-radius:999px;margin-left:6px">новое</span>'
+    const sp = window.secondPartSummaryData() || {};
+    const todo = Number(sp.todo) || 0;
+    const waiting = Number(sp.waiting) || 0;
+    const reviewed = Number(sp.reviewed) || 0;
+    const unread = Number(sp.unread) || 0;
+    const tile = (n, label, color, bg) => `
+        <div style="flex:1;background:${bg};border-radius:var(--r-md);padding:10px;text-align:center">
+          <div style="font-size:20px;font-weight:900;color:${color}">${n}</div>
+          <div style="font-size:11px;color:#6b7280;font-weight:700">${label}</div>
+        </div>`;
+    // Непрочитанный разбор — единственная строка, которая просит сделать
+    // что-то прямо сейчас. Поэтому она отдельной плашкой и выше чисел.
+    const unreadBox = unread
+        ? `<div style="background:rgba(244,63,94,0.1);border:1px solid rgba(244,63,94,0.35);border-radius:var(--r-md);padding:12px;margin-bottom:10px">
+             <div style="font-size:13px;font-weight:900;color:#e11d48">📝 ${unread} ${_plural(unread, 'разбор', 'разбора', 'разборов')} не прочитано</div>
+             <div style="font-size:11px;color:#6b7280;margin-top:3px">Куратор объяснил ошибки — откройте, пока помните работу.</div>
+           </div>`
+        : '';
+    const numbers = (todo || waiting || reviewed)
+        ? `<div style="display:flex;gap:8px;margin-bottom:12px">
+             ${tile(todo, 'не сдано', todo ? '#d97706' : '#9ca3af', 'rgba(245,158,11,0.1)')}
+             ${tile(waiting, 'на проверке', waiting ? '#4f46e5' : '#9ca3af', 'rgba(79,70,229,0.1)')}
+             ${tile(reviewed, 'проверено', reviewed ? '#059669' : '#9ca3af', 'rgba(16,185,129,0.1)')}
+           </div>`
+        : '';
+    const score = sp.maxScore
+        ? `<div style="font-size:11px;color:#6b7280;text-align:center;margin-bottom:12px">Набрано ${sp.score} из ${sp.maxScore} ${_plural(Number(sp.maxScore) || 0, 'балла', 'баллов', 'баллов')}</div>`
+        : '';
+    // Пусто — это тоже ответ, и он должен отличаться от «не загрузилось».
+    const nothing = (!todo && !waiting && !reviewed && !unread)
+        ? `<div style="text-align:center;padding:18px 10px 22px;color:#9ca3af">
+             <div style="font-size:34px;margin-bottom:6px">✍️</div>
+             <div style="font-size:13px;font-weight:800;color:#374151" class="dark:text-gray-300">Работ пока нет</div>
+             <div style="font-size:12px;margin-top:4px">Куратор задаст — придёт уведомление. Можно зайти и порешать самому.</div>
+           </div>`
         : '';
     return `
-    <div style="margin-bottom:14px">
-      <div style="font-size:11px;font-weight:900;text-transform:uppercase;letter-spacing:.06em;color:#9ca3af;margin:6px 2px 8px">Вторая часть${dot}</div>
+    <div>
+      ${unreadBox}
+      ${numbers}
+      ${score}
+      ${nothing}
       <button type="button" onclick="window.openSecondPart&&window.openSecondPart()"
-        style="width:100%;text-align:left;background:var(--card,#fff);border:1px solid rgba(128,128,128,0.18);
-               border-left:3px solid var(--c-brand,#4f46e5);border-radius:var(--r-md);padding:14px;cursor:pointer;display:flex;
-               align-items:center;gap:12px" class="dark:bg-[#1e1e1e]">
-        <span style="font-size:26px;line-height:1">✍️</span>
-        <span style="flex:1">
-          <span style="display:block;font-size:13px;font-weight:900;color:#111" class="dark:text-white">Развёрнутые ответы</span>
-          <span style="display:block;font-size:11px;color:#6b7280;margin-top:2px">${_secondPartSummary()}</span>
-        </span>
-        <span style="font-size:18px;color:#9ca3af">›</span>
-      </button>
+        style="width:100%;background:var(--c-brand,#4f46e5);color:#fff;border:none;border-radius:var(--r-md);padding:14px;
+               font-size:14px;font-weight:900;cursor:pointer">✍️ Открыть развёрнутые ответы</button>
+      <div style="font-size:11px;color:#9ca3af;text-align:center;margin-top:8px">Задания 13–21 · фото ответа, проверяет куратор</div>
     </div>`;
 };
 

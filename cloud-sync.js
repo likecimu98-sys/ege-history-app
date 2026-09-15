@@ -7,14 +7,14 @@
             signInWithCredential, signOut, initializeFirestore, collection, doc, setDoc, getDoc,
             getDocs, addDoc, updateDoc, deleteDoc, deleteField, onSnapshot, query, where,
             orderBy, limit, runTransaction, arrayUnion, arrayRemove, vpsApiFetch, refreshVpsAuth
-        } from "./vps-sync-compat.js?v=20260905-11";
+        } from "./vps-sync-compat.js?v=20260915-12";
 
         // jsPDF грузился с cdnjs.cloudflare.com без SRI — то есть посторонний скрипт
         // исполнялся с полными правами страницы, а при недоступности CDN (у части
         // нашей аудитории это обычное дело) экспорт PDF просто не работал. Довод тот
         // же, что и для telegram-web-app.js: своя копия с того же origin.
         // Версия совпадает с прежней CDN-ной — 2.5.1, лежит в vendor/.
-        const VENDOR_JSPDF = 'vendor/jspdf.umd.min.js?v=20260905-11';
+        const VENDOR_JSPDF = 'vendor/jspdf.umd.min.js?v=20260915-12';
 
         const cloudConfig = { projectId: 'vps-postgresql' };
         
@@ -3234,9 +3234,23 @@
                     // со второй частью читал журнал летней группы без неё, признак
                     // стирался, и раздел «Развёрнутые ответы» не появлялся вовсе:
                     // ни строки в «Домашке», ни цифры на значке.
+                    //
+                    // 🔴 Признак читается НА ОТКАЗ, как и на сервере.
+                    //
+                    // Здесь стояло `data.secondPart === true` — разрешение, —
+                    // а бот с 09.09 считает вторую часть открытой всем, кроме
+                    // классов с явным secondPart:false (`/secondpart` теперь
+                    // закрывает, а не открывает). У класса, которому никто
+                    // ничего не переключал, поля просто нет: куратор выдавал
+                    // домашку, уведомление приходило, а тренажёр стирал признак
+                    // при каждом чтении журнала — и раздел «Развёрнутые ответы»
+                    // пропадал с экрана «Домашка». Держался он только на второй
+                    // линии (сводка/новости в снапшоте профиля), поэтому и вёл
+                    // себя так: был — открыла — закрыла — нет нигде
+                    // (жалоба 15.09.2026).
                     if (_classDocId(localStorage.getItem('student_class_code') || '') === code) {
-                        if (data.secondPart === true) localStorage.setItem('class_second_part', '1');
-                        else localStorage.removeItem('class_second_part');
+                        if (data.secondPart === false) localStorage.removeItem('class_second_part');
+                        else localStorage.setItem('class_second_part', '1');
                     }
                 } catch (e) {}
                 // «С чистого листа»: метка revokeBefore снимает ЛЮБЫЕ невыполненные ДЗ, выданные до неё —

@@ -651,7 +651,10 @@ function hwItemProgress(item) {
     if (item.task === 'cram') {
         const live = window.cramLearnedCount ? window.cramLearnedCount(item.yearStart, item.yearEnd) : null;
         const known = typeof live === 'number' ? live : (Number(item.progress) || 0);
-        return Math.min(item.goal || 0, known);
+        // Потолок — УРЕЗАННАЯ цель, как и у всех остальных этапов: иначе на
+        // экране застывало бы «11 из 12» у задания, в диапазоне которого дат
+        // всего одиннадцать.
+        return Math.min(hwItemGoal(item), known);
     }
     // Потолок — УРЕЗАННАЯ цель (hwItemGoal), иначе на экране осталось бы «24 из 25»
     // у этапа, который уже закрыт: доступных строк всего 24.
@@ -676,7 +679,25 @@ window.hwItemProgress = hwItemProgress;
 // совпадает с той, по которой строки реально отбираются.
 // Ноль означает «данные ещё не загрузились» — тогда цель не трогаем.
 function hwItemAvailable(item) {
-    if (!item || item.task === 'cram') return 0; // зубрёжка живёт по своим ключам
+    if (!item) return 0;
+    // 🔴 Зубрёжка запирала ученика ровно так же, просто дольше оставалась без
+    // потолка: даты живут не в TASK_CONFIG, а в колоде тренажёра, и здесь
+    // стояло «return 0» — то есть «цель не трогаем никогда».
+    // Цель «12 дат за 1801–1825», когда в колоде их 11, не закрыть ничем.
+    // Считаем доступное тем же перечнем, по которому колода и собирается.
+    // Ноль (кэш дат ещё не загружен) по общему правилу означает «не знаю» —
+    // цель тогда остаётся как есть.
+    if (item.task === 'cram') {
+        // Без рамок этап идёт по ВСЕМ колодам зубрёжки (ВОВ, командующие,
+        // фильмы, личности), а их состав живёт внутри cram.html — посчитать
+        // отсюда нечем, и урезать цель было бы враньём в другую сторону.
+        if (!item.yearStart || !item.yearEnd) return 0;
+        try {
+            const ids = window.cramEventIdsInRange
+                ? window.cramEventIdsInRange(item.yearStart, item.yearEnd) : null;
+            return ids ? ids.size : 0;
+        } catch (e) { return 0; }
+    }
     try {
         return learnedCountInPeriod(item.task, item.period, item.yearStart, item.yearEnd).total || 0;
     } catch (e) { return 0; }

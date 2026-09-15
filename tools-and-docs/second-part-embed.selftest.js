@@ -19,24 +19,37 @@ const ui = strip(fs.readFileSync(path.join(root, 'ui.js'), 'utf8'));
 const cloud = strip(fs.readFileSync(path.join(root, 'cloud-sync.js'), 'utf8'));
 
 // ── 1. Признак доезжает от документа класса до клиента ──────────────────────
-assert.match(cloud, /data\.secondPart === true\) localStorage\.setItem\('class_second_part', '1'\)/,
-  'Признак второй части не сохраняется из документа класса — раздел никогда не появится');
-assert.match(cloud, /else localStorage\.removeItem\('class_second_part'\)/,
-  'Выключение второй части не убирает признак — у класса её отключат, а раздел останется');
+//
+// 🔴 Читаем НА ОТКАЗ — так же, как решает бот (classSecondPart: открыто всем,
+// кроме secondPart:false). Разрешительное «=== true» держалось до 15.09.2026 и
+// стирало признак у каждого класса, которому ничего не переключали: домашку
+// второй части выдавали, уведомление приходило, а раздел у ученика пропадал.
+assert.match(cloud, /data\.secondPart === false\) localStorage\.removeItem\('class_second_part'\)/,
+  'Закрытие второй части не убирает признак — у класса её закроют, а раздел останется');
+assert.match(cloud, /else localStorage\.setItem\('class_second_part', '1'\)/,
+  'Признак ставится только по явному разрешению — класс без поля потеряет вторую часть');
 assert.match(modes, /localStorage\.getItem\('class_second_part'\) === '1'/,
   'Доступность читается не из того места, куда её кладут');
 
 // ── 2. Раздел показывается только включённым классам ───────────────────────
-const row = modes.slice(modes.indexOf('window.secondPartRow = function'), modes.indexOf('window.openSecondPart = async function'));
-assert.ok(row.length > 100, 'secondPartRow не найдена');
+const row = modes.slice(modes.indexOf('window.secondPartPanel = function'), modes.indexOf('window.openSecondPart = async function'));
+assert.ok(row.length > 100, 'secondPartPanel не найдена');
 assert.match(row, /if \(!window\.secondPartAvailable\(\)\) return '';/,
   'Раздел рисуется всем — классы без второй части увидят чужой инструмент');
-assert.match(ui, /window\.secondPartRow \? window\.secondPartRow\(\) : ''/,
+assert.match(ui, /window\.secondPartPanel \? window\.secondPartPanel\(\) : ''/,
   'Раздел не вставлен во вкладку «Домашка»');
 
-// ── 3. «Заданий нет» не спорит с открытой второй частью ─────────────────────
-assert.match(ui, /&& !\(window\.secondPartAvailable && window\.secondPartAvailable\(\)\)\)/,
-  'При пустой первой части экран скажет «домашних заданий нет» над разделом второй части');
+// ── 3. Вторая часть — вкладка, а не баннер ─────────────────────────────────
+// Строкой поверх списка ДЗ она терялась: ученица открыла выданную работу,
+// вышла и найти её больше не смогла. У вкладки есть своё место и свой счётчик.
+assert.match(ui, /tabBtn\('second', '✍️ Вторая часть', secondPending, showSecond\)/,
+  'На вторую часть нельзя переключиться — вкладки нет');
+assert.match(ui, /window\.openHwTab = function\(tab\)/,
+  'openHwTab не принимает вкладку — кнопки переключения некуда вести');
+assert.match(ui, /const showSecond = hasSecond && \(tab === 'second'/,
+  'Выбор вкладки не читается из аргумента openHwTab');
+assert.match(ui, /\|\| \(!tab && !active\.length && !overdue\.length && secondPending > 0\)\)/,
+  'Ученик без тренажёрных ДЗ упрётся в пустой экран, хотя во второй части его ждёт работа');
 
 // ── 4. Подпись уходит сообщением, а не адресом ──────────────────────────────
 const open = modes.slice(modes.indexOf('window.openSecondPart = async function'));

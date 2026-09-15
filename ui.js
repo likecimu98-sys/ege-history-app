@@ -557,6 +557,21 @@ window._hwcAddItem = function() {
             : { task: 'match', period: 'all', metric: 'lines', goal };
         const ys = c.draft.yearStart, ye = c.draft.yearEnd;
         if (ys && ye && !(ys <= 862 && ye >= 2026)) { cit.yearStart = Math.min(ys, ye); cit.yearEnd = Math.max(ys, ye); }
+        // 🔴 Цель зубрёжки не может быть больше, чем дат в диапазоне.
+        //
+        // Подсказка под полем уже говорит, сколько их («1801–1825: 11 дат»), но
+        // ничто не мешало поставить 12 — и ученик запирался на «11 из 12»
+        // навсегда. У ученика есть вторая линия обороны (hwItemGoal урезает
+        // цель на месте), но узнать об этом учитель должен здесь, пока выдача
+        // ещё не ушла: в его кабинете иначе висело бы вечное «не сдал».
+        if (task === 'cram' && cit.yearStart && cit.yearEnd && window.cramEventIdsInRange) {
+            const ids = window.cramEventIdsInRange(cit.yearStart, cit.yearEnd);
+            // null — даты ещё грузятся; молчим, ученика прикроет hwItemGoal.
+            if (ids && ids.size && goal > ids.size) {
+                cit.goal = goal = ids.size;
+                showToast('⚡', `В ${cit.yearStart}–${cit.yearEnd} всего ${_ruDates(ids.size)} — цель уменьшена`, 'bg-amber-500', 'border-amber-700');
+            }
+        }
         if (task === 'match' && window.matchDatesInRange) {
             const info = window.matchDatesInRange(cit.yearStart || 862, cit.yearEnd || 2026);
             if (info && info.unique < info.pairsNeeded) {
@@ -1362,12 +1377,36 @@ async function _loadCramEvents() {
     })();
     return _cramEventsPromise;
 }
+// 🔴 Год события считаем ТЕМ ЖЕ правилом, что и сам тренажёр дат.
+//
+// Здесь стояло своё, похожее: «первое четырёхзначное число из даты, иначе из
+// текста события, иначе из темы». У cram.html правило другое (mainYearTarget):
+// если в «что знать» сказано «год роспуска / окончания / завершения», берётся
+// ПОСЛЕДНИЙ год, а не первый.
+//
+// Расходятся они ровно на одном событии — Государственный Совет (id 93):
+// «Высшее законосовещательное учреждение… в 1810-1906 годы… В 1906-1917 годах»,
+// знать надо «год роспуска». Тренажёр кладёт его в 1917, а мы клали в 1810.
+// Для домашки «Александр I, 1801–1825» это значило: составитель насчитал 12 дат
+// и учитель поставил цель 12, а в колоде их 11. Двенадцатой не существует —
+// этап не закрыть НИКОГДА (жалоба 15.09.2026: «не может доделать ДЗ по
+// зубрёжке, последний вариант не засчитывает»).
+//
+// Правда — за колодой: её ученик и решает. Дублируем её правило здесь, а
+// cram-year-rule.selftest.js сверяет обе реализации на каждом событии, чтобы
+// они больше не разъехались молча.
+function _cramYearList(s) {
+    return (String(s || '').match(/\d{3,4}/g) || []).filter(y => Number(y) >= 800 && Number(y) <= 2100);
+}
 function _cramEventYear(e) {
-    const pick = s => { const m = (String(s || '').match(/\d{3,4}/g) || []).map(Number).filter(y => y >= 800 && y <= 2100); return m.length ? m[0] : null; };
-    let y = pick(e.date);
-    if (y == null) y = pick((e.event || '') + ' ' + (e.know || ''));
-    if (y == null) y = pick(e.section);
-    return y;
+    const fromDate = _cramYearList(e.date).map(Number);
+    if (fromDate.length) return fromDate[0];
+    const primary = _cramYearList((e.event || '') + ' ' + (e.know || ''));
+    const list = primary.length ? primary : _cramYearList(e.section);
+    if (!list.length) return null;
+    const know = String(e.know || '').toLowerCase().replace(/ё/g, 'е');
+    if (/роспуск|окончан|заверш|конец/.test(know)) return Number(list[list.length - 1]);
+    return Number(list[0]);
 }
 window.cramDateCount = async function(from, to) {
     const evs = await _loadCramEvents();
@@ -1607,7 +1646,11 @@ function _hwEsc(v) {
         { '<': '&lt;', '>': '&gt;', '&': '&amp;', '"': '&quot;', "'": '&#39;' }[c]));
 }
 
-window.openHwTab = function() {
+// tab: 'main' — тренажёрные ДЗ, 'second' — вторая часть. Без аргумента вкладка
+// выбирается сама: если в тренажёре делать нечего, а во второй части есть —
+// открываем сразу её, иначе ученик упрётся в пустой экран с надписью «заданий
+// нет» и решит, что домашки не существует.
+window.openHwTab = function(tab) {
     haptic('light');
     if (window.refreshHwState) window.refreshHwState();
     if (window.updateHwNavBadge) window.updateHwNavBadge();
@@ -1658,15 +1701,18 @@ window.openHwTab = function() {
         ? `<div style="margin-bottom:14px"><div style="font-size:11px;font-weight:900;text-transform:uppercase;letter-spacing:.06em;color:#9ca3af;margin:6px 2px 8px">${title}</div>${items.map(a => card(a, kind)).join('')}</div>`
         : '';
 
-    // «Заданий нет» не пишем, когда открыта вторая часть: там может лежать
-    // работа, и два взаимоисключающих сообщения на одном экране — хуже, чем ни
-    // одного.
-    const empty = (!active.length && !overdue.length && !done.length
-                   && !(window.secondPartAvailable && window.secondPartAvailable()))
+    // «Заданий нет» теперь говорит только про СВОЮ вкладку: вторая часть
+    // переехала в соседнюю, и раньше её работы делали эту надпись ложью — а
+    // чтобы не врать, надпись просто прятали, и ученик оставался перед пустым
+    // экраном без единого слова.
+    const emptyHint = (window.secondPartAvailable && window.secondPartAvailable())
+        ? 'Учитель пока ничего не задал. Работы второй части — на соседней вкладке.'
+        : 'Учитель пока ничего не задал';
+    const empty = (!active.length && !overdue.length && !done.length)
         ? `<div style="text-align:center;padding:40px 16px;color:#9ca3af">
              <div style="font-size:42px;margin-bottom:8px">🎉</div>
              <div style="font-size:14px;font-weight:800;color:#374151" class="dark:text-gray-300">Домашних заданий нет</div>
-             <div style="font-size:12px;margin-top:4px">Учитель пока ничего не задал</div>
+             <div style="font-size:12px;margin-top:4px">${emptyHint}</div>
            </div>` : '';
 
     const streak = window.state.stats.achievementsData?.hwStreakMax || 0;
@@ -1680,6 +1726,30 @@ window.openHwTab = function() {
                <div style="font-size:20px;font-weight:900;color:#d97706">🔥 ${streak}</div>
                <div style="font-size:10px;color:#6b7280;font-weight:700">лучшая серия вовремя</div></div>
            </div>` : '';
+
+    // ── Вкладки ──────────────────────────────────────────────────────────
+    // Вторая часть — не баннер поверх списка, а равноправная половина
+    // «Домашки»: работы там живут неделями и возвращаться к ним надо не раз.
+    const hasSecond = !!(window.secondPartAvailable && window.secondPartAvailable());
+    const secondBody = hasSecond && window.secondPartPanel ? window.secondPartPanel() : '';
+    const secondPending = hasSecond && window.secondPartPending ? window.secondPartPending() : 0;
+    const showSecond = hasSecond && (tab === 'second'
+        || (!tab && !active.length && !overdue.length && secondPending > 0));
+    const pill = n => n
+        ? `<span style="display:inline-block;min-width:18px;background:#f43f5e;color:#fff;font-size:11px;font-weight:900;padding:1px 6px;border-radius:var(--r-full);margin-left:6px">${n > 9 ? '9+' : n}</span>`
+        : '';
+    const tabBtn = (id, label, count, on) => `
+        <button type="button" onclick="window.openHwTab('${id}')"
+          style="flex:1;padding:9px 6px;border:none;border-radius:var(--r-sm);font-size:12px;font-weight:900;cursor:pointer;
+                 background:${on ? 'var(--card,#fff)' : 'transparent'};color:${on ? '#111' : '#6b7280'};
+                 ${on ? 'box-shadow:var(--e-1)' : ''}"
+          class="${on ? 'dark:bg-[#1e1e1e] dark:text-white' : ''}">${label}${pill(count)}</button>`;
+    const tabsBar = hasSecond
+        ? `<div style="display:flex;gap:4px;background:rgba(128,128,128,0.12);border-radius:var(--r-md);padding:4px;margin-bottom:14px">
+             ${tabBtn('main', '📚 Тренажёр', active.length + overdue.length, !showSecond)}
+             ${tabBtn('second', '✍️ Вторая часть', secondPending, showSecond)}
+           </div>`
+        : '';
 
     const overlayId = 'hw-tab-overlay';
     let overlay = document.getElementById(overlayId);
@@ -1698,12 +1768,13 @@ window.openHwTab = function() {
         <div style="font-size:16px;font-weight:900;color:#111" class="dark:text-white">📚 Домашние задания</div>
         <button onclick="window.closeHwTab()" style="font-size:22px;color:#aaa;background:none;border:none;cursor:pointer;padding:2px 8px">✕</button>
       </div>
+      ${tabsBar}
+      ${showSecond ? secondBody : `
       ${statsLine}
-      ${window.secondPartRow ? window.secondPartRow() : ''}
       ${section('🔴 Просроченные — доделать', overdue, 'overdue')}
       ${section('🟢 Активные', active, 'active')}
       ${section('Выполненные', done, 'done')}
-      ${empty}
+      ${empty}`}
     </div>`;
 };
 

@@ -70,25 +70,64 @@ const streaks = { 'cram:e1': learned, 'cram:e2': learned, 'cram:e3': learned };
   assert.equal(count('deckA'), 1, 'счёт по префиксу колоды не должен зависеть от диапазона');
 }
 
-// ── 4. hwItemProgress не понижает прогресс, пока счёт неизвестен ────────────
-{
-  const stateSrc = strip(read('state.js'));
-  const from = stateSrc.indexOf('function hwItemProgress(');
-  assert.ok(from > 0, 'hwItemProgress не найдена');
-  const body = stateSrc.slice(from, stateSrc.indexOf('\n}', from) + 2);
+// ── 4. hwItemProgress не понижает прогресс, пока счёт неизвестен ────
+//
+// Вместе с ним тянем hwItemGoal/hwItemAvailable: с 15.09 прогресс зубрёжки
+// упирается в УРЕЗАННУЮ цель, и врозь эти три функции больше не живут.
+const stateSrc = strip(read('state.js'));
+function pullFn(name) {
+  const from = stateSrc.indexOf(`function ${name}(`);
+  assert.ok(from > 0, `${name} не найдена`);
+  return stateSrc.slice(from, stateSrc.indexOf('\n}', from) + 2);
+}
+const hwFns = [pullFn('hwItemProgress'), pullFn('hwItemAvailable'), pullFn('hwItemGoal')].join('\n');
 
-  const run = (item, live) => {
-    const box = { window: { cramLearnedCount: () => live, state: { stats: {} } } };
-    vm.createContext(box);
-    vm.runInContext(`${body}; this.f = hwItemProgress;`, box);
-    return box.f(item);
+function runHw(item, live, rangeIds) {
+  const box = {
+    window: {
+      cramLearnedCount: () => live,
+      cramEventIdsInRange: () => rangeIds,
+      state: { stats: {} },
+    },
+    learnedCountInPeriod: () => ({ learned: 0, total: 0 }),
   };
+  vm.createContext(box);
+  vm.runInContext(`${hwFns}; this.p = hwItemProgress; this.g = hwItemGoal;`, box);
+  return { progress: box.p(item), goal: box.g(item) };
+}
+{
   const item = { task: 'cram', goal: 6, progress: 6, yearStart: 862, yearEnd: 1054 };
+  const ids6 = new Set(['1', '2', '3', '4', '5', '6']);
 
-  assert.equal(run(item, null), 6,
+  assert.equal(runHw(item, null, ids6).progress, 6,
     'при неизвестном счёте обязано держаться последнее известное значение');
-  assert.equal(run(item, 6), 6, 'при известном счёте берём его');
-  assert.equal(run({ ...item, progress: 0 }, 4), 4, 'живой счёт важнее пустого кэша');
+  assert.equal(runHw(item, 6, ids6).progress, 6, 'при известном счёте берём его');
+  assert.equal(runHw({ ...item, progress: 0 }, 4, ids6).progress, 4,
+    'живой счёт важнее пустого кэша');
+}
+
+// ── 4a. Цель зубрёжки урезается по числу дат в диапазоне ────
+//
+// 🔴 Жалоба 15.09.2026: «не может доделать ДЗ по зубрёжке, последний вариант
+// не засчитывает». Учитель выдал «12 дат за 1801–1825», а в колоде их 11:
+// составитель и тренажёр по-разному читали год у события 93 (Государственный
+// Совет — «год роспуска»). Двенадцатой даты не существует в природе, и этап
+// не закрывался никогда. У всех остальных этапов такой потолок есть с 12.08.
+{
+  const eleven = new Set(Array.from({ length: 11 }, (_, i) => String(i + 1)));
+  const item = { task: 'cram', goal: 12, progress: 11, yearStart: 1801, yearEnd: 1825 };
+
+  const got = runHw(item, 11, eleven);
+  assert.equal(got.goal, 11, 'цель зубрёжки не урезана по числу доступных дат — этап не закрыть');
+  assert.equal(got.progress, 11, 'прогресс обязан дотягиваться до урезанной цели');
+
+  // Кэш дат ещё не загружен (null) — «не знаю», цель не трогаем.
+  assert.equal(runHw(item, 11, null).goal, 12,
+    'при незагруженных датах цель урезалась вслепую — так можно закрыть этап, которого не делали');
+
+  // Без рамок состав колод живёт внутри cram.html: считать нечем, не режем.
+  assert.equal(runHw({ task: 'cram', goal: 30, progress: 0 }, 0, null).goal, 30,
+    'этап без диапазона идёт по всем колодам — урезать его цель неоткуда');
 }
 
 // ── 5. refreshHwState запоминает счёт и НЕ понижает его ─────────────────────
