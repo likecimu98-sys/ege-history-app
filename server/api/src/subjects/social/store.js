@@ -592,22 +592,57 @@ async function rotateJoinCode(teacherUserId, classId, { db = pool } = {}) {
 async function classStudents(teacherUserId, classId, { db = pool, weekStart = null } = {}) {
   await ownedClass(teacherUserId, classId, { db });
   const week = weekStart || mondayStr();
+  // Баллы за неделю отвечали на вопрос «кто занимался», но не на вопрос «кто
+  // отстаёт»: чтобы узнать, сколько работ ученик сдал из выданных, учителю
+  // приходилось открывать все домашки по очереди и искать в каждой его строку.
+  // Считаем это здесь, тем же правилом видимости, что и везде: работа, которой
+  // ученик не получал (см. backfill), не должна ухудшать его «сдал N из M».
   const result = await db.query(
     `SELECT m.user_id, m.joined_at, COALESCE(p.display_name,'') AS display_name,
-            COALESCE(w.points,0) AS weekly_points, COALESCE(w.questions,0) AS weekly_questions
+            COALESCE(w.points,0) AS weekly_points, COALESCE(w.questions,0) AS weekly_questions,
+            COALESCE(hw.total,0) AS hw_total, COALESCE(hw.done,0) AS hw_done,
+            COALESCE(hw.overdue,0) AS hw_overdue, COALESCE(hw.touched,0) AS hw_touched,
+            COALESCE(hw.earned,0) AS hw_earned, COALESCE(hw.possible,0) AS hw_possible,
+            hw.last_activity
      FROM social_class_members m
      LEFT JOIN social_profiles p ON p.user_id = m.user_id
      LEFT JOIN social_weekly_scores w ON w.user_id = m.user_id AND w.week_start = $2
+     LEFT JOIN LATERAL (
+       SELECT COUNT(*)::int AS total,
+              COUNT(*) FILTER (WHERE pr.status = 'done')::int AS done,
+              COUNT(*) FILTER (WHERE COALESCE(pr.questions,0) > 0)::int AS touched,
+              COUNT(*) FILTER (WHERE COALESCE(pr.status,'active') <> 'done'
+                                 AND a.due_at IS NOT NULL AND a.due_at < now())::int AS overdue,
+              COALESCE(SUM(pr.earned),0)::float8 AS earned,
+              COALESCE(SUM(pr.possible),0)::float8 AS possible,
+              MAX(pr.updated_at) AS last_activity
+       FROM social_assignments a
+       JOIN social_classes c ON c.id = a.class_id
+       LEFT JOIN social_assignment_progress pr ON pr.assignment_id = a.id AND pr.user_id = m.user_id
+       WHERE a.class_id = m.class_id AND a.status <> 'cancelled' AND ${ASSIGNMENT_VISIBLE_SQL}
+     ) hw ON true
      WHERE m.class_id = $1 AND m.status = 'active'
      ORDER BY p.display_name NULLS LAST, m.joined_at`,
     [classId, week]);
-  return result.rows.map(row => ({
-    studentId: row.user_id,
-    displayName: row.display_name || 'Без имени',
-    joinedAt: new Date(row.joined_at).getTime(),
-    weeklyPoints: numeric(row.weekly_points),
-    weeklyQuestions: numeric(row.weekly_questions),
-  }));
+  return result.rows.map(row => {
+    const possible = numeric(row.hw_possible);
+    const earned = numeric(row.hw_earned);
+    return {
+      studentId: row.user_id,
+      displayName: row.display_name || 'Без имени',
+      joinedAt: new Date(row.joined_at).getTime(),
+      weeklyPoints: numeric(row.weekly_points),
+      weeklyQuestions: numeric(row.weekly_questions),
+      assignmentsTotal: numeric(row.hw_total),
+      assignmentsDone: numeric(row.hw_done),
+      assignmentsTouched: numeric(row.hw_touched),
+      assignmentsOverdue: numeric(row.hw_overdue),
+      earned,
+      possible,
+      percent: possible > 0 ? Math.round((earned / possible) * 100) : 0,
+      lastActivityAt: row.last_activity ? new Date(row.last_activity).getTime() : null,
+    };
+  });
 }
 
 // Присоединение ученика по коду. Ученик НЕ выбирает класс по идентификатору:
@@ -1179,6 +1214,162 @@ async function assignmentStudentDetail(teacherUserId, assignmentId, studentUserI
   };
 }
 
+// Ученик целиком, а не внутри одной домашки. Разбор (assignmentStudentDetail)
+// отвечает «что не получилось в этой работе», а учителю перед разговором с
+// учеником нужно «как у него вообще дела»: сколько работ сдал из выданных и на
+// каких номерах бланка он спотыкается из раза в раз.
+//
+// Слабые места считаем по номеру задания (exam_line), а не по task_id: «валит
+// 17-е» — это то, чем учитель может распорядиться, а «валит задание A3F2» —
+// нет. Порог в три попытки отсекает номера, где одна случайная ошибка дала бы
+// честные, но бессмысленные 0%.
+const STUDENT_WEAK_MIN_ATTEMPTS = 3;
+
+async function studentOverview(teacherUserId, classId, studentUserId, { db = pool } = {}) {
+  await ownedClass(teacherUserId, classId, { db });
+  const member = await db.query(
+    `SELECT m.user_id, m.joined_at, COALESCE(p.display_name,'') AS display_name
+     FROM social_class_members m
+     LEFT JOIN social_profiles p ON p.user_id = m.user_id
+     WHERE m.class_id = $1 AND m.user_id = $2 AND m.status = 'active'`,
+    [classId, studentUserId]);
+  if (!member.rowCount) {
+    const error = new Error('student_not_found');
+    error.statusCode = 404;
+    error.code = 'student_not_found';
+    throw error;
+  }
+
+  // Правило видимости то же, что в classStudents и в результатах: список работ
+  // ученика обязан совпасть с тем, что он видит у себя, иначе учитель спросит
+  // про работу, которой у ученика нет.
+  const assignments = await db.query(
+    `SELECT a.id, a.title, a.due_at, a.issued_at, a.question_goal, a.status,
+            COALESCE(pr.earned,0) AS earned, COALESCE(pr.possible,0) AS possible,
+            COALESCE(pr.questions,0) AS questions, COALESCE(pr.status,'active') AS progress_status,
+            pr.completed_at
+     FROM social_class_members m
+     JOIN social_assignments a ON a.class_id = m.class_id AND a.status <> 'cancelled'
+     JOIN social_classes c ON c.id = a.class_id
+     LEFT JOIN social_assignment_progress pr ON pr.assignment_id = a.id AND pr.user_id = m.user_id
+     WHERE m.class_id = $1 AND m.user_id = $2 AND m.status = 'active' AND ${ASSIGNMENT_VISIBLE_SQL}
+     ORDER BY a.issued_at DESC`,
+    [classId, studentUserId]);
+
+  const weak = await db.query(
+    `SELECT e.exam_line, COUNT(*)::int AS attempts,
+            COALESCE(SUM(e.earned),0)::float8 AS earned,
+            COALESCE(SUM(e.possible),0)::float8 AS possible
+     FROM social_attempt_events e
+     WHERE e.user_id = $1 AND e.exam_line IS NOT NULL
+     GROUP BY e.exam_line
+     HAVING COUNT(*) >= $2`,
+    [studentUserId, STUDENT_WEAK_MIN_ATTEMPTS]);
+
+  const lines = weak.rows.map(row => ({
+    examLine: numeric(row.exam_line),
+    attempts: numeric(row.attempts),
+    percent: numeric(row.possible) > 0 ? Math.round((numeric(row.earned) / numeric(row.possible)) * 100) : 0,
+  }));
+  lines.sort((left, right) => left.percent - right.percent || right.attempts - left.attempts);
+
+  const rows = assignments.rows.map(row => {
+    const possible = numeric(row.possible);
+    const earned = numeric(row.earned);
+    return {
+      assignmentId: row.id,
+      title: row.title || 'Домашнее задание',
+      issuedAt: row.issued_at ? new Date(row.issued_at).getTime() : null,
+      dueAt: row.due_at ? new Date(row.due_at).getTime() : null,
+      questionGoal: numeric(row.question_goal),
+      earned,
+      possible,
+      percent: possible > 0 ? Math.round((earned / possible) * 100) : 0,
+      questions: numeric(row.questions),
+      status: row.progress_status,
+      completedAt: row.completed_at ? new Date(row.completed_at).getTime() : null,
+      onTime: row.completed_at && row.due_at
+        ? new Date(row.completed_at).getTime() <= new Date(row.due_at).getTime()
+        : null,
+    };
+  });
+  const done = rows.filter(row => row.status === 'done');
+  const gradedPossible = rows.reduce((sum, row) => sum + row.possible, 0);
+  const gradedEarned = rows.reduce((sum, row) => sum + row.earned, 0);
+
+  return {
+    student: {
+      studentId: studentUserId,
+      displayName: member.rows[0].display_name || 'Без имени',
+      joinedAt: new Date(member.rows[0].joined_at).getTime(),
+    },
+    assignments: rows,
+    weakLines: lines,
+    totals: {
+      assignmentsTotal: rows.length,
+      assignmentsDone: done.length,
+      assignmentsLate: done.filter(row => row.onTime === false).length,
+      earned: gradedEarned,
+      possible: gradedPossible,
+      percent: gradedPossible > 0 ? Math.round((gradedEarned / gradedPossible) * 100) : 0,
+    },
+  };
+}
+
+// Что валит класс — и что валят все. Два одинаково посчитанных среза рядом:
+// без второго учитель не отличит «мои не поняли тему» от «этот номер тяжёлый
+// для всех», а это разные решения — объяснять заново или не тревожиться.
+//
+// Здесь, в отличие от taskDifficulty для режима «Трудные», НЕТ сглаживания:
+// учитель читает процент как процент, и подмешивать к нему среднее по банку
+// нельзя. Вместо этого рядом всегда стоит число попыток — оно и говорит,
+// насколько числу верить.
+const WEAK_MIN_ATTEMPTS = 3;
+
+async function weakSpots({ db = pool, classId = null, minAttempts = WEAK_MIN_ATTEMPTS } = {}) {
+  const floor = Math.max(1, Number(minAttempts) || WEAK_MIN_ATTEMPTS);
+  // Ограничение по классу — через членство, а не через домашки: в счёт идёт всё,
+  // что ученик класса решал, включая самостоятельные занятия. Учителя спрашивают
+  // «где мои плавают», а не «где мои плавают в заданном мной».
+  const scopeJoin = classId
+    ? `JOIN social_class_members m ON m.user_id = e.user_id AND m.class_id = $2 AND m.status = 'active'`
+    : '';
+  const params = classId ? [floor, classId] : [floor];
+
+  const byLine = await db.query(
+    `SELECT e.exam_line AS bucket, COUNT(*)::int AS attempts,
+            COALESCE(SUM(e.earned),0)::float8 AS earned,
+            COALESCE(SUM(e.possible),0)::float8 AS possible,
+            COUNT(DISTINCT e.user_id)::int AS students
+     FROM social_attempt_events e ${scopeJoin}
+     WHERE e.exam_line IS NOT NULL
+     GROUP BY e.exam_line
+     HAVING COUNT(*) >= $1`,
+    params);
+
+  // Блоки лежат массивом: задание с двумя блоками честно попадает в оба.
+  const byBlock = await db.query(
+    `SELECT b.bucket, COUNT(*)::int AS attempts,
+            COALESCE(SUM(e.earned),0)::float8 AS earned,
+            COALESCE(SUM(e.possible),0)::float8 AS possible,
+            COUNT(DISTINCT e.user_id)::int AS students
+     FROM social_attempt_events e ${scopeJoin}
+     CROSS JOIN LATERAL unnest(e.block_ids) AS b(bucket)
+     WHERE cardinality(e.block_ids) > 0
+     GROUP BY b.bucket
+     HAVING COUNT(*) >= $1`,
+    params);
+
+  const shape = rows => rows.map(row => ({
+    key: row.bucket === null || row.bucket === undefined ? '' : String(row.bucket),
+    attempts: numeric(row.attempts),
+    students: numeric(row.students),
+    percent: numeric(row.possible) > 0 ? Math.round((numeric(row.earned) / numeric(row.possible)) * 100) : 0,
+  })).sort((left, right) => left.percent - right.percent || right.attempts - left.attempts);
+
+  return { minAttempts: floor, lines: shape(byLine.rows), blocks: shape(byBlock.rows) };
+}
+
 // ДЗ глазами ученика: активные и завершённые, с собственным прогрессом. Чужих
 // результатов здесь нет — ученик видит только свою строку.
 //
@@ -1535,7 +1726,8 @@ module.exports = {
   weeklyLeaderboard,
   createClass, listClasses, ownedClass, updateClass, rotateJoinCode, classStudents, joinClass, myClasses,
   createAssignment, listAssignments, ownedAssignment, updateAssignment, cancelAssignment,
-  assignmentResults, assignmentStudentDetail, studentAssignments, studentDigest, teacherDigest,
+  assignmentResults, assignmentStudentDetail, studentOverview, weakSpots,
+  studentAssignments, studentDigest, teacherDigest,
   mergeUserData,
   listCustomTasks, createCustomTask, updateCustomTask, archiveCustomTask,
   listVariantTemplates, createVariantTemplate, updateVariantTemplate, deleteVariantTemplate,

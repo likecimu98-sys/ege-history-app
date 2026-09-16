@@ -3,6 +3,7 @@
 // Кэш сложности заданий: один на процесс, живёт десять минут.
 const DIFFICULTY_TTL_MS = 10 * 60 * 1000;
 let difficultyCache = null;
+let weakAllCache = null;
 
 // Маршруты предмета «обществознание»: /api/v1/subjects/social/...
 //
@@ -246,6 +247,16 @@ async function handleSocial(req, res, url, session, deps) {
       return json(res, 200, { students: await store.classStudents(userId, classId, {}) });
     }
 
+    // Ученик целиком: все его работы в этом классе и номера бланка, на которых
+    // он спотыкается. Отдельный маршрут, а не поле в списке учеников: класс на
+    // тридцать человек не должен тащить тридцать таких выборок ради одной.
+    const overviewMatch = path.match(/^\/teacher\/classes\/([^/]+)\/students\/([^/]+)$/);
+    if (overviewMatch && method === 'GET') {
+      const classId = uuid(decodeURIComponent(overviewMatch[1]), 'class_not_found');
+      const studentId = uuid(decodeURIComponent(overviewMatch[2]), 'student_not_found');
+      return json(res, 200, await store.studentOverview(userId, classId, studentId, {}));
+    }
+
     const codeMatch = path.match(/^\/teacher\/classes\/([^/]+)\/join-code$/);
     if (codeMatch && method === 'POST') {
       requireMutationAuth(req, session);
@@ -335,6 +346,28 @@ async function handleSocial(req, res, url, session, deps) {
         requireMutationAuth(req, session);
         return json(res, 200, await store.cancelAssignment(userId, assignmentId, {}));
       }
+    }
+
+    // Что валит класс — рядом с тем, что валят все. Второй срез не украшение:
+    // без него «у моих 31% по 17-му» ничего не значит, потому что по всей базе
+    // там может быть ровно столько же.
+    //
+    // Общий срез идёт по всей таблице попыток, поэтому живёт в том же кэше на
+    // десять минут, что и сложность заданий. Классный срез не кэшируем: он
+    // узкий, а учитель обновляет его именно затем, чтобы увидеть свежее.
+    if (method === 'GET' && path === '/teacher/weak-spots') {
+      const asked = url.searchParams.get('classId');
+      // 🔴 Владение проверяем ДО подсчёта: weakSpots сам по себе только считает
+      // и о том, чей это класс, ничего не знает. Иначе чужой идентификатор в
+      // адресе отдал бы агрегат по чужим ученикам.
+      const classId = asked ? uuid(asked, 'class_not_found') : null;
+      if (classId) await store.ownedClass(userId, classId, {});
+      const at = Date.now();
+      if (!weakAllCache || at - weakAllCache.at > DIFFICULTY_TTL_MS) {
+        weakAllCache = { at, value: await store.weakSpots({}) };
+      }
+      const scoped = classId ? await store.weakSpots({ classId }) : null;
+      return json(res, 200, { class: scoped, all: weakAllCache.value });
     }
 
     const resultsMatch = path.match(/^\/teacher\/assignments\/([^/]+)\/results$/);
