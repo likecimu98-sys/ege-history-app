@@ -4,21 +4,57 @@
     {
       "name": "ege-static",
       "runtimeExecutable": "python",
-      "runtimeArgs": ["-m", "http.server", "8123"],
+      "runtimeArgs": [
+        "-m",
+        "http.server",
+        "8123"
+      ],
       "port": 8123
     },
     {
       "name": "social-app",
       "runtimeExecutable": "python",
-      "runtimeArgs": ["-m", "http.server", "8124", "--directory", "../ege-social-app-main/app"],
+      "runtimeArgs": [
+        "-m",
+        "http.server",
+        "8124",
+        "--directory",
+        "../ege-social-app-main/app"
+      ],
       "port": 8124
     },
     {
       "name": "fipi-parser",
       "runtimeExecutable": "node",
-      "runtimeArgs": ["tools-and-docs/tools/fipi-parser/server.js"],
+      "runtimeArgs": [
+        "tools-and-docs/tools/fipi-parser/server.js"
+      ],
       "port": 3777,
       "autoPort": true
+    },
+    {
+      "name": "prv-api",
+      "runtimeExecutable": "../Новая папка (11)/.venv/Scripts/uvicorn.exe",
+      "runtimeArgs": [
+        "app.main:app",
+        "--port",
+        "8000",
+        "--app-dir",
+        "../Новая папка (11)/backend"
+      ],
+      "port": 8000
+    },
+    {
+      "name": "prv-web",
+      "runtimeExecutable": "node",
+      "runtimeArgs": [
+        "../Новая папка (11)/frontend/node_modules/vite/bin/vite.js",
+        "../Новая папка (11)/frontend",
+        "--port",
+        "5173",
+        "--strictPort"
+      ],
+      "port": 5173
     }
   ]
 }
