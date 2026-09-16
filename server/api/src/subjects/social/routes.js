@@ -1,5 +1,9 @@
 'use strict';
 
+// Кэш сложности заданий: один на процесс, живёт десять минут.
+const DIFFICULTY_TTL_MS = 10 * 60 * 1000;
+let difficultyCache = null;
+
 // Маршруты предмета «обществознание»: /api/v1/subjects/social/...
 //
 // 🔴 ПРЕДМЕТ ОПРЕДЕЛЯЕТ МАРШРУТ, А НЕ КЛИЕНТ. Ни один обработчик ниже не читает
@@ -144,6 +148,17 @@ async function handleSocial(req, res, url, session, deps) {
     const events = schema.attemptBatch(await readJson(req, 262144), { now });
     const result = await store.saveAttempts(userId, events, {});
     return json(res, 200, { ...result, serverTime: now });
+  }
+
+  // Сложность заданий: агрегат по всем ученикам, ничего личного. Ответ живёт
+  // минуты — считать его на каждый запуск приложения незачем, меняется он
+  // медленно, а запрос идёт по всей таблице попыток.
+  if (method === 'GET' && path === '/difficulty') {
+    const now = Date.now();
+    if (!difficultyCache || now - difficultyCache.at > DIFFICULTY_TTL_MS) {
+      difficultyCache = { at: now, value: await store.taskDifficulty({}) };
+    }
+    return json(res, 200, difficultyCache.value);
   }
 
   if (method === 'GET' && path === '/me/assignments') {

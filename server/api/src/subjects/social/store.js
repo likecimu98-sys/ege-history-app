@@ -361,6 +361,52 @@ async function saveAttempts(userId, events, { db = pool, transact = tx } = {}) {
 }
 
 // ---------------------------------------------------------------------------
+// Сложность заданий
+// ---------------------------------------------------------------------------
+
+// Насколько часто на задании ошибаются — по ВСЕМ ученикам сразу. Считаем долю
+// НАБРАННЫХ БАЛЛОВ, а не «сколько раз взяли максимум»: соответствие, где все
+// стабильно берут 1 балл из 2, по «максимуму» выглядит как стопроцентный
+// провал, хотя половину ученик знает. Ноль — не набирают ничего, единица —
+// берут на максимум.
+//
+// 🔴 СГЛАЖИВАНИЕ, А НЕ ПОРОГ. Сырая доля на трёх ответах — это шум: одно
+// невезение даёт «ноль процентов», и задание вылезает на первое место впереди
+// того, на котором спотыкаются пятьдесят человек подряд. Поэтому к каждому
+// заданию добавляется SMOOTHING баллов, набранных СРЕДНЕ по банку: пока
+// ответов мало, оценка держится у среднего и наверх не лезет, а с накоплением
+// ответов сама сходится к настоящей. Порог MIN_ATTEMPTS при этом остаётся:
+// задание, которое видели однажды, не «лёгкое» и не «трудное» — оно неизвестное.
+const DIFFICULTY_MIN_ATTEMPTS = 5;
+const DIFFICULTY_SMOOTHING = 20;
+
+async function taskDifficulty({ db = pool, minAttempts = DIFFICULTY_MIN_ATTEMPTS, smoothing = DIFFICULTY_SMOOTHING } = {}) {
+  const totals = await db.query(
+    `SELECT COALESCE(SUM(earned), 0)::float8 AS earned, COALESCE(SUM(possible), 0)::float8 AS possible
+     FROM social_attempt_events`);
+  const all = totals.rows[0] || { earned: 0, possible: 0 };
+  const mean = all.possible > 0 ? all.earned / all.possible : 1;
+  const rows = await db.query(
+    `SELECT task_id, COUNT(*)::int AS attempts,
+            COALESCE(SUM(earned), 0)::float8 AS earned,
+            COALESCE(SUM(possible), 0)::float8 AS possible
+     FROM social_attempt_events
+     GROUP BY task_id
+     HAVING COUNT(*) >= $1`,
+    [Math.max(1, Number(minAttempts) || DIFFICULTY_MIN_ATTEMPTS)]);
+  const tasks = rows.rows.map(row => ({
+    taskId: row.task_id,
+    attempts: numeric(row.attempts),
+    // Округляем до тысячных: точнее не нужно, а размер ответа заметно меньше.
+    share: Math.round(((row.earned + smoothing * mean) / (row.possible + smoothing)) * 1000) / 1000,
+  }));
+  // От самого проваливаемого к остальным — в том порядке, в котором занятие их
+  // и выдаёт. Клиенту не придётся сортировать заново.
+  tasks.sort((left, right) => left.share - right.share || right.attempts - left.attempts);
+  return { mean: Math.round(mean * 1000) / 1000, minAttempts, tasks };
+}
+
+// ---------------------------------------------------------------------------
 // Квота
 // ---------------------------------------------------------------------------
 
@@ -1485,7 +1531,7 @@ module.exports = {
   getState, putState,
   saveAttempts, insertEvents, recomputeAssignment, enqueueCompletionNotification, notifyCompletionSafely,
   activeAssignmentsFor,
-  quotaState, consumeQuota,
+  taskDifficulty, quotaState, consumeQuota,
   weeklyLeaderboard,
   createClass, listClasses, ownedClass, updateClass, rotateJoinCode, classStudents, joinClass, myClasses,
   createAssignment, listAssignments, ownedAssignment, updateAssignment, cancelAssignment,
