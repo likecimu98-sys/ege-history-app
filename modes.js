@@ -1221,7 +1221,6 @@ function generateDetectiveTable() {
     $('check-buttons').classList.remove('hidden');
     $('check-buttons').classList.add('flex');
     $('check-btn-sure').innerHTML = '✅ Вынести вердикт';
-    $('check-btn-doubt').innerHTML = '🤔 Нужна экспертиза';
     $('reveal-btn').className = "hidden text-orange-500 font-bold py-2 px-6 active:scale-95 text-[11px] sm:text-xs w-full transition-colors underline uppercase tracking-wider mt-2";
     $('reveal-btn').innerHTML = '👀 Запросить подсказку штаба';
     $('next-btn').classList.add('hidden');

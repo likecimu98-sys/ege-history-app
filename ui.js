@@ -2558,7 +2558,7 @@ window.renderLobbySide = renderLobbySide;
 // ── Клавиатура в задании (ПК) ───────────────────────────────────────────────
 // Того, чего на телефоне нет вообще. Ученик, который час решает вариант, мышью
 // работает кратно медленнее. Раскладка: 1-9 — поставить вариант из пула,
-// Enter — «Уверен», Shift+Enter — «Сомневаюсь», → — «Дальше», Esc — в лобби.
+// Enter — «Проверить», → — «Дальше», Esc — в лобби.
 // Никаких своих обработчиков ответа: жмём те же кнопки, что и палец, — иначе
 // логика разъедется между вводом с клавиатуры и тапом.
 (function initGameHotkeys() {
@@ -2584,8 +2584,7 @@ window.renderLobbySide = renderLobbySide;
             return;
         }
         if (e.key === 'Enter') {
-            const btn = e.shiftKey ? 'check-btn-doubt' : 'check-btn-sure';
-            if (clickIfLive(document.getElementById(btn))) { e.preventDefault(); return; }
+            if (clickIfLive(document.getElementById('check-btn-sure'))) { e.preventDefault(); return; }
             if (clickIfLive(document.getElementById('next-btn'))) e.preventDefault();
             return;
         }

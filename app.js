@@ -291,39 +291,46 @@ function calculateEgePoints(rows, task) {
     return errCount === 0 ? 2 : errCount === 1 ? 1 : 0;
 }
 
-// Все ячейки заполнены и КАЖДАЯ верна (read-only, без начисления/пометок). Зеркалит логику checkAnswers.
-function _tableAllSlotsCorrect() {
+// Все ли ячейки заполнены (read-only, без начисления и пометок).
+// Пустая таблица и таблица из одних раскрытых ответов — не «заполнена».
+function _tableAllSlotsFilled() {
     const rows = $$('#task-table-body tr');
     if (!rows.length) return false;
     let sawSlot = false;
-    for (let idx = 0; idx < rows.length; idx++) {
-        const slots = rows[idx].querySelectorAll('.dnd-slot');
-        if (!slots.length) continue;
-        const fact = window.state.currentTargetData[idx];
-        const acceptSet = (window.state.currentMode !== 'detective')
-            ? window.acceptableAnswerSet(fact, window.state.currentTask) : null;
-        for (const slot of slots) {
+    for (const tr of rows) {
+        for (const slot of tr.querySelectorAll('.dnd-slot')) {
             if (slot.classList.contains('revealed-slot')) continue;
             sawSlot = true;
-            const chip = slot.querySelector('.dnd-chip');
-            if (!chip) return false; // не заполнено
-            const val = chip.dataset.pureText || chip.innerText;
-            const ok = acceptSet ? acceptSet.has(val) : (val === slot.dataset.expected);
-            if (!ok) return false;
+            if (!slot.querySelector('.dnd-chip')) return false;
         }
     }
     return sawSlot;
 }
 
-// Авто-проверка после расстановки: если ВСЁ заполнено верно — сразу проверяем (как «Зубрёжка»).
-// При ошибках ничего не делаем — ученик жмёт «Проверить» сам и видит, где не так.
+// Авто-проверка после расстановки: расставил ВСЁ — ответ принят, каким бы он ни был.
+//
+// 🔴 Раньше проверка срабатывала сама только при ПОЛНОСТЬЮ ВЕРНОМ заполнении, а
+// при ошибке ничего не происходило: таблица оставалась живой, и ученик мог
+// перетаскивать фишки, пока не сойдётся, — ошибка не засчитывалась вовсе.
+// Получался не тренажёр, а подбор: на экзамене второго захода нет, а статистика
+// ошибок и SRS не видели ни одного промаха и считали тему выученной.
+//
+// Теперь порог один: заполнены все ячейки — проверяем. Верно — идём дальше
+// сами, неверно — это ошибка, со всеми последствиями (серия сбита, факт
+// уходит в «повторить»). Кнопка проверки остаётся для тех, кто хочет
+// отправить неполный ответ.
 window.maybeAutoSubmit = function() {
     const st = window.state;
     if (!st || st.currentMode === 'duel') return;        // дуэль — ручная проверка
     if (st.answersRevealed) return;
     const cb = $('check-buttons');
     if (!cb || cb.classList.contains('hidden')) return;  // уже проверено / не идёт ввод
-    if (!_tableAllSlotsCorrect()) return;
+    // Сама проверка срабатывает РОВНО ОДИН РАЗ на таблицу. После неё ученик
+    // чинит ошибки, и таблица снова полна на каждом перетаскивании: без этого
+    // он получал бы красный тост и вибрацию на каждую переставленную фишку.
+    // Признак первой отправки — проставленный слотам scored (см. checkAnswers).
+    if (document.querySelector('#task-table-body .dnd-slot[data-scored]')) return;
+    if (!_tableAllSlotsFilled()) return;
     checkAnswers(true, true);
 };
 
@@ -717,7 +724,6 @@ const ACTION_HANDLERS = {
     confirmTaskPick:        (a) => window.confirmTaskPick?.(a),
     closeTaskPicker:        () => window.closeTaskPicker?.(),
     checkAnswersTrue:       () => window.checkAnswers?.(true),
-    checkAnswersFalse:      () => window.checkAnswers?.(false),
     generateTable:          () => window.generateTable?.(),
     toggleAnswers:          () => window.toggleAnswers?.(),
     giveUpRedPencil:        () => window.giveUpRedPencil?.(),

@@ -283,7 +283,7 @@ function cacheDOM() {
         'game-container', 'lobby-area', 'bottom-nav', 'check-buttons',
         'reveal-btn', 'next-btn', 'game-timer-display', 'pool-title',
         'toggle-hide-learned', 'pg-hide-learned', 'detective-stamp',
-        'pg-sort-year-container', 'check-btn-sure', 'check-btn-doubt'
+        'pg-sort-year-container', 'check-btn-sure'
     ].forEach(id => { DOM[id] = document.getElementById(id); });
 }
 

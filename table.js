@@ -1889,9 +1889,7 @@ function resetTableUI() {
     if (checkBtns) { checkBtns.classList.remove('hidden'); checkBtns.classList.add('flex'); }
 
     const btnSure = DOM['check-btn-sure'] || $('check-btn-sure');
-    if (btnSure) btnSure.innerHTML = '✅ Уверен';
-    const btnDoubt = DOM['check-btn-doubt'] || $('check-btn-doubt');
-    if (btnDoubt) btnDoubt.innerHTML = '🤔 Сомневаюсь';
+    if (btnSure) btnSure.innerHTML = '✅ Проверить';
 
     const revealBtn = DOM['reveal-btn'] || $('reveal-btn');
     if (revealBtn) {

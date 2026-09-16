@@ -1,8 +1,8 @@
 {
-  "updated": "2026-07-26",
+  "updated": "2026-09-16",
   "counts": {
     "radius": 153,
-    "font-too-small": 207,
+    "font-too-small": 206,
     "shadow-literal": 76
   },
   "byFile": {
@@ -49,7 +49,7 @@
     "font-too-small": {
       "cloud-sync.js": 41,
       "exam-mode.js": 7,
-      "index.html": 91,
+      "index.html": 90,
       "match-mode.js": 3,
       "modes.js": 10,
       "styles.css": 11,
