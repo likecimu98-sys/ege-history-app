@@ -116,8 +116,29 @@ test('пересчёт варианта ограничен его собстве
   // не открывал.
   const start = storeSource.indexOf('async function recomputeAssignment(');
   const block = storeSource.slice(start, storeSource.indexOf('\nasync function', start + 1));
-  assert.match(block, /e\.task_id = ANY\(\$9::text\[\]\)/);
+  // Само сравнение живёт в общем attemptPoolSql: пересчёт обязан звать его и
+  // передавать туда СВОЙ список заданий, а не собирать условие заново.
+  assert.match(block, /attemptPoolSql\(\{/);
+  assert.match(block, /ids: '\$9::text\[\]'/);
   assert.match(block, /assignment\.task_ids \|\| \[\]/);
+  const pool = storeSource.slice(storeSource.indexOf('function attemptPoolSql('),
+    storeSource.indexOf('// Активные ДЗ ученика'));
+  assert.match(pool, /e\.task_id = ANY\(\$\{list\}\)/, 'вариант засчитывает ровно свои задания');
+});
+
+// 🔴 Задание с графиком, поставленное учителем в вариант, обязано
+// засчитываться. Фильтр «без картинок» сужает ВЫБОРКУ ИЗ БАНКА; когда список
+// заданий задан поимённо, сужать нечего — учитель уже выбрал. Без этого три
+// ученика неделю висели на 10 из 11: девятую строку варианта они решали, а
+// счётчик её выбрасывал.
+test('свой список заданий отменяет фильтры выборки', () => {
+  const pool = storeSource.slice(storeSource.indexOf('function attemptPoolSql('),
+    storeSource.indexOf('// Активные ДЗ ученика'));
+  assert.match(pool, /cardinality\(\$\{list\}\) > 0\s*\n\s*OR \(/,
+    'при заданном списке фильтры выборки не применяются');
+  const images = pool.indexOf('e.has_images = false');
+  const guard = pool.indexOf('cardinality(${list}) > 0');
+  assert.ok(guard > -1 && guard < images, 'проверка списка стоит раньше фильтра картинок');
 });
 
 test('состав варианта проверяется на принадлежность учителю', () => {

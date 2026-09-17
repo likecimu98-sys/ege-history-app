@@ -43,8 +43,15 @@ test('разбор берёт первую попытку по заданию, �
   }
 });
 
+// 🔴 Разбор и зачёт обязаны отбирать ответы ОДНИМ И ТЕМ ЖЕ правилом. Пока оно
+// было выписано в трёх местах списком, они разошлись: зачёт выбрасывал задание
+// с графиком из собранного учителем варианта, а разбор его показывал.
 test('разбор применяет те же фильтры домашки, что и зачёт', () => {
   const detail = body('assignmentStudentDetail');
+  assert.match(detail, /attemptPoolSql\(\{/, 'разбор зовёт общее правило, а не пишет своё');
+  assert.match(detail, /ids: '\$7::text\[\]'/, 'и передаёт в него список заданий варианта');
+  const source = fs.readFileSync(path.join(__dirname, '..', 'src', 'subjects', 'social', 'store.js'), 'utf8');
+  const pool = source.slice(source.indexOf('function attemptPoolSql('), source.indexOf('// Активные ДЗ ученика'));
   for (const filter of [
     'e.task_type = ANY(',
     'e.block_ids && ',
@@ -52,7 +59,7 @@ test('разбор применяет те же фильтры домашки, �
     'e.has_images = false',
     'e.task_id = ANY(',
   ]) {
-    assert.ok(detail.includes(filter), `разбор обязан фильтровать по ${filter}`);
+    assert.ok(pool.includes(filter), `общее правило обязано фильтровать по ${filter}`);
   }
 });
 

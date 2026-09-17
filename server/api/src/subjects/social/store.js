@@ -182,6 +182,32 @@ const ASSIGNMENT_VISIBLE_SQL = `(
                   WHERE pv.assignment_id = a.id AND pv.user_id = m.user_id)
      )`;
 
+// 🔴 КАКИЕ ОТВЕТЫ ЗАСЧИТЫВАЮТСЯ ДОМАШКЕ. Одно определение на три запроса:
+// пересчёт прогресса, разбор у учителя и список зачтённого у ученика. Пока их
+// было три штуки списком, они и разъехались.
+//
+// Главное здесь — первая ветка. Если у домашки есть СВОЙ список заданий
+// (вариант, собранный учителем), фильтры выборки из банка не применяются
+// вовсе: учитель выбрал задания поимённо, и сужать его выбор нечем.
+//
+// Без этого задание с графиком, поставленное учителем в девятую строку
+// варианта, выбрасывалось фильтром «без картинок»: ученик видел его в работе,
+// отвечал, а счётчик не двигался. Домашку нельзя было закрыть в принципе — три
+// ученика класса «Сыр и не сыр» неделю висели на 10 из 11.
+function attemptPoolSql({ types, blocks, topics, images, ids }) {
+  const list = `COALESCE(${ids}, ARRAY[]::text[])`;
+  return `(
+       cardinality(${list}) > 0
+       OR (
+             (cardinality(${types}) = 0 OR e.task_type = ANY(${types}))
+         AND (cardinality(${blocks}) = 0 OR e.block_ids && ${blocks})
+         AND (cardinality(${topics}) = 0 OR e.topic_codes && ${topics})
+         AND (${images} OR e.has_images = false)
+       )
+     )
+     AND (cardinality(${list}) = 0 OR e.task_id = ANY(${list}))`;
+}
+
 // Активные ДЗ ученика: только его классы, только невыданное задним числом.
 async function activeAssignmentsFor(client, userId) {
   const result = await client.query(
@@ -247,13 +273,10 @@ async function recomputeAssignment(client, assignment, userId) {
        FROM social_attempt_events e
        WHERE e.user_id = $2
          AND e.attempted_at >= $4
-         AND (cardinality($5::text[]) = 0 OR e.task_type = ANY($5::text[]))
-         AND (cardinality($6::text[]) = 0 OR e.block_ids && $6::text[])
-         AND (cardinality($7::text[]) = 0 OR e.topic_codes && $7::text[])
-         AND ($8::boolean OR e.has_images = false)
-         -- Вариант учителя: засчитываются РОВНО его задания. У обычного ДЗ
-         -- список пуст, и условие не влияет ни на что.
-         AND (cardinality($9::text[]) = 0 OR e.task_id = ANY($9::text[]))
+         AND ${attemptPoolSql({
+    types: '$5::text[]', blocks: '$6::text[]', topics: '$7::text[]',
+    images: '$8::boolean', ids: '$9::text[]',
+  })}
          -- 🔴 Ответ, данный ВНУТРИ другой домашки, этой не принадлежит. Без
          -- условия одна работа закрывала два задания сразу: у ученицы ДЗ с
          -- целью 20 показывало 36, потому что впитывало и работу по
@@ -1166,11 +1189,10 @@ async function assignmentStudentDetail(teacherUserId, assignmentId, studentUserI
      FROM social_attempt_events e
      WHERE e.user_id = $1
        AND e.attempted_at >= $2
-       AND (cardinality($3::text[]) = 0 OR e.task_type = ANY($3::text[]))
-       AND (cardinality($4::text[]) = 0 OR e.block_ids && $4::text[])
-       AND (cardinality($5::text[]) = 0 OR e.topic_codes && $5::text[])
-       AND ($6::boolean OR e.has_images = false)
-       AND (cardinality($7::text[]) = 0 OR e.task_id = ANY($7::text[]))
+       AND ${attemptPoolSql({
+    types: '$3::text[]', blocks: '$4::text[]', topics: '$5::text[]',
+    images: '$6::boolean', ids: '$7::text[]',
+  })}
      ORDER BY e.task_id, e.attempted_at`,
     [studentUserId, assignment.issued_at, assignment.types || [], assignment.blocks || [],
       assignment.topics || [], assignment.include_images, assignment.task_ids || []]);
@@ -1444,11 +1466,10 @@ async function studentAssignments(userId, { db = pool } = {}) {
        FROM social_attempt_events e
        WHERE e.user_id = $1
          AND e.attempted_at >= a.issued_at
-         AND (cardinality(a.types) = 0 OR e.task_type = ANY(a.types))
-         AND (cardinality(a.blocks) = 0 OR e.block_ids && a.blocks)
-         AND (cardinality(a.topics) = 0 OR e.topic_codes && a.topics)
-         AND (a.include_images OR e.has_images = false)
-         AND (own.ids IS NULL OR e.task_id = ANY(own.ids))
+         AND ${attemptPoolSql({
+    types: 'a.types', blocks: 'a.blocks', topics: 'a.topics',
+    images: 'a.include_images', ids: 'own.ids',
+  })}
          -- Тот же отбор, что и в recomputeAssignment: список зачтённого обязан
          -- совпадать с тем, что реально засчитано, иначе клиент прячет задания,
          -- которые домашке не зачлись.
