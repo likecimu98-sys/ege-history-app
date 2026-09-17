@@ -1223,6 +1223,11 @@ async function assignmentStudentDetail(teacherUserId, assignmentId, studentUserI
 // 17-е» — это то, чем учитель может распорядиться, а «валит задание A3F2» —
 // нет. Порог в три попытки отсекает номера, где одна случайная ошибка дала бы
 // честные, но бессмысленные 0%.
+//
+// 🔴 exam_line > 0, а не IS NOT NULL. Ноль — это не «номер ноль», а «задания в
+// бланке нет»: так помечены тренажёрные карточки вне экзаменационной формы.
+// С проверкой на NULL они собирались в одну строку «№0», и она оказывалась
+// самой заметной в списке — по ней больше всего попыток.
 const STUDENT_WEAK_MIN_ATTEMPTS = 3;
 
 async function studentOverview(teacherUserId, classId, studentUserId, { db = pool } = {}) {
@@ -1261,7 +1266,7 @@ async function studentOverview(teacherUserId, classId, studentUserId, { db = poo
             COALESCE(SUM(e.earned),0)::float8 AS earned,
             COALESCE(SUM(e.possible),0)::float8 AS possible
      FROM social_attempt_events e
-     WHERE e.user_id = $1 AND e.exam_line IS NOT NULL
+     WHERE e.user_id = $1 AND e.exam_line > 0
      GROUP BY e.exam_line
      HAVING COUNT(*) >= $2`,
     [studentUserId, STUDENT_WEAK_MIN_ATTEMPTS]);
@@ -1342,7 +1347,7 @@ async function weakSpots({ db = pool, classId = null, minAttempts = WEAK_MIN_ATT
             COALESCE(SUM(e.possible),0)::float8 AS possible,
             COUNT(DISTINCT e.user_id)::int AS students
      FROM social_attempt_events e ${scopeJoin}
-     WHERE e.exam_line IS NOT NULL
+     WHERE e.exam_line > 0
      GROUP BY e.exam_line
      HAVING COUNT(*) >= $1`,
     params);

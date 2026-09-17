@@ -130,6 +130,16 @@ test('карточка ученика: его работы и номера, на
   assert.equal(card.weakLines[0].percent, 22);
 });
 
+// 🔴 Ноль в exam_line — это «задания нет в бланке», а не «номер ноль». Такие
+// карточки собирались в строку «№0», и она выходила самой заметной: по ней
+// больше всего попыток во всей базе.
+test('задания вне бланка не превращаются в «№0»', () => {
+  const lines = storeSource.split('\n').filter(line => line.includes('exam_line'));
+  assert.ok(lines.some(line => line.includes('e.exam_line > 0')), 'срез по номерам отсекает ноль');
+  assert.ok(!lines.some(line => line.includes('exam_line IS NOT NULL')),
+    'проверки на NULL недостаточно: ноль ею не отсекается');
+});
+
 test('чужой ученик — 404, а не пустая карточка', async () => {
   const db = fakeDb([OWNED]);
   await assert.rejects(
