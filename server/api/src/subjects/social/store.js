@@ -1261,6 +1261,23 @@ async function studentOverview(teacherUserId, classId, studentUserId, { db = poo
      ORDER BY a.issued_at DESC`,
     [classId, studentUserId]);
 
+  // 🔴 Блоки, а не только номера бланка. Номер проставляется ТОЛЬКО в пробнике
+  // и в варианте учителя: в обычной тренировке его взять неоткуда. На живых
+  // данных номер есть у 3% ответов, блок — у всех, кроме одного. Считать
+  // слабые места одними номерами значит показывать учителю пустоту по тем, кто
+  // пробник ещё не писал, — то есть по большинству. Номера остаются вторым
+  // списком: там, где пробники уже были, они точнее блока.
+  const weakBlocks = await db.query(
+    `SELECT b.bucket, COUNT(*)::int AS attempts,
+            COALESCE(SUM(e.earned),0)::float8 AS earned,
+            COALESCE(SUM(e.possible),0)::float8 AS possible
+     FROM social_attempt_events e
+     CROSS JOIN LATERAL unnest(e.block_ids) AS b(bucket)
+     WHERE e.user_id = $1 AND cardinality(e.block_ids) > 0
+     GROUP BY b.bucket
+     HAVING COUNT(*) >= $2`,
+    [studentUserId, STUDENT_WEAK_MIN_ATTEMPTS]);
+
   const weak = await db.query(
     `SELECT e.exam_line, COUNT(*)::int AS attempts,
             COALESCE(SUM(e.earned),0)::float8 AS earned,
@@ -1271,12 +1288,24 @@ async function studentOverview(teacherUserId, classId, studentUserId, { db = poo
      HAVING COUNT(*) >= $2`,
     [studentUserId, STUDENT_WEAK_MIN_ATTEMPTS]);
 
+  const percentOf = row => (numeric(row.possible) > 0
+    ? Math.round((numeric(row.earned) / numeric(row.possible)) * 100)
+    : 0);
+  const worstFirst = (left, right) => left.percent - right.percent || right.attempts - left.attempts;
+
   const lines = weak.rows.map(row => ({
     examLine: numeric(row.exam_line),
     attempts: numeric(row.attempts),
-    percent: numeric(row.possible) > 0 ? Math.round((numeric(row.earned) / numeric(row.possible)) * 100) : 0,
+    percent: percentOf(row),
   }));
-  lines.sort((left, right) => left.percent - right.percent || right.attempts - left.attempts);
+  lines.sort(worstFirst);
+
+  const blocks = weakBlocks.rows.map(row => ({
+    blockId: String(row.bucket),
+    attempts: numeric(row.attempts),
+    percent: percentOf(row),
+  }));
+  blocks.sort(worstFirst);
 
   const rows = assignments.rows.map(row => {
     const possible = numeric(row.possible);
@@ -1310,6 +1339,7 @@ async function studentOverview(teacherUserId, classId, studentUserId, { db = poo
     },
     assignments: rows,
     weakLines: lines,
+    weakBlocks: blocks,
     totals: {
       assignmentsTotal: rows.length,
       assignmentsDone: done.length,
