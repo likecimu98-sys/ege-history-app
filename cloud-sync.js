@@ -7,14 +7,14 @@
             signInWithCredential, signOut, initializeFirestore, collection, doc, setDoc, getDoc,
             getDocs, addDoc, updateDoc, deleteDoc, deleteField, onSnapshot, query, where,
             orderBy, limit, runTransaction, arrayUnion, arrayRemove, vpsApiFetch, refreshVpsAuth
-        } from "./vps-sync-compat.js?v=20260916-16";
+        } from "./vps-sync-compat.js?v=20260919-17";
 
         // jsPDF грузился с cdnjs.cloudflare.com без SRI — то есть посторонний скрипт
         // исполнялся с полными правами страницы, а при недоступности CDN (у части
         // нашей аудитории это обычное дело) экспорт PDF просто не работал. Довод тот
         // же, что и для telegram-web-app.js: своя копия с того же origin.
         // Версия совпадает с прежней CDN-ной — 2.5.1, лежит в vendor/.
-        const VENDOR_JSPDF = 'vendor/jspdf.umd.min.js?v=20260916-16';
+        const VENDOR_JSPDF = 'vendor/jspdf.umd.min.js?v=20260919-17';
 
         const cloudConfig = { projectId: 'vps-postgresql' };
         
@@ -3034,6 +3034,10 @@
         function _classDocId(code) {
             return String(code || '').trim().replace(/[\/#?%]/g, '_');
         }
+        // Наружу: state.js сверяет по ней принадлежность домашки классу. Правило
+        // нормализации обязано быть ОДНО — разъехавшись, оно молча оставит
+        // ученику чужие долги (см. refreshHwState).
+        window._classDocId = _classDocId;
         // Догрузить старые ДЗ своего класса (вызывается при входе и при выборе класса). Идемпотентно по id.
         // ─── Своя группа: показать и выйти ──────────────────────────────────
         // Поле ручного ввода кода убрали 20.07.2026, когда вступление перевели на
@@ -3116,7 +3120,13 @@
             const o = opts || {};
             const next = _classDocId(rawCode);
             const prev = _classDocId(localStorage.getItem('student_class_code') || '');
-            if (o.authoritative) window._serverClassCode = next;
+            if (o.authoritative) {
+                window._serverClassCode = next;
+                // Код подтверждён сервером — теперь refreshHwState вправе снимать
+                // домашку чужих групп. До этого он обязан молчать: на старте код
+                // пуст, и «чужим» оказался бы весь список.
+                window._classCodeKnown = true;
+            }
             if (next === prev) return false;
             console.log(`[Класс] ${prev || '—'} → ${next || '—'} · ${o.reason || 'без причины'}`);
 

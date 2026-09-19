@@ -923,6 +923,48 @@ function refreshHwState() {
             }
         });
     }
+    // 🔴 ДЗ КЛАССА, В КОТОРОМ УЧЕНИКА БОЛЬШЕ НЕТ.
+    //
+    // Снятие при переходе (_adoptStudentClass) срабатывает ОДИН РАЗ и только
+    // там, где переход виден: устройство знает прежний код и читает журнал
+    // прежней группы. Кому не повезло — перешёл до этой правки, сменил
+    // телефон, переустановил приложение — остался с чужой домашкой навсегда:
+    // журнал прежней группы после ухода не читает уже никто, и снять её
+    // оттуда нельзя в принципе. Учитель удаляет там всю домашку — у ученика
+    // она всё равно висит (жалоба 19.09 про gege: в облаке ноль заданий, на
+    // экране домашка «Летней» и «Смешариков»).
+    //
+    // Поэтому правило постоянное, а не разовое: активная домашка, помеченная
+    // классом, живёт ровно пока ученик в этом классе. Личную и старую (без
+    // метки класса) не трогаем — её снимать нечем и незачем.
+    //
+    // Ждём подтверждённого кода: во время загрузки он пуст, и без этой
+    // проверки первый же прогон снёс бы домашку всему классу.
+    if (window._classCodeKnown) {
+        const norm = window._classDocId || (c => String(c || '').trim());
+        let mine = '';
+        try { mine = norm(localStorage.getItem('student_class_code') || ''); } catch (e) {}
+        const stray = [];
+        s.assignments.forEach(a => {
+            if (!a || a.status !== 'active') return;
+            const codes = Array.isArray(a.classCodes) && a.classCodes.length
+                ? a.classCodes : (a.classCode ? [a.classCode] : []);
+            if (!codes.length) return;                       // личная или легаси
+            if (mine && codes.some(code => norm(code) === mine)) return;
+            stray.push(a.id);
+        });
+        if (stray.length) {
+            // Надгробие через общий путь: удаление не переживает слияние с
+            // облаком, а rememberRevokedHw держит снятое до ответа сервера.
+            const removed = window.reconcileRevokedAssignments
+                ? window.reconcileRevokedAssignments(stray) : 0;
+            if (window.rememberRevokedHw) window.rememberRevokedHw(stray, 0);
+            if (removed > 0) {
+                tombstoned += removed;
+                console.log('[Класс] снята домашка чужих групп:', removed);
+            }
+        }
+    }
     // Надгробий не копим бесконечно: без потолка список рос бы с каждым отзывом.
     // Старейшие уходят — они уже сделали свою работу во всех слияниях.
     const tombs = s.assignments.filter(a => a && a.status === 'revoked');

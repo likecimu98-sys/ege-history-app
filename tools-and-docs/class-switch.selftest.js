@@ -66,4 +66,30 @@ assert.match(cloud, /if \(newsAt \|\| hasWorks\) localStorage\.setItem\('class_s
 assert.match(store, /AND data->>'_mergedInto' IS NULL/,
   'ownClasses снова собирается по влитым документам — журнал прежней группы останется читаемым');
 
+// ── 7. Домашка чужой группы снимается ПОСТОЯННО, а не только при переходе ───
+//
+// 🔴 Жалоба 19.09 (gege): в облаке ноль заданий, а на экране домашка «Летней» и
+// «Смешариков». Снятие при переходе срабатывает один раз и только там, где
+// переход виден. Перешёл до правки, сменил телефон, переустановил приложение —
+// и остался с чужой домашкой навсегда: журнал прежней группы после ухода не
+// читает уже никто, и учитель, удаляя там всё, ученику ничем не помогает.
+const state = strip(fs.readFileSync(path.join(root, 'state.js'), 'utf8'));
+const refreshFrom = state.indexOf('function refreshHwState(');
+assert.ok(refreshFrom > 0, 'refreshHwState не найдена');
+const refresh = state.slice(refreshFrom, state.indexOf('window.refreshHwState = refreshHwState', refreshFrom));
+assert.match(refresh, /window\._classCodeKnown/,
+  'Снятие чужой домашки не ждёт подтверждённого кода — на старте он пуст, и снесёт домашку всем');
+assert.match(refresh, /reconcileRevokedAssignments\(stray\)/,
+  'Домашка чужих групп не снимается — ученик останется с долгом класса, в котором его нет');
+assert.match(refresh, /rememberRevokedHw\(stray, 0\)/,
+  'Снятое не помечено локально — облако вернёт его на следующем входе');
+assert.match(refresh, /if \(!codes\.length\) return;/,
+  'Личная и старая домашка без метки класса обязана оставаться — снимать её нечем и незачем');
+
+// Правило нормализации кода — ОДНО на оба файла.
+assert.match(cloud, /window\._classDocId = _classDocId;/,
+  'Нормализатор кода класса не отдан наружу — state.js начнёт сверять по своему правилу');
+assert.match(refresh, /window\._classDocId \|\|/,
+  'state.js сверяет коды не общим нормализатором — «Летняя» и «летняя » разъедутся');
+
 console.log('✅ class-switch: перевод между группами, один источник правды, долги прежней группы сняты');
