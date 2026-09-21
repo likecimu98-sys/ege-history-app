@@ -1196,7 +1196,7 @@ window.answerFlashcard = function(isCorrect, isSure, e) {
     } else {
         haptic('error');
         updateFactSRS(fKey, false, false);
-        if (mIdx === -1) window.state.mistakesPool.push({ fact, task: window.state.currentTask });
+        window.recordMistake(fact, task, { at: Date.now(), source: 'flashcard', slots: [] });
         window.state.stats.streak = 0;
         showToast('🔄', window.getJokePhrase(false), 'bg-rose-500', 'border-rose-700');
     }

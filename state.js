@@ -444,6 +444,16 @@ const SAVE_FIELDS = [
 
 const MAX_MISTAKES_POOL = 200;
 
+// Снимок последней ошибочной попытки, а не ответ после подсказки/исправления.
+// Вложенное поле остаётся внутри уже сохраняемого и синхронизируемого mistakesPool.
+window.recordMistake = function(fact, task, answer) {
+    const pool = window.state.mistakesPool;
+    const index = pool.findIndex(m => mistakeMatchesFact(m, fact, task));
+    const entry = { fact, task, answer };
+    if (index === -1) pool.push(entry);
+    else pool[index] = entry;
+};
+
 // Убираем из пула ошибок факты, которые уже ВЫУЧЕНЫ (SRS level≥1). Ошибка = то, что
 // ещё не освоено; как только факт выучен, он больше не «ошибка». Это единая точка
 // правды с factStreaks и лекарство от «воскрешения»: облачный merge объединяет

@@ -7,14 +7,14 @@
             signInWithCredential, signOut, initializeFirestore, collection, doc, setDoc, getDoc,
             getDocs, addDoc, updateDoc, deleteDoc, deleteField, onSnapshot, query, where,
             orderBy, limit, runTransaction, arrayUnion, arrayRemove, vpsApiFetch, refreshVpsAuth
-        } from "./vps-sync-compat.js?v=20260921-1";
+        } from "./vps-sync-compat.js?v=20260921-2";
 
         // jsPDF грузился с cdnjs.cloudflare.com без SRI — то есть посторонний скрипт
         // исполнялся с полными правами страницы, а при недоступности CDN (у части
         // нашей аудитории это обычное дело) экспорт PDF просто не работал. Довод тот
         // же, что и для telegram-web-app.js: своя копия с того же origin.
         // Версия совпадает с прежней CDN-ной — 2.5.1, лежит в vendor/.
-        const VENDOR_JSPDF = 'vendor/jspdf.umd.min.js?v=20260921-1';
+        const VENDOR_JSPDF = 'vendor/jspdf.umd.min.js?v=20260921-2';
 
         const cloudConfig = { projectId: 'vps-postgresql' };
         
@@ -2327,6 +2327,30 @@
                 : '<p class="text-center py-4 text-xs font-bold text-gray-500">В этом срезе никого нет — сними фильтр или поменяй запрос</p>';
         };
 
+        function studentMistakeReportLines(m) {
+            const f = m.fact || {};
+            let correct;
+            if (m.task === 'task7') correct = [f.culture, f.trait];
+            else if (m.task === 'task5') correct = [f.event, f.person];
+            else if (m.task === 'task3') correct = [f.process, f.fact];
+            else if (m.task === 'task1') correct = [f.event, f.year];
+            else correct = [f.geo, f.year, f.event];
+            const lines = [{ text: 'Верная строка: ' + correct.filter(v => v != null).join(' | '), kind: 'correct' }];
+            const answer = m.answer;
+            if (!answer) {
+                lines.push({ text: 'Ответ ученика не сохранён.', kind: 'unknown' });
+            } else if (answer.source === 'flashcard') {
+                lines.push({ text: 'Карточка: ученик отметил «Забыл». Вариант ответа не выбирался.', kind: 'unknown' });
+            } else {
+                if (answer.source === 'revealed') lines.push({ text: 'Ученик открыл подсказку.', kind: 'unknown' });
+                (Array.isArray(answer.slots) ? answer.slots : []).forEach(slot => {
+                    const chosen = slot.chosen == null ? 'не ответил' : 'выбрал «' + slot.chosen + '»';
+                    lines.push({ text: (slot.label || 'Ответ') + ': ' + chosen + '; верно: «' + slot.expected + '».', kind: 'chosen' });
+                });
+            }
+            return lines;
+        }
+
         window.downloadStudentPDF = async function(uid) {
             const s = window._cachedStudents.find(x => x.uid === uid);
             if (!s) return;
@@ -2334,7 +2358,7 @@
             // Parse fullStateJson to extract mistakes list
             let fullState = {};
             try { fullState = JSON.parse(s.fullStateJson || '{}'); } catch(e) {}
-            const mistakesPool = fullState.mistakesPool || [];
+            const mistakesPool = fullState.mistakesPool || fullState.stats?.mistakesPool || [];
             const factStreaks = fullState.factStreaks || s.factStreaks || {};
 
             // Determine database sizes
@@ -2545,22 +2569,24 @@
                 sectionTitle('Ошибки (' + mistakesPool.length + ')');
                 const shown = mistakesPool.slice(0, 50);
                 shown.forEach((m, i) => {
-                    needSpace(7);
+                    needSpace(14);
                     doc.setFont(PDF_FONT,'bold'); doc.setFontSize(7.5); doc.setTextColor(244,63,94);
                     doc.text(String(i + 1) + '.', M, y + 2.5);
                     const taskLabel = TEXT_TASK_SHORT[m.task] || '№4';
                     doc.setFont(PDF_FONT,'bold'); doc.setFontSize(7); doc.setTextColor(100,116,139);
                     doc.text('[' + taskLabel + ']', M + 6, y + 2.5);
-                    let mText = '';
-                    if (m.task === 'task7') mText = m.fact.culture + ' → ' + m.fact.trait;
-                    else if (m.task === 'task5') mText = m.fact.event + ' → ' + m.fact.person;
-                    else if (m.task === 'task3') mText = m.fact.process + ' → ' + m.fact.fact;
-                    else if (m.task === 'task1') mText = m.fact.event + ' → ' + m.fact.year;
-                    else mText = m.fact.geo + ' | ' + m.fact.year + ' | ' + m.fact.event;
-                    doc.setFont(PDF_FONT,'normal'); doc.setFontSize(7.5); doc.setTextColor(30,41,59);
-                    const lines = doc.splitTextToSize(mText, CW - 18);
-                    doc.text(lines, M + 18, y + 2.5);
-                    y += Math.max(6, lines.length * 3.8);
+                    studentMistakeReportLines(m).forEach(part => {
+                        doc.setFont(PDF_FONT,'normal'); doc.setFontSize(7.5);
+                        const lines = doc.splitTextToSize(part.text, CW - 18);
+                        lines.forEach(line => {
+                            needSpace(4);
+                            doc.setTextColor(...(part.kind === 'chosen' ? [190,18,60]
+                                : part.kind === 'unknown' ? [100,116,139] : [30,41,59]));
+                            doc.text(line, M + 18, y + 2.5);
+                            y += 3.8;
+                        });
+                    });
+                    y += 2;
                 });
                 if (mistakesPool.length > 50) {
                     doc.setFont(PDF_FONT,'normal'); doc.setFontSize(7); doc.setTextColor(148,163,184);
@@ -4018,13 +4044,18 @@
                 st.hwTask1 = per.task1; st.hwTask3 = per.task3; st.hwTask4 = per.task4;
                 st.hwTask5 = per.task5; st.hwTask7 = per.task7;
             }
-            const mistakeKeys = new Set();
+            const mistakeByKey = new Map();
             states.forEach(s => {
                 (s.mistakesPool || s.stats?.mistakesPool || []).forEach(m => {
-                    const key = JSON.stringify(m.fact);
-                    if (!mistakeKeys.has(key)) { mistakeKeys.add(key); merged.mistakesPool.push(m); }
+                    const key = JSON.stringify({ task: m && m.task, fact: m && m.fact });
+                    const previous = mistakeByKey.get(key);
+                    if (!previous || (!previous.answer && m.answer) ||
+                        (Number(m.answer?.at) || 0) > (Number(previous.answer?.at) || 0)) {
+                        mistakeByKey.set(key, m);
+                    }
                 });
             });
+            merged.mistakesPool = [...mistakeByKey.values()];
             // Союз mistakesPool воскрешал ошибки из устаревших копий даже после того,
             // как факт был выучен. factStreaks здесь уже слит по ЛУЧШЕМУ уровню, поэтому
             // отсекаем ошибки, чей факт уже выучен (level≥1) — единый источник правды.

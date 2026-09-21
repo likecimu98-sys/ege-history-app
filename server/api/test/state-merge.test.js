@@ -4,6 +4,19 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const { mergeStateValues, mergeStateJson } = require('../src/state-merge');
 
+test('last wrong choice survives older devices and legacy mistakes in either merge order', () => {
+  const base = { task: 'task1', fact: { event: 'Крещение Руси', year: '988' } };
+  const older = { ...base, answer: { at: 100, source: 'table', slots: [{ chosen: '862', expected: '988' }] } };
+  const newer = { ...base, answer: { at: 200, source: 'table', slots: [{ chosen: '945', expected: '988' }] } };
+  for (const mistakes of [[base, older, newer], [newer, base, older], [older, newer, base]]) {
+    const states = mistakes.map(m => ({ stats: {}, mistakesPool: [m] }));
+    const merged = mergeStateValues(states);
+    assert.deepEqual(merged.mistakesPool, [newer]);
+    merged.mistakesPool[0].answer.slots[0].chosen = 'changed';
+    assert.equal(newer.answer.slots[0].chosen, '945', 'merge must not mutate input');
+  }
+});
+
 test('merges progress without losing mock exams, mistakes or assignments', () => {
   const oldState = {
     stats: {

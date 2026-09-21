@@ -335,6 +335,21 @@ window.maybeAutoSubmit = function() {
 };
 
 // === ПРОВЕРКА ОТВЕТОВ ===
+function mistakeAnswerForRow(tr, fact, task, source = 'table') {
+    const accepted = window.acceptableAnswerSet(fact, task);
+    const fields = { task1: 'Дата', task3: 'Факт', task5: 'Личность', task7: 'Признак' };
+    const slots = Array.from(tr.querySelectorAll('.dnd-slot')).filter(slot =>
+        !slot.classList.contains('revealed-slot')).map(slot => {
+        const chip = slot.querySelector('.dnd-chip');
+        const chosen = chip ? String(chip.dataset.pureText || chip.innerText) : null;
+        const expected = String(slot.dataset.expected || '');
+        const correct = accepted ? accepted.has(chosen) : chosen === expected;
+        const label = fields[task] || ['Объект', 'Событие', 'Дата'][slot.closest('td')?.cellIndex] || 'Ответ';
+        return { label, chosen, expected, correct };
+    }).filter(slot => !slot.correct).map(({ label, chosen, expected }) => ({ label, chosen, expected }));
+    return { at: Date.now(), source, slots };
+}
+
 function checkAnswers(isSure, auto) {
     isSure = isSure !== false;
     // Дневной лимит строк: обычная тренировка блокируется по достижении лимита.
@@ -404,7 +419,8 @@ function checkAnswers(isSure, auto) {
                         newlyCorrect++;
                     } else {
                         updateFactSRS(fKey, false, false);
-                        if (mIdx === -1) window.state.mistakesPool.push({ fact, task: window.state.currentTask });
+                        window.recordMistake(fact, window.state.currentTask,
+                            mistakeAnswerForRow(tr, fact, window.state.currentTask));
                         tr.dataset.scored = "incorrect";
                     }
                 } else if (tr.dataset.scored === "incorrect" && rowAllCor && rowFilled === slots.length) {
@@ -538,9 +554,8 @@ function toggleAnswers() {
                 tr.dataset.scored = "incorrect";
                 if (!isDet) {
                     updateFactSRS(factKey(fact), false, false);
-                    if (!window.state.mistakesPool.some(m => mistakeMatchesFact(m, fact))) {
-                        window.state.mistakesPool.push({ fact, task: window.state.currentTask });
-                    }
+                    window.recordMistake(fact, window.state.currentTask,
+                        mistakeAnswerForRow(tr, fact, window.state.currentTask, 'revealed'));
                 }
             }
             tr.querySelectorAll('.dnd-slot').forEach(slot => {

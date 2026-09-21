@@ -240,11 +240,16 @@ function mergeStateValues(values) {
   }
   if (Object.keys(timeByTask).length) st.timeByTask = timeByTask;
 
-  const mistakeKeys = new Set();
+  const mistakeByKey = new Map();
   for (const state of states) for (const mistake of state.mistakesPool || []) {
     const key = JSON.stringify({ task: mistake && mistake.task, fact: mistake && mistake.fact });
-    if (!mistakeKeys.has(key)) { mistakeKeys.add(key); merged.mistakesPool.push(clone(mistake)); }
+    const previous = mistakeByKey.get(key);
+    if (!previous || (!previous.answer && mistake.answer) ||
+        (Number(mistake.answer?.at) || 0) > (Number(previous.answer?.at) || 0)) {
+      mistakeByKey.set(key, mistake);
+    }
   }
+  merged.mistakesPool = [...mistakeByKey.values()].map(clone);
   return merged;
 }
 
