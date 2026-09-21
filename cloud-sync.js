@@ -7,14 +7,14 @@
             signInWithCredential, signOut, initializeFirestore, collection, doc, setDoc, getDoc,
             getDocs, addDoc, updateDoc, deleteDoc, deleteField, onSnapshot, query, where,
             orderBy, limit, runTransaction, arrayUnion, arrayRemove, vpsApiFetch, refreshVpsAuth
-        } from "./vps-sync-compat.js?v=20260919-17";
+        } from "./vps-sync-compat.js?v=20260921-1";
 
         // jsPDF грузился с cdnjs.cloudflare.com без SRI — то есть посторонний скрипт
         // исполнялся с полными правами страницы, а при недоступности CDN (у части
         // нашей аудитории это обычное дело) экспорт PDF просто не работал. Довод тот
         // же, что и для telegram-web-app.js: своя копия с того же origin.
         // Версия совпадает с прежней CDN-ной — 2.5.1, лежит в vendor/.
-        const VENDOR_JSPDF = 'vendor/jspdf.umd.min.js?v=20260919-17';
+        const VENDOR_JSPDF = 'vendor/jspdf.umd.min.js?v=20260921-1';
 
         const cloudConfig = { projectId: 'vps-postgresql' };
         
@@ -4219,10 +4219,11 @@
                     try {
                         const tCol = collection(db, 'artifacts', appId, 'public', 'data', 'teachers');
                         const orgTeachers = await getDocs(query(tCol, where('orgId', '==', window._teacherOrgId), limit(200)));
-                        const seen = new Set(groups.map(g => g.code));
+                        const byCode = new Map(groups.map(g => [String(g.code), g]));
                         orgTeachers.forEach(td => norm(td.data().classes).forEach(g => {
-                            if (!seen.has(g.code)) { seen.add(g.code); groups.push(g); }
+                            if (allowedCodes.has(String(g.code))) byCode.set(String(g.code), g);
                         }));
+                        groups = [...byCode.values()];
                     } catch (e) { console.warn('[teacherRole] org classes:', e && e.message); }
                 }
                 window._teacherGroups = groups;

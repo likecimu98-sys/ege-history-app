@@ -71,7 +71,6 @@ window.Sfx = (function () {
     const FILES = {
         wow: 'assets/sounds/wow.mp3',  // верный ответ
         fah: 'assets/sounds/fah.mp3',  // неверный ответ
-        dun: 'assets/sounds/dun.mp3',  // пришла домашка
         duel: 'assets/sounds/duel.mp3', // legacy-файл; входящий вызов теперь без звука
     };
     const cache = {};

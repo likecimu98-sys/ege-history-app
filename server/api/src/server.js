@@ -294,7 +294,21 @@ async function handleSecondPartClasses(req, res) {
   // Документы классов: признак второй части и архивность.
   const docs = new Map();
   const classRows = await pool.query('SELECT doc_id,data FROM classes');
-  for (const row of classRows.rows) docs.set(String(row.doc_id), row.data || {});
+  const teacherById = new Map(teachers.rows.map(row => [String(row.doc_id), row.data || {}]));
+  for (const row of classRows.rows) {
+    const code = String(row.doc_id), data = row.data || {};
+    docs.set(code, data);
+    // При повторном приглашении бот раньше стирал teachers.classes. Сам
+    // документ группы сохраняет её имя и владельца: не теряем эту связь.
+    if (data.name) names.set(code, String(data.name));
+    const ownerId = String(data.ownerTgId || '');
+    if (/^[0-9]+$/.test(ownerId) && teacherById.has(ownerId)) {
+      owners.set(code, Number(ownerId));
+      const ownerOrg = teacherById.get(ownerId).orgId;
+      if (ownerOrg) orgs.set(code, String(ownerOrg));
+      else orgs.delete(code);
+    }
+  }
 
   const codes = [...new Set([...names.keys(), ...docs.keys()])]
     .filter(code => !docs.get(code)?.archived);
@@ -354,7 +368,18 @@ async function handleSecondPartClasses(req, res) {
     }
     return out;
   });
-  return json(res, 200, { classes });
+  // Сотрудники школы видимы руководителю ещё ДО назначения на класс.
+  // Источник ролей — серверная карточка преподавателя, не профиль ученика.
+  const staff = teachers.rows.filter(row => /^[0-9]+$/.test(String(row.doc_id))).map(row => {
+    const data = row.data || {}, orgId = data.orgId ? String(data.orgId) : null;
+    return {
+      tg_user_id: Number(row.doc_id), name: String(data.name || '').slice(0, 160),
+      username: String(data.username || '').slice(0, 64),
+      role: env.adminTelegramIds.has(String(row.doc_id)) ? 'admin' : (data.role || 'solo'),
+      org_id: orgId, org_owner_tg_id: orgId ? (orgOwners.get(orgId) || null) : null,
+    };
+  });
+  return json(res, 200, { classes, teachers: staff });
 }
 
 async function handleInternal(req, res, url) {

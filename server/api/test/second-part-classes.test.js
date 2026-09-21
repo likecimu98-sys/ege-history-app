@@ -49,7 +49,7 @@ test('маршрут только на чтение', () => {
     'Маршрут принимает не только GET — узкий ключ обязан быть ключом на чтение');
   const fn = server.slice(server.indexOf('async function handleSecondPartClasses'),
     server.indexOf('async function handleInternal'));
-  assert.doesNotMatch(fn, /\b(INSERT|UPDATE|DELETE)\b/i, 'В чтении состава появилась запись');
+  assert.doesNotMatch(fn, /\b(INSERT\s+INTO|UPDATE\s+\w+\s+SET|DELETE\s+FROM)\b/i, 'В чтении состава появилась запись');
 });
 
 test('признак второй части доезжает до ученика', () => {

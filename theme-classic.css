@@ -154,3 +154,7 @@ body.skin-classic [data-action="finishOnboarding"].bg-emerald-500 {
 /* Тёмные правила для .dnd-chip тоже удалены 26.07.2026: они дублировали
    `.dark .dnd-chip` и `.dark .dnd-chip.selected` из styles.css. Состояния фишек
    живут в одном месте — в styles.css, рядом с базовым `.dnd-chip`. */
+/* Native option popups must use the same color scheme as the teacher panel. */
+#teacher-group-select { color-scheme: light; }
+html.dark #teacher-group-select { color-scheme: dark; }
+html.dark #teacher-group-select option { background-color: #1f2937; color: #f9fafb; }

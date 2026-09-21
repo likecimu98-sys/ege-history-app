@@ -447,7 +447,10 @@ bot.command('start', async (ctx) => {
         const org = orgs.get(orgId);
         if (org) {
             try {
-                await fdb.doc(`${base}/teachers/${ctx.from.id}`).set({ name: displayName(ctx.from), username: ctx.from.username || '', role: 'org_teacher', orgId, classes: [], joinedAt: Date.now() }, { merge: true });
+                // Повторное приглашение не обнуляет группы и не понижает
+                // владельца школы до преподавателя собственной организации.
+                const role = Number(org.ownerTgId) === ctx.from.id ? 'org_owner' : 'org_teacher';
+                await fdb.doc(`${base}/teachers/${ctx.from.id}`).set({ name: displayName(ctx.from), username: ctx.from.username || '', role, orgId, joinedAt: Date.now() }, { merge: true });
                 await fdb.doc(`${base}/orgs/${orgId}`).set({ teacherIds: admin.firestore.FieldValue.arrayUnion(ctx.from.id) }, { merge: true });
                 applyCommandMenu(ctx.from.id, CMD_TEACHER);
                 await ctx.reply(`Вы присоединились к школе «${org.name}» как преподаватель! 👨‍🏫\n\nЖми /menu — там всё под рукой.`, { reply_markup: menuKeyboard(ctx.from.id) });
@@ -700,7 +703,7 @@ bot.callbackQuery(/^t_(approve|deny):(\d+)$/, async (ctx) => {
     const who = displayName(u || { id: targetId });
     if (action === 'approve') {
         if (!fdb) return ctx.answerCallbackQuery('Сервер данных недоступен');
-        await fdb.doc(`${base}/teachers/${targetId}`).set({ name: who, username: (u && u.username) || '', role: 'solo', classes: [], approvedAt: Date.now(), approvedBy: ADMIN_ID }, { merge: true });
+        await fdb.doc(`${base}/teachers/${targetId}`).set({ name: who, username: (u && u.username) || '', role: 'solo', approvedAt: Date.now(), approvedBy: ADMIN_ID }, { merge: true });
         applyCommandMenu(targetId, CMD_TEACHER);
         await ctx.answerCallbackQuery('Одобрено');
         await ctx.editMessageText(`✅ ${who} — теперь репетитор`);
@@ -737,7 +740,7 @@ bot.callbackQuery(/^o_(approve|deny):(\d+)$/, async (ctx) => {
     if (action === 'approve') {
         const orgId = `org_${targetId}`;
         await fdb.doc(`${base}/orgs/${orgId}`).set({ name: pend.name, ownerTgId: targetId, teacherIds: [targetId], createdAt: Date.now() }, { merge: true });
-        await fdb.doc(`${base}/teachers/${targetId}`).set({ name: who, username: (u && u.username) || '', role: 'org_owner', orgId, classes: [], approvedAt: Date.now(), approvedBy: ADMIN_ID }, { merge: true });
+        await fdb.doc(`${base}/teachers/${targetId}`).set({ name: who, username: (u && u.username) || '', role: 'org_owner', orgId, approvedAt: Date.now(), approvedBy: ADMIN_ID }, { merge: true });
         db.prepare('DELETE FROM pending_orgs WHERE user_id = ?').run(targetId);
         applyCommandMenu(targetId, CMD_OWNER);
         await ctx.answerCallbackQuery('Школа одобрена');
@@ -1254,7 +1257,7 @@ async function grantTeacherByInput(ctx, raw) {
     if (teachers.has(String(target.id))) return ctx.reply('Он уже учитель 👨‍🏫');
     if (!fdb) return ctx.reply('Сервер данных недоступен.');
     const who = displayName(target.id ? target : { id: target.id });
-    await fdb.doc(`${base}/teachers/${target.id}`).set({ name: who, username: target.username || '', role: 'solo', classes: [], approvedAt: Date.now(), approvedBy: ADMIN_ID }, { merge: true });
+    await fdb.doc(`${base}/teachers/${target.id}`).set({ name: who, username: target.username || '', role: 'solo', approvedAt: Date.now(), approvedBy: ADMIN_ID }, { merge: true });
     applyCommandMenu(target.id, CMD_TEACHER);
     await ctx.reply(`✅ ${who} (id ${target.id}) — теперь репетитор.`);
     await sendSafe(target.id, 'Вас назначили репетитором! 👨‍🏫\n\nВсё через /menu: создайте группу и пригласите учеников ссылкой.', { reply_markup: appKb() });
