@@ -65,6 +65,11 @@ assert.match(tetris, /if \(_g\.incoming\.length\) \{[\s\S]{0,120}_g\.incoming\.s
 assert.match(tetris, /const top = Math\.max\(\.\.\._g\.stacks\.map\(s => s\.length\)\)/, 'кирпич соперника снова падает не в самый высокий стакан');
 assert.match(tetris, /_g\.charge = 0;\s*_g\.stacks\[bl\.col\]\.push/, 'промах больше не обнуляет шкалу заряда');
 
+// Кирпичи копятся в запас и летят залпом по кнопке, а не сами.
+assert.match(tetris, /if \(_g\.ammo < MAX_AMMO\) \{\s*_g\.ammo\+\+;/, 'полная шкала снова сама отправляет кирпич, а не кладёт в запас');
+assert.match(tetris, /function _fire\(\) \{[\s\S]{0,200}_g\.ammo = 0;\s*_g\.atkSent \+= n;/, 'кнопка ⚔️ больше не бросает весь запас разом');
+assert.match(tetris, /const dur = THREAT_MS \+ \(n - 1\) \* THREAT_EXTRA_MS;/, '«туча» залпа не удлиняется — отбить 4 кирпича за 3 секунды нельзя');
+
 // ── Реакции: едут вместе с последним счётом режима ──
 const cloud = read('cloud-sync.js');
 assert.match(cloud, /window\.state\.duel\._last = \{ score, combo, extra \}/, 'реакция уйдёт без полей режима и обнулит их у соперника');

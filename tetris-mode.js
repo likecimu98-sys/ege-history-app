@@ -15,10 +15,12 @@
 //
 // АТАКА (как в тетрис-баттлах, и так, чтобы её было ВИДНО):
 //  • попадания заряжают шкалу ⚔️ из трёх делений, промах её обнуляет;
-//  • полная шкала — кирпич видимо улетает сопернику;
-//  • у соперника над полем повисает «туча» с отсчётом 3 с: попадание в это
-//    время ОТБИВАЕТ кирпич (и не заряжает свою шкалу), не успел — кирпич падает
-//    в самый высокий стакан. Отбил — атакующему показываем «Соперник отбил».
+//  • полная шкала — кирпич В ЗАПАС (до 5). Когда бросать, решает игрок: кнопка
+//    «⚔️ ×N» отправляет весь запас разом. Соперник видит, сколько у тебя в запасе;
+//  • у соперника над полем повисает «туча» с отсчётом (3 с + 0,5 с на каждый
+//    следующий кирпич): каждое попадание в это время ОТБИВАЕТ один кирпич (и не
+//    заряжает свою шкалу), остальные падают разом, каждый в самый высокий на тот
+//    момент стакан. Отбил — атакующему показываем «Соперник отбил».
 //
 // 🔴 tetrisDeck обязан быть в MATCH_CREATE_FIELDS на сервере (store.js), а длительность
 // 'tetris' — в DUEL_DURATION_MS. Без первого матч не создаётся (403), без второго
@@ -34,6 +36,8 @@
     const MAX_TEXT = 60;            // длиннее не влезает в узкий стакан на телефоне
     const ATTACK_EVERY = 3;         // делений шкалы заряда на один кирпич сопернику
     const THREAT_MS = 3000;         // сколько «туча» висит до падения — время отбиться
+    const THREAT_EXTRA_MS = 500;    // +к «туче» за каждый следующий кирпич в залпе
+    const MAX_AMMO = 5;             // больше кирпичей в запас не копится
     const TUT_KEY = 'dt_tutorial_v1', DUEL_TIP_KEY = 'dt_duel_tip_v1';
     const KO_BONUS = 50;
     const DUEL_STEPS = 80;          // бросков в колоде — заведомо больше, чем успевают
@@ -153,7 +157,7 @@
             cups: [], stacks: [[], [], [], []], step: null, stepIdx: -1,
             block: null, score: 0, streak: 0, best: 0, hits: 0, drops: 0,
             atkSent: 0, oppAtkSeen: 0, ko: false, over: false, busy: false,
-            charge: 0, incoming: [], blkSent: 0, oppBlkSeen: 0, paused: false, pausedAt: 0,
+            charge: 0, ammo: 0, incoming: [], blkSent: 0, oppBlkSeen: 0, oppAmmo: 0, paused: false, pausedAt: 0,
             oppScore: 0, oppHits: 0, oppHs: [0, 0, 0, 0], oppKo: false, oppName: 'Соперник',
             misses: [], raf: 0, timerIv: null, lastTickSec: null, hiddenAt: 0, test: false
         }, o);
@@ -216,7 +220,7 @@
         if (!_g || !_g.duel || _g.test) return;
         try {
             window.updateDuelScoreDb && window.updateDuelScoreDb(_g.score, _g.streak, {
-                done: _g.drops, correct: _g.hits, atk: _g.atkSent, blk: _g.blkSent, ko: _g.ko, hs: _g.stacks.map(s => s.length)
+                done: _g.drops, correct: _g.hits, atk: _g.atkSent, blk: _g.blkSent, ammo: _g.ammo, ko: _g.ko, hs: _g.stacks.map(s => s.length)
             });
         } catch (e) {}
     }
@@ -226,6 +230,7 @@
         _g.oppScore = opp.score || 0;
         _g.oppHits = opp.correct || 0;
         if (Array.isArray(opp.hs)) _g.oppHs = opp.hs.slice(0, 4).map(n => Number(n) || 0);
+        _g.oppAmmo = Math.max(0, Math.min(MAX_AMMO, Number(opp.ammo) || 0));
         const atk = Number(opp.atk) || 0;
         if (atk > _g.oppAtkSeen && !_g.over) {
             const n = atk - _g.oppAtkSeen;
@@ -248,13 +253,16 @@
     };
 
     // Атака соперника: сначала «туча» с отсчётом — время отбиться попаданием.
+    // Залп из n кирпичей — одна «туча» и один отсчёт, длиннее на каждый кирпич.
     function _threat(n) {
-        const at = Date.now() + THREAT_MS;
-        for (let i = 0; i < n; i++) _g.incoming.push({ at: at + i * 400 });
+        const dur = THREAT_MS + (n - 1) * THREAT_EXTRA_MS;
+        const at = Date.now() + dur;
+        for (let i = 0; i < n; i++) _g.incoming.push({ at, dur });
         Snd.warn(); _h('warning');
-        _toast('⚠️ Летит кирпич! Попади — отобьёшь', 'bad');
+        _toast(n > 1 ? `⚠️ Летит залп: ${n} ${_bricks(n)}! Каждое попадание отбивает один` : '⚠️ Летит кирпич! Попади — отобьёшь', 'bad');
         _threatUi();
     }
+    function _bricks(n) { return typeof plural === 'function' ? plural(n, 'кирпич', 'кирпича', 'кирпичей') : 'кирп.'; }
     function _threatUi() {
         const el = document.getElementById('dt-threat');
         if (!el || !_g) return;
@@ -262,7 +270,7 @@
         if (!q.length) { el.classList.remove('dt-threat-on'); return; }
         const left = Math.max(0, q[0].at - Date.now());
         el.classList.add('dt-threat-on');
-        el.innerHTML = `<span>🧱${q.length > 1 ? ' ×' + q.length : ''}</span><b>${Math.ceil(left / 1000)}</b><i style="width:${Math.round(left / THREAT_MS * 100)}%"></i>`;
+        el.innerHTML = `<span>🧱${q.length > 1 ? ' ×' + q.length : ''}</span><b>${Math.ceil(left / 1000)}</b><i style="width:${Math.round(left / (q[0].dur || THREAT_MS) * 100)}%"></i>`;
     }
 
     // Кирпич от соперника — в самый высокий стакан: так нокаут достижим, и видно,
@@ -388,10 +396,13 @@
                     _threatUi();
                 } else if (++_g.charge >= ATTACK_EVERY) {
                     _g.charge = 0;
-                    _g.atkSent++;
-                    Snd.attack();
-                    _flyAttack();
-                    _toast('⚔️ Кирпич летит сопернику!', 'ok');
+                    if (_g.ammo < MAX_AMMO) {
+                        _g.ammo++;
+                        Snd.clear();
+                        _toast(_g.ammo === 1 ? '🧱 Кирпич в запасе — жми ⚔️, чтобы бросить' : `🧱 В запасе ${_g.ammo} — копи или бросай`, 'ok');
+                    } else {
+                        _toast('🧱 Запас полон — бросай!', 'ok');
+                    }
                 }
             }
             _drawStacks(ti);
@@ -446,15 +457,32 @@
         _threatUi();
     }
 
-    function _flyAttack() {
-        const f = document.getElementById('dt-field'), b = document.getElementById('dt-block');
-        if (!f || !b) return;
-        const d = document.createElement('div');
-        d.className = 'dt-fly';
-        d.textContent = '🧱';
-        d.style.left = b.style.left; d.style.top = b.style.top;
-        f.appendChild(d);
-        setTimeout(() => d.remove(), 800);
+    // Бросок всего запаса разом.
+    function _fire() {
+        if (!_g || !_g.duel || !_g.ammo || _g.over || _g.paused) return;
+        const n = _g.ammo;
+        _g.ammo = 0;
+        _g.atkSent += n;
+        Snd.attack(); _h('heavy');
+        _flyAttack(n);
+        _toast(n > 1 ? `⚔️ Залп: ${n} ${_bricks(n)} летят сопернику!` : '⚔️ Кирпич летит сопернику!', 'ok');
+        _hud();
+        _report();
+    }
+
+    function _flyAttack(n) {
+        const f = document.getElementById('dt-field');
+        if (!f) return;
+        for (let i = 0; i < (n || 1); i++) {
+            const d = document.createElement('div');
+            d.className = 'dt-fly';
+            d.textContent = '🧱';
+            d.style.left = (f.clientWidth * (0.15 + 0.7 * ((i + 0.5) / (n || 1))) - 15) + 'px';
+            d.style.top = (f.clientHeight - 60) + 'px';
+            d.style.animationDelay = (i * 90) + 'ms';
+            f.appendChild(d);
+            setTimeout(() => d.remove(), 900 + i * 90);
+        }
     }
 
     // ─── Обучение ────────────────────────────────────────────────────────────
@@ -500,7 +528,7 @@
         if (!f) return;
         const d = document.createElement('div');
         d.className = 'dt-coach';
-        d.innerHTML = '👇 Тапни стакан с событием этого года.<br>⚔️ 3 попадания — кирпич сопернику.<br>🛡 Летит кирпич в тебя — попади, чтобы отбить.';
+        d.innerHTML = '👇 Тапни стакан с событием этого года.<br>⚔️ 3 попадания — кирпич в запас. Копи и бросай разом кнопкой ⚔️.<br>🛡 Летит кирпич в тебя — попади, чтобы отбить.';
         f.appendChild(d);
         _markSeen(DUEL_TIP_KEY);
         setTimeout(() => { d.classList.add('dt-coach-out'); setTimeout(() => d.remove(), 400); }, 7000);
@@ -519,6 +547,7 @@
         else if (e.key === 'ArrowRight') { _move(_g.block.col + 1); e.preventDefault(); }
         else if (e.key === 'ArrowDown' || e.key === ' ') { _drop(); e.preventDefault(); }
         else if (e.key >= '1' && e.key <= '4') { _drop(Number(e.key) - 1); e.preventDefault(); }
+        else if (e.key === 'Enter' || e.key === 'f' || e.key === 'а') { _fire(); e.preventDefault(); }
     }
 
     // ─── Отрисовка ───────────────────────────────────────────────────────────
@@ -545,8 +574,9 @@
             <div class="dt-opp">
               <span class="dt-opp-name">${_esc(_g.oppName)}</span>
               <span id="dt-opp-score" class="dt-opp-score">0</span>
+              <span id="dt-opp-ammo" class="dt-opp-ammo"></span>
               <span class="dt-mini" id="dt-mini"><i></i><i></i><i></i><i></i></span>
-              <span class="dt-atk">⚔️ шкала полна — кирпич сопернику</span>
+              <span class="dt-atk">⚔️ копи кирпичи — бросай разом</span>
             </div>` : `<div class="dt-hint">Тапни стакан — год упадёт туда. Промах оставляет кирпич.</div>`}
             <div id="dt-field" class="dt-field">
               <div class="dt-cols"><i></i><i></i><i></i><i></i></div>
@@ -561,6 +591,7 @@
               <button class="dt-key" id="dt-l" aria-label="Влево">←</button>
               <button class="dt-key dt-key-main" id="dt-d" aria-label="Уронить">↓</button>
               <button class="dt-key" id="dt-r" aria-label="Вправо">→</button>
+              ${_g.duel ? '<button class="dt-key dt-fire" id="dt-fire" aria-label="Бросить кирпичи сопернику" hidden>⚔️</button>' : ''}
             </div>
           </div>`;
         document.body.appendChild(ov);
@@ -573,6 +604,8 @@
         ov.querySelector('#dt-l').onclick = () => _g && _g.block && _move(_g.block.col - 1);
         ov.querySelector('#dt-r').onclick = () => _g && _g.block && _move(_g.block.col + 1);
         ov.querySelector('#dt-d').onclick = () => _drop();
+        const fire = ov.querySelector('#dt-fire');
+        if (fire) fire.onclick = _fire;
         // Поле: тап по колонке — сдвиг туда, свайп вниз — сброс.
         const field = ov.querySelector('#dt-field');
         let sy = 0, sx = 0;
@@ -658,6 +691,14 @@
             Array.from(ch.querySelectorAll('i')).forEach((el, i) => el.classList.toggle('dt-on', i < _g.charge));
             ch.classList.toggle('dt-charge-hot', _g.charge === ATTACK_EVERY - 1);
         }
+        const fire = document.getElementById('dt-fire');
+        if (fire) {
+            fire.hidden = !_g.ammo;
+            fire.textContent = '⚔️ ×' + _g.ammo;
+            fire.classList.toggle('dt-fire-full', _g.ammo >= MAX_AMMO);
+        }
+        const oa = document.getElementById('dt-opp-ammo');
+        if (oa) { oa.textContent = _g.oppAmmo ? `🧱×${_g.oppAmmo} в запасе` : ''; oa.classList.toggle('dt-opp-ammo-on', _g.oppAmmo > 0); }
         const mini = document.getElementById('dt-mini');
         if (mini) Array.from(mini.children).forEach((el, i) => { el.style.height = Math.round(Math.min(ROWS, _g.oppHs[i] || 0) / ROWS * 100) + '%'; });
     }
@@ -725,7 +766,7 @@
         if (!_g.test) {
             try {
                 const fin = window.finalizeDuelScores
-                    ? await window.finalizeDuelScores(_g.score, _g.streak, { done: _g.drops, correct: _g.hits, atk: _g.atkSent, blk: _g.blkSent, ko: _g.ko, hs: _g.stacks.map(s => s.length) })
+                    ? await window.finalizeDuelScores(_g.score, _g.streak, { done: _g.drops, correct: _g.hits, atk: _g.atkSent, blk: _g.blkSent, ammo: 0, ko: _g.ko, hs: _g.stacks.map(s => s.length) })
                     : null;
                 if (fin) { my = fin.mine; opp = fin.opp; oppEloDoc = fin.oppElo; }
             } catch (e) { console.warn('[Duel] finalize:', e); }
@@ -793,7 +834,7 @@ html.dark #tetris-overlay{background:#121212;color:#e5e7eb}
 html.dark .dt-btn{background:#2c2c2c;color:#d1d5db;border-color:#3f3f46}
 .dt-hint{font-size:12px;font-weight:700;color:#9ca3af;text-align:center;flex-shrink:0}
 .dt-opp{display:flex;align-items:center;gap:8px;font-size:12px;font-weight:900;flex-shrink:0}
-.dt-opp-name{color:#f59e0b;max-width:90px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.dt-opp-name{color:#f59e0b;max-width:96px;flex-shrink:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .dt-opp-score{color:#6b7280;font-variant-numeric:tabular-nums}
 .dt-mini{display:inline-flex;align-items:flex-end;gap:2px;height:22px;padding:2px;border:1px solid #e5e7eb;border-radius:var(--r-sm)}
 .dt-mini i{display:block;width:6px;height:0;background:#f59e0b;border-radius:var(--r-full);transition:height .25s}
@@ -855,6 +896,10 @@ html.dark .dt-cup{background:#2e1065;color:#ddd6fe;border-color:#4c1d95}
 .dt-key{flex:1;max-width:120px;font-size:20px;font-weight:1000;padding:10px 0;border-radius:var(--r-md);background:#fff;border:2px solid #e5e7eb;border-bottom-width:5px;color:#4b5563;cursor:pointer}
 .dt-key:active{transform:translateY(2px)}
 .dt-key-main{background:#f97316;border-color:#ea580c;color:#fff}
+.dt-fire{background:#dc2626!important;border-color:#991b1b!important;color:#fff!important;font-size:17px;animation:dtPulse .9s ease-in-out infinite}
+.dt-fire.dt-fire-full{animation:dtPulse .45s ease-in-out infinite}
+.dt-opp-ammo{font-size:12px;color:#dc2626;font-weight:1000;white-space:nowrap}
+.dt-opp-ammo.dt-opp-ammo-on{animation:dtPulse 1s ease-in-out infinite}
 html.dark .dt-key{background:#2c2c2c;border-color:#3f3f46;color:#d1d5db}
 html.dark .dt-key-main{background:#f97316;border-color:#ea580c;color:#fff}
 #dt-end{position:fixed;inset:0;z-index:${Z + 1};display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.55);padding:16px}
@@ -875,6 +920,7 @@ html.dark .dt-mis{background:#2a2a2a}
 html.dark .dt-big{background:#2c2c2c;color:#d1d5db}
 .dt-big-main{background:#f97316!important;color:#fff!important;font-size:13px;padding:13px;margin-top:14px}
 .dt-link{background:none;border:none;color:#3b82f6;font-weight:1000;font-size:12px;text-decoration:underline;margin-top:10px;cursor:pointer}
+@media (max-width:480px){.dt-atk{display:none}}
 @media (max-height:640px){.dt-cup{min-height:60px;font-size:11px}.dt-key{padding:7px 0}}
 @keyframes dtPop{0%{transform:scale(.6)}100%{transform:scale(1)}}
 @keyframes dtBurn{0%{transform:scale(1);opacity:1}100%{transform:scale(1.35);opacity:0}}
