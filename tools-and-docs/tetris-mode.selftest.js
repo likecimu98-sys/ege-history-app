@@ -58,4 +58,19 @@ assert.match(read('cloud-sync.js'), /DUEL_MODES_PLAYABLE = \[[^\]]*'tetris'/, '�
 assert.match(read('modes.js'), /duelMode === 'tetris' && window\.openTetrisDuel/, 'дуэль не запускает «Датрис»');
 assert.match(read('server/api/src/state-merge.js'), /'tetrisBest', 'tetrisGames'/, 'сервер не сливает рекорд «Датриса»');
 
+// ── Атака: видимая и отбиваемая ──
+const tetris = read('tetris-mode.js');
+assert.match(tetris, /function _threat\(n\)/, 'атака снова падает мгновенно, без «тучи» с отсчётом');
+assert.match(tetris, /if \(_g\.incoming\.length\) \{[\s\S]{0,120}_g\.incoming\.shift\(\);[\s\S]{0,40}_g\.blkSent\+\+/, 'попадание больше не отбивает летящий кирпич');
+assert.match(tetris, /const top = Math\.max\(\.\.\._g\.stacks\.map\(s => s\.length\)\)/, 'кирпич соперника снова падает не в самый высокий стакан');
+assert.match(tetris, /_g\.charge = 0;\s*_g\.stacks\[bl\.col\]\.push/, 'промах больше не обнуляет шкалу заряда');
+
+// ── Реакции: едут вместе с последним счётом режима ──
+const cloud = read('cloud-sync.js');
+assert.match(cloud, /window\.state\.duel\._last = \{ score, combo, extra \}/, 'реакция уйдёт без полей режима и обнулит их у соперника');
+assert.match(cloud, /\.\.\.\(emo \? \{ emo \} : \{\}\)/, 'реакция не едет в объекте игрока');
+assert.match(cloud, /window\.onDuelReaction\(opp\.emo/, 'слушатель матча не передаёт реакции соперника');
+assert.match(read('index.html'), /<script src="duel-react\.js\?v=/, 'duel-react.js не подключён');
+assert.match(read('service-worker.js'), /duel-react\.js\?v=/, 'duel-react.js не в прекэше');
+
 console.log('tetris-mode.selftest: ok');

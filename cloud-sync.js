@@ -7,14 +7,14 @@
             signInWithCredential, signOut, initializeFirestore, collection, doc, setDoc, getDoc,
             getDocs, addDoc, updateDoc, deleteDoc, deleteField, onSnapshot, query, where,
             orderBy, limit, runTransaction, arrayUnion, arrayRemove, vpsApiFetch, refreshVpsAuth
-        } from "./vps-sync-compat.js?v=20260923-5";
+        } from "./vps-sync-compat.js?v=20260923-6";
 
         // jsPDF грузился с cdnjs.cloudflare.com без SRI — то есть посторонний скрипт
         // исполнялся с полными правами страницы, а при недоступности CDN (у части
         // нашей аудитории это обычное дело) экспорт PDF просто не работал. Довод тот
         // же, что и для telegram-web-app.js: своя копия с того же origin.
         // Версия совпадает с прежней CDN-ной — 2.5.1, лежит в vendor/.
-        const VENDOR_JSPDF = 'vendor/jspdf.umd.min.js?v=20260923-5';
+        const VENDOR_JSPDF = 'vendor/jspdf.umd.min.js?v=20260923-6';
 
         const cloudConfig = { projectId: 'vps-postgresql' };
         
@@ -1466,6 +1466,7 @@
                         else if (dm === 'match' && window.updateMatchDuelOpp) window.updateMatchDuelOpp(opp);
                         else if (dm === 'order' && window.updateOrderDuelOpp) window.updateOrderDuelOpp(opp);
                         else if (dm === 'tetris' && window.updateTetrisDuelOpp) window.updateTetrisDuelOpp(opp);
+                        if (opp.emo && window.onDuelReaction) window.onDuelReaction(opp.emo, window.state.duel.oppName);
                     }
                 }
                 
@@ -1482,6 +1483,11 @@
         // ✅ FIX: Функция теперь async с правильным await — без молчаливых падений
         window.updateDuelScoreDb = async function(score, combo, extra) {
             if (!db || !window.state.duel.matchId || !fbUser) return;
+            // Последний отправленный счёт режима — чтобы реакция (sendDuelReaction)
+            // ушла ВМЕСТЕ с ним: объект игрока перезаписывается целиком, и реакция
+            // без полей режима обнулила бы у соперника, например, стаканы «Датриса».
+            window.state.duel._last = { score, combo, extra };
+            const emo = window.state.duel.emo;
             const matchesRef = collection(db, 'artifacts', appId, 'public', 'data', 'matches');
             try {
                 await updateDoc(doc(matchesRef, window.state.duel.matchId), {
@@ -1492,10 +1498,24 @@
                         combo: combo,
                         elo: _myDuelElo(), // объект перезаписывается целиком — рейтинг нельзя терять
                         seq: _nextDuelSeq(),
-                        ...(extra || {}) // свайп-дуэль: {done, correct} — живой прогресс для соперника
+                        ...(extra || {}), // свайп-дуэль: {done, correct} — живой прогресс для соперника
+                        // Реакция едет в каждой записи, пока не сменится: соперник мог
+                        // пропустить снапшот, где она появилась впервые.
+                        ...(emo ? { emo } : {})
                     }
                 });
             } catch(e) { console.error('[Duel] updateDuelScoreDb error:', e); }
+        };
+
+        // Реакция-эмодзи сопернику (duel-react.js). n растёт — по нему соперник
+        // отличает новую реакцию от той же, приехавшей в следующей записи счёта.
+        window.sendDuelReaction = function(e) {
+            const d = window.state.duel;
+            if (!d || !d.active || !d.matchId) return false;
+            d.emo = { e: String(e).slice(0, 8), n: ((d.emo && d.emo.n) || 0) + 1 };
+            const last = d._last || { score: d.myScore || 0, combo: d.myCombo || 0, extra: {} };
+            window.updateDuelScoreDb(last.score, last.combo, last.extra);
+            return true;
         };
 
         // ─── Авторитетный финал матча ───────────────────────────────────────────
