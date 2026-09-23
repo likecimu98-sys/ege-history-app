@@ -725,6 +725,7 @@ const ACTION_HANDLERS = {
     openCram:               (a) => window.openCram?.(a),
     openSwipeMode:          () => window.openSwipeMode?.(),
     openMatchMode:          () => window.openMatchMode?.(),
+    openOrderMode:          () => window.openOrderMode?.(),
     openVovMode:            () => window.openVovMode?.(),
     openExamMode:           () => window.openExamMode?.(),
     backToLobby:            () => window.backToLobby?.(),

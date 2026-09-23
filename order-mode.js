@@ -1,22 +1,26 @@
-// order-mode.js — дуэль «Кто раньше». Два события задания №1 — тапни то, что было
-// раньше. Три находки, ради которых режим не сводится к «угадай из двух»:
+// order-mode.js — «Кто раньше»: из двух событий тапнуть более раннее. Два режима
+// на одном движке:
+//  • ДУЭЛЬ (openOrderDuel) — колода из документа матча, 45 секунд, соперник;
+//  • ТРЕНИРОВКА (openOrderMode) — «Тренажёры» в лобби: три жизни, колода растёт
+//    по ходу, рекорд в stats.orderBest.
 //
-//  • РАЗРЫВ СУЖАЕТСЯ. Колода идёт от пар, разнесённых на века, к «фотофинишу» —
-//    событиям в 1–4 годах друг от друга. Фотофиниш объявляется ДО ответа и стоит
-//    вдвое больше: рискуешь осознанно.
-//  • «ТРОЙКА». Каждый седьмой ход — три события, их надо расставить по порядку.
-//    Одна ошибка в порядке — ход проигран целиком.
-//  • ЛЕНТА ВРЕМЕНИ. Каждое угаданное событие падает точкой на шкалу 862–2022,
-//    а после матча — разбор ошибок с годами: дуэль заодно учит.
+// События — order-data.js (хронологическая таблица владельца + задание №1), у
+// каждого ИНТЕРВАЛ, а не год: длительное событие не сравнивается с тем, что
+// случилось в ходе него (см. _ordered).
+//
+// Что делает режим не «угадай из двух»:
+//  • РАЗРЫВ СУЖАЕТСЯ — от веков к «фотофинишу» (меньше 5 лет, очки ×2, объявляется
+//    до ответа; бывает и «один и тот же год» — тогда решают месяцы);
+//  • «ТРОЙКА» — каждый седьмой ход три события расставить по порядку;
+//  • ЛЕНТА ВРЕМЕНИ — угаданное падает точкой на шкалу; в конце — разбор ошибок.
 //
 // Звуки синтезируются Web Audio на лету, файлов нет: верный ответ звучит ВЫШЕ с
-// каждым шагом серии (игрок слышит, что «разогнался»), промах — низкий «бвомп»,
-// последние пять секунд тикают часы. Выключатель — общий Sfx.isMuted.
+// каждым шагом серии, промах — низкий «бвомп», последние пять секунд дуэли тикают
+// часы. Выключатель — общий Sfx.isMuted.
 //
-// Колоду, как и в свайпе/подборе, строит создатель матча и кладёт в документ матча
-// (поле orderDeck): у обоих игроков одни и те же ходы в одном порядке. Поле обязано
-// быть в MATCH_CREATE_FIELDS на сервере — иначе создание матча молча получает 403
-// (так 01.08.2026 выпал «подбор», см. match-fields-contract.selftest.js).
+// Колоду дуэли строит создатель матча и кладёт в документ матча (поле orderDeck).
+// Поле обязано быть в MATCH_CREATE_FIELDS на сервере — иначе создание матча молча
+// получает 403 (так 01.08.2026 выпал «подбор», см. match-fields-contract.selftest.js).
 'use strict';
 
 (function () {
@@ -24,19 +28,21 @@
     window.ORDER_DUEL_MS = DUEL_MS;
     const Z = 10006;
     const Y_MIN = 850, Y_MAX = 2025;           // шкала ленты времени
-    const PHOTO_GAP = 4;                        // разница ≤ 4 лет — фотофиниш, очки ×2
+    const PHOTO_GAP_YEARS = 5;                  // разрыв меньше 5 лет — фотофиниш, очки ×2
     const REVEAL_OK_MS = 560, REVEAL_BAD_MS = 1000; // промах стоит ещё и времени
+    const SOLO_LIVES = 3;
 
-    // Ступени колоды: [мин. разрыв, макс. разрыв (не включая), сколько пар].
-    // Порядок = порядок в матче: от лёгкого к трудному. Пар заведомо больше, чем
-    // успевают за 45 секунд — матч обрывает таймер, а не конец колоды.
-    // За 45 секунд успевают ~20–25 ходов, поэтому лёгкие ступени короткие: до
-    // фотофиниша обязан доходить каждый, кто играет в нормальном темпе.
-    const TIERS = [[150, Infinity, 4], [50, 150, 4], [15, 50, 5], [5, 15, 6], [1, PHOTO_GAP + 1, 14]];
+    // Ступени сложности по разрыву между событиями, лет: [от, до). Разрыв — от
+    // КОНЦА раннего до НАЧАЛА позднего, так что «правление Николая I» и «отмена
+    // крепостного права» разнесены на 5 лет, а не на 36.
+    const TIERS = [[150, Infinity], [50, 150], [15, 50], [5, 15], [0, PHOTO_GAP_YEARS]];
+    // Дуэль: сколько пар на каждой ступени. За 45 секунд успевают ~20–25 ходов,
+    // поэтому лёгкие ступени короткие: до фотофиниша доходит каждый.
+    const DUEL_LADDER = [4, 4, 5, 6, 14];
     const TRIO_EVERY = 7;                        // каждый седьмой ход — тройка
     // Разрывы между соседями внутри тройки по ступеням: [мин, макс]. Без потолка
     // поздняя тройка выходила «1598 / 1924 / 1944» — легче любой пары вокруг неё.
-    const TRIO_GAPS = [[60, 400], [25, 150], [10, 60], [4, 30], [2, 15]];
+    const TRIO_GAPS = [[60, 400], [25, 150], [10, 60], [4, 30], [1, 15]];
 
     let _o = null;
 
@@ -97,38 +103,59 @@
     };
     window.OrderSfx = Snd; // для ручной проверки звуков из консоли
 
-    // ─── Колода ──────────────────────────────────────────────────────────────
-    function _rows() {
-        const seen = new Set(), out = [];
-        for (const r of (window.task1Data || [])) {
-            if (!r || !r.event) continue;
+    // ─── События и сравнимость ───────────────────────────────────────────────
+    // order-data.js: [текст, начало ГГГГММДД, конец ГГГГММДД, подпись, точн.начала, точн.конца].
+    // У события есть ДЛИТЕЛЬНОСТЬ: «Северная война» — это 1700–1721, а не 1700.
+    // «Раньше» значит «целиком закончилось до начала другого». Пересекающиеся
+    // события несравнимы и в одну пару не попадают никогда: «Северная война» и
+    // «Полтавская битва» — не вопрос «кто раньше», а ловушка без ответа.
+    function _dayNo(n) { const y = Math.floor(n / 10000), m = Math.floor(n / 100) % 100, d = n % 100; return Date.UTC(y, m - 1, d) / 86400000; }
+    function _ev(r) { return { t: r[0], s: r[1], e: r[2], l: r[3], sp: r[4], ep: r[5], y: Math.floor(r[1] / 10000) }; }
+
+    let _allCache = null;
+    function _all() {
+        if (_allCache) return _allCache;
+        const src = window.orderEventsData;
+        if (Array.isArray(src) && src.length) return (_allCache = src.map(_ev));
+        // Запасной путь, пока order-data.js не подъехал: задание №1, только годы.
+        return (window.task1Data || []).filter(r => r && r.event).map(r => {
             const y = Number(r.yearNum) || parseInt(String(r.year).match(/\d+/) || '', 10);
-            if (!isFinite(y) || y < Y_MIN || y > Y_MAX) continue;
-            const key = String(r.event).trim().toLowerCase();
-            if (seen.has(key)) continue;
-            seen.add(key);
-            out.push({ t: _cap(String(r.event).trim()), y });
-        }
-        return out;
+            return isFinite(y) ? { t: _cap(String(r.event).trim()), s: y * 10000 + 101, e: y * 10000 + 1231, l: String(y), sp: 0, ep: 0, y } : null;
+        }).filter(Boolean);
     }
 
-    // Пара с разрывом в [lo, hi). Равных годов не бывает никогда: «кто раньше» без ответа.
+    // Упорядоченная пара [раньше, позже] или null, если сравнивать нельзя.
+    // Обе границы точные (месяц/день) — нужен зазор ≥ 45 дней: разницу в неделю
+    // («конституция 10 июля или расстрел 17 июля») помнить никто не обязан.
+    const MIN_FINE_GAP_DAYS = 45;
+    function _ordered(a, b) {
+        let x = a, z = b;
+        if (!(x.e < z.s)) { if (b.e < a.s) { x = b; z = a; } else return null; }
+        if (x.ep > 0 && z.sp > 0 && _dayNo(z.s) - _dayNo(x.e) < MIN_FINE_GAP_DAYS) return null;
+        return [x, z];
+    }
+    function _gapYears(a, b) { const o = _ordered(a, b); return o ? (_dayNo(o[1].s) - _dayNo(o[0].e)) / 365.25 : -1; }
+    // Разница «как видит человек»: год начала позднего минус год конца раннего.
+    // Точный зазор для «1849 / 1851» — ровно год (от 31.12.1849 до 01.01.1851), но
+    // игрок видит на карточках два года разницы и счёл бы «↕ 1 год» ошибкой.
+    function _yearGap(a, b) { const o = _ordered(a, b); return o ? Math.floor(o[1].s / 10000) - Math.floor(o[0].e / 10000) : -1; }
+    function _sameYear(a, b) { return _yearGap(a, b) === 0; }
+
     function _takePair(pool, lo, hi) {
         const idx = _shuffle(pool.map((_, i) => i));
-        for (const i of idx.slice(0, 60)) {
+        for (const i of idx.slice(0, 80)) {
             const a = pool[i];
-            const js = _shuffle(pool.map((_, j) => j)).filter(j => { const g = Math.abs(pool[j].y - a.y); return j !== i && g >= lo && g < hi; });
-            if (js.length) { const b = pool[js[0]]; _drop(pool, [a, b]); return [a, b]; }
+            const cands = pool.filter(b => { if (b === a) return false; const g = _gapYears(a, b); return g >= lo && g < hi; });
+            if (cands.length) { const b = cands[Math.floor(Math.random() * cands.length)]; _drop(pool, [a, b]); return [a, b]; }
         }
         return null;
     }
-    // Тройка: три года подряд, соседние разнесены на [lo, hi] лет.
+    // Тройка: x < y < z, соседи сравнимы и разнесены на [lo, hi] лет.
     function _takeTrio(pool, lo, hi) {
-        const sorted = pool.slice().sort((a, b) => a.y - b.y);
-        for (const a of _shuffle(sorted.slice()).slice(0, 120)) {
-            const bs = _shuffle(sorted.filter(x => x.y - a.y >= lo && x.y - a.y <= hi));
-            for (const b of bs.slice(0, 10)) {
-                const c = _shuffle(sorted.filter(x => x.y - b.y >= lo && x.y - b.y <= hi))[0];
+        const ok = (a, b) => { const g = _gapYears(a, b); return g >= lo && g <= hi && a.s < b.s; };
+        for (const a of _shuffle(pool.slice()).slice(0, 120)) {
+            for (const b of _shuffle(pool.filter(x => ok(a, x))).slice(0, 12)) {
+                const c = _shuffle(pool.filter(x => ok(b, x) && _ordered(a, x)))[0];
                 if (c) { _drop(pool, [a, b, c]); return [a, b, c]; }
             }
         }
@@ -136,26 +163,74 @@
     }
     function _drop(pool, items) { for (const it of items) { const k = pool.indexOf(it); if (k >= 0) pool.splice(k, 1); } }
 
+    // В колоду матча уходит только то, что нужно на экране: текст, подпись даты,
+    // границы (для ответа и разрыва) и год — год оставлен для клиентов vps-120,
+    // которые сравнивают только по нему.
+    function _snap(ev) { return { t: ev.t, l: ev.l, s: ev.s, e: ev.e, y: ev.y }; }
+    function _item(tier, pool) {
+        if (tier.trio) { const tr = _takeTrio(pool, tier.trio[0], tier.trio[1]); return tr ? { k: 't', e: _shuffle(tr.map(_snap)) } : null; }
+        const p = _takePair(pool, tier.lo, tier.hi) || _takePair(pool, 0, Infinity);
+        return p ? { k: 'p', e: _shuffle(p.map(_snap)) } : null;
+    }
+    function _tier(i) { const t = TIERS[Math.max(0, Math.min(TIERS.length - 1, i))]; return { lo: t[0], hi: t[1] }; }
+    function _trioTier(i) { return { trio: TRIO_GAPS[Math.max(0, Math.min(TRIO_GAPS.length - 1, i))] }; }
+
     window.buildOrderDuelDeck = function () {
-        const pool = _shuffle(_rows());
-        if (pool.length < 40) return null;
+        const pool = _shuffle(_all().slice());
+        if (pool.length < 60) return null;
         const deck = [];
-        TIERS.forEach(([lo, hi, n], tier) => {
+        DUEL_LADDER.forEach((n, tier) => {
             for (let k = 0; k < n; k++) {
-                if ((deck.length + 1) % TRIO_EVERY === 0) {
-                    const trio = _takeTrio(pool, TRIO_GAPS[tier][0], TRIO_GAPS[tier][1]);
-                    if (trio) deck.push({ k: 't', e: _shuffle(trio) });
-                }
-                // Не нашлось пары в ступени — берём любую с разрывом ≥ 1: ход важнее ступени.
-                const pair = _takePair(pool, lo, hi) || _takePair(pool, 1, Infinity);
-                if (!pair) break;
-                deck.push({ k: 'p', e: _shuffle(pair) });
+                if ((deck.length + 1) % TRIO_EVERY === 0) { const t = _item(_trioTier(tier), pool); if (t) deck.push(t); }
+                const p = _item(_tier(tier), pool);
+                if (!p) break;
+                deck.push(p);
             }
         });
         return deck.length >= 12 ? deck : null;
     };
 
-    // ─── Дуэль ───────────────────────────────────────────────────────────────
+    // Период из лобби — как в «Подборе»: #filter-period и «свои годы». «Дошли до N»
+    // ученика класса приходит сюда же как custom 862–N. Событие берём, если оно
+    // целиком внутри рамок.
+    function _soloPool() {
+        const all = _all();
+        const g = id => document.getElementById(id);
+        const sel = g('filter-period');
+        const period = (sel && sel.value) || 'all';
+        let a = -Infinity, b = Infinity;
+        if (period === 'custom') {
+            a = parseInt(g('custom-year-start') && g('custom-year-start').value, 10) || -Infinity;
+            b = parseInt(g('custom-year-end') && g('custom-year-end').value, 10) || Infinity;
+        } else if (period === 'early') { b = 1699; }
+        else if (period === '18th') { a = 1700; b = 1799; }
+        else if (period === '19th') { a = 1800; b = 1899; }
+        else if (period === '20th') { a = 1900; }
+        const inRange = all.filter(ev => ev.y >= a && Math.floor(ev.e / 10000) <= b);
+        // Узкие рамки не набирают игры — лучше вся история, чем пустой экран.
+        const narrow = inRange.length >= 30 && (isFinite(a) || isFinite(b));
+        return { pool: inRange.length >= 30 ? inRange : all, range: narrow ? [a, b] : null };
+    }
+
+    // ─── Общий движок ────────────────────────────────────────────────────────
+    // Один экран на два режима: дуэль (колода из матча, таймер, соперник) и
+    // тренировка (колода растёт по ходу, три жизни, рекорд).
+    function _start(o) {
+        if (_o) window.closeOrderMode();
+        try { if (window.Sfx) window.Sfx.unlock(); } catch (e) {}
+        _o = Object.assign({
+            deck: [], idx: -1, lock: false, over: false, finishedMine: false,
+            score: 0, streak: 0, best: 0, done: 0, correct: 0,
+            trioPicked: [], placed: [], misses: [],
+            oppName: 'Соперник', oppScore: 0, oppCorrect: 0, oppDone: 0,
+            endsAt: 0, lastTickSec: null, timerIv: null, test: false, solo: false, lives: 0
+        }, o);
+        _render();
+        _next();
+        if (!_o.solo) { _o.timerIv = setInterval(_tick, 100); _tick(); }
+        _h('medium');
+    }
+
     window.openOrderDuel = function (opts) {
         const deck = ((opts && opts.deck) || []).filter(it => it && Array.isArray(it.e) && it.e.length >= 2);
         if (!deck.length) {
@@ -163,22 +238,27 @@
             try { window.cancelDuelDb && window.cancelDuelDb(); } catch (e) {}
             return;
         }
-        if (_o) window.closeOrderMode();
-        try { if (window.Sfx) window.Sfx.unlock(); } catch (e) {}
-        _o = {
-            deck, idx: -1, lock: false, over: false, finishedMine: false,
-            score: 0, streak: 0, best: 0, done: 0, correct: 0,
-            trioPicked: [], placed: [], misses: [],
-            oppName: (opts && opts.oppName) || 'Соперник', oppScore: 0, oppCorrect: 0, oppDone: 0,
-            endsAt: (opts && opts.endsAt) || (Date.now() + DUEL_MS),
-            lastTickSec: null, timerIv: null, test: !!(opts && opts.test)
-        };
-        _render();
-        _next();
-        _o.timerIv = setInterval(_tick, 100);
-        _tick();
-        _h('medium');
+        _start({ deck, oppName: (opts && opts.oppName) || 'Соперник', endsAt: (opts && opts.endsAt) || (Date.now() + DUEL_MS), test: !!(opts && opts.test) });
     };
+
+    // Тренировка «Кто раньше» — отдельный режим в разделе «Тренажёры».
+    window.openOrderMode = function () {
+        if (window.canSolveMore) {
+            const lim = window.canSolveMore();
+            if (!lim.ok) { if (window.showDailyLimitModal) window.showDailyLimitModal(); return; }
+        }
+        const { pool, range } = _soloPool();
+        if (pool.length < 30) { if (typeof showToast === 'function') showToast('⚠️', 'События ещё загружаются — попробуй через секунду', 'bg-amber-500', 'border-amber-700'); return; }
+        _start({ solo: true, lives: SOLO_LIVES, soloPool: _shuffle(pool.slice()), soloFull: pool, range, test: true });
+    };
+
+    // Тренировка: следующий ход строится на лету. Ступень растёт каждые 5 верных,
+    // так что сильный игрок быстро доходит до фотофиниша, а слабый не тонет сразу.
+    function _soloItem() {
+        if (_o.soloPool.length < 12) _o.soloPool = _shuffle(_o.soloFull.slice());
+        const tier = Math.floor(_o.correct / 5);
+        return ((_o.idx + 1) % TRIO_EVERY === 0 ? _item(_trioTier(tier), _o.soloPool) : null) || _item(_tier(tier), _o.soloPool);
+    }
 
     window.closeOrderMode = function () {
         if (!_o) return;
@@ -218,29 +298,38 @@
         if (left <= 0 && !_o.over) _finish();
     }
 
+    function _hearts() { return '❤️'.repeat(Math.max(0, _o.lives)) + '🤍'.repeat(Math.max(0, SOLO_LIVES - _o.lives)); }
+    function _soloBest() { return Number(window.state && window.state.stats && window.state.stats.orderBest) || 0; }
+    function _rangeText(r) { return r ? ` · ${isFinite(r[0]) ? r[0] : '…'}–${isFinite(r[1]) ? r[1] : '…'}` : ''; }
+
     function _render() {
         const old = document.getElementById('order-overlay'); if (old) old.remove();
         const ov = document.createElement('div');
         ov.id = 'order-overlay';
         ov.addEventListener('pointerdown', _wake, { passive: true });
         const muted = !!(window.Sfx && window.Sfx.isMuted && window.Sfx.isMuted());
+        const solo = _o.solo;
+        const best = _soloBest();
         ov.innerHTML = `
           <div class="om-wrap">
             <div class="om-head">
               <div class="om-title">
-                <div class="om-kicker">⏳ Кто раньше · дуэль</div>
+                <div class="om-kicker">⏳ Кто раньше${solo ? _rangeText(_o.range) : ' · дуэль'}</div>
                 <div class="om-sub">Счёт <b id="om-score">0</b> · <span id="om-streak" class="om-streak">🔥0</span></div>
               </div>
-              <div id="om-timer" class="om-timer">${_fmtLeft(DUEL_MS)}</div>
+              ${solo
+                ? `<div class="om-lives-box"><div id="om-lives" class="om-lives">${_hearts()}</div><div class="om-rec">${best ? '🏆 рекорд ' + best : 'первая игра!'}</div></div>`
+                : `<div id="om-timer" class="om-timer">${_fmtLeft(DUEL_MS)}</div>`}
               <div class="om-btns">
                 <button id="om-mute" class="om-btn" aria-label="Звук">${muted ? '🔇' : '🔊'}</button>
                 <button id="om-exit" class="om-btn">✕</button>
               </div>
             </div>
+            ${solo ? '' : `
             <div class="om-bars">
               <div class="om-row"><span class="om-who om-me">ТЫ</span><div class="om-track"><div id="om-me-bar" class="om-fill om-fill-me"></div></div><span id="om-me-txt" class="om-num">✓0 · 0</span></div>
               <div class="om-row"><span class="om-who om-op">${_esc(_o.oppName).toUpperCase()}</span><div class="om-track"><div id="om-op-bar" class="om-fill om-fill-op"></div></div><span id="om-op-txt" class="om-num">✓0 · 0</span></div>
-            </div>
+            </div>`}
             <div id="om-ask" class="om-ask"></div>
             <div id="om-stage" class="om-stage"></div>
             <div class="om-line-box">
@@ -268,6 +357,8 @@
 
     function _requestExit() {
         _h('light');
+        // Тренировку «Выйти» не обрывает молча: показываем итог и сохраняем рекорд.
+        if (_o && _o.solo && !_o.over && _o.done > 0) return _soloEnd(true);
         if (_o && !_o.over && !_o.test && window.uiConfirm) return window.uiConfirm('Выйти из дуэли? Это засчитается как сдача.', window.closeOrderMode);
         window.closeOrderMode();
     }
@@ -278,6 +369,7 @@
         set('om-score', _o.score);
         set('om-me-txt', `✓${_o.correct} · ${_o.score}`);
         set('om-op-txt', `✓${_o.oppCorrect} · ${_o.oppScore}`);
+        if (_o.solo) set('om-lives', _hearts());
         const st = document.getElementById('om-streak');
         if (st) { st.textContent = '🔥' + _o.streak; st.classList.toggle('om-hot', _o.streak >= 5); }
         const top = Math.max(1, _o.score, _o.oppScore);
@@ -288,21 +380,30 @@
         if (ov) ov.classList.toggle('om-onfire', _o.streak >= 5);
     }
 
+    // Колоды vps-120 несут только {t, y}: достраиваем границы из года.
+    function _norm(ev) {
+        if (ev.s) return ev;
+        return Object.assign({}, ev, { s: ev.y * 10000 + 101, e: ev.y * 10000 + 1231, l: String(ev.y) });
+    }
+
     function _next() {
         if (!_o || _o.over) return;
         _o.idx++;
-        const it = _o.deck[_o.idx];
+        const it = _o.solo ? _soloItem() : _o.deck[_o.idx];
+        if (_o.solo && it) _o.deck[_o.idx] = it;
         if (!it) return _mineDone();
+        it.e = it.e.map(_norm);
         _o.lock = false;
         _o.trioPicked = [];
         const trio = it.k === 't';
-        const gap = trio ? 0 : Math.abs(it.e[0].y - it.e[1].y);
-        _o.photo = !trio && gap <= PHOTO_GAP;
+        const gap = trio ? 99 : _yearGap(it.e[0], it.e[1]);
+        _o.photo = !trio && gap >= 0 && gap < PHOTO_GAP_YEARS;
+        const oneYear = _o.photo && _sameYear(it.e[0], it.e[1]);
         const ask = document.getElementById('om-ask');
         if (ask) ask.innerHTML = trio
             ? `<span class="om-badge om-badge-trio">🎲 Тройка</span> Расставь по порядку — тапни от <b>самого раннего</b>`
             : _o.photo
-                ? `<span class="om-badge om-badge-photo">⚡ Фотофиниш · ×2</span> Разница меньше 5 лет. Что <b>раньше</b>?`
+                ? `<span class="om-badge om-badge-photo">⚡ Фотофиниш · ×2</span> ${oneYear ? 'Один и тот же год!' : 'Разница меньше 5 лет.'} Что <b>раньше</b>?`
                 : `Что было <b>раньше</b>?`;
         const stage = document.getElementById('om-stage');
         if (!stage) return;
@@ -319,7 +420,8 @@
             b.style.animationDelay = (i * 60) + 'ms';
             b.dataset.i = String(i);
             const txt = document.createElement('span'); txt.className = 'om-text'; txt.textContent = ev.t;
-            const yr = document.createElement('span'); yr.className = 'om-year'; yr.textContent = ev.y + ' г.';
+            const yr = document.createElement('span'); yr.className = 'om-year'; yr.textContent = ev.l;
+            if (String(ev.l).length > 12) yr.classList.add('om-year-long');
             const num = document.createElement('span'); num.className = 'om-num-badge';
             b.append(num, txt, yr);
             if (ev.t.length > 80) b.classList.add('om-long');
@@ -337,12 +439,30 @@
         const gain = Math.round((base + Math.min(20, (_o.streak - 1) * 2)) * (_o.photo ? 2 : 1));
         _o.score += gain;
         _o.correct++;
+        // Тренировка идёт в норму дня, как «Подбор»; дуэль — нет.
+        if (_o.solo && window.creditNorm) window.creditNorm(1, 'task1');
         return gain;
     }
     function _miss(it) {
         _o.streak = 0;
-        _o.score = Math.max(0, _o.score - 5);
+        if (_o.solo) _o.lives--;
+        else _o.score = Math.max(0, _o.score - 5);
         _o.misses.push(it);
+    }
+    // После хода: в тренировке кончились жизни — итог, иначе следующий ход.
+    function _after(ms) {
+        setTimeout(() => {
+            if (!_o || _o.over) return;
+            if (_o.solo && _o.lives <= 0) return _soloEnd(false);
+            _next();
+        }, ms);
+    }
+
+    function _gapText(a, b) {
+        const n = _yearGap(a, b);
+        if (n >= 1) return `↕ ${n} ${_years(n)}`;
+        const m = Math.max(1, Math.round(_gapYears(a, b) * 12));
+        return `↕ ${m} ${typeof plural === 'function' ? plural(m, 'месяц', 'месяца', 'месяцев') : 'мес.'}`;
     }
 
     function _pickPair(i) {
@@ -350,15 +470,14 @@
         _o.lock = true;
         _wake();
         const it = _o.deck[_o.idx];
-        const early = it.e[0].y < it.e[1].y ? 0 : 1;
+        const early = it.e[0].s < it.e[1].s ? 0 : 1;
         const ok = i === early;
         _o.done++;
         const cards = _cards();
         _reveal();
         cards[early].classList.add('om-right');
         const vs = document.getElementById('om-vs');
-        const gap = Math.abs(it.e[0].y - it.e[1].y);
-        if (vs) { vs.textContent = `↕ ${gap} ${_years(gap)}`; vs.classList.add('om-vs-gap'); }
+        if (vs) { vs.textContent = _gapText(it.e[0], it.e[1]); vs.classList.add('om-vs-gap'); }
         if (ok) {
             const gain = _award(10);
             if (_o.photo) Snd.photo(); else Snd.ok(_o.streak);
@@ -371,7 +490,8 @@
             Snd.bad(); _h('error');
         }
         _report(); _bar();
-        setTimeout(_next, ok ? REVEAL_OK_MS : REVEAL_BAD_MS);
+        // В тренировке на ошибке дольше: прочитать даты — и есть смысл режима.
+        _after(ok ? REVEAL_OK_MS : REVEAL_BAD_MS + (_o.solo ? 900 : 0));
     }
 
     function _pickTrio(i) {
@@ -379,7 +499,7 @@
         if (_o.trioPicked.indexOf(i) !== -1) return;
         _wake();
         const it = _o.deck[_o.idx];
-        const order = it.e.map((e, k) => k).sort((a, b) => it.e[a].y - it.e[b].y);
+        const order = it.e.map((e, k) => k).sort((a, b) => it.e[a].s - it.e[b].s);
         const want = order[_o.trioPicked.length];
         const cards = _cards();
         if (i === want) {
@@ -397,10 +517,10 @@
             _floatPts(cards[i], gain);
             it.e.forEach(_drop2line);
             _report(); _bar();
-            setTimeout(_next, REVEAL_OK_MS + 200);
+            _after(REVEAL_OK_MS + 200);
             return;
         }
-        // Ошибка в порядке — ход проигран: показываем правильный порядок и годы.
+        // Ошибка в порядке — ход проигран: показываем правильный порядок и даты.
         _o.lock = true;
         _o.done++;
         cards[i].classList.add('om-wrong');
@@ -409,12 +529,11 @@
         _miss(it);
         Snd.bad(); _h('error');
         _report(); _bar();
-        setTimeout(_next, REVEAL_BAD_MS + 500);
+        _after(REVEAL_BAD_MS + (_o.solo ? 1200 : 500));
     }
 
     function _floatPts(card, gain) {
-        const stage = document.getElementById('om-stage');
-        if (!stage || !card) return;
+        if (!card) return;
         const f = document.createElement('div');
         f.className = 'om-float';
         f.textContent = (_o.photo ? '⚡ ' : '') + '+' + gain;
@@ -427,11 +546,12 @@
         _o.placed.push(ev);
         const line = document.getElementById('om-line');
         if (line) {
+            const y = Math.floor(ev.s / 10000);
             const d = document.createElement('span');
             d.className = 'om-dot';
-            d.style.left = _pos(ev.y) + '%';
-            d.style.background = ev.y < 1700 ? '#a16207' : ev.y < 1800 ? '#0891b2' : ev.y < 1900 ? '#7c3aed' : '#e11d48';
-            d.title = ev.y + ' — ' + ev.t;
+            d.style.left = _pos(y) + '%';
+            d.style.background = y < 1700 ? '#a16207' : y < 1800 ? '#0891b2' : y < 1900 ? '#7c3aed' : '#e11d48';
+            d.title = ev.l + ' — ' + ev.t;
             line.appendChild(d);
         }
         const n = document.getElementById('om-line-n');
@@ -457,8 +577,47 @@
         setTimeout(_verdict, 400);
     }
 
-    // Финал — той же процедурой, что свайп и подбор: авторитетные числа из документа
-    // матча, затем Elo, и только потом cancelDuelDb (он стирает рейтинг соперника).
+    function _missesHtml(list) {
+        return list.map(it => {
+            const s = it.e.slice().sort((a, b) => a.s - b.s);
+            return `<li>${s.map(e => `<span class="om-mis-y">${_esc(e.l)}</span> ${_esc(e.t)}`).join('<span class="om-mis-arrow">→</span>')}</li>`;
+        }).join('');
+    }
+
+    // Конец тренировки: жизни кончились или игрок вышел сам.
+    function _soloEnd(quit) {
+        if (!_o || _o.over) return;
+        _o.over = true; _o.lock = true;
+        const s = window.state && window.state.stats;
+        const prev = _soloBest();
+        const record = _o.score > prev;
+        if (s && _o.done > 0) {
+            s.orderGames = (Number(s.orderGames) || 0) + 1;
+            if (record) s.orderBest = _o.score;
+            try { if (typeof saveProgress === 'function') saveProgress(); } catch (e) {}
+        }
+        _h(record ? 'success' : 'warning');
+        (record ? Snd.win : Snd.lose)();
+        const misses = _missesHtml(_o.misses.slice(-5));
+        const panel = document.createElement('div');
+        panel.id = 'om-end';
+        panel.innerHTML = `
+          <div class="om-end-card">
+            <div style="font-size:52px;line-height:1">${record ? '🏆' : quit ? '⏳' : '💔'}</div>
+            <div class="om-end-title" style="color:${record ? '#16a34a' : '#64748b'}">${record ? 'Новый рекорд!' : quit ? 'Игра окончена' : 'Жизни кончились'}</div>
+            <div class="om-end-score">${_o.score}</div>
+            <div class="om-end-sub">Верно ${_o.correct} из ${_o.done} · лучшая серия 🔥${_o.best}${record || !prev ? '' : ` · рекорд ${prev}`}</div>
+            ${misses ? `<div class="om-mis"><div class="om-mis-cap">Как было на самом деле</div><ul>${misses}</ul></div>` : ''}
+            <button id="om-rematch" class="om-big om-big-main">🔁 Ещё раз</button>
+            <button id="om-leave" class="om-big">✕ Выйти</button>
+          </div>`;
+        document.body.appendChild(panel);
+        panel.querySelector('#om-rematch').onclick = () => { window.closeOrderMode(); window.openOrderMode(); };
+        panel.querySelector('#om-leave').onclick = () => window.closeOrderMode();
+    }
+
+    // Финал дуэли — той же процедурой, что свайп и подбор: авторитетные числа из
+    // документа матча, затем Elo, и только потом cancelDuelDb (он стирает рейтинг соперника).
     async function _verdict() {
         if (!_o) return;
         let my = _o.score, opp = _o.oppScore, oppEloDoc = null, rate = null;
@@ -482,10 +641,7 @@
         _h(win ? 'success' : 'error');
         (win ? Snd.win : draw ? Snd.draw : Snd.lose)();
         _bar();
-        const misses = _o.misses.slice(-4).map(it => {
-            const s = it.e.slice().sort((a, b) => a.y - b.y);
-            return `<li>${s.map(e => `<span class="om-mis-y">${e.y}</span> ${_esc(e.t)}`).join('<span class="om-mis-arrow">→</span>')}</li>`;
-        }).join('');
+        const misses = _missesHtml(_o.misses.slice(-4));
         const panel = document.createElement('div');
         panel.id = 'om-end';
         panel.innerHTML = `
@@ -524,6 +680,10 @@ html.dark #order-overlay.om-onfire{background:radial-gradient(120% 80% at 50% 11
 .om-streak{display:inline-block;transition:transform .2s}.om-streak.om-hot{color:#ea580c;animation:omPulse .8s ease-in-out infinite}
 .om-timer{font-size:26px;font-weight:1000;font-variant-numeric:tabular-nums;color:#f43f5e}
 .om-timer.om-hurry{animation:omPulse .5s ease-in-out infinite}
+.om-lives-box{text-align:center}
+.om-lives{font-size:20px;letter-spacing:2px;line-height:1.1}
+.om-rec{font-size:var(--t-micro);font-weight:900;color:#9ca3af;margin-top:2px}
+.om-year.om-year-long{font-size:17px}
 .om-btns{display:flex;gap:6px}
 .om-btn{font-size:13px;font-weight:900;background:#fff;color:#4b5563;border:1px solid #e5e7eb;border-radius:var(--r-sm);padding:7px 11px;cursor:pointer}
 html.dark .om-btn{background:#2c2c2c;color:#d1d5db;border-color:#3f3f46}

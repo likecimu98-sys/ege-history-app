@@ -7,14 +7,14 @@
             signInWithCredential, signOut, initializeFirestore, collection, doc, setDoc, getDoc,
             getDocs, addDoc, updateDoc, deleteDoc, deleteField, onSnapshot, query, where,
             orderBy, limit, runTransaction, arrayUnion, arrayRemove, vpsApiFetch, refreshVpsAuth
-        } from "./vps-sync-compat.js?v=20260923-2";
+        } from "./vps-sync-compat.js?v=20260923-3";
 
         // jsPDF грузился с cdnjs.cloudflare.com без SRI — то есть посторонний скрипт
         // исполнялся с полными правами страницы, а при недоступности CDN (у части
         // нашей аудитории это обычное дело) экспорт PDF просто не работал. Довод тот
         // же, что и для telegram-web-app.js: своя копия с того же origin.
         // Версия совпадает с прежней CDN-ной — 2.5.1, лежит в vendor/.
-        const VENDOR_JSPDF = 'vendor/jspdf.umd.min.js?v=20260923-2';
+        const VENDOR_JSPDF = 'vendor/jspdf.umd.min.js?v=20260923-3';
 
         const cloudConfig = { projectId: 'vps-postgresql' };
         
@@ -3867,7 +3867,7 @@
             // разделов визуала ниже — с оглядкой на метку сброса.
             ['totalSolvedEver','streak','bestSpeedrunScore','flashcardsSolved','totalTimeSpent',
              'egePoints',
-             'duelGames','duelWins','duelLosses','duelDraws','matchGames'].forEach(k => {
+             'duelGames','duelWins','duelLosses','duelDraws','matchGames','orderBest','orderGames'].forEach(k => {
                 const hasValue = states.some(s => s.stats?.[k] !== undefined);
                 if (hasValue) st[k] = Math.max(...states.map(s => Number(s.stats?.[k]) || 0));
             });
@@ -4086,7 +4086,7 @@
             'visualArchitectureProgress','visualArchitectureSolved','visualArchitectureResetAt',
             'visualPaintingProgress','visualPaintingSolved','visualPaintingResetAt',
             'duelElo','duelGames','duelWins','duelLosses','duelDraws',
-            'matchBestMs','matchGames','vovLearned','mockExams','mockExamMistakes',
+            'matchBestMs','matchGames','orderBest','orderGames','vovLearned','mockExams','mockExamMistakes',
             // Круг по банку ФИПИ. Без записи в этом списке поле не уезжает в облако
             // вовсе — и ротация работала бы только на одном устройстве.
             'examSolved',

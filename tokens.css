@@ -95,7 +95,7 @@
   --a-swipe:  #ec4899;   --a-match:  #a855f7;   --a-cram:   #f59e0b;
   --a-vov:    #84cc16;   --a-cards:  #10b981;   --a-story:  #6366f1;
   --a-visual: #0ea5e9;   --a-duel:   #f43f5e;   --a-exam:   #6366f1;
-  --a-arch:   #0ea5e9;   --a-pencil: #dc2626;
+  --a-arch:   #0ea5e9;   --a-pencil: #dc2626;   --a-order:  #f97316;
 }
 
 /* Тёмная тема — переопределяем ТОЛЬКО токены (стратегия darkMode: class на <html>). */

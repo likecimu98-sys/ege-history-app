@@ -65,7 +65,9 @@ function mergeStateValues(values) {
     // которая о сбросе ещё не знает. Их считает блок разделов визуала — с оглядкой
     // на метку сброса.
     'egePoints', 'duelGames', 'duelWins',
-    'duelLosses', 'duelDraws', 'matchGames'
+    'duelLosses', 'duelDraws', 'matchGames',
+    // «Кто раньше»: рекорд очков — больше = лучше, поэтому max, как и число игр.
+    'orderBest', 'orderGames'
   ];
   for (const key of maxFields) {
     if (states.some(s => s.stats[key] !== undefined)) st[key] = Math.max(...states.map(s => Number(s.stats[key]) || 0));

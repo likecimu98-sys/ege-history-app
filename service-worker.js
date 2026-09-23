@@ -1,7 +1,7 @@
 'use strict';
 
-const APP_VERSION = '2026-09-23-vps-120';
-const RELEASE_ASSET_VERSION = '20260923-2';
+const APP_VERSION = '2026-09-23-vps-121';
+const RELEASE_ASSET_VERSION = '20260923-3';
 // ⚠️ Версия НАБОРА КАРТИНОК, а не версия приложения. Поднимай её ТОЛЬКО когда
 // меняется состав offline-assets.json — добавились, удалились или переснялись
 // файлы. От бампа APP_VERSION она не зависит и зависеть не должна.
@@ -57,6 +57,7 @@ const CORE_URLS = [
     `./swipe-mode.js?v=${RELEASE_ASSET_VERSION}`,
     `./match-mode.js?v=${RELEASE_ASSET_VERSION}`,
     `./order-mode.js?v=${RELEASE_ASSET_VERSION}`,
+    `./order-data.js?v=${RELEASE_ASSET_VERSION}`,
     `./vov-mode.js?v=${RELEASE_ASSET_VERSION}`,
     `./visual-trainer.js?v=${RELEASE_ASSET_VERSION}`,
     `./exam-mode.js?v=${RELEASE_ASSET_VERSION}`,

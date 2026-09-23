@@ -28,6 +28,7 @@ window.state = {
         assignments: [],
         duelElo: 1000, duelGames: 0, duelWins: 0, duelLosses: 0, duelDraws: 0,
         matchBestMs: 0, matchGames: 0,   // режим «Подбор» (Quizlet Match): рекорд-время и число раундов
+        orderBest: 0, orderGames: 0,     // тренировка «Кто раньше»: рекорд очков и число игр
         vovLearned: {},                  // режим «ВОВ» (задание 8, старый образец): id задания → true (выучено)
         mockExams: { active: null, history: [] }, // пробник 1–12: незавершённая попытка + история
         mockExamMistakes: [],            // долговечная история ошибок в пробниках и цельных заданиях ФИПИ
@@ -432,7 +433,7 @@ const SAVE_FIELDS = [
     'visualPaintingProgress', 'visualPaintingSolved', 'visualPaintingResetAt',
     'bestSpeedrunScore', 'dailyStats', 'achievements', 'achievementsData',
     'duelElo', 'duelGames', 'duelWins', 'duelLosses', 'duelDraws',
-    'matchBestMs', 'matchGames', 'vovLearned', 'mockExams', 'mockExamMistakes',
+    'matchBestMs', 'matchGames', 'orderBest', 'orderGames', 'vovLearned', 'mockExams', 'mockExamMistakes',
     // Круг по банку ФИПИ: id верно решённых заданий (и 'g:<groupId>' для карт 9–12).
     // Без записи здесь ротация обнулялась бы при каждой перезагрузке страницы.
     'examSolved',
