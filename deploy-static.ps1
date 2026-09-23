@@ -5,7 +5,10 @@
 # script for routine site changes. ASCII-only to stay codepage-independent.
 param(
     [string]$Vps = 'root@5.35.94.238',   # Beget since 2026-08-01; old AdminVPS is rollback only
-    [string]$KeyPath = (Join-Path $env:USERPROFILE '.ssh\id_ed25519'),
+    # Working copy of the deploy key, if present. The original key got a broken
+    # ACL on 2026-09-21 (another agent added an unknown SID) and OpenSSH refuses it.
+    # Never fix key ACLs from an agent - see AGENTS.md, SSH section.
+    [string]$KeyPath = $(if (Test-Path -LiteralPath (Join-Path $env:USERPROFILE '.ssh\id_ed25519_deploy')) { Join-Path $env:USERPROFILE '.ssh\id_ed25519_deploy' } else { Join-Path $env:USERPROFILE '.ssh\id_ed25519' }),
     [string]$KnownHostsPath = (Join-Path $env:USERPROFILE '.ssh\known_hosts')
 )
 
