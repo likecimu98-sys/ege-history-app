@@ -26,12 +26,12 @@ for (const r of ctx.orderEventsData) if (Math.floor(r[1] / 1e4) === Math.floor(r
 const eras = new Set();
 for (let run = 0; run < 300; run++) {
   const deck = ctx.buildTetrisDuelDeck();
-  assert.ok(deck && deck.init.length === 4 && deck.steps.length >= 30, 'колода не собралась');
+  assert.ok(deck && deck.init.length === 3 && deck.steps.length >= 30, 'колода не собралась или не на три стакана');
   eras.add(deck.era);
   const cups = deck.init.map(c => ({ ...c }));
   const check = where => {
     const ys = cups.map(c => c.y);
-    assert.equal(new Set(ys).size, 4, `два стакана с одним годом (${where}): ${ys.join(', ')}`);
+    assert.equal(new Set(ys).size, cups.length, `два стакана с одним годом (${where}): ${ys.join(', ')}`);
     for (const c of cups) {
       assert.ok(single.has(c.t), 'событие не из order-data или длится больше года: ' + c.t);
       assert.equal(single.get(c.t), c.y, 'год стакана не совпадает с данными: ' + c.t);
@@ -40,7 +40,7 @@ for (let run = 0; run < 300; run++) {
   };
   check('начало');
   for (const [k, st] of deck.steps.entries()) {
-    assert.ok(st.t >= 0 && st.t <= 3, 'целевой стакан вне 0–3');
+    assert.ok(st.t >= 0 && st.t < cups.length, 'целевой стакан вне колонок');
     const falling = cups[st.t].y;
     assert.equal(cups.filter(c => c.y === falling).length, 1, `год ${falling} подходит не к одному стакану (шаг ${k})`);
     cups[st.t] = { ...st.n };
@@ -57,6 +57,11 @@ assert.match(read('service-worker.js'), /tetris-mode\.js\?v=/, 'tetris-mode.js �
 assert.match(read('cloud-sync.js'), /DUEL_MODES_PLAYABLE = \[[^\]]*'tetris'/, '«Датрис» не в списке играбельных режимов');
 assert.match(read('modes.js'), /duelMode === 'tetris' && window\.openTetrisDuel/, 'дуэль не запускает «Датрис»');
 assert.match(read('server/api/src/state-merge.js'), /'tetrisBest', 'tetrisGames'/, 'сервер не сливает рекорд «Датриса»');
+
+// Три стакана, а не четыре; число колонок игры — из колоды, а не зашито числом.
+const tsrc = read('tetris-mode.js');
+assert.match(tsrc, /const COLS = 3;/, 'стаканов снова не три');
+assert.doesNotMatch(tsrc, /Math\.random\(\) \* 4\b|\/ 4\b|Math\.min\(3, col\)|\[0, 1, 2, 3\]/, 'где-то снова зашиты четыре колонки');
 
 // ── Атака: видимая и отбиваемая ──
 const tetris = read('tetris-mode.js');

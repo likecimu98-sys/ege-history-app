@@ -1,4 +1,4 @@
-// tetris-mode.js — «Датрис»: тетрис с датами. Внизу четыре «стакана» с событиями одной
+// tetris-mode.js — «Датрис»: тетрис с датами. Внизу три «стакана» с событиями одной
 // эпохи, сверху падает год. Двигаешь блок в стакан с нужным событием:
 //  • попал — блок сгорает и выбивает один кирпич из этого стакана;
 //  • промахнулся — год остаётся лежать кирпичом там, куда упал;
@@ -32,6 +32,11 @@
     window.TETRIS_DUEL_MS = DUEL_MS;
     const Z = 10006;
     const ROWS = 6;                 // кирпичей в стакане до нокаута
+    // Стаканов три, а не четыре (решение владельца 23.09): четыре текста в узких
+    // стаканах на телефоне не успевали прочитать. Число колонок игры берётся из
+    // колоды (_g.nc = число стаканов), поэтому колода старой версии с четырьмя
+    // стаканами тоже доигрывается корректно.
+    const COLS = 3;
     const FALL_START = 6500, FALL_MIN = 2300, FALL_STEP = 0.95; // мс на всё падение
     const MAX_TEXT = 60;            // длиннее не влезает в узкий стакан на телефоне
     const ATTACK_EVERY = 3;         // делений шкалы заряда на один кирпич сопернику
@@ -101,7 +106,7 @@
     // одной и той же цепочке независимо от своих промахов.
     function _nextStep(cups, take, last) {
         let ti;
-        do { ti = Math.floor(Math.random() * 4); } while (ti === last && Math.random() < 0.75);
+        do { ti = Math.floor(Math.random() * cups.length); } while (ti === last && Math.random() < 0.75);
         const n = take(cups.map(c => c.y), cups.map(c => c.t));
         return n ? { t: ti, n: { t: n.t, y: n.y } } : null;
     }
@@ -113,7 +118,7 @@
             if (pool.length < 30) continue;
             const take = _bag(pool);
             const cups = [];
-            for (let i = 0; i < 4; i++) { const e = take(cups.map(c => c.y), cups.map(c => c.t)); if (!e) return null; cups.push({ t: e.t, y: e.y }); }
+            for (let i = 0; i < COLS; i++) { const e = take(cups.map(c => c.y), cups.map(c => c.t)); if (!e) return null; cups.push({ t: e.t, y: e.y }); }
             const init = cups.map(c => ({ t: c.t, y: c.y }));
             const steps = [];
             let last = -1;
@@ -154,13 +159,16 @@
         if (_g) window.closeTetrisMode();
         try { if (window.Sfx) window.Sfx.unlock(); } catch (e) {}
         _g = Object.assign({
-            cups: [], stacks: [[], [], [], []], step: null, stepIdx: -1,
+            cups: [], stacks: [], step: null, stepIdx: -1,
             block: null, score: 0, streak: 0, best: 0, hits: 0, drops: 0,
             atkSent: 0, oppAtkSeen: 0, ko: false, over: false, busy: false,
             charge: 0, ammo: 0, incoming: [], blkSent: 0, oppBlkSeen: 0, oppAmmo: 0, paused: false, pausedAt: 0,
-            oppScore: 0, oppHits: 0, oppHs: [0, 0, 0, 0], oppKo: false, oppName: 'Соперник',
+            oppScore: 0, oppHits: 0, oppHs: [], oppKo: false, oppName: 'Соперник',
             misses: [], raf: 0, timerIv: null, lastTickSec: null, hiddenAt: 0, test: false
         }, o);
+        _g.nc = _g.cups.length;
+        _g.stacks = _g.cups.map(() => []);
+        _g.oppHs = _g.cups.map(() => 0);
         _render();
         _g.raf = requestAnimationFrame(_frame);
         if (_g.duel) { _g.timerIv = setInterval(_tick, 100); _tick(); }
@@ -174,7 +182,7 @@
 
     window.openTetrisDuel = function (opts) {
         const deck = opts && opts.deck;
-        if (!deck || !Array.isArray(deck.init) || deck.init.length !== 4 || !Array.isArray(deck.steps) || !deck.steps.length) {
+        if (!deck || !Array.isArray(deck.init) || deck.init.length < 3 || deck.init.length > 4 || !Array.isArray(deck.steps) || !deck.steps.length) {
             if (typeof showToast === 'function') showToast('⚠️', 'Не удалось получить колоду дуэли', 'bg-rose-500', 'border-rose-700');
             try { window.cancelDuelDb && window.cancelDuelDb(); } catch (e) {}
             return;
@@ -196,7 +204,7 @@
         if (pool.length < 8) { if (typeof showToast === 'function') showToast('⚠️', 'События ещё загружаются — попробуй через секунду', 'bg-amber-500', 'border-amber-700'); return; }
         const take = _bag(pool);
         const cups = [];
-        for (let i = 0; i < 4; i++) cups.push(take(cups.map(c => c.y), cups.map(c => c.t)));
+        for (let i = 0; i < COLS; i++) cups.push(take(cups.map(c => c.y), cups.map(c => c.t)));
         _start({ duel: false, take, cups, label, test: true });
     };
 
@@ -229,7 +237,7 @@
         if (!_g || !opp || !_g.duel) return;
         _g.oppScore = opp.score || 0;
         _g.oppHits = opp.correct || 0;
-        if (Array.isArray(opp.hs)) _g.oppHs = opp.hs.slice(0, 4).map(n => Number(n) || 0);
+        if (Array.isArray(opp.hs)) _g.oppHs = opp.hs.slice(0, _g.nc).map(n => Number(n) || 0);
         _g.oppAmmo = Math.max(0, Math.min(MAX_AMMO, Number(opp.ammo) || 0));
         const atk = Number(opp.atk) || 0;
         if (atk > _g.oppAtkSeen && !_g.over) {
@@ -277,7 +285,7 @@
     // как соперник добивает, а не случайно сыплет куда попало.
     function _junk() {
         const top = Math.max(..._g.stacks.map(s => s.length));
-        const cols = [0, 1, 2, 3].filter(c => _g.stacks[c].length === top);
+        const cols = _g.stacks.map((_, c) => c).filter(c => _g.stacks[c].length === top);
         const col = cols[Math.floor(Math.random() * cols.length)];
         _g.stacks[col].push({ junk: true });
         Snd.junk(); _h('warning');
@@ -301,7 +309,7 @@
             if (!_g.step) { _g.block = null; return; }
         }
         const y = _g.cups[_g.step.t].y;
-        _g.block = { y, col: Math.floor(Math.random() * 4), t0: performance.now(), fall: _fallMs(), p: 0 };
+        _g.block = { y, col: Math.floor(Math.random() * _g.nc), t0: performance.now(), fall: _fallMs(), p: 0 };
         // Отсчёт кадров — с появления блока: иначе пауза до ПЕРВОГО кадра не
         // считалась бы остановкой, и новый блок проскакивал бы до дна сам.
         _g.lastFrame = _g.block.t0;
@@ -335,7 +343,7 @@
         const f = document.getElementById('dt-field');
         if (!b || !f || !_g.block) return;
         const bh = f.clientHeight / (ROWS + 1);
-        const colW = f.clientWidth / 4;
+        const colW = f.clientWidth / _g.nc;
         b.style.transition = instant ? 'none' : 'left .12s ease-out';
         b.style.width = (colW - 8) + 'px';
         b.style.height = (bh - 6) + 'px';
@@ -347,7 +355,7 @@
 
     function _move(col) {
         if (!_g || !_g.block || _g.busy || _g.over || _g.paused) return;
-        col = Math.max(0, Math.min(3, col));
+        col = Math.max(0, Math.min(_g.nc - 1, col));
         if (col === _g.block.col) return;
         _g.block.col = col;
         Snd.move(); _h('light');
@@ -358,7 +366,7 @@
 
     function _drop(col) {
         if (!_g || !_g.block || _g.busy || _g.over || _g.paused) return;
-        if (col != null) _g.block.col = Math.max(0, Math.min(3, col));
+        if (col != null) _g.block.col = Math.max(0, Math.min(_g.nc - 1, col));
         _land(true);
     }
 
@@ -549,7 +557,7 @@
         if (e.key === 'ArrowLeft') { _move(_g.block.col - 1); e.preventDefault(); }
         else if (e.key === 'ArrowRight') { _move(_g.block.col + 1); e.preventDefault(); }
         else if (e.key === 'ArrowDown' || e.key === ' ') { _drop(); e.preventDefault(); }
-        else if (e.key >= '1' && e.key <= '4') { _drop(Number(e.key) - 1); e.preventDefault(); }
+        else if (e.key >= '1' && e.key <= String(_g.nc)) { _drop(Number(e.key) - 1); e.preventDefault(); }
         else if (e.key === 'Enter' || e.key === 'f' || e.key === 'а') { _fire(); e.preventDefault(); }
     }
 
@@ -578,18 +586,18 @@
               <span class="dt-opp-name">${_esc(_g.oppName)}</span>
               <span id="dt-opp-score" class="dt-opp-score">0</span>
               <span id="dt-opp-ammo" class="dt-opp-ammo"></span>
-              <span class="dt-mini" id="dt-mini"><i></i><i></i><i></i><i></i></span>
+              <span class="dt-mini" id="dt-mini">${'<i></i>'.repeat(_g.nc)}</span>
               <span class="dt-atk">⚔️ копи кирпичи — бросай разом</span>
             </div>` : `<div class="dt-hint">Тапни стакан — год упадёт туда. Промах оставляет кирпич.</div>`}
             <div id="dt-field" class="dt-field">
-              <div class="dt-cols"><i></i><i></i><i></i><i></i></div>
+              <div class="dt-cols" style="grid-template-columns:repeat(${_g.nc},1fr)">${'<i></i>'.repeat(_g.nc)}</div>
               <div id="dt-lane" class="dt-lane"></div>
               <div id="dt-stacks"></div>
               <div id="dt-block" class="dt-block"></div>
               <div id="dt-threat" class="dt-threat"></div>
               <div id="dt-toast" class="dt-toast"></div>
             </div>
-            <div id="dt-cups" class="dt-cups"></div>
+            <div id="dt-cups" class="dt-cups" style="grid-template-columns:repeat(${_g.nc},1fr)"></div>
             <div class="dt-ctrl">
               <button class="dt-key" id="dt-l" aria-label="Влево">←</button>
               <button class="dt-key dt-key-main" id="dt-d" aria-label="Уронить">↓</button>
@@ -617,9 +625,9 @@
             if (!_g || !_g.block) return;
             const r = field.getBoundingClientRect();
             if (e.clientY - sy > 40 && Math.abs(e.clientX - sx) < 60) return _drop();
-            _move(Math.floor((e.clientX - r.left) / (r.width / 4)));
+            _move(Math.floor((e.clientX - r.left) / (r.width / _g.nc)));
         });
-        for (let i = 0; i < 4; i++) _drawCup(i, false);
+        for (let i = 0; i < _g.nc; i++) _drawCup(i, false);
         _drawStacks();
         _hud();
     }
@@ -671,7 +679,7 @@
         const box = document.getElementById('dt-stacks');
         const f = document.getElementById('dt-field');
         if (!box || !f) return;
-        const bh = f.clientHeight / (ROWS + 1), colW = f.clientWidth / 4;
+        const bh = f.clientHeight / (ROWS + 1), colW = f.clientWidth / _g.nc;
         box.innerHTML = '';
         _g.stacks.forEach((st, c) => st.forEach((br, k) => {
             const d = document.createElement('div');
@@ -871,7 +879,7 @@ html.dark .dt-tut-card{background:#1e1e1e;color:#e5e7eb}
 .dt-field{position:relative;flex:1;min-height:200px;border-radius:var(--r-md);background:#fff;border:2px solid #e5e7eb;overflow:hidden;transition:border-color .3s}
 html.dark .dt-field{background:#1a1a1a;border-color:#3f3f46}
 .dt-field.dt-field-danger{border-color:#f43f5e;animation:dtDanger 1s ease-in-out infinite}
-.dt-cols{position:absolute;inset:0;display:grid;grid-template-columns:repeat(4,1fr);pointer-events:none}
+.dt-cols{position:absolute;inset:0;display:grid;grid-template-columns:repeat(3,1fr);pointer-events:none}
 .dt-cols i{border-right:1px dashed #e5e7eb}.dt-cols i:last-child{border-right:none}
 html.dark .dt-cols i{border-color:#2f2f35}
 .dt-lane{position:absolute;top:0;bottom:0;background:rgba(249,115,22,.08);transition:left .12s ease-out;pointer-events:none}
@@ -887,9 +895,9 @@ html.dark .dt-brick.dt-danger{background:#4c0519;color:#fda4af}
 .dt-brick.dt-drop{animation:dtDrop .22s cubic-bezier(.2,.9,.3,1.4)}
 .dt-toast{position:absolute;left:8px;right:8px;top:38%;text-align:center;font-size:15px;font-weight:1000;opacity:0;transform:translateY(8px);transition:opacity .2s,transform .2s;pointer-events:none}
 .dt-toast.dt-toast-on{opacity:1;transform:none}.dt-toast-ok{color:#16a34a}.dt-toast-bad{color:#e11d48}
-.dt-cups{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;flex-shrink:0}
-.dt-cup{position:relative;min-height:74px;padding:8px 5px;border-radius:var(--r-md);background:#ede9fe;color:#4c1d95;border:2px solid #ddd6fe;border-bottom-width:5px;font-size:12px;font-weight:800;line-height:1.25;cursor:pointer;overflow:hidden;hyphens:auto;-webkit-hyphens:auto;overflow-wrap:anywhere;transition:background .2s,border-color .2s,transform .1s;-webkit-tap-highlight-color:transparent}
-.dt-cup.dt-cup-small{font-size:11px}
+.dt-cups{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;flex-shrink:0}
+.dt-cup{position:relative;min-height:74px;padding:8px 5px;border-radius:var(--r-md);background:#ede9fe;color:#4c1d95;border:2px solid #ddd6fe;border-bottom-width:5px;font-size:13.5px;font-weight:800;line-height:1.25;cursor:pointer;overflow:hidden;hyphens:auto;-webkit-hyphens:auto;overflow-wrap:anywhere;transition:background .2s,border-color .2s,transform .1s;-webkit-tap-highlight-color:transparent}
+.dt-cup.dt-cup-small{font-size:12px}
 .dt-cup:active{transform:translateY(2px)}
 html.dark .dt-cup{background:#2e1065;color:#ddd6fe;border-color:#4c1d95}
 .dt-cup-new{animation:dtIn .3s cubic-bezier(.2,.9,.3,1.25)}
