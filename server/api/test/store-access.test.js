@@ -12,7 +12,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const {
   authorizeRead, authorizeCollectionQuery, publicStudent, publicMatch, studentClassView,
-  projectDocument, classDocId, DocumentStore, denyContext, authorizeWrite, accessContext
+  projectDocument, classDocId, DocumentStore, denyContext, authorizeWrite, accessContext, mergeMatchData
 } = require('../src/store');
 const { pool } = require('../src/db');
 
@@ -500,4 +500,32 @@ test('владелец организации не дотягивается до
   // Законная ветка org_owner (свой орг, по orgId документа) остаётся.
   assert.match(src, /ctx\.role === 'org_owner' && ctx\.orgId && row\?\.data\?\.orgId === ctx\.orgId/,
     'потеряна законная проверка «свой орг» для карточек преподавателей');
+});
+
+// ── Реакции в дуэли (duel-react.js) ────────────────────────────────────────────
+// Реакция едет полем emo в объекте игрока вместе с его счётом. Проверяем весь
+// серверный путь: запись разрешена самому игроку, слияние её не теряет, соперник
+// читает матч целиком и видит её. Чужой объект реакцией не перепишешь.
+test('реакция в дуэли: пишет только сам игрок, сервер её хранит, соперник её видит', async () => {
+  const p1 = context({ docIds: ['111'], userId: 11 });
+  const p2 = context({ docIds: ['222'], userId: 22 });
+  const current = {
+    status: 'playing', mode: 'tetris', startTime: 1000, playingAt: Date.now(),
+    player1: { uid: '111', name: 'Петя', score: 40, combo: 1, elo: 1000, seq: 5, done: 4, correct: 3, atk: 1, hs: [1, 0, 0, 0] },
+    player2: { uid: '222', name: 'Маша', score: 30, combo: 0, elo: 1000, seq: 3 },
+  };
+  const patch = { player1: { ...current.player1, seq: 6, emo: { e: '🔥', n: 1 } } };
+  const matchRef = ref('matches', 'm1');
+
+  assert.equal(await authorizeWrite(noClient, matchRef, p1, { data: current }, patch, 'update'), true,
+    'сервер не пропускает реакцию в собственный объект игрока');
+  assert.equal(await authorizeWrite(noClient, matchRef, p2, { data: current }, patch, 'update'), false,
+    'соперник смог переписать чужой объект игрока');
+
+  const merged = mergeMatchData(current, { ...current, ...patch }, patch);
+  assert.deepEqual(merged.player1.emo, { e: '🔥', n: 1 }, 'слияние матча потеряло реакцию');
+  assert.deepEqual(merged.player1.hs, [1, 0, 0, 0], 'реакция затёрла поля режима');
+
+  const access = await authorizeRead(noClient, matchRef, p2, { doc_id: 'm1', user_id: 11, version: 2, data: merged });
+  assert.deepEqual(access, { ok: true, full: true }, 'соперник не читает матч целиком — реакция до него не доедет');
 });
