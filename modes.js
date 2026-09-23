@@ -417,7 +417,7 @@ function _duelBarTime(sec) {
 
 window.startDuelSearch = function(mode) {
     // Без аргумента — 'auto': присоединяемся к любому играбельному режиму, а свой матч
-    // создаём свайпом, подбором или «Кто раньше» по жребию (см. startDuelSearchDb). Явный режим
+    // создаём свайпом, подбором, «Кто раньше» или «Датрисом» по жребию (см. startDuelSearchDb). Явный режим
     // оставлен для отладки; классика живёт в коде, но кнопкой не вызывается.
     mode = mode || 'auto';
     haptic('medium');
@@ -498,6 +498,16 @@ window.startDuelGame = function() {
             sections: window.state.duel.swipeSections || [],
             oppName: window.state.duel.oppName,
             endsAt: (window.state.duel.startTime || Date.now()) + (window.SWIPE_DUEL_MS || 45000)
+        });
+        return;
+    }
+    if (duelMode === 'tetris' && window.openTetrisDuel) {
+        window.state.currentMode = 'duel';
+        Object.assign(window.state.duel, { active: true, myScore: 0, myCombo: 0 });
+        window.openTetrisDuel({
+            deck: window.state.duel.tetrisDeck,
+            oppName: window.state.duel.oppName,
+            endsAt: (window.state.duel.startTime || Date.now()) + (window.TETRIS_DUEL_MS || 60000)
         });
         return;
     }

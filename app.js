@@ -726,6 +726,7 @@ const ACTION_HANDLERS = {
     openSwipeMode:          () => window.openSwipeMode?.(),
     openMatchMode:          () => window.openMatchMode?.(),
     openOrderMode:          () => window.openOrderMode?.(),
+    openTetrisMode:         () => window.openTetrisMode?.(),
     openVovMode:            () => window.openVovMode?.(),
     openExamMode:           () => window.openExamMode?.(),
     backToLobby:            () => window.backToLobby?.(),

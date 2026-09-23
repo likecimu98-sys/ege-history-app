@@ -1902,8 +1902,8 @@ window.showDuelChallenge = function(ch) {
     }
     el.dataset.matchId = ch.matchId;
     el.innerHTML = `
-        <span style="font-size:16px;flex-shrink:0">${ch.mode === 'swipe' ? '🃏' : ch.mode === 'order' ? '⏳' : '🗡️'}</span>
-        <span style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis"><b>${name}</b> зовёт: ${ch.mode === 'swipe' ? 'свайп-дуэль' : ch.mode === 'order' ? '«Кто раньше»' : 'дуэль'}!</span>
+        <span style="font-size:16px;flex-shrink:0">${ch.mode === 'swipe' ? '🃏' : ch.mode === 'order' ? '⏳' : ch.mode === 'tetris' ? '🧱' : '🗡️'}</span>
+        <span style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis"><b>${name}</b> зовёт: ${ch.mode === 'swipe' ? 'свайп-дуэль' : ch.mode === 'order' ? '«Кто раньше»' : ch.mode === 'tetris' ? '«Датрис»' : 'дуэль'}!</span>
         <button onclick="window.acceptDuelChallenge&&window.acceptDuelChallenge('${ch.matchId}')" style="flex-shrink:0;background:#fff;color:#4f46e5;border:none;border-radius:9px;padding:6px 12px;font-size:12px;font-weight:900;cursor:pointer">Принять</button>
         <button onclick="window.dismissDuelChallenge&&window.dismissDuelChallenge('${ch.matchId}')" style="flex-shrink:0;background:rgba(255,255,255,.2);color:#fff;border:none;border-radius:9px;width:26px;height:26px;font-size:13px;font-weight:900;cursor:pointer;line-height:1">✕</button>`;
     requestAnimationFrame(() => { el.style.transform = 'translateX(-50%) translateY(0)'; });

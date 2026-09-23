@@ -7,14 +7,14 @@
             signInWithCredential, signOut, initializeFirestore, collection, doc, setDoc, getDoc,
             getDocs, addDoc, updateDoc, deleteDoc, deleteField, onSnapshot, query, where,
             orderBy, limit, runTransaction, arrayUnion, arrayRemove, vpsApiFetch, refreshVpsAuth
-        } from "./vps-sync-compat.js?v=20260923-4";
+        } from "./vps-sync-compat.js?v=20260923-5";
 
         // jsPDF грузился с cdnjs.cloudflare.com без SRI — то есть посторонний скрипт
         // исполнялся с полными правами страницы, а при недоступности CDN (у части
         // нашей аудитории это обычное дело) экспорт PDF просто не работал. Довод тот
         // же, что и для telegram-web-app.js: своя копия с того же origin.
         // Версия совпадает с прежней CDN-ной — 2.5.1, лежит в vendor/.
-        const VENDOR_JSPDF = 'vendor/jspdf.umd.min.js?v=20260923-4';
+        const VENDOR_JSPDF = 'vendor/jspdf.umd.min.js?v=20260923-5';
 
         const cloudConfig = { projectId: 'vps-postgresql' };
         
@@ -1126,7 +1126,7 @@
         // один играл бы подбор, а второй классическую таблицу.
         // Объявлено ДО startChallengeListener: слушатель может отдать закэшированный
         // снапшот сразу при подписке, а const в TDZ уронил бы весь обработчик.
-        const DUEL_MODES_PLAYABLE = ['swipe', 'match', 'order'];
+        const DUEL_MODES_PLAYABLE = ['swipe', 'match', 'order', 'tetris'];
         function _duelModePlayable(m) { return DUEL_MODES_PLAYABLE.indexOf(m || 'classic') !== -1; }
         // 'auto' совместим с любым играбельным режимом, конкретный — только сам с собой.
         function _duelModeMatches(want, has) {
@@ -1362,7 +1362,11 @@
                     let createMode = mode === 'auto'
                         ? DUEL_MODES_PLAYABLE[Math.floor(Math.random() * DUEL_MODES_PLAYABLE.length)]
                         : mode;
-                    let swipeSections = null, matchRounds = null, orderDeck = null;
+                    let swipeSections = null, matchRounds = null, orderDeck = null, tetrisDeck = null;
+                    if (createMode === 'tetris') {
+                        tetrisDeck = window.buildTetrisDuelDeck ? window.buildTetrisDuelDeck() : null;
+                        if (!tetrisDeck) createMode = 'swipe';
+                    }
                     if (createMode === 'order') {
                         orderDeck = window.buildOrderDuelDeck ? window.buildOrderDuelDeck() : null;
                         // Данные №1 ещё не подъехали — играем свайпом, как и подбор.
@@ -1391,6 +1395,7 @@
                         ...(swipeSections ? { swipeSections } : {}),
                         ...(matchRounds ? { matchRounds } : {}),
                         ...(orderDeck ? { orderDeck } : {}),
+                        ...(tetrisDeck ? { tetrisDeck } : {}),
                         createdAt: Date.now(),
                         player1: { uid: myUid, name: myName, score: 0, combo: 0, elo: _myDuelElo() },
                         player2: null,
@@ -1444,6 +1449,7 @@
                     window.state.duel.swipeSections = data.swipeSections || null;
                     window.state.duel.matchRounds = data.matchRounds || null;
                     window.state.duel.orderDeck = data.orderDeck || null;
+                    window.state.duel.tetrisDeck = data.tetrisDeck || null;
                     window.state.duel.startTime = data.startTime || Date.now();
                     window.initDuelStart(data.startTime);
                 }
@@ -1459,6 +1465,7 @@
                         if (dm === 'swipe' && window.updateSwipeDuelOpp) window.updateSwipeDuelOpp(opp);
                         else if (dm === 'match' && window.updateMatchDuelOpp) window.updateMatchDuelOpp(opp);
                         else if (dm === 'order' && window.updateOrderDuelOpp) window.updateOrderDuelOpp(opp);
+                        else if (dm === 'tetris' && window.updateTetrisDuelOpp) window.updateTetrisDuelOpp(opp);
                     }
                 }
                 
@@ -3867,7 +3874,7 @@
             // разделов визуала ниже — с оглядкой на метку сброса.
             ['totalSolvedEver','streak','bestSpeedrunScore','flashcardsSolved','totalTimeSpent',
              'egePoints',
-             'duelGames','duelWins','duelLosses','duelDraws','matchGames','orderBest','orderGames'].forEach(k => {
+             'duelGames','duelWins','duelLosses','duelDraws','matchGames','orderBest','orderGames','tetrisBest','tetrisGames'].forEach(k => {
                 const hasValue = states.some(s => s.stats?.[k] !== undefined);
                 if (hasValue) st[k] = Math.max(...states.map(s => Number(s.stats?.[k]) || 0));
             });
@@ -4086,7 +4093,7 @@
             'visualArchitectureProgress','visualArchitectureSolved','visualArchitectureResetAt',
             'visualPaintingProgress','visualPaintingSolved','visualPaintingResetAt',
             'duelElo','duelGames','duelWins','duelLosses','duelDraws',
-            'matchBestMs','matchGames','orderBest','orderGames','vovLearned','mockExams','mockExamMistakes',
+            'matchBestMs','matchGames','orderBest','orderGames','tetrisBest','tetrisGames','vovLearned','mockExams','mockExamMistakes',
             // Круг по банку ФИПИ. Без записи в этом списке поле не уезжает в облако
             // вовсе — и ротация работала бы только на одном устройстве.
             'examSolved',

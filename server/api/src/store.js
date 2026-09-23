@@ -57,14 +57,14 @@ const PUBLIC_MATCH_FIELDS = ['status', 'mode', 'createdAt', 'startTime', 'swipeS
 // ⚠️ Добавляешь поле в создание матча на клиенте (cloud-sync.js, объект нового
 // матча) — добавь его и сюда. Договор закреплён тестом store-match-fields.
 const MATCH_CREATE_FIELDS = new Set([
-  'status', 'mode', 'swipeSections', 'matchRounds', 'orderDeck', 'createdAt', 'player1', 'player2', 'startTime',
+  'status', 'mode', 'swipeSections', 'matchRounds', 'orderDeck', 'tetrisDeck', 'createdAt', 'player1', 'player2', 'startTime',
 ]);
 
 // Сколько длится матч в каждом режиме — держать в согласии с клиентом:
 // SWIPE_DUEL_MS (swipe-mode.js), MATCH_DUEL_MS (match-mode.js),
-// ORDER_DUEL_MS (order-mode.js), CLASSIC_DUEL_MS (modes.js). Незнакомый режим получает самый долгий срок:
+// ORDER_DUEL_MS (order-mode.js), TETRIS_DUEL_MS (tetris-mode.js), CLASSIC_DUEL_MS (modes.js). Незнакомый режим получает самый долгий срок:
 // ошибиться в сторону «дали доиграть» безопаснее, чем оборвать живой матч.
-const DUEL_DURATION_MS = Object.freeze({ swipe: 45000, match: 45000, order: 45000, classic: 60000 });
+const DUEL_DURATION_MS = Object.freeze({ swipe: 45000, match: 45000, order: 45000, tetris: 60000, classic: 60000 });
 const DUEL_MAX_DURATION_MS = 60000;
 // Запас поверх длительности. Закрывающая запись идёт уже после таймера:
 // 400 мс на «Считаем очки…», до шести попыток finalizeDuelScores по 400 мс,
