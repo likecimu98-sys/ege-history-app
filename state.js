@@ -334,7 +334,13 @@ function getFilteredPool(period, limit) {
             if (window.state._normalTableTick % 3 === 0) {
                 const task = window.state.currentTask;
                 const cfg = TASK_CONFIG[task] || TASK_CONFIG.task4;
-                const mist = (window.state.mistakesPool || []).filter(m => m.task === task).map(m => m.fact);
+                // 🔴 Ошибки — только из ВЫБРАННОГО периода. Раньше брались все ошибки
+                // задания, и каждая третья таблица при «1700–1890» приносила «походы
+                // первых князей» и «начало ВОВ» (жалоба 23.09: «после пары попыток
+                // ломается хронологическое ограничение»). pool здесь — уже база
+                // периода, поэтому сверяем по ключу факта.
+                const inPeriod = new Set(pool.map(f => factKey(f)));
+                const mist = (window.state.mistakesPool || []).filter(m => m.task === task && inPeriod.has(factKey(m.fact))).map(m => m.fact);
                 const exp = pool.filter(f => { const d = fs[factKey(f)]; return d && d.level > 0 && d.nextReview <= now; });
                 const seen = new Set(); const blend = [];
                 for (const f of [...mist, ...exp]) { const k = cfg.dedupeKey(f); if (!seen.has(k)) { seen.add(k); blend.push(f); } }

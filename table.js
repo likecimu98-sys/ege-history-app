@@ -1735,8 +1735,9 @@ function generateTable() {
     const saved = periodEl ? periodEl.value : 'all';
     if (periodEl && saved !== 'all') {
         periodEl.value = 'all';
-        generateTableOnce();
-        periodEl.value = saved;
+        // finally: упади генерация здесь — период навсегда остался бы «вся история»,
+        // и все следующие таблицы шли бы вне рамок до перезагрузки.
+        try { generateTableOnce(); } finally { periodEl.value = saved; }
     }
 }
 

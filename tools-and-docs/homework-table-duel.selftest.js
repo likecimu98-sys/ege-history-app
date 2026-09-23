@@ -764,4 +764,20 @@ assert.doesNotMatch(tableSource, /_selectHomeworkTargets\('task4', TASK_CONFIG\.
         'Сверка после приватной записи снова не учитывает то, что решено за время запроса');
 }
 
+// Жалоба 23.09: каждая третья таблица («перемешивание» с ошибками) при рамках
+// 1700–1890 приносила ошибки из всей истории. Ошибки обязаны сверяться с базой периода.
+{
+    const blend = stateSource.slice(stateSource.indexOf('БЛЕНДИНГ (Q1)'), stateSource.indexOf('window.state._blendTable = false'));
+    assert.ok(blend.length > 100, 'Блок перемешивания с ошибками не найден в state.js');
+    assert.match(blend, /const inPeriod = new Set\(pool\.map\(f => factKey\(f\)\)\)/,
+        'Перемешивание больше не строит набор фактов периода');
+    assert.match(blend, /mistakesPool[^\n]*inPeriod\.has\(factKey\(m\.fact\)\)/,
+        'Ошибки в перемешивании снова берутся без учёта периода — рамки будут ломаться каждой третьей таблицей');
+}
+{
+    const tableSource = read('table.js');
+    assert.match(tableSource, /try \{ generateTableOnce\(\); \} finally \{ periodEl\.value = saved; \}/,
+        'Откат на всю историю снова может оставить период «вся история» навсегда');
+}
+
 console.log('Homework, table uniqueness and silent duel self-test passed.');
