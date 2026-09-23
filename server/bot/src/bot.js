@@ -335,6 +335,7 @@ const CMD_TEACHER = [
     { command: 'menu', description: '📋 Меню' },
     { command: 'newclass', description: '➕ Создать группу' },
     { command: 'myclasses', description: '📚 Мои группы и ссылки' },
+    { command: 'students', description: '👥 Участники класса и Telegram ID' },
     { command: 'msg', description: '📣 Сообщение группе' },
     { command: 'secondpart', description: '✍️ Вторая часть ЕГЭ' },
     { command: 'delclass', description: '🗑 Удалить группу' },
@@ -346,6 +347,7 @@ const CMD_OWNER = [
     { command: 'menu', description: '📋 Меню' },
     { command: 'newclass', description: '➕ Создать группу' },
     { command: 'myclasses', description: '📚 Группы школы' },
+    { command: 'students', description: '👥 Участники класса и Telegram ID' },
     { command: 'msg', description: '📣 Сообщение группе' },
     { command: 'inviteteacher', description: '👨‍🏫 Пригласить преподавателя' },
     { command: 'secondpart', description: '✍️ Вторая часть ЕГЭ' },
@@ -359,6 +361,7 @@ const CMD_ADMIN = [
     { command: 'premiumgroup', description: '♾ Группа безлимита (в группе / ID)' },
     { command: 'commands', description: '🗂 Все команды всех ролей' },
     { command: 'stats', description: '📈 Статистика' },
+    { command: 'students', description: '👥 Участники класса и Telegram ID' },
     { command: 'msg', description: '📣 Сообщение группе' },
     { command: 'menu', description: '📋 Меню' },
     { command: 'newclass', description: '➕ Создать группу' },
@@ -411,6 +414,7 @@ function menuKeyboard(userId) {
     if (isTeacher(userId)) {
         kb.text('➕ Новая группа', 'm_newclass').text('📚 Мои группы', 'm_myclasses').row();
         kb.text('📣 Сообщение группе', 'm_msg').text('🗑 Удалить группу', 'm_delclass').row();
+        kb.text('👥 Участники и TG ID', 'm_students').row();
         kb.text('✍️ Вторая часть', 'm_secondpart').row();
     }
     if (isOrgOwner(userId)) kb.text('👨‍🏫 Пригласить преподавателя', 'm_inviteteacher').row();
@@ -803,6 +807,99 @@ async function doMyClasses(ctx) {
 }
 bot.command('myclasses', doMyClasses);
 
+// ---------- Участники класса: только личный чат и актуальный доступ ----------
+function rosterClassKey(code) { return crypto.createHash('sha256').update(code).digest('hex').slice(0, 16); }
+function rosterHtml(value) { return String(value ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
+function rosterTgId(doc) {
+    const d = doc.data() || {};
+    for (const value of [d.knownTgId, d.tgId, doc.id]) {
+        const s = String(value ?? '');
+        if (/^[1-9]\d{0,15}$/.test(s) && Number.isSafeInteger(Number(s))) return s;
+    }
+    return null;
+}
+async function rosterClasses(userId) {
+    const teacher = await fdb.doc(`${base}/teachers/${userId}`).get();
+    const t = teacher.exists ? teacher.data() : null;
+    if (userId !== ADMIN_ID && !t) return [];
+    // Свежие документы: старые кнопки не сохраняют доступ после снятия роли.
+    const all = await fdb.collection(`${base}/classes`).limit(5000).get();
+    const own = new Set(normClasses(t?.classes).map(c => c.code));
+    const list = [];
+    all.forEach(doc => {
+        const c = doc.data() || {};
+        if (c.archived) return;
+        if (userId === ADMIN_ID || own.has(doc.id) || String(c.ownerTgId) === String(userId)
+            || (t?.role === 'org_owner' && t.orgId && c.orgId === t.orgId)) {
+            list.push({ code: doc.id, name: String(c.name || doc.id) });
+        }
+    });
+    return list.sort((a, b) => a.name.localeCompare(b.name, 'ru') || a.code.localeCompare(b.code));
+}
+async function doClassRoster(ctx, key = null, page = 0) {
+    if (ctx.chat?.type !== 'private') return ctx.reply('Список с Telegram ID доступен только в личном чате с ботом. Откройте /menu там.');
+    if (!fdb) return ctx.reply('Сервис временно недоступен.');
+    const classes = await rosterClasses(ctx.from.id);
+    if (!classes.length) return ctx.reply('Нет доступных классов. Список доступен преподавателям своих классов и руководителю школы.');
+    const kb = new InlineKeyboard();
+    let text;
+    if (!key) {
+        const pages = Math.ceil(classes.length / 8);
+        page = Math.min(Math.max(0, page), pages - 1);
+        classes.slice(page * 8, page * 8 + 8).forEach(c => kb.text(c.name.slice(0, 55), `roster_c:${rosterClassKey(c.code)}:0`).row());
+        if (page > 0) kb.text('← Назад', `roster_p:${page - 1}`);
+        if (page + 1 < pages) kb.text('Дальше →', `roster_p:${page + 1}`);
+        text = `👥 Участники и Telegram ID\nВыберите класс (${classes.length}).\nСтраница ${page + 1} из ${pages}.`;
+    } else {
+        const cls = classes.find(c => rosterClassKey(c.code) === key);
+        if (!cls) return ctx.reply('Класс недоступен или был удалён. Выберите класс заново: /students');
+        const snapshots = await Promise.all([
+            fdb.collection(`${base}/students`).where('classCode', '==', cls.code).limit(5000).get(),
+            fdb.collection(`${base}/students`).where('inviteClassCode', '==', cls.code).limit(5000).get()
+        ]);
+        const byDoc = new Map();
+        snapshots.forEach(s => s.forEach(doc => byDoc.set(doc.id, doc)));
+        const byPerson = new Map();
+        for (const doc of byDoc.values()) {
+            const d = doc.data() || {};
+            if (d._mergedInto) continue;
+            // Приглашение учителя авторитетнее старого кода на устройстве.
+            const current = d.inviteClassCode || (d.leftClassAt ? '' : d.classCode);
+            if (current !== cls.code) continue;
+            const tgId = rosterTgId(doc);
+            const name = String(d.name || d.displayName || d.fullName || d.firstName || 'Без имени').slice(0, 80);
+            const username = String(d.username || d.tgUsername || '').replace(/^@/, '');
+            const item = { name, tgId, username: /^[a-zA-Z0-9_]{5,32}$/.test(username) ? username : '' };
+            const id = tgId ? `tg:${tgId}` : `doc:${doc.id}`;
+            if (!byPerson.has(id) || byPerson.get(id).name === 'Без имени') byPerson.set(id, item);
+        }
+        const rows = [...byPerson.values()].sort((a, b) => a.name.localeCompare(b.name, 'ru') || String(a.tgId).localeCompare(String(b.tgId)));
+        const pages = Math.max(1, Math.ceil(rows.length / 10));
+        page = Math.min(Math.max(0, page), pages - 1);
+        text = `👥 <b>${rosterHtml(cls.name.slice(0, 100))}</b>\nУчастников: ${rows.length}. Страница ${page + 1} из ${pages}.\n`;
+        rows.slice(page * 10, page * 10 + 10).forEach((r, i) => {
+            text += `\n${page * 10 + i + 1}. ${rosterHtml(r.name)}${r.username ? ` · @${r.username}` : ''}\n`;
+            text += r.tgId ? `Telegram ID: <code>${r.tgId}</code>\n` : 'Telegram не привязан\n';
+        });
+        if (!rows.length) text += '\nВ этом классе пока нет участников.';
+        if (snapshots.some(s => s.size >= 5000)) text += '\n⚠️ Достигнут предел выгрузки; список может быть неполным.';
+        if (page > 0) kb.text('← Назад', `roster_c:${key}:${page - 1}`);
+        if (page + 1 < pages) kb.text('Дальше →', `roster_c:${key}:${page + 1}`);
+        kb.row().text('🔄 Обновить', `roster_c:${key}:${page}`).row();
+        kb.text('← Выбрать класс', 'roster_p:0');
+    }
+    const options = { parse_mode: 'HTML', reply_markup: kb, link_preview_options: { is_disabled: true } };
+    if (ctx.callbackQuery) {
+        try { return await ctx.editMessageText(text, options); }
+        catch (e) { if (/message is not modified/i.test(e.message || '')) return; throw e; }
+    }
+    return ctx.reply(text, options);
+}
+bot.command('students', ctx => doClassRoster(ctx));
+bot.callbackQuery('m_students', async ctx => { await ctx.answerCallbackQuery(); await doClassRoster(ctx); });
+bot.callbackQuery(/^roster_p:(\d{1,5})$/, async ctx => { await ctx.answerCallbackQuery(); await doClassRoster(ctx, null, Number(ctx.match[1])); });
+bot.callbackQuery(/^roster_c:([a-f0-9]{16}):(\d{1,5})$/, async ctx => { await ctx.answerCallbackQuery(); await doClassRoster(ctx, ctx.match[1], Number(ctx.match[2])); });
+
 async function doDelClass(ctx) {
     if (!isTeacher(ctx.from.id)) return;
     const list = teacherClasses(ctx.from.id);
@@ -1001,6 +1098,7 @@ function commandsCheatsheet() {
         '👨‍🏫 Репетитор:',
         '/newclass Название — создать группу (автокод)',
         '/myclasses — мои группы + инвайт-ссылки для учеников',
+        '/students — выбрать класс и посмотреть Telegram ID участников',
         '/msg текст — сообщение всем ученикам группы (несколько групп: /msg КОД текст)',
         '/delclass — удалить (архивировать) группу',
         '/settings — плюс: ✅ Сдача ДЗ, ➕ Новые ученики, 📊 Дайджест, ⚠️ Алерты',
