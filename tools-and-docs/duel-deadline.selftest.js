@@ -53,7 +53,8 @@ assert.ok(classicMs, 'CLASSIC_DUEL_MS не найдена в modes.js');
 const swipeMs = /const DUEL_SECTIONS = \d+, DUEL_CARDS_PER_SECTION = \d+, DUEL_MS = (\d+)/
   .exec(strip(fs.readFileSync(path.join(root, 'swipe-mode.js'), 'utf8')));
 const matchMs = /const DUEL_MS = (\d+)/.exec(strip(fs.readFileSync(path.join(root, 'match-mode.js'), 'utf8')));
-assert.ok(swipeMs && matchMs, 'Не найдены длительности свайпа/подбора');
+const orderMs = /const DUEL_MS = (\d+)/.exec(strip(fs.readFileSync(path.join(root, 'order-mode.js'), 'utf8')));
+assert.ok(swipeMs && matchMs && orderMs, 'Не найдены длительности свайпа/подбора/«Кто раньше»');
 const table = /DUEL_DURATION_MS = Object\.freeze\(\{([^}]+)\}\)/.exec(store);
 assert.ok(table, 'На сервере нет таблицы длительностей дуэли');
 const serverMs = Object.fromEntries([...table[1].matchAll(/(\w+):\s*(\d+)/g)].map(m => [m[1], Number(m[2])]));
@@ -63,6 +64,8 @@ assert.strictEqual(serverMs.swipe, Number(swipeMs[1]),
   'Свайп: сервер и клиент разошлись по длительности матча');
 assert.strictEqual(serverMs.match, Number(matchMs[1]),
   'Подбор: сервер и клиент разошлись по длительности матча');
+assert.strictEqual(serverMs.order, Number(orderMs[1]),
+  '«Кто раньше»: сервер и клиент разошлись по длительности матча');
 
 // ── 4. Отметку начала ставит СЕРВЕР, а не клиент ────────────────────────────
 assert.match(store, /if \(Number\(current\.playingAt\) > 0\) next\.playingAt = current\.playingAt;/,

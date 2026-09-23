@@ -7,14 +7,14 @@
             signInWithCredential, signOut, initializeFirestore, collection, doc, setDoc, getDoc,
             getDocs, addDoc, updateDoc, deleteDoc, deleteField, onSnapshot, query, where,
             orderBy, limit, runTransaction, arrayUnion, arrayRemove, vpsApiFetch, refreshVpsAuth
-        } from "./vps-sync-compat.js?v=20260923-1";
+        } from "./vps-sync-compat.js?v=20260923-2";
 
         // jsPDF грузился с cdnjs.cloudflare.com без SRI — то есть посторонний скрипт
         // исполнялся с полными правами страницы, а при недоступности CDN (у части
         // нашей аудитории это обычное дело) экспорт PDF просто не работал. Довод тот
         // же, что и для telegram-web-app.js: своя копия с того же origin.
         // Версия совпадает с прежней CDN-ной — 2.5.1, лежит в vendor/.
-        const VENDOR_JSPDF = 'vendor/jspdf.umd.min.js?v=20260923-1';
+        const VENDOR_JSPDF = 'vendor/jspdf.umd.min.js?v=20260923-2';
 
         const cloudConfig = { projectId: 'vps-postgresql' };
         
@@ -1126,7 +1126,7 @@
         // один играл бы подбор, а второй классическую таблицу.
         // Объявлено ДО startChallengeListener: слушатель может отдать закэшированный
         // снапшот сразу при подписке, а const в TDZ уронил бы весь обработчик.
-        const DUEL_MODES_PLAYABLE = ['swipe', 'match'];
+        const DUEL_MODES_PLAYABLE = ['swipe', 'match', 'order'];
         function _duelModePlayable(m) { return DUEL_MODES_PLAYABLE.indexOf(m || 'classic') !== -1; }
         // 'auto' совместим с любым играбельным режимом, конкретный — только сам с собой.
         function _duelModeMatches(want, has) {
@@ -1273,7 +1273,7 @@
 
         window.startDuelSearchDb = async function(mode) {
             // 'auto' — обычный вход с кнопки: присоединяемся к ЛЮБОМУ играбельному режиму,
-            // а если соперника нет и создаём матч сами — бросаем монетку свайп/подбор.
+            // а если соперника нет и создаём матч сами — жребий между всеми режимами.
             // Фильтровать вход по случайно выбранному режиму было бы вдвое хуже для
             // стыковки: два ищущих человека расходились бы просто по жребию.
             mode = (_duelModePlayable(mode) || mode === 'classic') ? mode : 'auto';
@@ -1358,9 +1358,16 @@
                     // Не нашли свободный матч — создаём свой.
                     // Колоду генерирует создатель и кладёт прямо в документ матча
                     // (со снапшотами данных) — оба игрока получают идентичные карточки.
-                    // 'auto' → монетка: половина матчей стартует подбором, половина свайпом.
-                    let createMode = mode === 'auto' ? (Math.random() < 0.5 ? 'match' : 'swipe') : mode;
-                    let swipeSections = null, matchRounds = null;
+                    // 'auto' → жребий между всеми играбельными режимами поровну.
+                    let createMode = mode === 'auto'
+                        ? DUEL_MODES_PLAYABLE[Math.floor(Math.random() * DUEL_MODES_PLAYABLE.length)]
+                        : mode;
+                    let swipeSections = null, matchRounds = null, orderDeck = null;
+                    if (createMode === 'order') {
+                        orderDeck = window.buildOrderDuelDeck ? window.buildOrderDuelDeck() : null;
+                        // Данные №1 ещё не подъехали — играем свайпом, как и подбор.
+                        if (!orderDeck) createMode = 'swipe';
+                    }
                     if (createMode === 'match') {
                         matchRounds = window.buildMatchDuelRounds ? window.buildMatchDuelRounds() : null;
                         // Данные №1 ещё не подъехали — молча играем свайпом вместо ошибки.
@@ -1383,6 +1390,7 @@
                         mode: createMode,
                         ...(swipeSections ? { swipeSections } : {}),
                         ...(matchRounds ? { matchRounds } : {}),
+                        ...(orderDeck ? { orderDeck } : {}),
                         createdAt: Date.now(),
                         player1: { uid: myUid, name: myName, score: 0, combo: 0, elo: _myDuelElo() },
                         player2: null,
@@ -1435,6 +1443,7 @@
                     window.state.duel.mode = data.mode || 'classic';
                     window.state.duel.swipeSections = data.swipeSections || null;
                     window.state.duel.matchRounds = data.matchRounds || null;
+                    window.state.duel.orderDeck = data.orderDeck || null;
                     window.state.duel.startTime = data.startTime || Date.now();
                     window.initDuelStart(data.startTime);
                 }
@@ -1449,6 +1458,7 @@
                         const dm = window.state.duel.mode || data.mode;
                         if (dm === 'swipe' && window.updateSwipeDuelOpp) window.updateSwipeDuelOpp(opp);
                         else if (dm === 'match' && window.updateMatchDuelOpp) window.updateMatchDuelOpp(opp);
+                        else if (dm === 'order' && window.updateOrderDuelOpp) window.updateOrderDuelOpp(opp);
                     }
                 }
                 
