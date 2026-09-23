@@ -507,8 +507,11 @@
             document.querySelectorAll('.dt-spot').forEach(el => el.classList.remove('dt-spot'));
             const t = document.getElementById(TUT[i].target);
             if (t) t.classList.add('dt-spot');
-            box.className = 'dt-tut-' + (i === 1 ? 'top' : 'bottom');
-            box.innerHTML = `<div class="dt-tut-card"><div class="dt-tut-n">${i + 1} / ${TUT.length}</div><div class="dt-tut-t">${TUT[i].text}</div><button class="dt-tut-btn">${i < TUT.length - 1 ? 'Дальше' : 'Играть!'}</button></div>`;
+            // Слои раздельно: затемнение (z 5) < подсвеченный элемент (z 6) < карточка
+            // (z 7). Раньше карточка жила ВНУТРИ затемнения, и на шаге 3 подсвеченное
+            // поле ложилось поверх неё — кнопку «Играть!» нельзя было нажать.
+            box.className = 'dt-tut-' + ['bottom', 'top', 'low'][i];
+            box.innerHTML = `<div class="dt-tut-dim"></div><div class="dt-tut-card"><div class="dt-tut-n">${i + 1} / ${TUT.length}</div><div class="dt-tut-t">${TUT[i].text}</div><button class="dt-tut-btn">${i < TUT.length - 1 ? 'Дальше' : 'Играть!'}</button></div>`;
             box.querySelector('.dt-tut-btn').onclick = () => {
                 _h('light');
                 if (++i < TUT.length) return show();
@@ -852,16 +855,18 @@ html.dark .dt-threat{background:#450a0a;color:#fca5a5;border-color:#b91c1c}
 .dt-fly{position:absolute;font-size:30px;pointer-events:none;animation:dtFly .8s cubic-bezier(.3,0,.6,1) forwards;z-index:3}
 .dt-coach{position:absolute;left:8px;right:8px;top:56px;padding:10px 12px;border-radius:var(--r-md);background:rgba(17,24,39,.88);color:#fff;font-size:13px;font-weight:700;line-height:1.45;text-align:center;z-index:3;pointer-events:none;transition:opacity .4s}
 .dt-coach.dt-coach-out{opacity:0}
-#dt-tut{position:absolute;inset:0;z-index:5;background:rgba(0,0,0,.5);display:flex;flex-direction:column;padding:16px;pointer-events:auto}
+#dt-tut{position:absolute;inset:0;display:flex;flex-direction:column;padding:16px;pointer-events:none}
+.dt-tut-dim{position:absolute;inset:0;z-index:5;background:rgba(0,0,0,.5);pointer-events:auto}
 #dt-tut.dt-tut-top{justify-content:flex-start;padding-top:calc(90px + env(safe-area-inset-top))}
 #dt-tut.dt-tut-bottom{justify-content:flex-end;padding-bottom:calc(150px + env(safe-area-inset-bottom))}
-.dt-tut-card{max-width:360px;margin:0 auto;background:#fff;color:#1f2937;border-radius:var(--r-md);box-shadow:var(--e-3);padding:16px;text-align:center;animation:dtIn .3s cubic-bezier(.2,.9,.3,1.25)}
+#dt-tut.dt-tut-low{justify-content:flex-end;padding-bottom:calc(12px + env(safe-area-inset-bottom))}
+.dt-tut-card{position:relative;z-index:7;pointer-events:auto;width:100%;max-width:360px;margin:0 auto;box-sizing:border-box;background:#fff;color:#1f2937;border-radius:var(--r-md);box-shadow:var(--e-3);padding:16px;text-align:center;animation:dtIn .3s cubic-bezier(.2,.9,.3,1.25)}
 html.dark .dt-tut-card{background:#1e1e1e;color:#e5e7eb}
 .dt-tut-n{font-size:var(--t-micro);font-weight:900;letter-spacing:.1em;color:#9ca3af}
 .dt-tut-t{font-size:15px;font-weight:700;line-height:1.45;margin:6px 0 12px}
 .dt-tut-t b{color:#ea580c}
 .dt-tut-btn{width:100%;padding:11px;border:none;border-radius:var(--r-md);background:#f97316;color:#fff;font-size:13px;font-weight:1000;text-transform:uppercase;letter-spacing:.06em;cursor:pointer}
-.dt-spot{position:relative;z-index:6;outline:3px solid #f97316;outline-offset:3px;animation:dtPulse 1s ease-in-out infinite}
+.dt-spot{position:relative;z-index:6;outline:3px solid #f97316;outline-offset:3px;animation:dtSpot 1s ease-in-out infinite}
 .dt-block.dt-spot{position:absolute}
 .dt-field{position:relative;flex:1;min-height:200px;border-radius:var(--r-md);background:#fff;border:2px solid #e5e7eb;overflow:hidden;transition:border-color .3s}
 html.dark .dt-field{background:#1a1a1a;border-color:#3f3f46}
@@ -930,6 +935,7 @@ html.dark .dt-big{background:#2c2c2c;color:#d1d5db}
 @keyframes dtPulse{0%,100%{transform:scale(1)}50%{transform:scale(1.07)}}
 @keyframes dtFloat{0%{opacity:0;transform:translateY(8px)}20%{opacity:1}100%{opacity:0;transform:translateY(-22px)}}
 @keyframes dtFly{0%{transform:none;opacity:1}100%{transform:translateY(-420px) rotate(-25deg) scale(1.4);opacity:0}}
+@keyframes dtSpot{0%,100%{outline-color:#f97316}50%{outline-color:rgba(249,115,22,.25)}}
 @keyframes dtDanger{0%,100%{border-color:#f43f5e}50%{border-color:#fecdd3}}
 `;
         document.head.appendChild(st);

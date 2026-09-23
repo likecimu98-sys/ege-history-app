@@ -70,6 +70,15 @@ assert.match(tetris, /if \(_g\.ammo < MAX_AMMO\) \{\s*_g\.ammo\+\+;/, 'полн�
 assert.match(tetris, /function _fire\(\) \{[\s\S]{0,200}_g\.ammo = 0;\s*_g\.atkSent \+= n;/, 'кнопка ⚔️ больше не бросает весь запас разом');
 assert.match(tetris, /const dur = THREAT_MS \+ \(n - 1\) \* THREAT_EXTRA_MS;/, '«туча» залпа не удлиняется — отбить 4 кирпича за 3 секунды нельзя');
 
+// Обучение: карточка ВЫШЕ подсвеченного элемента. 23.09 карточка жила внутри
+// затемнения (z 5), подсвеченное поле (z 6) ложилось на неё — «Играть!» не
+// нажималась. Программный .click() это не ловит, поэтому проверяем слои в CSS.
+assert.match(tetris, /\.dt-tut-dim\{[^}]*z-index:5/, 'затемнение обучения больше не отдельный слой');
+assert.match(tetris, /\.dt-tut-card\{[^}]*z-index:7/, 'карточка обучения ниже подсветки — кнопку не нажать');
+assert.match(tetris, /\.dt-spot\{[^}]*z-index:6/, 'подсветка обучения не между затемнением и карточкой');
+assert.doesNotMatch(tetris, /#dt-tut\{[^}]*z-index/, '#dt-tut снова создаёт свой слой — карточка окажется под подсветкой');
+assert.match(read('duel-react.js'), /ui\.classList\.add\('dr-open', 'dr-intro', 'dr-hint'\)/, 'реакции больше не раскрываются в начале дуэли — их не находят');
+
 // ── Реакции: едут вместе с последним счётом режима ──
 const cloud = read('cloud-sync.js');
 assert.match(cloud, /window\.state\.duel\._last = \{ score, combo, extra \}/, 'реакция уйдёт без полей режима и обнулит их у соперника');
