@@ -164,9 +164,27 @@ assert.doesNotMatch(
 );
 assert.match(
   dataSource,
-  /event: "заключение договора Руси с Византией в 944 г\.", person: "князь Игорь Старый"/,
+  /event: "заключение договора Руси с Византией в 944 г\.", person: "Игорь Старый"/,
   'Task 5 treaty with Byzantium must distinguish Igor from Oleg'
 );
+// 🔴 Один человек — одно написание (жалоба 23.09: в одной таблице задания 5
+// «Святослав Игоревич» и «князь Святослав Игоревич»). Проверка равенства лиц
+// сравнивает строки, и для неё это два разных человека: оба попадали в одну
+// таблицу, а ученик видел одного и того же князя дважды с разными событиями.
+{
+  const TITLES = /^(великий\s+князь|великая\s+княгиня|князь|княгиня|царь|царица|царевна|царевич|император|императрица|митрополит|патриарх|хан|граф|генерал-фельдмаршал|фельдмаршал|генерал|адмирал|маршал|полководец|гетман|атаман|святой)\s+/i;
+  const bare = name => {
+    let x = String(name || '').toLowerCase().replace(/ё/g, 'е').replace(/\s+/g, ' ').trim(), prev;
+    do { prev = x; x = x.replace(TITLES, ''); } while (x !== prev);
+    return x;
+  };
+  const spellings = {};
+  for (const m of dataSource.matchAll(/person: "([^"]+)"/g)) {
+    (spellings[bare(m[1])] = spellings[bare(m[1])] || new Set()).add(m[1]);
+  }
+  const twins = Object.values(spellings).filter(v => v.size > 1).map(v => [...v].join(' ~ '));
+  assert.deepStrictEqual(twins, [], 'Task 5: one person written two ways — ' + twins.join('; '));
+}
 assert.doesNotMatch(
   dataSource,
   /event: "заключение договора Руси с Византией", person: "князь Игорь Старый"/
@@ -585,7 +603,7 @@ assert.match(cloudCode, /_mergeAssignmentLists\(window\.state\.stats\.assignment
     const rows = [
         { year: '1036 г.', geo: 'Киев', event: 'разгром печенегов', c: 'early' },
         { year: '1945 г.', geo: 'Кёнигсберг', event: 'операция в Восточной Пруссии', c: '20th' },
-        { year: '1113 г.', geo: 'Киев', event: 'восстание', c: 'early' },
+        { year: '1136 г.', geo: 'Новгород', event: 'изгнание князя Всеволода', c: 'early' },
         { year: '1812 г.', geo: 'Тарутино', event: 'манёвр русской армии', c: '19th' },
     ];
     const inPeriod = new Set([rows[0], rows[2]]); // только 862–1340
@@ -640,6 +658,27 @@ assert.match(cloudCode, /_mergeAssignmentLists\(window\.state\.stats\.assignment
     const all = ctx._selectHomeworkTargets(
         'task4', { displayField: 'event', fieldName: 'year' }, rows, [0, 1, 2, 3], 4);
     assert.equal(all.length, 4, 'Без ограничителя периода отбор обязан работать как раньше');
+
+    // ── Задание 4: общий объект или год в одной таблице — двусмысленность ──
+    // Жалоба 23.09: два «Севастополя» (1783 и 1854–1855) при скрытых дате и
+    // событии. Какой куда — не угадать. Такая пара в одну таблицу не попадает.
+    const sev = [
+        { year: '1783 г.', geo: 'Севастополь', event: 'основание базы флота', c: '18th' },
+        { year: '1854-1855 гг.', geo: 'Севастополь', event: 'оборона в Крымскую войну', c: '19th' },
+        { year: '1812 г.', geo: 'Бородино', event: 'генеральное сражение', c: '19th' },
+        { year: '1812 г.', geo: 'Тарутино', event: 'манёвр русской армии', c: '19th' },
+    ];
+    ctx.state.hwCurrentPool = [0, 1, 2, 3];
+    const noTwins = ctx._selectHomeworkTargets(
+        'task4', { displayField: 'event', fieldName: 'year' }, sev, [0, 1, 2, 3], 4);
+    const geos = noTwins.map(r => r.geo), yrs = noTwins.map(r => r.year);
+    assert.equal(new Set(geos).size, geos.length,
+        `Два одинаковых объекта в одной таблице задания 4: ${geos.join(', ')}`);
+    assert.equal(new Set(yrs).size, yrs.length,
+        `Два одинаковых года в одной таблице задания 4: ${yrs.join(', ')}`);
+    assert.ok(ctx._task4Clash(sev[0], sev[1]), 'Севастополь 1783 и 1854 — это конфликт');
+    assert.ok(ctx._task4Clash(sev[2], sev[3]), 'Один год у двух строк — это конфликт');
+    assert.ok(!ctx._task4Clash(sev[0], sev[2]), 'Разные объекты и годы — не конфликт');
 }
 
 // Оба сборщика таблиц обязаны передавать рамки периода в отбор ДЗ.

@@ -12,8 +12,72 @@ function _tableIdentityKey(value) {
         .trim();
 }
 
+// ── Задание 4: у двух строк одной таблицы не бывает общего объекта или года ──
+//
+// 🔴 Жалоба 23.09: «при коротких временных рамках выпадает 2 одинаковых
+// географических объекта, при скрытых дате и событии». Севастополь в базе дважды —
+// основание базы флота (1783) и оборона в Крымскую (1854–1855). Защита от
+// «близнецов» ловила только пару «тот же год + тот же объект», а тут годы разные.
+// Строка, где виден один «Севастополь», и вторая такая же — это два одинаковых
+// вопроса с разными ответами: какой куда, не угадать никак.
+//
+// То же с годом: если у двух строк виден только «1812 г.», события к ним
+// переставляются как угодно. Поэтому в одной таблице объект и год уникальны.
+function _task4GeoKey(geo) {
+    return _tableIdentityKey(geo)
+        .replace(/\s*\([^)]*\)\s*/g, ' ')          // «Корсунь (Херсонес)» → «корсунь»
+        .replace(/^(река|село|деревня|мыс|озеро|город|г\.)\s+/, '')
+        .trim();
+}
+function _task4YearKey(year) {
+    const m = String(year ?? '').match(/\d{3,4}/);
+    return m ? m[0] : '';
+}
+function _task4Clash(a, b) {
+    if (!a || !b || a === b) return false;
+    const ga = _task4GeoKey(a.geo), gb = _task4GeoKey(b.geo);
+    if (ga && ga === gb) return true;
+    const ya = _task4YearKey(a.year), yb = _task4YearKey(b.year);
+    return Boolean(ya && ya === yb);
+}
+
+// ── Выбранные ГОДЫ: из ДЗ или из фильтра «свои годы» ──
+//
+// 🔴 Жалоба 23.09: «при маленьких временных рамках часто попадаются даты событий,
+// которые выпадают из заданного предела, и сразу понятно, что они не подходят».
+// Обманки подбирались по всей базе (или по эпохе), и при рамках «1801–1825» в
+// пуле лежали 1703 и 1945 — их ученик отбрасывал, не думая. Тренажёр превращался
+// в «исключи лишнее». Этой функцией генераторы обманок узнают рамки.
+//
+// null — рамок нет (вся история, эпоха-пресет, дуэль): подбираем как раньше.
+function _tableYearRange() {
+    const st = window.state;
+    if (!st || st.currentMode === 'duel') return null;
+    if (st.isHomeworkMode && window.getActiveHwRange) {
+        const r = window.getActiveHwRange();
+        if (r) return r;
+    }
+    const periodEl = (typeof DOM !== 'undefined' && DOM['filter-period']) || $('filter-period');
+    if (periodEl && periodEl.value === 'custom') {
+        const a = parseInt(($('custom-year-start') || {}).value, 10);
+        const b = parseInt(($('custom-year-end') || {}).value, 10);
+        if (Number.isFinite(a) && Number.isFinite(b) && b >= a) return { from: a, to: b };
+    }
+    return null;
+}
+// Окно для обманок: рамки плюс запас. Ровно по рамкам при «1812–1814» обманок не
+// набрать вовсе, поэтому запас растёт ступенями, но не прыгает сразу на всю базу.
+const RANGE_MARGINS = [0, 5, 15, 40];
+function _inYearWindow(value, range, margin) {
+    if (!range) return true;
+    const y = typeof value === 'number' ? value : parseInt(_task4YearKey(value), 10);
+    if (!Number.isFinite(y)) return false;
+    return y >= range.from - margin && y <= range.to + margin;
+}
+
 function _tableRowsCompatible(task, cfg, candidate, selected) {
     if (!candidate) return false;
+    if (task === 'task4' && selected.some(row => _task4Clash(candidate, row))) return false;
     const displayKey = _tableIdentityKey(candidate[cfg.displayField]);
     const hiddenKey = _tableIdentityKey(candidate[cfg.fieldName]);
     if (!displayKey || selected.some(row => _tableIdentityKey(row[cfg.displayField]) === displayKey)) return false;
@@ -134,11 +198,12 @@ function pickTargetTask4(allowed, rowsCount) {
     TASK_EPOCHS.forEach(e => { ep[e] = shuffleArray(allowed.filter(f => f.c === e)); });
     const usedEv = new Set();
     const usedFP = new Set(); // fingerprints — запрет близнецов
+    const taken = [];         // для _task4Clash: общий объект или год
     const pick1 = (pool) => {
         for (const f of pool) {
             const fp = eventFingerprint(f);
-            if (!usedEv.has(f.event) && !usedFP.has(fp)) {
-                usedEv.add(f.event); usedFP.add(fp); return f;
+            if (!usedEv.has(f.event) && !usedFP.has(fp) && !taken.some(t => _task4Clash(f, t))) {
+                usedEv.add(f.event); usedFP.add(fp); taken.push(f); return f;
             }
         }
         return null;
@@ -797,7 +862,7 @@ function _task1DistractorYearList() {
     return Array.isArray(src) ? src.map(y => String(y).trim()).filter(Boolean) : [];
 }
 
-function _task1AddGeneratedYears(target, poolItems, used, correctYears, needed) {
+function _task1AddGeneratedYears(target, poolItems, used, correctYears, needed, range) {
     const nums = target.map(t => Number.isFinite(t?.yearNum) ? t.yearNum : parseInt(String(t?.year || '').replace(/\D/g, ''), 10))
         .filter(y => Number.isFinite(y));
     const deltas = [1, -1, 2, -2, 3, -3, 5, -5, 7, -7, 10, -10, 15, -15, 20, -20, 25, -25, 30, -30];
@@ -806,6 +871,8 @@ function _task1AddGeneratedYears(target, poolItems, used, correctYears, needed) 
             if (poolItems.length >= needed) return;
             const y = base + delta;
             if (y < 800 || y > 2026) continue;
+            // «Своя» дата ±30 лет легко выходит за узкие рамки — и выдаёт себя.
+            if (range && !_inYearWindow(y, range, RANGE_MARGINS[1])) continue;
             const label = `${y} г.`;
             if (used.has(label) || correctYears.has(label)) continue;
             used.add(label);
@@ -820,16 +887,29 @@ function generateDistractorsTask1(target, poolItems) {
     const used = new Set(poolItems.map(v => String(v)));
     const correctYears = _task1CorrectYearsSet();
     const selectedYears = new Set(target.map(t => String(t?.year || '')).filter(Boolean));
+    const range = _tableYearRange();
 
-    for (const year of shuffleArray(_task1DistractorYearList())) {
+    // 🔴 Список «правдоподобных дат» — на всю историю. При рамках «1801–1825»
+    // оттуда приходили 1480 и 1991, и ученик отбрасывал их не думая. Берём
+    // только даты из рамок, расширяя запас ступенями, пока пул не наберётся.
+    const curated = shuffleArray(_task1DistractorYearList());
+    for (const margin of (range ? RANGE_MARGINS : [null])) {
+        for (const year of curated) {
+            if (poolItems.length >= needed) break;
+            if (used.has(year) || selectedYears.has(year) || correctYears.has(year)) continue;
+            if (margin !== null && !_inYearWindow(year, range, margin)) continue;
+            used.add(year);
+            poolItems.push(year);
+        }
         if (poolItems.length >= needed) break;
-        if (used.has(year) || selectedYears.has(year) || correctYears.has(year)) continue;
-        used.add(year);
-        poolItems.push(year);
     }
 
     if (poolItems.length < needed) {
-        _task1AddGeneratedYears(target, poolItems, used, correctYears, needed);
+        _task1AddGeneratedYears(target, poolItems, used, correctYears, needed, range);
+    }
+    // Последний шаг — без рамок: пустые слоты хуже далёкой даты.
+    if (poolItems.length < needed && range) {
+        _task1AddGeneratedYears(target, poolItems, used, correctYears, needed, null);
     }
 
     return poolItems;
@@ -849,6 +929,7 @@ function generateDistractors(task, target, missing) {
     // Task3/5/7: единая логика
     const cfg = TASK_CONFIG[task];
     const dataSource = cfg.data();
+    const yearRange = _tableYearRange();
     const task7UsesAudit = task === 'task7' && dataSource.some(d => Array.isArray(d.appliesToIds));
     const targetPeriods = [...new Set(target.map(t => t.c))];
     const periodOrder = TASK_EPOCHS;
@@ -1001,7 +1082,11 @@ function generateDistractors(task, target, missing) {
                 if (tooClose) return;
             }
             seen.add(val);
-            const pri = targetPeriodSet.has(d.c) ? 0 : (adjSet.has(d.c) ? 1 : 2);
+            // При рамках (ДЗ или «свои годы») первыми идут обманки ИЗ рамок: личность
+            // или факт из другого века отбрасывается без размышлений — см. _tableYearRange.
+            const inRange = yearRange && _inYearWindow(d.year, yearRange, RANGE_MARGINS[1]);
+            const base = targetPeriodSet.has(d.c) ? 0 : (adjSet.has(d.c) ? 1 : 2);
+            const pri = yearRange ? (inRange ? 0 : base + 1) : base;
             scored.push({ val, pri });
         });
         shuffleArray(scored);
@@ -1207,7 +1292,20 @@ function generateDistractorsTask4(target, poolItems) {
     // давать тематически близкие дистракторы (даже с разницей 100+ лет),
     // либо события той же эпохи с отступом ≥40 лет — чтобы случайная близость
     // в 2-3 года не создавала ложное ощущение ошибки ученика.
+    // Рамки ученика (ДЗ или «свои годы») — см. _tableYearRange.
+    const yearRange = _tableYearRange();
+
     function autoYearTraps(yearStr, targetFact) {
+        // При рамках — сначала строго внутри, потом с растущим запасом.
+        // Без рамок — один проход без ограничений, как раньше.
+        for (const margin of (yearRange ? RANGE_MARGINS : [null])) {
+            const got = autoYearTrapsWithin(yearStr, targetFact, margin);
+            if (got.length) return got;
+        }
+        return yearRange ? autoYearTrapsWithin(yearStr, targetFact, null) : [];
+    }
+
+    function autoYearTrapsWithin(yearStr, targetFact, margin) {
         const y = parseInt(yearStr, 10);
         if (!y) return [];
         const period = targetFact && targetFact.c;
@@ -1225,12 +1323,15 @@ function generateDistractorsTask4(target, poolItems) {
         window.bigData.forEach(d => {
             const dy = parseInt(d.year, 10);
             if (!dy || dy === y || seen.has(d.year)) return;
+            if (margin !== null && !_inYearWindow(dy, yearRange, margin)) return;
             seen.add(d.year);
             const dist = Math.abs(dy - y);
             if (targetGroup && getEventGroup(d) === targetGroup) {
                 thematic.push({ val: d.year, dist });
             }
-            if (period && d.c === period) {
+            // При рамках «своя эпоха» — это сами рамки: у «1690–1710» половина
+            // годов по разметке ранняя, половина XVIII век, и обе годятся.
+            if (period && (d.c === period || margin !== null)) {
                 if (dist >= 40) farSame.push({ val: d.year, dist });
                 else            nearSame.push({ val: d.year, dist });
             }
@@ -1261,21 +1362,45 @@ function generateDistractorsTask4(target, poolItems) {
 
     function autoGeoTraps(geoStr, period) {
         const targetGeos = new Set(target.map(t => t.geo));
-        const seen = new Set(), result = [];
-        shuffleArray(window.bigData.filter(d => d.c === period && !targetGeos.has(d.geo) && d.geo !== geoStr))
-            .forEach(d => { if (!seen.has(d.geo)) { seen.add(d.geo); result.push(d.geo); } });
-        return result.slice(0, 5);
+        const pick = (keep) => {
+            const seen = new Set(), result = [];
+            shuffleArray(window.bigData.filter(d => keep(d) && !targetGeos.has(d.geo) && d.geo !== geoStr))
+                .forEach(d => { if (!seen.has(d.geo)) { seen.add(d.geo); result.push(d.geo); } });
+            return result.slice(0, 5);
+        };
+        // Объект тоже выдаёт себя годом: «Кёнигсберг» в таблице про Александра I
+        // отбрасывается сразу. При рамках берём объекты событий из рамок.
+        if (yearRange) {
+            for (const margin of RANGE_MARGINS) {
+                const got = pick(d => _inYearWindow(d.year, yearRange, margin));
+                if (got.length) return got;
+            }
+        }
+        return pick(d => d.c === period);
     }
 
     const targetPeriodSet = new Set(target.map(t => t.c));
-    const pFacts = window.bigData.filter(d => targetPeriodSet.has(d.c));
+    // Запасной источник обманок. При рамках — сначала события из рамок (с
+    // запасом), и только если их нет совсем — эпоха целиком.
+    let pFacts = window.bigData.filter(d => targetPeriodSet.has(d.c));
+    if (yearRange) {
+        for (const margin of RANGE_MARGINS) {
+            const inside = window.bigData.filter(d => _inYearWindow(d.year, yearRange, margin));
+            if (inside.length >= target.length * 3) { pFacts = inside; break; }
+        }
+    }
 
     ['geo', 'event', 'year'].forEach(type => {
         for (let i = 0; i < requiredFakes[type]; i++) {
             const relHid = hiddenRowsData.find(h => h.types.includes(type));
             // Ручные ловушки
             if (typeof trapDict !== 'undefined' && relHid && Math.random() < 0.6) {
-                const pT = trapDict[relHid.row[type]];
+                let pT = trapDict[relHid.row[type]];
+                // Ручные ловушки-годы тоже бывают из другого века — при рамках
+                // оставляем только те, что в них (с наибольшим запасом).
+                if (pT && type === 'year' && yearRange) {
+                    pT = pT.filter(t => _inYearWindow(t, yearRange, RANGE_MARGINS[RANGE_MARGINS.length - 1]));
+                }
                 if (pT && pT.length > 0) {
                     const trap = pT[Math.floor(Math.random() * pT.length)];
                     if (!bannedVals.has(trap)) { poolItems.push(trap); bannedVals.add(trap); continue; }
@@ -1375,14 +1500,17 @@ function generateTableOnce() {
 // Гарантирует: (1) решаемость — каждый ожидаемый ответ присутствует в пуле
 // в нужном количестве; (2) уникальность — один и тот же ответ не требуется
 // в 2+ слотах (иначе задание неоднозначно). Детектив/визуал/ДЗ не проверяются.
-function validateTable() {
+function validateTable(opts) {
     const slots = $$('#task-table-body .dnd-slot');
     if (!slots.length) return true; // пустая таблица (напр. «ошибок нет») — не ошибка
     const expectedRows = window.state.currentMode === 'duel'
         ? 4
         : (parseInt($('filter-rows')?.value, 10) || 4);
     const renderedRows = $$('#task-table-body tr[data-index]');
-    if (renderedRows.length !== expectedRows) return false;
+    // allowShort — только при заданных рамках (см. generateTable): короткая
+    // таблица в своих годах лучше полной таблицы про другие века.
+    const shortOk = opts && opts.allowShort && renderedRows.length >= 2 && renderedRows.length < expectedRows;
+    if (renderedRows.length !== expectedRows && !shortOk) return false;
     const cfg = TASK_CONFIG[window.state.currentTask];
     const targets = window.state.currentTargetData || [];
     if (cfg && window.state.currentTask !== 'task4') {
@@ -1587,6 +1715,20 @@ function generateTable() {
     for (let attempt = 0; attempt < 15; attempt++) {
         generateTableOnce();
         if (skipValidation() || (validateTable() && _task5GateOk())) return;
+    }
+    // 🔴 Рамки заданы — из них не уходим.
+    //
+    // Проверка требует ровно столько строк, сколько выбрано, и раньше, не набрав
+    // их, мы молча перегенерировали таблицу по ВСЕЙ истории. Ученик ставил
+    // «1812–1814» и получал 1634, 1759 и 1974 — те самые «даты, которые сразу
+    // понятно, что не подходят» (жалоба 23.09). В узких рамках честных строк
+    // бывает меньше: в 1812–1814 всего три разных года. Короткая таблица в своих
+    // годах — правильный ответ; вся история — только если нет и двух строк.
+    if (_tableYearRange()) {
+        for (let attempt = 0; attempt < 15; attempt++) {
+            generateTableOnce();
+            if (validateTable({ allowShort: true }) && _task5GateOk()) return;
+        }
     }
     // Фолбэк: умный подбор по всем эпохам обычно даёт корректную таблицу.
     const periodEl = $('filter-period');
@@ -1824,7 +1966,9 @@ function generateTask4Table() {
             for (const f of shuffleArray([...allowed])) {
                 if (target.length >= rowsCount) break;
                 const fp = eventFingerprint(f);
-                if (!usedEvents.has(f.event) && !usedFPs.has(fp)) {
+                // Короткие рамки — ровно тот случай, когда сюда и попадают: умный
+                // подбор по эпохам не работает, и два Севастополя приходили вместе.
+                if (!usedEvents.has(f.event) && !usedFPs.has(fp) && !target.some(t => _task4Clash(f, t))) {
                     target.push(f); usedEvents.add(f.event); usedFPs.add(fp);
                 }
             }
