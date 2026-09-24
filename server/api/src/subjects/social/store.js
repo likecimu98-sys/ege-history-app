@@ -668,6 +668,32 @@ async function classStudents(teacherUserId, classId, { db = pool, weekStart = nu
   });
 }
 
+// Убрать ученика из класса. Состав меняется руками учителя ровно здесь: в
+// классе оказываются и прошлогодние выпускники, и случайные люди по утёкшей
+// ссылке, и второй аккаунт того же ребёнка, а списка без них не было вовсе.
+//
+// 🔴 Строка НЕ удаляется, а получает status='removed'. Во-первых, вместе с ней
+// ушло бы joined_at, а по нему считается, какие работы ученику вообще
+// выдавались (ASSIGNMENT_VISIBLE_SQL): вернувшийся получил бы пачку чужих
+// просроченных домашек. Во-вторых, «убрать из списка» и «стереть сделанную
+// работу» — разные вещи: прогресс по уже выданным заданиям остаётся на месте,
+// и если ученика вернут, его результаты будут при нём.
+//
+// Убранный ученик перестаёт получать домашку и пропадает из таблиц: каждый
+// запрос про членство требует status='active'. Код класса при этом прежний —
+// по нему ученик вернётся сам. Это осознанно: ошибочное удаление иначе нечем
+// было бы исправить, а чтобы закрыть дверь совсем, у класса есть смена кода.
+async function removeClassStudent(teacherUserId, classId, studentUserId, { db = pool } = {}) {
+  await ownedClass(teacherUserId, classId, { db });
+  const result = await db.query(
+    `UPDATE social_class_members SET status='removed', updated_at=now()
+     WHERE class_id=$1 AND user_id=$2 AND status='active'
+     RETURNING user_id`,
+    [classId, studentUserId]);
+  if (!result.rowCount) fail('student_not_found', 404);
+  return { classId: String(classId), studentId: String(studentUserId), status: 'removed' };
+}
+
 // Присоединение ученика по коду. Ученик НЕ выбирает класс по идентификатору:
 // код знает только тот, кому его дал учитель, а идентификатор класса можно было
 // бы подобрать. Архивный класс не принимает новых.
@@ -1780,7 +1806,8 @@ module.exports = {
   activeAssignmentsFor,
   taskDifficulty, quotaState, consumeQuota,
   weeklyLeaderboard,
-  createClass, listClasses, ownedClass, updateClass, rotateJoinCode, classStudents, joinClass, myClasses,
+  createClass, listClasses, ownedClass, updateClass, rotateJoinCode, classStudents, removeClassStudent,
+  joinClass, myClasses,
   createAssignment, listAssignments, ownedAssignment, updateAssignment, cancelAssignment,
   assignmentResults, assignmentStudentDetail, studentOverview, weakSpots,
   studentAssignments, studentDigest, teacherDigest,
