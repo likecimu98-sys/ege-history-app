@@ -16,13 +16,15 @@ const ctx=()=>({from:{id:2},chat:{type:'private'},reply:async(text,opts)=>({text
  role={role:'org_owner',orgId:'a',classes:[]};assert.deepEqual(Array.from(await sandbox.rosterClasses(2),c=>c.code).sort(),['own','school']);
  assert.equal((await sandbox.doClassRoster({...ctx(),chat:{type:'group'}})).text.includes('личном'),true);
  role={classes:['own']};
- students=Array.from({length:23},(_,i)=>[String(100+i),{name:`Ученик ${i}`,classCode:'own',knownTgId:String(100+i)}]);
+ students=Array.from({length:23},(_,i)=>[String(100+i),{name:`Ученик ${i}`,classCode:'own',knownTgId:String(100+i),username:i===0?'ivan_petrov':i===1?'bad name!':''}]);
  students.push(['dup',{name:'Копия',classCode:'own',knownTgId:'100'}],['merged',{classCode:'own',_mergedInto:'100'}],['left',{classCode:'own',leftClassAt:123}],['moved',{classCode:'own',inviteClassCode:'other'}],['new',{name:'<Имя & фамилия>',classCode:'other',inviteClassCode:'own'}]);
  const key=sandbox.rosterClassKey('own');
- let r=await sandbox.doClassRoster(ctx(),key,0);assert(r.text.includes('Участников: 24.'));assert(r.text.includes('&lt;Имя &amp; фамилия&gt;'));assert(r.text.includes('Telegram не привязан'));assert(r.text.length<4096);
- r=await sandbox.doClassRoster(ctx(),key,2);assert(r.text.includes('Страница 3 из 3'));assert.equal((r.text.match(/Telegram ID:/g)||[]).length,4);
+ let r=await sandbox.doClassRoster(ctx(),key,0);assert(r.text.includes('Учеников: 24.'));assert(r.text.includes('&lt;Имя &amp; фамилия&gt;'));assert(r.text.includes('Telegram не привязан'));assert(r.text.length<4096);
+ // Имя — ссылка на профиль (работает и без юзернейма), @юзернейм — отдельной ссылкой t.me; кривой юзернейм не выводится.
+ assert(r.text.includes('<a href="tg://user?id=100">Ученик 0</a>'));assert(r.text.includes('<a href="https://t.me/ivan_petrov">@ivan_petrov</a>'));assert(!r.text.includes('bad name'));assert.equal((r.text.match(/<a /g)||[]).length,(r.text.match(/<\/a>/g)||[]).length);assert(!/<a href="tg:\/\/user\?id=">/.test(r.text));
+ r=await sandbox.doClassRoster(ctx(),key,1);assert(r.text.includes('Страница 2 из 2'));assert.equal((r.text.match(/tg:\/\/user\?id=/g)||[]).length,4);
  classes[0][1].ownerTgId=3;role=null;r=await sandbox.doClassRoster(ctx(),key);assert(r.text.includes('Нет доступных'));
  role={classes:['own']};r=await sandbox.doClassRoster(ctx(),sandbox.rosterClassKey('other'));assert(r.text.includes('недоступен'));
  assert.equal(sandbox.rosterTgId(doc('google_x',{})),null);assert.equal(sandbox.rosterTgId(doc('789',{})),'789');
- console.log('Class roster: roles, school isolation, revoked access, private chat, paging, merges, transfers and HTML escaping passed');
+ console.log('Class roster: roles, school isolation, revoked access, private chat, paging, merges, transfers, profile links and HTML escaping passed');
 })().catch(e=>{console.error(e);process.exitCode=1});

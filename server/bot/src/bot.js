@@ -335,7 +335,7 @@ const CMD_TEACHER = [
     { command: 'menu', description: '📋 Меню' },
     { command: 'newclass', description: '➕ Создать группу' },
     { command: 'myclasses', description: '📚 Мои группы и ссылки' },
-    { command: 'students', description: '👥 Участники класса и Telegram ID' },
+    { command: 'students', description: '👥 Ученики класса (профили)' },
     { command: 'msg', description: '📣 Сообщение группе' },
     { command: 'secondpart', description: '✍️ Вторая часть ЕГЭ' },
     { command: 'delclass', description: '🗑 Удалить группу' },
@@ -347,7 +347,7 @@ const CMD_OWNER = [
     { command: 'menu', description: '📋 Меню' },
     { command: 'newclass', description: '➕ Создать группу' },
     { command: 'myclasses', description: '📚 Группы школы' },
-    { command: 'students', description: '👥 Участники класса и Telegram ID' },
+    { command: 'students', description: '👥 Ученики класса (профили)' },
     { command: 'msg', description: '📣 Сообщение группе' },
     { command: 'inviteteacher', description: '👨‍🏫 Пригласить преподавателя' },
     { command: 'secondpart', description: '✍️ Вторая часть ЕГЭ' },
@@ -361,7 +361,7 @@ const CMD_ADMIN = [
     { command: 'premiumgroup', description: '♾ Группа безлимита (в группе / ID)' },
     { command: 'commands', description: '🗂 Все команды всех ролей' },
     { command: 'stats', description: '📈 Статистика' },
-    { command: 'students', description: '👥 Участники класса и Telegram ID' },
+    { command: 'students', description: '👥 Ученики класса (профили)' },
     { command: 'msg', description: '📣 Сообщение группе' },
     { command: 'menu', description: '📋 Меню' },
     { command: 'newclass', description: '➕ Создать группу' },
@@ -414,7 +414,7 @@ function menuKeyboard(userId) {
     if (isTeacher(userId)) {
         kb.text('➕ Новая группа', 'm_newclass').text('📚 Мои группы', 'm_myclasses').row();
         kb.text('📣 Сообщение группе', 'm_msg').text('🗑 Удалить группу', 'm_delclass').row();
-        kb.text('👥 Участники и TG ID', 'm_students').row();
+        kb.text('👥 Ученики класса', 'm_students').row();
         kb.text('✍️ Вторая часть', 'm_secondpart').row();
     }
     if (isOrgOwner(userId)) kb.text('👨‍🏫 Пригласить преподавателя', 'm_inviteteacher').row();
@@ -849,7 +849,7 @@ async function doClassRoster(ctx, key = null, page = 0) {
         classes.slice(page * 8, page * 8 + 8).forEach(c => kb.text(c.name.slice(0, 55), `roster_c:${rosterClassKey(c.code)}:0`).row());
         if (page > 0) kb.text('← Назад', `roster_p:${page - 1}`);
         if (page + 1 < pages) kb.text('Дальше →', `roster_p:${page + 1}`);
-        text = `👥 Участники и Telegram ID\nВыберите класс (${classes.length}).\nСтраница ${page + 1} из ${pages}.`;
+        text = `👥 Ученики класса\nВыберите класс (${classes.length}).\nСтраница ${page + 1} из ${pages}.`;
     } else {
         const cls = classes.find(c => rosterClassKey(c.code) === key);
         if (!cls) return ctx.reply('Класс недоступен или был удалён. Выберите класс заново: /students');
@@ -874,14 +874,22 @@ async function doClassRoster(ctx, key = null, page = 0) {
             if (!byPerson.has(id) || byPerson.get(id).name === 'Без имени') byPerson.set(id, item);
         }
         const rows = [...byPerson.values()].sort((a, b) => a.name.localeCompare(b.name, 'ru') || String(a.tgId).localeCompare(String(b.tgId)));
-        const pages = Math.max(1, Math.ceil(rows.length / 10));
+        // 🔴 Владельцу нужно не «ID для копирования», а открыть человека: имя —
+        // ссылка на профиль. tg://user?id работает и без юзернейма (у многих
+        // школьников его нет), @юзернейм рядом — отдельной ссылкой t.me: она
+        // открывается при любых настройках приватности. ID — мелко в конце,
+        // его по-прежнему удобно скопировать (зачислить, выдать безлимит).
+        const PER_PAGE = 20;
+        const pages = Math.max(1, Math.ceil(rows.length / PER_PAGE));
         page = Math.min(Math.max(0, page), pages - 1);
-        text = `👥 <b>${rosterHtml(cls.name.slice(0, 100))}</b>\nУчастников: ${rows.length}. Страница ${page + 1} из ${pages}.\n`;
-        rows.slice(page * 10, page * 10 + 10).forEach((r, i) => {
-            text += `\n${page * 10 + i + 1}. ${rosterHtml(r.name)}${r.username ? ` · @${r.username}` : ''}\n`;
-            text += r.tgId ? `Telegram ID: <code>${r.tgId}</code>\n` : 'Telegram не привязан\n';
+        text = `👥 <b>${rosterHtml(cls.name.slice(0, 100))}</b>\nУчеников: ${rows.length}. Страница ${page + 1} из ${pages}.\nНажмите на имя — откроется профиль в Telegram.\n`;
+        rows.slice(page * PER_PAGE, page * PER_PAGE + PER_PAGE).forEach((r, i) => {
+            const name = r.tgId ? `<a href="tg://user?id=${r.tgId}">${rosterHtml(r.name)}</a>` : rosterHtml(r.name);
+            const nick = r.username ? ` · <a href="https://t.me/${r.username}">@${r.username}</a>` : '';
+            const tail = r.tgId ? ` · <code>${r.tgId}</code>` : ' · Telegram не привязан';
+            text += `\n${page * PER_PAGE + i + 1}. ${name}${nick}${tail}`;
         });
-        if (!rows.length) text += '\nВ этом классе пока нет участников.';
+        if (!rows.length) text += '\nВ этом классе пока нет учеников.';
         if (snapshots.some(s => s.size >= 5000)) text += '\n⚠️ Достигнут предел выгрузки; список может быть неполным.';
         if (page > 0) kb.text('← Назад', `roster_c:${key}:${page - 1}`);
         if (page + 1 < pages) kb.text('Дальше →', `roster_c:${key}:${page + 1}`);
@@ -1098,7 +1106,7 @@ function commandsCheatsheet() {
         '👨‍🏫 Репетитор:',
         '/newclass Название — создать группу (автокод)',
         '/myclasses — мои группы + инвайт-ссылки для учеников',
-        '/students — выбрать класс и посмотреть Telegram ID участников',
+        '/students — ученики класса: имя открывает профиль в Telegram, рядом @юзернейм и ID',
         '/msg текст — сообщение всем ученикам группы (несколько групп: /msg КОД текст)',
         '/delclass — удалить (архивировать) группу',
         '/settings — плюс: ✅ Сдача ДЗ, ➕ Новые ученики, 📊 Дайджест, ⚠️ Алерты',
