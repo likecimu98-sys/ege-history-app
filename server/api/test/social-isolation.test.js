@@ -52,13 +52,30 @@ const SOCIAL_FILES = fs.readdirSync(SRC).filter(name => name.endsWith('.js')).ma
 // Иначе тест падал бы на SET, SKIP и LATERAL — то есть на ровном месте, и его
 // начали бы чинить ослаблением проверки.
 const SQL_KEYWORDS = new Set(['SET', 'SELECT', 'VALUES', 'ONLY', 'LATERAL']);
+
+// 🔴 Имя, объявленное в WITH, таблицей не является. Без этой поправки проверка
+// ловила собственные CTE запроса («recipients», «first_try») и требовала
+// переименовать их в social_*, то есть заставляла врать: CTE — не таблица
+// предмета. Такое здесь уже однажды кончилось обходным манёвром — список
+// получателей пришлось разворачивать через FROM (VALUES …), потому что
+// «FROM unnest» читалось как обращение к таблице. Проверка обязана ловить
+// чужие ДАННЫЕ, а не форму запроса.
+function cteNames(source) {
+  const names = new Set();
+  const re = /(?:\bWITH|,)\s+([A-Za-z_][A-Za-z0-9_]*)\s+AS\s*\(/g;
+  let match;
+  while ((match = re.exec(source))) names.add(match[1]);
+  return names;
+}
+
 function referencedTables(source) {
   const tables = new Set();
+  const defined = cteNames(source);
   const re = /\b(?:FROM|JOIN|INTO)\s+([A-Za-z_][A-Za-z0-9_]*)|(?<!\b(?:FOR|DO)\s)\bUPDATE\s+([A-Za-z_][A-Za-z0-9_]*)/g;
   let match;
   while ((match = re.exec(source))) {
     const name = match[1] || match[2];
-    if (name && !SQL_KEYWORDS.has(name.toUpperCase())) tables.add(name);
+    if (name && !SQL_KEYWORDS.has(name.toUpperCase()) && !defined.has(name)) tables.add(name);
   }
   return tables;
 }
