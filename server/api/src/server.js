@@ -343,9 +343,14 @@ async function handleSecondPartClasses(req, res) {
         skipped.set(code, skipped.get(code) + 1);
         continue;
       }
+      // Юзернейм — чтобы куратор второй части мог открыть ученика в Telegram
+      // одним нажатием: по одному имени «Настя» не понять, какая из трёх.
+      // Только допустимый в Telegram вид, иначе ссылка вела бы в никуда.
+      const username = String(row.data?.username || row.data?.tgUsername || '').replace(/^@/, '');
       byClass.get(code).push({
         tg_user_id: Number(row.doc_id),
         name: String(row.data?.name || '').slice(0, 120),
+        ...(/^[A-Za-z0-9_]{5,32}$/.test(username) ? { username } : {}),
       });
     }
   }

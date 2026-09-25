@@ -137,6 +137,30 @@ assert.equal(
   true,
   'Task 3 Christianization and Korsun rows must not create two defensible matches'
 );
+// Жалоба 26.09: к «ордынскому владычеству» вариантом шёл ярлык Ивану Калите —
+// факт другого процесса, но под владычество подходит так же. Диапазон лет его
+// не ловил (у процесса в базе 1246–1293), поэтому нужна смысловая «семья».
+assert.equal(
+  tableContext._task3Conflicts(
+    { process: 'ордынское владычество на Руси', fact: 'казнь князя Михаила Черниговского', year: 1246 },
+    { process: 'борьба за первенство среди русских князей в XIV в.', fact: 'получение Иваном Калитой ярлыка на великое владимирское княжение', year: 1328 }
+  ),
+  true,
+  'Task 3: a Horde-yarlyk fact must not sit next to the Horde-domination process'
+);
+assert.equal(
+  tableContext._task3Conflicts(
+    { process: 'реформы Петра I', fact: 'учреждение Сената', year: 1711 },
+    { process: 'ордынское владычество на Руси', fact: 'казнь князя Михаила Черниговского', year: 1246 }
+  ),
+  false,
+  'Task 3: the Horde family must not swallow unrelated rows'
+);
+assert.match(
+  tableSource,
+  /t3Procs && target\.some\(t => _task3SemanticConflict\(d, t\)\)/,
+  'Task 3 distractors must also be checked against the semantic families of shown rows'
+);
 assert.equal(
   tableContext._task5Interchangeable(
     { event: 'составление Русской Правды', person: 'Ярослав Мудрый', year: 1016 },

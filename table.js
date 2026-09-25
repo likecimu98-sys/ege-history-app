@@ -332,7 +332,15 @@ function _task3SemanticConflict(a, b) {
     const earlyForeignPolicy = row => /внешнеполитическ[а-я]* деятельност[а-я]* первых русских княз|военн[а-я]* поход[а-я]* первых русских княз|поход[а-я]* княз[а-я]* святослав|внешн[а-я]* политик[а-я]* княз[а-я]* владимир|доростол|хазарск[а-я]* каганат|осад[а-я]* корсун|олег[а-я]*.*византи/i.test(semanticText(row));
     const yaroslav = row => /ярослав[а-я]* мудр|правд[а-я]* ярослав|кровн[а-я]* мест|разгром[а-я]* печенег|софийск[а-я]* собор[а-я]* в киев|город[а-я]* юрьев|занят[а-я]* киевск[а-я]* престол[а-я]* ярослав/i.test(semanticText(row));
     const christianization = row => /принят[а-я]* христианств|крещен[а-я]* руси|внешн[а-я]* политик[а-я]* княз[а-я]* владимир|осад[а-я]* корсун/i.test(semanticText(row));
+    // Ордынская зависимость: ярлык, выход, баскаки, карательные рати — всё это
+    // и есть «ордынское владычество». Жалоба 26.09: к процессу «ордынское
+    // владычество на Руси» (казнь Михаила Черниговского) вариантом шёл «ярлык
+    // Ивану Калите» — он из процесса «борьба за первенство в XIV в.», но под
+    // владычество подходит ровно так же. Диапазон лет его не поймал: у процесса
+    // в базе факты 1246–1293, а ярлык — 1328.
+    const horde = row => /ордын|(^|[^а-я])орд[аеуыо]([^а-я]|$)|ярлык|баскак|неврюев|дюденев|щелкан|федорчук|тохтамыш|мама[йяе]|ахмат|угр[аеу]([^а-я]|$)|куликовск/i.test(semanticText(row));
     if ((law(a) && law(b)) || (polovtsy(a) && polovtsy(b)) ||
+        (horde(a) && horde(b)) ||
         (fragmentation(a) && fragmentation(b)) ||
         (mongolConflict(a) && mongolConflict(b)) ||
         (earlyForeignPolicy(a) && earlyForeignPolicy(b)) ||
@@ -1059,6 +1067,9 @@ function generateDistractors(task, target, missing) {
                 targetYears.some(ty => isReigningAuthority(val, ty))) return;
             if (task === 'task5' && target.some(t => _task5PersonFitsEvent(val, t.event))) return;
             if (t3Procs && t3Procs.some(p => _task3YearInProcess(d.year, p))) return;
+            // Смысловая «семья» с показанной строкой — вариант подойдёт и к ней:
+            // диапазон лет ловит только пересечение по времени.
+            if (t3Procs && target.some(t => _task3SemanticConflict(d, t))) return;
             // Обратная проверка: кандидат подходит как ответ для какого-то target.display?
             const myDisplays = fieldToDisplays[val] || new Set();
             for (const tdv of targetDisplayVals) {
