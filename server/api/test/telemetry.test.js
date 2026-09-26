@@ -152,3 +152,12 @@ test('пачка событий ограничена сверху', async () => 
   const many = Array.from({ length: 100 }, () => ({ name: 'app_open' }));
   assert.equal(await recordEvents('u-1', many, { db }), 20);
 });
+
+test('телеметрия принимается и без входа: маршрут стоит до общей проверки сессии', () => {
+  // До 26.09.2026 маршрут жил ниже requireSession и отвечал невошедшим 401 —
+  // новичок, ушедший с заставки, не оставлял ни события, ни ошибки.
+  const src = require('node:fs').readFileSync(require('node:path').join(__dirname, '..', 'src', 'server.js'), 'utf8');
+  const route = src.indexOf("url.pathname === '/api/v1/telemetry'");
+  const gate = src.indexOf('\n    requireSession(session);\n'.replace(/\n/g, src.includes('\r\n') ? '\r\n' : '\n'));
+  assert.ok(route > 0 && gate > 0 && route < gate, 'telemetry must be handled before requireSession');
+});
