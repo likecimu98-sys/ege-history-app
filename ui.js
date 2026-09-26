@@ -770,18 +770,30 @@ function _hasEntryIntent() {
     try {
         const p = new URLSearchParams(location.search);
         for (const k of p.keys()) {
-            if (!/^(utm_.*|yclid|gclid|fbclid|_boot|v)$/.test(k)) return true;
+            if (!/^(utm_.*|yclid|gclid|fbclid|_boot|v|open)$/.test(k)) return true;
         }
         const tg = window.Telegram && window.Telegram.WebApp;
         if (tg && tg.initDataUnsafe && tg.initDataUnsafe.start_param) return true;
     } catch (e) {}
     return false;
 }
+// Какое задание открыть по ссылке: страницы банка ФИПИ ведут кнопкой
+// «Решать такие задания» на свой номер (?open=task5).
+const OPENABLE_TASKS = ['task1', 'task3', 'task4', 'task5', 'task7'];
+function _openRequested() {
+    try {
+        const v = new URLSearchParams(location.search).get('open');
+        return OPENABLE_TASKS.includes(v) ? v : null;
+    } catch (e) { return null; }
+}
 function _startFirstRun() {
     if (_hasEntryIntent()) { _showOnboardingOverlay(); return; }
-    window._firstRunPeriod = { from: 862, to: 1890 };
     window._askNameOnExit = true;
-    if (typeof window.quickStartGame === 'function') window.quickStartGame('task4', 'normal');
+    const want = _openRequested();
+    // Годы до 1890 — для «вслепую» пришедших. Пришедший со страницы конкретного
+    // задания ищет его, а не начало курса: ему — вся история.
+    if (!want) window._firstRunPeriod = { from: 862, to: 1890 };
+    if (typeof window.quickStartGame === 'function') window.quickStartGame(want || 'task4', 'normal');
     else _showOnboardingOverlay();
 }
 function _inTelegramNow() {
@@ -818,6 +830,12 @@ window.showNamePrompt = function () {
 // localStorage действительно означает нового пользователя.
 const ONBOARDING_CLOUD_WAIT_MS = 6000;
 function checkOnboarding() {
+    // Знакомый человек пришёл по кнопке со страницы задания — сразу туда.
+    if (_alreadyOnboarded() && _openRequested() && typeof window.quickStartGame === 'function') {
+        try { localStorage.setItem('ege_onboarding_done', '1'); } catch (e) {}
+        window.quickStartGame(_openRequested(), 'normal');
+        return;
+    }
     if (_alreadyOnboarded()) {
         // Согласие приехало из облака — закрепляем локально, чтобы следующий вход
         // не ждал сеть вовсе.

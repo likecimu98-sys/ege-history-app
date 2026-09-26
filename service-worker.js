@@ -1,7 +1,7 @@
 'use strict';
 
-const APP_VERSION = '2026-09-26-vps-129';
-const RELEASE_ASSET_VERSION = '20260926-2';
+const APP_VERSION = '2026-09-26-vps-130';
+const RELEASE_ASSET_VERSION = '20260926-3';
 // ⚠️ Версия НАБОРА КАРТИНОК, а не версия приложения. Поднимай её ТОЛЬКО когда
 // меняется состав offline-assets.json — добавились, удалились или переснялись
 // файлы. От бампа APP_VERSION она не зависит и зависеть не должна.
@@ -316,7 +316,11 @@ async function networkFirstNavigation(request) {
     // cram.html и другие под-страницы (iframe) кэшируем под их собственным URL,
     // а не под index.html — иначе навигация iframe затирала бы кэш главной страницы.
     const url = new URL(request.url);
-    const isRootNav = url.pathname.endsWith('/') || url.pathname.endsWith('/index.html');
+    // 🔴 «Корень» — только корень области SW, а не любой адрес на «/». Страницы
+    // банка ФИПИ живут в /ege/zadanie-N/ — раньше они сохранялись бы в кэш ПОД
+    // КЛЮЧОМ index.html и подменяли приложение у всех, кто их открыл.
+    const scopePath = new URL(self.registration.scope).pathname;
+    const isRootNav = url.pathname === scopePath || url.pathname === scopePath + 'index.html';
     // cram.html открывается с ?cb=<timestamp> (форс-перезагрузка iframe для диплинка) —
     // нормализуем ключ кэша к ./cram.html, иначе каждый запуск плодил бы новую запись.
     const isCramNav = url.pathname.endsWith('/cram.html');

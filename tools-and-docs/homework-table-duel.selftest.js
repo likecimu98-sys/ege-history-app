@@ -360,7 +360,8 @@ assert.match(uiSource, /if \(!_inTelegramNow\(\)\) \{ _startFirstRun\(\); return
   'outside Telegram a newcomer must start solving immediately');
 assert.match(uiSource, /window\._firstRunPeriod = \{ from: 862, to: 1890 \}/,
   'the first session must be limited to 862–1890');
-assert.match(uiSource, /quickStartGame\('task4', 'normal'\)/, 'the first session must open task 4');
+assert.match(uiSource, /quickStartGame\(want \|\| 'task4', 'normal'\)/,
+  'the first session must open task 4 (or the task a bank page asked for)');
 assert.match(appSource, /if \(window\._askNameOnExit\) \{[\s\S]{0,200}showNamePrompt/,
   'the name must be asked when the newcomer returns to the lobby');
 assert.doesNotMatch(read('index.html'), /id="onb-consent"/, 'no consent checkbox before the first task');
