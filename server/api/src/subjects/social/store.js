@@ -1809,6 +1809,60 @@ async function enqueueAssignmentNotifications(assignment, { db = pool } = {}) {
   return result.rowCount;
 }
 
+// 🔴 НАПОМИНАНИЕ ТОМУ, КТО ВСТУПИЛ В КЛАСС И НЕ НАЧАЛ.
+//
+// 102 ученика из 319 не ответили ни разу, и это не «не дошли»: у всех есть
+// снимок прогресса, то есть приложение они открывали, а у 63 висела домашка.
+// Между вступлением в класс и первым ответом проходит в среднем восемь часов —
+// половина начинает не в тот день, а часть не начинает никогда.
+//
+// ⚠️ Это сообщение ЖИВОМУ ЧЕЛОВЕКУ, поэтому ограничений четыре, и каждое важно:
+//  1. ОДИН РАЗ НА ВЕСЬ СРОК — ключ повтора `nudge:start:<ученик>`. Не «раз в
+//     неделю» и не «пока не начнёт»: человек, который не захотел, имеет право
+//     больше об этом не слышать.
+//  2. Не раньше чем через сутки после вступления: почти все, кто начинает
+//     сразу, укладываются в этот срок, и напоминать им не о чем.
+//  3. Только тем, у кого НЕТ НИ ОДНОГО ответа. Решил хоть что-то — не трогаем.
+//  4. Только в дневное окно по Москве: окно выбирает вызывающий, потому что
+//     это вопрос не данных, а приличия.
+//
+// Telegram запрещает писать первым тому, кто не начинал диалог с ботом, —
+// такие задания честно упадут в `failed` и повторяться не будут.
+const NUDGE_MIN_HOURS = 24;
+
+async function enqueueStartNudges({ db = pool, minHours = NUDGE_MIN_HOURS, limit = 50 } = {}) {
+  const hours = Math.max(1, Number(minHours) || NUDGE_MIN_HOURS);
+  const size = Math.min(200, Math.max(1, Number(limit) || 50));
+  const result = await db.query(
+    `INSERT INTO social_notification_jobs(user_id, telegram_id, kind, payload, dedup_key)
+     SELECT m.user_id, i.subject, 'start_nudge',
+            jsonb_build_object('classTitle', COALESCE(c.title, ''),
+                               'homework', COALESCE(hw.title, ''),
+                               'questionGoal', COALESCE(hw.question_goal, 0)),
+            'nudge:start:' || m.user_id
+     FROM social_class_members m
+     JOIN social_classes c ON c.id = m.class_id AND c.status = 'active'
+     JOIN user_identities i ON i.user_id = m.user_id AND i.provider = 'telegram'
+     JOIN social_profiles p ON p.user_id = m.user_id AND p.role = 'student'
+     LEFT JOIN LATERAL (
+       SELECT a.title, a.question_goal
+       FROM social_assignments a
+       WHERE a.class_id = m.class_id AND a.status = 'active'
+         AND (a.due_at IS NULL OR a.due_at > now())
+       ORDER BY a.due_at NULLS LAST, a.issued_at DESC
+       LIMIT 1
+     ) hw ON true
+     WHERE m.status = 'active'
+       AND m.joined_at < now() - ($1 || ' hours')::interval
+       AND NOT EXISTS (SELECT 1 FROM social_attempt_events e WHERE e.user_id = m.user_id)
+     ORDER BY m.joined_at
+     LIMIT $2
+     ON CONFLICT (dedup_key) WHERE dedup_key <> '' DO NOTHING
+     RETURNING id`,
+    [String(hours), size]);
+  return result.rowCount;
+}
+
 // Забор пачки ботом. `FOR UPDATE SKIP LOCKED` — чтобы два экземпляра бота (или
 // перезапуск во время работы) не отправили одно и то же дважды.
 async function claimNotifications(limit, { db = pool, transact = tx } = {}) {
@@ -1958,7 +2012,7 @@ async function whoIs(telegramId, { db = pool } = {}) {
 
 module.exports = {
   ensureProfile, patchProfile, roleOf, setRole, whoIs, whoIsByEmail, requestTeacherRole,
-  enqueueAssignmentNotifications, claimNotifications, ackNotification, failNotification,
+  enqueueAssignmentNotifications, enqueueStartNudges, claimNotifications, ackNotification, failNotification,
   getState, putState,
   saveAttempts, insertEvents, recomputeAssignment, enqueueCompletionNotification, notifyCompletionSafely,
   activeAssignmentsFor,

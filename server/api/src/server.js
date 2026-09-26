@@ -522,6 +522,15 @@ async function handleInternal(req, res, url) {
     const socialStore = require('./subjects/social/store');
     return json(res, 200, { jobs: await socialStore.claimNotifications(body.limit) });
   }
+  // Напоминание тем, кто вступил в класс и не начал. Ставит задачи в ту же
+  // очередь; кого именно и с какими ограничениями — в enqueueStartNudges.
+  // Дневное окно решает БОТ: он знает московское время и не станет писать
+  // детям ночью, а база про приличия ничего не знает.
+  if (req.method === 'POST' && url.pathname === '/internal/v1/subjects/social/nudges') {
+    const body = await readJson(req, 4096).catch(() => ({}));
+    const socialStore = require('./subjects/social/store');
+    return json(res, 200, { queued: await socialStore.enqueueStartNudges({ limit: body.limit }) });
+  }
   const socialAck = url.pathname.match(/^\/internal\/v1\/subjects\/social\/notifications\/(\d+)\/(ack|fail)$/);
   if (req.method === 'POST' && socialAck) {
     const body = await readJson(req, 4096).catch(() => ({}));
