@@ -72,8 +72,17 @@ test('в свойства события проходят только числ�
   assert.deepEqual(props, { task: 'task4', points: 2, seconds: 42.5 });
 });
 
+test('метка устройства проходит, а данные человека — нет', () => {
+  // vid — случайные 16 hex, придуманные браузером: связывает первые шаги новичка
+  // до входа. Всё прочее по-прежнему режется.
+  assert.deepEqual(cleanProps({ vid: '0a1b2c3d4e5f6a7b', source: 'web', mode: 'search', result: 'new' }),
+    { vid: '0a1b2c3d4e5f6a7b', source: 'web', mode: 'search', result: 'new' });
+  assert.deepEqual(cleanProps({ vid: 'Иванов Иван' }), {});
+});
+
 test('перечень имён событий закрыт', () => {
   assert.ok(EVENT_NAMES.has('app_open'));
+  assert.ok(EVENT_NAMES.has('app_ready'));
   assert.ok(EVENT_NAMES.has('limit_reached'));
   assert.ok(!EVENT_NAMES.has('произвольное_событие'));
 });

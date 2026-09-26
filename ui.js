@@ -750,7 +750,39 @@ function _isPcWebFreshLocal() {
 function _alreadyOnboarded() {
     if (localStorage.getItem('ege_onboarding_done')) return true;
     const c = window.state && window.state.stats && window.state.stats.consent;
-    return !!(c && c.acceptedAt);
+    if (c && c.acceptedAt) return true;
+    // Уже решал, но имени не дал (закрыл вкладку прямо из задания) — не гоним его
+    // снова в первое задание, а спросим имя при следующем выходе в меню.
+    const solved = (window.state && window.state.stats && window.state.stats.totalSolvedEver) || 0;
+    // В Telegram имя и так известно, а хранилище там не переживает перезапуск —
+    // спрашивали бы при каждом входе.
+    if (solved > 0 && !_inTelegramNow() && !localStorage.getItem('student_manual_name')) window._askNameOnExit = true;
+    return solved > 0;
+}
+
+// 🔴 ЛЁГКИЙ СТАРТ (решение владельца 26.09.2026). Новичок не видит ни анкеты,
+// ни галочек, ни вопроса «есть ли аккаунт» — сразу задание 4 по годам до 1890.
+// Имя спросим, когда он сам выйдет в меню (см. backToLobby → showNamePrompt).
+// Исключение — пришёл по ссылке с делом (ДЗ, приглашение в класс, дуэль, вход):
+// его ведёт ссылка, и подменять её заданием нельзя; ему — сразу короткое «как
+// тебя зовут».
+function _hasEntryIntent() {
+    try {
+        const p = new URLSearchParams(location.search);
+        for (const k of p.keys()) {
+            if (!/^(utm_.*|yclid|gclid|fbclid|_boot|v)$/.test(k)) return true;
+        }
+        const tg = window.Telegram && window.Telegram.WebApp;
+        if (tg && tg.initDataUnsafe && tg.initDataUnsafe.start_param) return true;
+    } catch (e) {}
+    return false;
+}
+function _startFirstRun() {
+    if (_hasEntryIntent()) { _showOnboardingOverlay(); return; }
+    window._firstRunPeriod = { from: 862, to: 1890 };
+    window._askNameOnExit = true;
+    if (typeof window.quickStartGame === 'function') window.quickStartGame('task4', 'normal');
+    else _showOnboardingOverlay();
 }
 function _inTelegramNow() {
     try {
@@ -765,9 +797,16 @@ function _showOnboardingOverlay() {
         const u = (window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.initDataUnsafe || {}).user;
         if (input && !input.value && u && u.first_name) input.value = String(u.first_name).slice(0, 24);
     } catch (e) {}
+    // Вход по коду нужен только в браузере: в Telegram человек уже узнан.
+    const acc = $('onb-has-account');
+    if (acc) acc.classList.toggle('hidden', _inTelegramNow());
     $('onboarding-overlay').classList.remove('hidden');
     $('onboarding-overlay').classList.add('flex');
 }
+window.showNamePrompt = function () {
+    if (localStorage.getItem('ege_onboarding_done')) return;
+    _showOnboardingOverlay();
+};
 
 // 🔴 Анкету НЕЛЬЗЯ решать по одному localStorage. В Telegram (особенно в десктопном
 // клиенте и в WebView) хранилище может не пережить перезапуск приложения — и тогда
@@ -785,9 +824,10 @@ function checkOnboarding() {
         try { localStorage.setItem('ege_onboarding_done', '1'); } catch (e) {}
         return;
     }
-    // Свежий заход на ПК (не из Telegram) — сначала спросим, есть ли уже аккаунт.
-    if (_isPcWebFreshLocal()) { showPcWelcome(); return; }
-    if (!_inTelegramNow()) { _showOnboardingOverlay(); return; }
+    // Вне Telegram пустое хранилище и правда значит «новый» — сразу в задание.
+    // Вопрос «есть ли аккаунт» больше не преграждает путь: вход по коду лежит
+    // в окне имени («Уже занимаешься в Telegram?»).
+    if (!_inTelegramNow()) { _startFirstRun(); return; }
 
     const decide = () => {
         if (_alreadyOnboarded()) {
@@ -796,14 +836,14 @@ function checkOnboarding() {
             try { localStorage.setItem('ege_onboarding_done', '1'); } catch (e) {}
             return;
         }
-        _showOnboardingOverlay();
+        _startFirstRun();
     };
     if (window._cloudStateLoaded) return decide();
     let done = false;
     const once = () => { if (done) return; done = true; decide(); };
     document.addEventListener('ege:cloud-state-loaded', once, { once: true });
     // Страховка: облако может не ответить вовсе (нет сети). Ждать бесконечно нельзя —
-    // новый ученик обязан увидеть согласие до того, как начнёт решать.
+    // новичок должен начать решать, а не смотреть на пустой экран.
     setTimeout(once, ONBOARDING_CLOUD_WAIT_MS);
 }
 window.checkOnboarding = checkOnboarding;
@@ -910,6 +950,19 @@ window.pcwBack = function() {
     if (window.cancelPcLoginSession) window.cancelPcLoginSession();
     $('pcw-qr').classList.add('hidden');
     $('pcw-choice').classList.remove('hidden');
+    if (window._qrFromNamePrompt) {
+        window._qrFromNamePrompt = false;
+        hidePcWelcome();
+        _showOnboardingOverlay();
+    }
+};
+// «Уже занимаешься в Telegram? Войти по коду» — из окна имени.
+window.onbHasAccount = function() {
+    window._qrFromNamePrompt = true;
+    $('onboarding-overlay').classList.add('hidden');
+    $('onboarding-overlay').classList.remove('flex');
+    showPcWelcome();
+    window.pcwHasAccount();
 };
 window.nextOnbStep = function(step) {
     haptic('light');
@@ -923,45 +976,22 @@ window.nextOnbStep = function(step) {
         }
     }
 };
-// Версия текста согласия. Меняешь смысл политики — подними номер, иначе нельзя
-// будет отличить, на какую редакцию человек соглашался.
-window.CONSENT_VERSION = 1;
+// 🔴 Галочки согласия больше нет (решение владельца 26.09.2026): старт без
+// единого поля, кроме имени. Уже выданные согласия (stats.consent) остаются в
+// состоянии как были и по-прежнему считаются «человек знаком».
 
-// Кнопка старта включается только после галочки согласия. Слушатель вешается
-// один раз: «Пропустить» из этого слайда убрана намеренно — пропуск означал бы
-// сохранение данных несовершеннолетнего без согласия, то есть ровно то, чего
-// экран и должен не допустить.
-document.addEventListener('app:ready', function initConsentGate() {
-    const box = $('onb-consent'), btn = $('onb-start-btn');
-    if (!box || !btn) return;
-    const sync = () => { btn.disabled = !box.checked; };
-    box.addEventListener('change', sync);
-    sync();
-});
+window.skipOnboarding = function() {
+    haptic('light');
+    try { localStorage.setItem('ege_onboarding_done', '1'); } catch (e) {}
+    $('onboarding-overlay').classList.add('hidden');
+    $('onboarding-overlay').classList.remove('flex');
+};
 
 window.finishOnboarding = function() {
-    // Защита на случай, если кнопку всё же нажали мимо блокировки.
-    const consentBox = $('onb-consent');
-    if (consentBox && !consentBox.checked) {
-        showToast('⚠️', 'Отметь согласие, чтобы продолжить', 'bg-amber-500', 'border-amber-700');
-        return;
-    }
     haptic('medium');
     // Класс назначает учитель по ссылке-приглашению; ученик вводит только имя.
     const onbName = $('onb-name-input') ? $('onb-name-input').value.trim() : '';
     const assignedClass = localStorage.getItem('student_class_code') || '';
-    if (consentBox) {
-        // byGuardian: за несовершеннолетнего соглашается законный представитель.
-        // Одной галочкой их не различить, поэтому пишем честно — «подтверждено
-        // через общий экран»; отдельный вопрос о возрасте добавляй, если юрист
-        // скажет, что этого недостаточно.
-        window.state.stats.consent = {
-            version: window.CONSENT_VERSION,
-            acceptedAt: Date.now(),
-            byGuardian: true,
-        };
-        if (window.saveProgress) window.saveProgress();
-    }
     if (onbName) { localStorage.setItem('student_manual_name', onbName); localStorage.setItem('student_manual_name_at', String(Date.now())); }
     localStorage.setItem('ege_onboarding_done', '1');
     $('onboarding-overlay').classList.add('hidden');
@@ -2129,6 +2159,9 @@ function _workingPeriod() {
     // собственный выбор не применяется.
     const own = _ownChosenPeriod();
     if (own) return own;
+    // Первая сессия новичка (лёгкий старт): задание 4 по годам до 1890. Не
+    // запоминается — после выхода в меню действует обычный порядок.
+    if (window._firstRunPeriod) return window._firstRunPeriod;
     const upto = parseInt(localStorage.getItem('class_current_upto'), 10);
     if (upto >= 862 && upto <= 2026) return { upto };
     const cp = localStorage.getItem('class_current_period');

@@ -99,15 +99,15 @@
     <link rel="manifest" href="manifest.webmanifest">
     <link rel="icon" type="image/png" href="assets/icons/icon-192.png">
     <link rel="apple-touch-icon" href="assets/icons/icon-180.png">
-    <link rel="stylesheet" href="tokens.css?v=20260926-1">
-    <link rel="stylesheet" href="output.css?v=20260926-1">
-    <link rel="stylesheet" href="theme-classic.css?v=20260926-1">
-    <link rel="stylesheet" href="styles.css?v=20260926-1">
+    <link rel="stylesheet" href="tokens.css?v=20260926-2">
+    <link rel="stylesheet" href="output.css?v=20260926-2">
+    <link rel="stylesheet" href="theme-classic.css?v=20260926-2">
+    <link rel="stylesheet" href="styles.css?v=20260926-2">
     
     <!-- Самохостинг telegram-web-app.js: telegram.org часто недоступен (сеть/VPN),
          тогда window.Telegram не создавался → known_tg_id не считывался → случайный id «через раз».
          Локальная копия отдаётся с того же origin и кэшируется service worker'ом. -->
-    <script src="vendor/telegram-web-app.js?v=20260926-1" defer></script>
+    <script src="vendor/telegram-web-app.js?v=20260926-2" defer></script>
 
     <style>
         /* Этот inline-блок намеренно МИНИМАЛЕН: только то, что должно сработать на
@@ -333,7 +333,7 @@
 
     <script>
       (function() {
-      var BOOT_RELEASE = '20260926-1';
+      var BOOT_RELEASE = '20260926-2';
         var bootT0 = Date.now();
         // 🔴 Диагностика загрузки НЕ должна зависеть только от fetch.
         // 30.07 два айфона скачали страницу и ВСЕ 20 скриптов (200 в логе), но не
@@ -429,12 +429,8 @@
           el.addEventListener('transitionend', function() { el.remove(); }, { once: true });
         }
         document.addEventListener('app:ready', dismissSkeleton);
-        // Открытие приложения — база для DAU и возврата D1/D7. Считаем именно по
-        // app:ready, а не по загрузке страницы: интересует, что приложение
-        // действительно ОТКРЫЛОСЬ, а не что человек увидел заставку.
-        document.addEventListener('app:ready', function () {
-            if (window.trackEvent) window.trackEvent('app_open');
-        }, { once: true });
+        // Открытие считает telemetry.js: «app_open» — сразу при загрузке страницы
+        // (чтобы видеть и тех, кто ушёл с заставки), «app_ready» — по app:ready.
 
         async function repairAppBoot() {
           var button = document.getElementById('app-boot-repair');
@@ -595,28 +591,28 @@
          диагностика поломок сама стала способом их устроить.
          Единственное, что теряется с defer, — ошибки инлайн-скриптов ВЫШЕ по
          документу. Они уже покрыты своим отчётом (bootSignal('error')). -->
-    <script src="telemetry.js?v=20260926-1" defer></script>
+    <script src="telemetry.js?v=20260926-2" defer></script>
 
     <!-- JS разбит на модули: config → utils → state → table → ui → modes → app -->
     <!-- Порядок defer гарантирован браузером: выполняются строго по порядку в DOM -->
-    <script src="config.js?v=20260926-1" defer></script>
-    <script src="utils.js?v=20260926-1" defer></script>
-    <script src="exam-scoring.js?v=20260926-1" defer></script>
-    <script src="state.js?v=20260926-1" defer></script>
-    <script src="table.js?v=20260926-1" defer></script>
-    <script src="ui.js?v=20260926-1" defer></script>
-    <script src="modes.js?v=20260926-1" defer></script>
-    <script src="swipe-data.js?v=20260926-1" defer></script>
-    <script src="swipe-mode.js?v=20260926-1" defer></script>
-    <script src="match-mode.js?v=20260926-1" defer></script>
-    <script src="order-mode.js?v=20260926-1" defer></script>
-    <script src="order-data.js?v=20260926-1" defer></script>
-    <script src="tetris-mode.js?v=20260926-1" defer></script>
-    <script src="duel-react.js?v=20260926-1" defer></script>
-    <script src="vov-mode.js?v=20260926-1" defer></script>
-    <script src="visual-trainer.js?v=20260926-1" defer></script>
-    <script src="exam-mode.js?v=20260926-1" defer></script>
-    <script src="app.js?v=20260926-1" defer></script>
+    <script src="config.js?v=20260926-2" defer></script>
+    <script src="utils.js?v=20260926-2" defer></script>
+    <script src="exam-scoring.js?v=20260926-2" defer></script>
+    <script src="state.js?v=20260926-2" defer></script>
+    <script src="table.js?v=20260926-2" defer></script>
+    <script src="ui.js?v=20260926-2" defer></script>
+    <script src="modes.js?v=20260926-2" defer></script>
+    <script src="swipe-data.js?v=20260926-2" defer></script>
+    <script src="swipe-mode.js?v=20260926-2" defer></script>
+    <script src="match-mode.js?v=20260926-2" defer></script>
+    <script src="order-mode.js?v=20260926-2" defer></script>
+    <script src="order-data.js?v=20260926-2" defer></script>
+    <script src="tetris-mode.js?v=20260926-2" defer></script>
+    <script src="duel-react.js?v=20260926-2" defer></script>
+    <script src="vov-mode.js?v=20260926-2" defer></script>
+    <script src="visual-trainer.js?v=20260926-2" defer></script>
+    <script src="exam-mode.js?v=20260926-2" defer></script>
+    <script src="app.js?v=20260926-2" defer></script>
 
     <!-- ШАПКА -->
     <header id="main-header" class="sticky top-0 z-50 no-print transition-colors duration-400 pt-2 pb-2 sm:pt-3 sm:pb-3 px-4">
@@ -1203,24 +1199,21 @@
                 <button data-action="nextOnbStep" data-arg="6" class="w-full bg-blue-600 text-white py-3 rounded-xl font-black uppercase tracking-wider active:scale-95 transition-transform text-sm">Далее →</button>
             </div>
 
-            <!-- Слайд 6: Настройка профиля + старт -->
+            <!-- Слайд 6: одно имя, и всё.
+                 🔴 Решение владельца 26.09.2026: максимально лёгкий старт. Новичок
+                 сначала решает (задание 4, годы до 1890), а имя у него спрашивают,
+                 когда он выходит в меню. Никаких галочек и слайдов перед первой
+                 задачей: из поиска почти половина уходила раньше, чем начинала. -->
             <div id="onb-step-6">
-                <div class="text-6xl mb-3">🏛️</div>
-                <h2 class="text-xl font-black text-gray-800 dark:text-gray-200 mb-2">Добро пожаловать!</h2>
-                <p class="text-sm text-gray-500 dark:text-gray-400 mb-4 leading-relaxed">Укажи своё имя. Класс подключится автоматически, когда ты войдёшь по ссылке учителя.</p>
+                <div class="text-5xl mb-3">👋</div>
+                <h2 class="text-xl font-black text-gray-800 dark:text-gray-200 mb-2">Как тебя зовут?</h2>
+                <p class="text-sm text-gray-500 dark:text-gray-400 mb-4 leading-relaxed">Чтобы сохранить твой прогресс.</p>
                 <div class="flex flex-col gap-3 mb-4">
-                    <input type="text" id="onb-name-input" placeholder="Фамилия Имя" autocomplete="name" class="w-full p-3 border border-gray-200 dark:border-[#3f3f46] rounded-xl dark:bg-[#181818] dark:text-gray-300 outline-none font-bold text-sm shadow-inner text-center">
+                    <input type="text" id="onb-name-input" placeholder="Имя" autocomplete="given-name" maxlength="40" class="w-full p-3 border border-gray-200 dark:border-[#3f3f46] rounded-xl dark:bg-[#181818] dark:text-gray-300 outline-none font-bold text-sm shadow-inner text-center">
                 </div>
-                <!-- Согласие на обработку ПД. Пользователи несовершеннолетние, поэтому
-                     согласие спрашивается ДО первого сохранения данных, а не «где-то в
-                     настройках». Кнопка старта заблокирована, пока галочка не стоит. -->
-                <label for="onb-consent" class="flex items-start gap-2.5 text-left mb-4 cursor-pointer">
-                    <input type="checkbox" id="onb-consent" class="mt-0.5 shrink-0" style="width:18px;height:18px;accent-color:#2563eb">
-                    <span class="text-xs text-gray-500 dark:text-gray-400 leading-snug">Я или мой родитель согласны на обработку данных
-                        по <a href="/legal/privacy.html" target="_blank" rel="noopener" class="text-blue-600 dark:text-blue-400 font-bold underline">политике</a>
-                        и принимаю <a href="/legal/terms.html" target="_blank" rel="noopener" class="text-blue-600 dark:text-blue-400 font-bold underline">правила</a>.</span>
-                </label>
-                <button id="onb-start-btn" data-action="finishOnboarding" disabled class="w-full bg-emerald-500 hover:bg-emerald-600 text-white py-3.5 rounded-xl font-black uppercase tracking-wider active:scale-95 transition-transform text-sm shadow-md disabled:opacity-40 disabled:cursor-not-allowed disabled:active:scale-100">Начать тренировку! 🚀</button>
+                <button id="onb-start-btn" data-action="finishOnboarding" class="w-full bg-emerald-500 hover:bg-emerald-600 text-white py-3.5 rounded-xl font-black uppercase tracking-wider active:scale-95 transition-transform text-sm shadow-md">Готово</button>
+                <button data-action="skipOnboarding" class="w-full text-gray-400 dark:text-gray-500 py-2 mt-1 text-xs font-bold">Потом</button>
+                <button id="onb-has-account" data-action="onbHasAccount" class="hidden w-full text-blue-600 dark:text-blue-400 py-1 text-xs font-bold">Уже занимаешься в Telegram? Войти по коду</button>
             </div>
 
             <!-- Dots -->
@@ -1539,11 +1532,11 @@
     <!-- jsPDF грузится лениво (см. loadJsPDFOnDemand в cloud-sync.js) — не нужен при старте -->
 
     <!-- === PWA + first-party cloud sync loader === -->
-    <script src="pwa.js?v=20260926-1" defer></script>
+    <script src="pwa.js?v=20260926-2" defer></script>
 
     <!-- Ядро (факты, ~659 КБ): нужно для лобби и заданий. Приложение ОТКРЫВАЕТСЯ сразу
          после него — defer парсит HTML параллельно, порядок выполнения гарантирован. -->
-    <script src="data.js?v=20260926-1" defer></script>
+    <script src="data.js?v=20260926-2" defer></script>
     <!-- app:ready диспатчит инлайн-вотчер готовности в начале <body> (см. watchBoot):
          отдельный boot-ready.js убран — свежий файл не лежал в старом SW-кэше и на
          моргнувшей сети вис, не давая снять заставку. -->

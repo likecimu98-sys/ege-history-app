@@ -168,6 +168,13 @@ window.backToLobby = function() {
     if (window.updateGamePeriodChip) window.updateGamePeriodChip();
     window.updateZenButton();
     updateProgressBars();
+    // Лёгкий старт: новичок сначала решал, а имя спрашиваем, когда он вышел в меню.
+    // Годы первой сессии (до 1890) тоже отпускаем — дальше он выбирает сам.
+    if (window._askNameOnExit) {
+        window._askNameOnExit = false;
+        window._firstRunPeriod = null;
+        if (window.showNamePrompt) setTimeout(window.showNamePrompt, 300);
+    }
 };
 
 // === TASK PICKER ===
@@ -751,6 +758,8 @@ const ACTION_HANDLERS = {
     setPgRows:              (a) => window.setPgRows?.(Number(a)),
     nextOnbStep:            (a) => window.nextOnbStep?.(Number(a)),
     finishOnboarding:       () => window.finishOnboarding?.(),
+    skipOnboarding:         () => window.skipOnboarding?.(),
+    onbHasAccount:          () => window.onbHasAccount?.(),
     pcwHasAccount:          () => window.pcwHasAccount?.(),
     pcwNewUser:             () => window.pcwNewUser?.(),
     pcwBack:                () => window.pcwBack?.(),

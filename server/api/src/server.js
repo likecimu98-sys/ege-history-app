@@ -913,7 +913,10 @@ async function handle(req, res) {
       }
       const body = await readJson(req, 16384).catch(() => ({}));
       if (body.error) await recordClientError(body.error, req.headers['user-agent']).catch(() => {});
-      if (session && body.events) await recordEvents(session.userId, body.events).catch(() => {});
+      // Без сессии тоже пишем: новичок из поиска, закрывший вкладку до входа, —
+      // ровно тот, кого надо посчитать. Такие строки без user_id, связаны
+      // только случайной меткой устройства (vid) и режутся тем же лимитом по IP.
+      if (body.events) await recordEvents(session ? session.userId : null, body.events).catch(() => {});
       res.writeHead(204).end();
       return;
     }

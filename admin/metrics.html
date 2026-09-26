@@ -55,9 +55,30 @@
         })
         .then(function (d) {
             var html = '';
-            html += '<h2>Открытия приложения по дням (по Москве)</h2>';
+            html += '<h2>Открытия приложения по дням (по Москве, устройств)</h2>';
             html += table(['День', 'Человек'], d.dau || [], function (r) {
                 return '<tr><td>' + esc(String(r.day).slice(0, 10)) + '</td><td class="num">' + esc(r.users) + '</td></tr>';
+            });
+
+            html += '<h2>Где открывают (устройств в день)</h2>';
+            html += table(['День', 'Telegram', 'Браузер', 'Ярлык на экране'], d.opens || [], function (r) {
+                return '<tr><td>' + esc(String(r.day).slice(0, 10)) + '</td><td class="num">' + esc(r.tg)
+                    + '</td><td class="num">' + esc(r.web) + '</td><td class="num">' + esc(r.pwa) + '</td></tr>';
+            });
+
+            // Воронка новичка: откуда пришёл впервые и что было дальше.
+            var MODE = { search: 'Поиск (Google, Яндекс)', vk: 'ВКонтакте', tg: 'Telegram', site: 'С нашего сайта',
+                         direct: 'Прямой заход / закладка', other: 'Другие сайты' };
+            function pct(a, b) { return b ? Math.round(a * 100 / b) + '%' : '—'; }
+            html += '<h2>Новички за 14 дней: откуда пришли и что дальше</h2>';
+            html += '<p class="sub">«Дождались» — приложение успело загрузиться. «Решили» — сделали первую строку. '
+                + '«Вернулись» — открыли снова в другой день.</p>';
+            html += table(['Откуда', 'Пришло', 'Дождались', 'Решили', 'Вернулись', 'Загрузка, с (медиана)'], d.entry || [], function (r) {
+                var n = Number(r.visitors) || 0;
+                return '<tr><td>' + esc(MODE[r.mode] || r.mode || '—') + '</td><td class="num">' + esc(n)
+                    + '</td><td class="num">' + pct(r.loaded, n) + '</td><td class="num">' + pct(r.solved, n)
+                    + '</td><td class="num">' + pct(r.returned, n) + '</td><td class="num">'
+                    + esc(r.load_median == null ? '—' : r.load_median) + '</td></tr>';
             });
 
             html += '<h2>События за неделю</h2>';

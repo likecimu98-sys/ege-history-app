@@ -20,14 +20,18 @@ const MAX_EVENTS_PER_MINUTE = 60;
 // Разрешённые имена продуктовых событий. Закрытый перечень намеренно: иначе
 // клиент (в том числе подделанный) насыпал бы в таблицу произвольных строк.
 const EVENT_NAMES = new Set([
-  'app_open', 'first_task_solved', 'daily_goal_done', 'duel_started',
+  'app_open', 'app_ready', 'first_task_solved', 'daily_goal_done', 'duel_started',
   'exam_started', 'exam_finished', 'limit_reached', 'premium_shown', 'premium_taken',
   'hw_received', 'hw_done',
 ]);
 
 // Свойства события: только числа и короткие метки из белого списка.
 // Никаких строк, введённых человеком.
-const EVENT_PROPS = new Set(['task', 'kim', 'points', 'seconds', 'count', 'mode', 'source', 'result']);
+// vid — случайная метка устройства (16 hex), которую браузер придумывает сам.
+// Не Telegram ID и не имя: по ней нельзя узнать человека, но можно связать
+// «пришёл из поиска» → «дождался загрузки» → «решил» → «вернулся» у тех, кто
+// ещё не вошёл и сессии не имеет. Без неё воронка новичка не считается вовсе.
+const EVENT_PROPS = new Set(['task', 'kim', 'points', 'seconds', 'count', 'mode', 'source', 'result', 'vid']);
 
 function scrubText(value, limit = 300) {
   let text = String(value == null ? '' : value);
@@ -106,13 +110,13 @@ async function recordEvents(userId, events, { db = pool } = {}) {
 // Сводка для админского дашборда. Всё считается в SQL, наружу уходят только
 // агрегаты — ни одной строки, привязанной к человеку.
 async function metricsSummary({ db = pool } = {}) {
-  const [dau, funnel, errors] = await Promise.all([
+  const [dau, funnel, errors, opens, entry] = await Promise.all([
     db.query(`SELECT (created_at AT TIME ZONE 'Europe/Moscow')::date AS day,
-                     count(DISTINCT user_id) AS users
+                     count(DISTINCT COALESCE(props->>'vid', user_id::text)) AS users
               FROM product_events
               WHERE name='app_open' AND created_at > now() - interval '14 days'
               GROUP BY 1 ORDER BY 1 DESC`),
-    db.query(`SELECT name, count(*) AS total, count(DISTINCT user_id) AS users
+    db.query(`SELECT name, count(*) AS total, count(DISTINCT COALESCE(props->>'vid', user_id::text)) AS users
               FROM product_events
               WHERE created_at > now() - interval '7 days'
               GROUP BY 1 ORDER BY 2 DESC`),
@@ -120,8 +124,51 @@ async function metricsSummary({ db = pool } = {}) {
               FROM client_errors
               WHERE last_seen_at > now() - interval '7 days'
               ORDER BY last_seen_at DESC LIMIT 50`),
+    // Где открывают: Telegram, браузер или ярлык на экране (pwa). Устройства
+    // считаются по vid, а у старых клиентов без vid — по пользователю.
+    db.query(`SELECT (created_at AT TIME ZONE 'Europe/Moscow')::date AS day,
+                     count(DISTINCT COALESCE(props->>'vid', user_id::text))
+                       FILTER (WHERE props->>'source' = 'tg')  AS tg,
+                     count(DISTINCT COALESCE(props->>'vid', user_id::text))
+                       FILTER (WHERE props->>'source' = 'web') AS web,
+                     count(DISTINCT COALESCE(props->>'vid', user_id::text))
+                       FILTER (WHERE props->>'source' = 'pwa') AS pwa
+              FROM product_events
+              WHERE name='app_open' AND created_at > now() - interval '14 days'
+              GROUP BY 1 ORDER BY 1 DESC`),
+    // Воронка НОВИЧКА по источнику входа: сколько пришло впервые, сколько
+    // дождалось загрузки, решило хоть одну строку и вернулось в другой день.
+    // Вход — по первому открытию устройства (result='new').
+    db.query(`WITH first AS (
+                SELECT props->>'vid' AS vid, min(props->>'mode') AS mode, min(created_at) AS at
+                FROM product_events
+                WHERE name='app_open' AND props->>'result'='new' AND props ? 'vid'
+                  AND created_at > now() - interval '14 days'
+                GROUP BY 1
+              ), per AS (
+                SELECT f.mode,
+                       (SELECT min((e.props->>'seconds')::numeric) FROM product_events e
+                         WHERE e.name='app_ready' AND e.props->>'vid'=f.vid
+                           AND e.created_at >= f.at) AS load_s,
+                       EXISTS (SELECT 1 FROM product_events e
+                         WHERE e.name='first_task_solved' AND e.props->>'vid'=f.vid
+                           AND e.created_at >= f.at) AS solved,
+                       EXISTS (SELECT 1 FROM product_events e
+                         WHERE e.name='app_open' AND e.props->>'vid'=f.vid
+                           AND (e.created_at AT TIME ZONE 'Europe/Moscow')::date
+                             > (f.at AT TIME ZONE 'Europe/Moscow')::date) AS returned
+                FROM first f
+              )
+              SELECT mode, count(*) AS visitors, count(load_s) AS loaded,
+                     count(*) FILTER (WHERE solved) AS solved,
+                     count(*) FILTER (WHERE returned) AS returned,
+                     round((percentile_cont(0.5) WITHIN GROUP (ORDER BY load_s))::numeric, 1) AS load_median
+              FROM per GROUP BY mode ORDER BY visitors DESC`),
   ]);
-  return { dau: dau.rows, funnel: funnel.rows, errors: errors.rows };
+  return {
+    dau: dau.rows, funnel: funnel.rows, errors: errors.rows,
+    opens: opens.rows, entry: entry.rows,
+  };
 }
 
 module.exports = {

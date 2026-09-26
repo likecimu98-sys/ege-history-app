@@ -100,11 +100,63 @@
 
     // Продуктовые события. Имя должно быть из перечня, который знает сервер, —
     // всё остальное он просто отбросит.
+    // Метка устройства: случайные 16 знаков, придуманные здесь же. Не имя и не
+    // Telegram ID — по ней нельзя узнать человека, но можно связать его первые
+    // шаги (пришёл → дождался загрузки → решил → вернулся), пока он не вошёл.
+    let vid = '', firstVisit = false;
+    try {
+        vid = localStorage.getItem('ege_vid') || '';
+        if (!/^[0-9a-f]{16}$/.test(vid)) {
+            // Новое устройство — но не новый человек, если у него уже есть прогресс
+            // (метку завели позже, чем он начал заниматься).
+            firstVisit = !localStorage.getItem('ege_onboarding_done') && !localStorage.getItem('ege_final_storage_v4');
+            const bytes = new Uint8Array(8);
+            (window.crypto || window.msCrypto).getRandomValues(bytes);
+            vid = Array.from(bytes, b => b.toString(16).padStart(2, '0')).join('');
+            localStorage.setItem('ege_vid', vid);
+        }
+    } catch (e) { vid = ''; }
+
     window.trackEvent = function (name, props) {
-        queue.push({ name: String(name || ''), props: props || {} });
+        const p = Object.assign({}, props || {});
+        if (vid) p.vid = vid;
+        queue.push({ name: String(name || ''), props: p });
         if (queue.length >= 10) { clearTimeout(flushTimer); flush(); return; }
         if (!flushTimer) flushTimer = setTimeout(flush, 5000);
     };
+
+    // 🔴 «Открыл» — САМЫМ первым делом, до загрузки остального приложения.
+    // Из поиска почти половина уходила, не дождавшись загрузки (лог 11–25.09),
+    // а увидеть это можно только если событие ушло раньше, чем человек закрыл
+    // вкладку. Отправка — через sendBeacon при уходе, сессия для него не нужна.
+    // Откуда пришёл — только категория, адрес страницы не отправляется.
+    function entryOf() {
+        let host = '';
+        try { host = document.referrer ? new URL(document.referrer).hostname.toLowerCase() : ''; } catch (e) {}
+        if (!host) return 'direct';
+        if (/(^|\.)(google\.[a-z.]+|yandex\.[a-z.]+|ya\.ru|bing\.com|duckduckgo\.com|go\.mail\.ru|rambler\.ru|yahoo\.com)$/.test(host)) return 'search';
+        if (/(^|\.)(vk\.com|vk\.ru|vkontakte\.ru)$/.test(host)) return 'vk';
+        if (/(^|\.)(t\.me|telegram\.org|telegram\.me)$/.test(host)) return 'tg';
+        if (host === location.hostname || /(^|\.)reshay-istoriyu\.ru$/.test(host)) return 'site';
+        return 'other';
+    }
+    function sourceOf() {
+        try {
+            const tg = window.Telegram && window.Telegram.WebApp;
+            if (tg && tg.initData) return 'tg';
+            if ((window.matchMedia && window.matchMedia('(display-mode: standalone)').matches) || navigator.standalone) return 'pwa';
+        } catch (e) {}
+        return 'web';
+    }
+    const source = sourceOf();
+    window.trackEvent('app_open', {
+        source, mode: source === 'tg' ? 'tg' : entryOf(), result: firstVisit ? 'new' : 'back',
+    });
+    // Дождался ли загрузки и сколько секунд ждал — то, от чего уходят новички.
+    document.addEventListener('app:ready', function () {
+        const seconds = Math.round((performance.now ? performance.now() : 0) / 100) / 10;
+        window.trackEvent('app_ready', { source, seconds });
+    }, { once: true });
 
     // Хвост очереди не должен теряться при уходе со страницы.
     document.addEventListener('visibilitychange', () => {

@@ -354,12 +354,21 @@ assert.match(cloudSource, /window\.state\.duel\.matchRounds = data\.matchRounds 
 // это выглядит как потеря аккаунта и убивает возврат.
 assert.match(uiSource, /function _alreadyOnboarded\(\)[\s\S]*?stats\.consent/,
   'onboarding must also accept consent restored from the cloud');
-assert.match(uiSource, /if \(!_inTelegramNow\(\)\) \{ _showOnboardingOverlay\(\); return; \}/,
-  'outside Telegram the onboarding must stay immediate');
+// Лёгкий старт (26.09.2026): вне Telegram новичок сразу попадает в задание 4
+// (годы до 1890), без анкеты и галочек; имя спрашивают при выходе в меню.
+assert.match(uiSource, /if \(!_inTelegramNow\(\)\) \{ _startFirstRun\(\); return; \}/,
+  'outside Telegram a newcomer must start solving immediately');
+assert.match(uiSource, /window\._firstRunPeriod = \{ from: 862, to: 1890 \}/,
+  'the first session must be limited to 862–1890');
+assert.match(uiSource, /quickStartGame\('task4', 'normal'\)/, 'the first session must open task 4');
+assert.match(appSource, /if \(window\._askNameOnExit\) \{[\s\S]{0,200}showNamePrompt/,
+  'the name must be asked when the newcomer returns to the lobby');
+assert.doesNotMatch(read('index.html'), /id="onb-consent"/, 'no consent checkbox before the first task');
+assert.match(uiSource, /function _hasEntryIntent\(\)/, 'links with a purpose (homework, invite) must not be hijacked');
 assert.match(uiSource, /document\.addEventListener\('ege:cloud-state-loaded', once, \{ once: true \}\)/,
   'in Telegram the onboarding must wait for the cloud answer');
 assert.match(uiSource, /setTimeout\(once, ONBOARDING_CLOUD_WAIT_MS\)/,
-  'a new student must still see consent if the cloud never answers');
+  'a new student must still start if the cloud never answers');
 // Сигнал обязан приходить и при упавшей загрузке, иначе анкета зависнет невидимой.
 assert.match(cloudSource, /finally \{[\s\S]{0,400}window\._cloudStateLoaded = true;[\s\S]{0,200}ege:cloud-state-loaded/,
   'the cloud-loaded signal must fire in finally, not only on success');
