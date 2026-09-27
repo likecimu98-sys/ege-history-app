@@ -14,7 +14,7 @@ const PREFIX = '/api/v1/pet';
 let showcaseCache = { at: 0, data: {} };
 async function showcase() {
   if (Date.now() - showcaseCache.at < 5 * 60 * 1000) return showcaseCache.data;
-  showcaseCache = { at: Date.now(), data: await W.rarityShowcase(pool) };
+  showcaseCache = { at: Date.now(), data: { ...(await W.rarityShowcase(pool)), ...(await W.speciesShowcase(pool)) } };
   return showcaseCache.data;
 }
 
@@ -66,6 +66,10 @@ async function handlePet(req, res, url, session, deps) {
     case '/open-box':
       if (!limiter.take(`${scope}:pet-box`, 30).ok) return json(res, 429, { error: 'rate_limited' });
       return json(res, 200, await run(c => W.openBox(c, userId, String(body.box || ''))));
+    case '/craft':
+      return json(res, 200, await run(c => W.craft(c, userId, String(body.species || ''))));
+    case '/switch':
+      return json(res, 200, await run(c => W.switchPet(c, userId, body.index)));
     case '/achievements':
       return json(res, 200, await run(c => W.rewardAchievements(c, userId, Array.isArray(body.ids) ? body.ids : [])));
     case '/paint-nick':

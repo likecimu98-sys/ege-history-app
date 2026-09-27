@@ -269,6 +269,41 @@ test('экономика v3, питомец, коробки, итоги, рей�
     assert.equal(await rebalanceV3(pool, tx), null, 'пересчёт разовый');
   }
 
+  // 21. Редкие виды: сборка Гуля из осколков, Николай из сундука «с верхнего края»
+  //     броска, повтор вида не выпадает, осколки из ларца, смена питомца.
+  {
+    const tNow = Date.now();
+    const top = n => (n === 1000000 ? 999999 : 0);
+    const sly = await newUser('Хитрец');
+    await assert.rejects(tx(c => W.hatch(c, sly, [], { species: 'tsar' })), /bad_species/);
+    await db.query(`UPDATE pet_wallets SET counters = jsonb_set(coalesce(counters,'{}'::jsonb), '{fragments}', '{"dark":7}'::jsonb) WHERE user_id=$1`, [u1]);
+    let s = await tx(c => W.craft(c, u1, 'ghoul', tNow));
+    assert.equal(s.crafted.species, 'ghoul');
+    assert.equal(s.fragments.dark, 1);
+    assert.equal(s.stable.at(-1).stageName, 'Новичок');
+    await assert.rejects(tx(c => W.craft(c, u1, 'tsar', tNow)), /not_enough_fragments/);
+    await tx(c => W.addItem(c, u1, 'box_chest', 2, 'test'));
+    await tx(c => W.addItem(c, u1, 'box_tsar', 1, 'test'));
+    s = await tx(c => W.openBox(c, u1, 'box_chest', tNow, top));
+    assert.equal(s.drop.species, 'tsar', JSON.stringify(s.drop));
+    assert.equal(s.drop.owners, 1);
+    s = await tx(c => W.openBox(c, u1, 'box_chest', tNow, top));
+    assert.ok(s.drop.id && !s.drop.species, 'оба вида уже есть — выпадает вещь');
+    s = await tx(c => W.openBox(c, u1, 'box_tsar', tNow, top));
+    assert.deepEqual(s.drop.fragments, { faberge: 1, dark: 1 });
+    assert.equal(s.fragments.dark, 2);
+    const main = s.pet.species;
+    const tsarAt = s.stable.findIndex(p => p.species === 'tsar');
+    s = await tx(c => W.switchPet(c, u1, tsarAt, tNow));
+    assert.equal(s.pet.species, 'tsar');
+    assert.equal(s.pet.stageName, 'Цесаревич');
+    assert.equal(s.pet.level, 1);
+    assert.equal(s.stable[tsarAt].species, main);
+    s = await tx(c => W.switchPet(c, u1, tsarAt, tNow));
+    assert.equal(s.pet.species, main);
+    await assert.rejects(tx(c => W.switchPet(c, u1, 99, tNow)), /bad_index/);
+  }
+
   // Журнал сходится с балансом у каждого (кроме старичка: его журнал — выдуманный v2).
   const sums = await db.query(`SELECT w.user_id, w.balance::int b, COALESCE(sum(l.delta),0)::int s
     FROM pet_wallets w LEFT JOIN pet_ledger l ON l.user_id=w.user_id GROUP BY w.user_id, w.balance`);

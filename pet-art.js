@@ -37,6 +37,9 @@
     owl:      { fur: '#a0785a', belly: '#f1dfc6', inner: '#d9b48a', nose: '#f2b705' },
     hedgehog: { fur: '#e8c9a0', belly: '#fbead3', inner: '#d9a67a', nose: '#3a2a1e', spikes: '#6b4f3a' },
     dragon:   { fur: '#6cc070', belly: '#e9f5c9', inner: '#4f9a55', nose: '#3f7d45', spikes: '#f2b705' },
+    // Редкие виды рисуются своей анатомией (renderHuman); цвета — для значков.
+    ghoul:    { fur: '#1d1d22', belly: '#ecebf2', inner: '#e0341a', nose: '#1d1b24' },
+    tsar:     { fur: '#56633f', belly: '#f3d3ba', inner: '#e3b448', nose: '#7a5230' },
   };
 
   // ── Стадии роста ────────────────────────────────────────────────────────
@@ -375,6 +378,229 @@
       return m;
     }
     return '';
+  }
+
+
+  // ── Редкие виды: Николай II и Гуль ─────────────────────────────────────
+  // Люди, а не зверьки, поэтому своя анатомия — в тех же координатах, что v3:
+  // голова рисуется в координатах головы малыша и садится трансформом, так что
+  // шапки, очки и маски из лавки подходят без перерисовки. Встроенный костюм
+  // вида (фуражка, маска) прячется, если в слот надета вещь.
+  var HUMAN = {
+    tsar: { skin: '#f3d3ba', ink: '#3a2a20', hair: '#7a5230', iris: '#6f9cc9', coat: '#56633f', coatD: '#3f4a2e',
+      gold: '#e3b448', pants: '#2b2f3a', boots: '#1b1b1f' },
+    ghoul: { skin: '#ecebf2', ink: '#1d1b24', hair: '#f4f4f8', hairD: '#c3c5d2', iris: '#8a8f9c', coat: '#1d1d22', coatD: '#101014',
+      red: '#e0341a', pants: '#1d1d22', boots: '#0d0d10' },
+  };
+  function humanHeadT(stage) {
+    return stage === 'baby' ? 'translate(100 72) scale(0.92) translate(-100 -88)' : V3_HEAD_T;
+  }
+  function hLine(p, w) { return 'stroke="' + p.ink + '" stroke-width="' + (w || 2.6) + '" stroke-linejoin="round"'; }
+
+  function humanBack(sp, p, stage) {
+    var s = '';
+    if (sp === 'tsar' && stage === 'sage') {
+      // Горностаевая мантия за плечами.
+      s += '<path d="M66 104 C48 130 46 168 54 188 L146 188 C154 168 152 130 134 104Z" fill="#b3262d" ' + hLine(p) + '/>';
+    }
+    if (sp === 'ghoul' && stage === 'sage') {
+      // Красные ленты-щупальца за спиной — «король» уже не прячется.
+      var tips = [[34, 70], [46, 40], [154, 40], [166, 70]];
+      tips.forEach(function (t, i) {
+        var d = 'M' + (i < 2 ? 88 : 112) + ' 150 C' + (i < 2 ? 60 : 140) + ' 140 ' + (t[0] + (i < 2 ? 20 : -20)) + ' ' + (t[1] + 50) + ' ' + t[0] + ' ' + t[1];
+        s += '<g class="pet-tail" style="animation-delay:' + (i * 0.3) + 's"><path d="' + d + '" fill="none" stroke="' + p.ink + '" stroke-width="11" stroke-linecap="round"/>' +
+          '<path d="' + d + '" fill="none" stroke="' + p.red + '" stroke-width="7" stroke-linecap="round"/>' +
+          '<path d="' + d + '" fill="none" stroke="#ff8a70" stroke-width="2" stroke-linecap="round" stroke-dasharray="2 10" opacity=".8"/></g>';
+      });
+    }
+    if (sp === 'ghoul' && stage !== 'baby') s += '<ellipse class="rar-glow" cx="100" cy="188" rx="' + (stage === 'teen' ? 40 : 54) + '" ry="8" fill="#5b21b6" opacity=".45"/>';
+    return s;
+  }
+
+  function humanBody(sp, p, stage) {
+    var s = '', o = hLine(p);
+    // Ноги: брюки и сапоги.
+    s += '<path d="M80 156 L82 182 L98 182 L99 158Z" fill="' + p.pants + '" ' + o + '/><path d="M120 156 L118 182 L102 182 L101 158Z" fill="' + p.pants + '" ' + o + '/>';
+    s += '<path d="M79 176 L99 176 L99 188 L74 188 Q74 180 79 176Z" fill="' + p.boots + '" ' + o + '/><path d="M121 176 L101 176 L101 188 L126 188 Q126 180 121 176Z" fill="' + p.boots + '" ' + o + '/>';
+    // Шея.
+    s += '<rect x="93" y="92" width="14" height="14" fill="' + p.skin + '" ' + o + '/>';
+    if (sp === 'tsar' && stage === 'baby') {
+      // Цесаревич в матроске.
+      s += '<path d="M72 104 Q100 96 128 104 L132 160 Q100 166 68 160Z" fill="#f4f6fa" ' + o + '/>';
+      s += '<path d="M76 104 L100 132 L124 104 L128 118 L100 140 L72 118Z" fill="#27458f" ' + o + '/><path d="M80 112 L100 134 L120 112" fill="none" stroke="#fff" stroke-width="1.8"/>';
+      s += '<path d="M96 132 L100 142 L104 132Z" fill="#b3262d"/>';
+      return s;
+    }
+    if (sp === 'tsar') {
+      var coat = stage === 'sage' ? '#2f4a35' : p.coat;
+      s += '<path d="M72 104 Q100 96 128 104 L134 160 Q100 168 66 160Z" fill="' + coat + '" ' + o + '/>';
+      s += '<path d="M90 100 L100 108 L110 100" fill="none" stroke="' + p.coatD + '" stroke-width="3"/>';
+      for (var i = 0; i < 4; i++) s += '<circle cx="100" cy="' + (114 + i * 10) + '" r="2.4" fill="' + p.gold + '" stroke="' + p.ink + '" stroke-width="1"/>';
+      s += '<rect x="68" y="146" width="64" height="7" rx="2" fill="#5a3a22" ' + hLine(p, 2) + '/><rect x="95" y="145" width="10" height="9" rx="1.5" fill="' + p.gold + '" ' + hLine(p, 1.5) + '/>';
+      s += '<path d="M84 114 h8 M84 118 h8" stroke="' + p.coatD + '" stroke-width="2"/>';
+      if (stage === 'adult' || stage === 'sage') {
+        s += '<rect x="66" y="100" width="18" height="8" rx="3" fill="' + p.gold + '" ' + hLine(p, 2) + ' transform="rotate(-14 75 104)"/>';
+        s += '<rect x="116" y="100" width="18" height="8" rx="3" fill="' + p.gold + '" ' + hLine(p, 2) + ' transform="rotate(14 125 104)"/>';
+      }
+      if (stage === 'sage') {
+        // Андреевская лента и звезда ордена, горностай на плечах.
+        s += '<path d="M76 106 L126 156" stroke="#3a7bd5" stroke-width="7" stroke-linecap="round"/>';
+        s += '<path d="M116 124 l3 7 7 0 -6 4 3 7 -7 -4 -7 4 3 -7 -6 -4 7 0Z" fill="#f5f0e0" stroke="' + p.gold + '" stroke-width="1.5"/>';
+        s += '<path d="M64 108 Q100 90 136 108 Q126 120 100 116 Q74 120 64 108Z" fill="#fbfaf5" ' + o + '/>';
+        for (var k = 0; k < 6; k++) s += '<path d="M' + (74 + k * 10) + ' ' + (106 + (k % 2) * 3) + ' l1.5 4 -3 0Z" fill="#15151a"/>';
+      }
+      return s;
+    }
+    // Гуль: худи (Новичок, Гуль) или чёрная куртка с высоким воротом.
+    s += '<path d="M72 104 Q100 96 128 104 L134 160 Q100 168 66 160Z" fill="' + p.coat + '" ' + o + '/>';
+    if (stage === 'baby' || stage === 'teen') {
+      s += '<path d="M76 102 Q100 118 124 102 Q120 94 100 94 Q80 94 76 102Z" fill="' + p.coatD + '" ' + hLine(p, 2) + '/>';
+      s += '<path d="M94 110 L92 126 M106 110 L108 126" stroke="#d4d4dc" stroke-width="1.6" stroke-linecap="round"/>';
+      s += '<path d="M82 136 Q100 142 118 136 L116 150 Q100 154 84 150Z" fill="' + p.coatD + '" ' + hLine(p, 1.6) + '/>';
+    } else {
+      s += '<path d="M84 104 L92 92 L100 104 L108 92 L116 104" fill="' + p.coatD + '" ' + hLine(p, 2) + '/>';
+      s += '<path d="M100 104 L100 160" stroke="#3a3a44" stroke-width="2"/>';
+      for (var j = 0; j < 3; j++) s += '<path d="M' + (92 - j * 2) + ' ' + (120 + j * 12) + ' h-8" stroke="' + p.red + '" stroke-width="2" stroke-linecap="round"/>';
+    }
+    return s;
+  }
+
+  function humanArm(sp, p, stage, side) {
+    var o = hLine(p), l = side === 'l';
+    var sleeve = sp === 'tsar' ? (stage === 'baby' ? '#f4f6fa' : stage === 'sage' ? '#2f4a35' : p.coat) : p.coat;
+    var d = l ? 'M74 106 C62 116 58 134 60 152 L71 152 C71 138 74 124 82 114Z' : 'M126 106 C138 116 142 134 140 152 L129 152 C129 138 126 124 118 114Z';
+    var s = '<path d="' + d + '" fill="' + sleeve + '" ' + o + '/>';
+    if (sp === 'tsar' && stage === 'baby') s += '<path d="' + (l ? 'M60 146 L71 146' : 'M129 146 L140 146') + '" stroke="#27458f" stroke-width="3"/>';
+    var hx = l ? 65.5 : 134.5;
+    s += '<circle cx="' + hx + '" cy="156" r="6.5" fill="' + p.skin + '" ' + hLine(p, 2.2) + '/>';
+    if (sp === 'ghoul') s += '<path d="M' + (hx - 4) + ' 160 l1 2 M' + hx + ' 161 l0 2.2 M' + (hx + 4) + ' 160 l-1 2" stroke="#0b0b0b" stroke-width="2.2" stroke-linecap="round"/>';
+    if (sp === 'ghoul' && stage !== 'baby') s += '<path d="M' + (hx - 6) + ' 150 h12 M' + (hx - 6) + ' 146 h12" stroke="#f4f1e6" stroke-width="3" opacity=".9"/>';
+    // Держава в левой руке Императора.
+    if (l && sp === 'tsar' && stage === 'sage') {
+      s += '<g class="it-shine"><circle cx="62" cy="148" r="10" fill="' + p.gold + '" ' + hLine(p, 2.2) + '/><path d="M52 148 H72 M62 138 V158" stroke="#b8912f" stroke-width="1.6"/>' +
+        '<path d="M62 138 V128 M58 132 H66" stroke="' + p.gold + '" stroke-width="3" stroke-linecap="round"/><circle cx="58" cy="144" r="2" fill="#fff" opacity=".7"/></g>';
+    }
+    return s;
+  }
+
+  function humanHead(sp, p, stage, eq) {
+    var o = hLine(p, 3), s = '';
+    s += '<circle cx="52" cy="94" r="7" fill="' + p.skin + '" ' + hLine(p, 2.4) + '/><circle cx="148" cy="94" r="7" fill="' + p.skin + '" ' + hLine(p, 2.4) + '/>';
+    s += '<ellipse cx="100" cy="90" rx="44" ry="48" fill="' + p.skin + '" ' + o + '/>';
+    s += '<path d="M128 56 Q150 86 136 118 Q126 132 110 136 Q144 104 128 56Z" fill="#000" opacity=".05"/>';
+    if (sp === 'tsar') {
+      // Волосы с пробором; у Мудреца — седина на висках.
+      s += '<path d="M56 88 C52 58 72 40 100 40 C128 40 148 58 144 88 C140 72 132 62 116 58 C100 56 84 60 72 66 C62 72 58 80 56 88Z" fill="' + p.hair + '" ' + o + '/>';
+      s += '<path d="M112 44 Q104 52 96 60" stroke="' + shade(p.hair, -0.25) + '" stroke-width="2" fill="none"/>';
+      if (stage === 'sage') s += '<path d="M56 86 C56 76 60 70 64 66 M144 86 C144 76 140 70 136 66" stroke="#d9d9d9" stroke-width="4" fill="none" stroke-linecap="round"/>';
+      if (stage === 'adult' || stage === 'sage') {
+        var beard = stage === 'sage' ? shade(p.hair, 0.12) : p.hair;
+        s += '<path d="M58 98 Q58 140 100 148 Q142 140 142 98 Q136 118 124 124 Q112 118 100 122 Q88 118 76 124 Q64 118 58 98Z" fill="' + beard + '" ' + o + '/>';
+        if (stage === 'sage') s += '<path d="M88 132 Q100 140 112 132 M92 140 Q100 144 108 140" stroke="#e6e6e6" stroke-width="1.6" fill="none" opacity=".8"/>';
+      }
+    } else {
+      // Белая чёлка на глаза.
+      s += '<path d="M52 92 C48 54 72 36 100 36 C130 36 152 54 148 92 L140 72 L134 90 L126 68 L118 92 L110 66 L100 96 L92 66 L84 88 L76 68 L68 86 L62 70Z" fill="' + p.hair + '" ' + o + '/>';
+      s += '<path d="M84 48 Q80 60 82 72 M106 44 Q106 56 108 64 M124 50 Q128 60 130 68" fill="none" stroke="' + p.hairD + '" stroke-width="2" stroke-linecap="round"/>';
+    }
+    return s;
+  }
+
+  // Глаз человека: миндаль с веком. dark — чёрный белок и красная радужка (какуган).
+  function humanEye(cx, cy, p, mirror, lid, dark) {
+    var q = { ink: p.ink, iris: dark ? p.red : p.iris, fur: p.skin };
+    var s = v3Eye(cx, cy, q, mirror, lid, dark ? p.red : p.iris);
+    if (dark) s = s.replace('fill="#fff" stroke="' + p.ink + '"', 'fill="#0b0b0b" stroke="' + p.ink + '"');
+    return s;
+  }
+
+  function humanFace(sp, p, state, stage, eq) {
+    var s = '', ink = p.ink;
+    // Взрослый Николай смотрит спокойно; Гуль по умолчанию «инсайд» — пустой взгляд.
+    var mood = state;
+    if (state === 'ok' && sp === 'ghoul') mood = 'inside';
+    else if (state === 'ok' && sp === 'tsar' && stage !== 'baby') mood = 'calm';
+    var kakugan = sp === 'ghoul' && stage !== 'baby';
+    if (mood === 'happy') {
+      s += '<path d="M70 92 Q81 82 92 92 M108 92 Q119 82 130 92" fill="none" stroke="' + ink + '" stroke-width="3.5" stroke-linecap="round"/>';
+    } else if (mood === 'sleep') {
+      s += '<path d="M70 92 Q81 98 92 92 M108 92 Q119 98 130 92" fill="none" stroke="' + ink + '" stroke-width="3" stroke-linecap="round"/>';
+    } else {
+      var lid = mood === 'inside' ? 0.5 : mood === 'calm' ? 0.28 : mood === 'sad' ? 0.3 : mood === 'sick' ? 0.55 : 0.12;
+      s += '<g class="pet-eyes">' + humanEye(81, 92, p, false, lid, false) + humanEye(119, 92, p, true, lid, kakugan) + '</g>';
+      if (kakugan) s += '<path d="M112 102 Q116 110 113 118 M124 100 Q128 106 127 112" stroke="' + p.red + '" stroke-width="1.4" fill="none" opacity=".7"/>';
+    }
+    var brow = sp === 'tsar' ? (stage === 'sage' ? '#d9d9d9' : p.hair) : p.hairD;
+    if (mood === 'sad' || mood === 'sick' || mood === 'hungry') s += '<path d="M70 80 L91 75 M130 80 L109 75" stroke="' + brow + '" stroke-width="3.2" stroke-linecap="round"/>';
+    else if (mood === 'inside') s += '<path d="M70 79 L92 80 M108 80 L130 79" stroke="' + brow + '" stroke-width="3" stroke-linecap="round"/>';
+    else if (mood !== 'happy' && mood !== 'sleep') s += '<path d="M70 78 Q81 73 92 78 M108 78 Q119 73 130 78" fill="none" stroke="' + brow + '" stroke-width="3.2" stroke-linecap="round"/>';
+    if (mood === 'sad') s += '<path class="pet-tear" d="M76 102 Q73 108 76 111 Q79 108 76 102Z" fill="#7fc8f8"/>';
+    // Нос.
+    s += '<path d="M100 96 Q95 106 100 109" fill="none" stroke="' + shade(p.skin, -0.3) + '" stroke-width="2.2" stroke-linecap="round"/>';
+    if (sp === 'tsar' && stage === 'baby') s += '<g class="pet-cheeks"><ellipse cx="70" cy="108" rx="7" ry="3.5" fill="#ff8fa3" opacity=".35"/><ellipse cx="130" cy="108" rx="7" ry="3.5" fill="#ff8fa3" opacity=".35"/></g>';
+    var my = 118, mouth;
+    if (mood === 'happy') mouth = '<path d="M89 ' + my + ' Q100 ' + (my + 11) + ' 111 ' + my + 'Z" fill="#6a1e2c" stroke="' + ink + '" stroke-width="2.2"/>';
+    else if (mood === 'hungry') mouth = '<ellipse cx="100" cy="' + (my + 3) + '" rx="5" ry="6" fill="#6a1e2c" stroke="' + ink + '" stroke-width="2.2"/>';
+    else if (mood === 'sad' || mood === 'sick') mouth = '<path d="M91 ' + (my + 5) + ' Q100 ' + (my - 1) + ' 109 ' + (my + 5) + '" fill="none" stroke="' + ink + '" stroke-width="2.4" stroke-linecap="round"/>';
+    else if (mood === 'sleep') mouth = '<ellipse cx="100" cy="' + (my + 2) + '" rx="3" ry="2.5" fill="' + ink + '"/>';
+    else if (mood === 'inside') mouth = '<path d="M92 ' + (my + 2) + ' Q102 ' + (my + 3) + ' 110 ' + (my - 2) + '" fill="none" stroke="' + ink + '" stroke-width="2.2" stroke-linecap="round"/>';
+    else mouth = '<path d="M91 ' + my + ' Q100 ' + (my + 5) + ' 109 ' + my + '" fill="none" stroke="' + ink + '" stroke-width="2.4" stroke-linecap="round"/>';
+    s += '<g class="pet-mouth">' + mouth + '</g>';
+    s += '<g class="pet-chomp"><ellipse cx="100" cy="' + (my + 3) + '" rx="8" ry="9" fill="#6a1e2c" stroke="' + ink + '" stroke-width="2.2"/><ellipse cx="100" cy="' + (my + 8) + '" rx="5" ry="3" fill="#ff8fa3"/></g>';
+    // Усы — поверх рта: у Наследника тонкие, у Императора пышные.
+    if (sp === 'tsar' && stage !== 'baby') {
+      var mc = stage === 'sage' ? shade(p.hair, 0.12) : p.hair;
+      s += stage === 'teen'
+        ? '<path d="M100 111 Q90 110 82 115 Q92 113 100 114 Q108 113 118 115 Q110 110 100 111Z" fill="' + mc + '" ' + hLine(p, 1.4) + '/>'
+        : '<path d="M100 110 Q88 106 76 116 Q70 120 66 116 Q72 124 84 118 Q94 115 100 116 Q106 115 116 118 Q128 124 134 116 Q130 120 124 116 Q112 106 100 110Z" fill="' + mc + '" ' + hLine(p, 1.8) + '/>';
+    }
+    // Встроенный облик вида — только если слот свободен.
+    if (sp === 'ghoul' && !eq.face) {
+      if (stage === 'adult' || stage === 'sage') s += T.eyepatch(['#15151a']);
+      if (stage !== 'baby') s += T.ghoulmask(['#15151a', '#f4f1e6']);
+    }
+    return s;
+  }
+
+  function humanHat(sp, p, stage, eq) {
+    if (eq.head) return '';
+    if (sp === 'tsar') {
+      if (stage === 'baby') {
+        // Бескозырка с лентами.
+        return '<path d="M134 48 L148 76 L141 78 L128 52Z M138 48 L154 72 L148 75 L132 50Z" fill="#15151a"/>' +
+          '<ellipse cx="100" cy="42" rx="44" ry="11" fill="#f8f9fc" ' + hLine(p, 2.4) + '/><rect x="60" y="42" width="80" height="10" rx="3" fill="#15151a" ' + hLine(p, 2) + '/>' +
+          '<text x="100" y="50.5" text-anchor="middle" font-size="6.5" font-weight="900" fill="' + p.gold + '" font-family="Arial">ШТАНДАРТЪ</text>';
+      }
+      if (stage === 'sage') return '';
+      // Офицерская фуражка с кокардой.
+      return '<path d="M52 50 Q100 20 148 50 Q100 60 52 50Z" fill="' + p.coat + '" ' + hLine(p, 2.6) + '/>' +
+        '<rect x="58" y="48" width="84" height="11" rx="3" fill="#b3262d" ' + hLine(p, 2.2) + '/>' +
+        '<path d="M60 58 Q100 72 140 58 L138 64 Q100 76 62 64Z" fill="#15151a" ' + hLine(p, 2) + '/>' +
+        '<ellipse cx="100" cy="53" rx="4.5" ry="5.5" fill="' + p.gold + '" stroke="#15151a" stroke-width="1.5"/><ellipse cx="100" cy="53" rx="2" ry="2.6" fill="#15151a"/>';
+    }
+    if (sp === 'ghoul' && stage === 'sage') {
+      // Корона из шипов.
+      var s = '<path d="M58 60 Q100 44 142 60" fill="none" stroke="#15151a" stroke-width="6"/>';
+      [[62, 36], [78, 24], [100, 16], [122, 24], [138, 36]].forEach(function (t, i) {
+        s += '<path d="M' + (t[0] - 7) + ' ' + (56 - Math.abs(2 - i) * -1) + ' L' + t[0] + ' ' + t[1] + ' L' + (t[0] + 7) + ' ' + (54 - Math.abs(2 - i) * -1) + 'Z" fill="#15151a" stroke="' + p.red + '" stroke-width="1.2"/>';
+      });
+      return '<g class="it-mythic-lite">' + s + '</g>';
+    }
+    return '';
+  }
+
+  function renderHuman(sp, stage, state, layer, eq, sick) {
+    var p = HUMAN[sp];
+    var k = stage === 'baby' ? 0.82 : stage === 'teen' ? 0.92 : 1;
+    var headT = humanHeadT(stage);
+    return '<g transform="translate(100 190) scale(' + k + ') translate(-100 -190)"><g class="pet-body">' +
+      humanBack(sp, p, stage) + humanBody(sp, p, stage) +
+      '<g transform="' + V3_BODY_T + '">' + layer('body') + '</g>' +
+      '<g class="pet-arm-l">' + humanArm(sp, p, stage, 'l') + '</g>' +
+      '<g transform="' + V3_NECK_T + '">' + layer('neck') + '</g>' +
+      '<g class="pet-head"><g transform="' + headT + '">' + humanHead(sp, p, stage, eq) + humanFace(sp, p, state, stage, eq) +
+      layer('face') + humanHat(sp, p, stage, eq) + layer('head') + (sick ? sickHead() : '') + '</g></g>' +
+      '<g class="pet-arm-r">' + humanArm(sp, p, stage, 'r') + layer('hand') + '</g></g></g>';
   }
 
   // ── Шаблоны вещей ───────────────────────────────────────────────────────
@@ -1038,7 +1264,10 @@
     var best = null;
     Object.keys(eq).forEach(function (slot) { var it = items[eq[slot]]; if (it && (!best || RANK_OF[it.rarity] > RANK_OF[best])) best = it.rarity; });
     var body, cls3 = '';
-    if (stage === 'baby') {
+    if (HUMAN[sp]) {
+      cls3 = ' v3 human';
+      body = renderHuman(sp, stage, state, layer, eq, state === 'sick');
+    } else if (stage === 'baby') {
       var k = STAGE_SCALE[stage];
       body = '<g transform="translate(100 190) scale(' + k + ') translate(-100 -190)"><g class="pet-body">' +
         speciesBack(sp, p, stage) + speciesBody(sp, p, stage) + layer('body') + armL(sp, p) +

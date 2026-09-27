@@ -34,7 +34,33 @@ const SPECIES = [
   { id: 'owl', name: 'Совёнок' },
   { id: 'hedgehog', name: 'Ёжик' },
   { id: 'dragon', name: 'Дракончик' },
+  // Редкие виды (27.09.2026, решение владельца): не вылупляются и не продаются —
+  // только выпадают из коробок или собираются из осколков. У каждой стадии своё имя.
+  { id: 'ghoul', name: 'Гуль', rare: true, fragment: 'dark', petName: 'Тень',
+    stages: { baby: 'Новичок', teen: 'Гуль', adult: 'Дед инсайд', sage: 'Одноглазый король' } },
+  { id: 'tsar', name: 'Николай II', rare: true, fragment: 'faberge', petName: 'Ники',
+    stages: { baby: 'Цесаревич', teen: 'Наследник', adult: 'Император', sage: 'Император с державой' } },
 ];
+
+// Шанс редкого вида при открытии коробки, в процентах (решение владельца:
+// Николай — 0,05% из сундука и 2% из ларца; Гуль чуть чаще). Бросок отдельный,
+// поверх обычного, поэтому шансы вещей в коробке не меняются.
+const RARE_SPECIES_DROPS = {
+  box_chest: { tsar: 0.05, ghoul: 0.3 },
+  box_tsar: { tsar: 2, ghoul: 5 },
+  box_week: { tsar: 2, ghoul: 5 },
+};
+// Осколки — запасной путь к редкому виду: падают из ларцов, за 1-е место недели,
+// за 30 дней серии входов и изредка с колеса.
+const FRAGMENTS = {
+  faberge: { name: 'Осколок Фаберже', icon: '🥚', species: 'tsar', need: 10 },
+  dark: { name: 'Осколок тьмы', icon: '🖤', species: 'ghoul', need: 6 },
+};
+const FRAGMENT_DROPS = {
+  box_tsar: { faberge: 3, dark: 3 },
+  box_week: { faberge: 3, dark: 3 },
+};
+const STABLE_MAX = 8;
 
 // [id, слот, редкость, цена|null (только из коробок), название, эпоха, [шаблон, ...цвета]]
 const RAW = [
@@ -422,6 +448,7 @@ function publicCatalog() {
     rarities: RARITIES.map(id => ({ id, label: RARITY_LABEL[id] })),
     slots: SLOTS.map(id => ({ id, label: SLOT_LABEL[id] })),
     species: SPECIES,
+    rareSpeciesDrops: RARE_SPECIES_DROPS, fragments: FRAGMENTS, fragmentDrops: FRAGMENT_DROPS,
     items: ITEMS,
     consumables: CONSUMABLES,
     boxes: BOXES,
@@ -442,10 +469,11 @@ function publicCatalog() {
 }
 
 // Меняется вместе с содержимым каталога: клиент кэширует каталог по версии.
-const CATALOG_VERSION = '2026-09-28-2';
+const CATALOG_VERSION = '2026-09-28-3';
 
 module.exports = {
   RARITIES, RARITY_VALUE, DUPLICATE_SHARE, SLOTS, SPECIES, ITEMS, CONSUMABLES, BOXES,
+  RARE_SPECIES_DROPS, FRAGMENTS, FRAGMENT_DROPS, STABLE_MAX,
   NICK_PAINT, NICK_COLORS, TOP_NICK_COLORS, ECONOMY, ACHIEVEMENT_REWARD, ACHIEVEMENTS,
   WEEKLY_PRIZES, MONTHLY_PRIZES, DUEL_PRIZES, LOGIN_STREAK, WHEEL, QUESTS,
   TOY_COOLDOWN_MS, CATALOG_VERSION, BY_ID, prizeFor, itemValue, publicCatalog,

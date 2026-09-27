@@ -89,7 +89,13 @@
   //   просит есть; грустит — вздыхает; в духе — машет, чешется, зевает,
   //   оглядывается, виляет хвостом, пританцовывает, иногда делает пируэт
   //   и рассказывает исторический факт.
-  var SPECIES_SOUND = { kitten: ['Мур!', 'Мяу!', 'Муррр 💛'], owl: ['Уху!', 'Ух-ух!', 'Уху-у 💛'], hedgehog: ['Фыр!', 'Фыр-фыр!', 'Пых 💛'], dragon: ['Рррр! 🔥', 'Фшшш!', 'Ррр 💛'] };
+  var SPECIES_SOUND = { kitten: ['Мур!', 'Мяу!', 'Муррр 💛'], owl: ['Уху!', 'Ух-ух!', 'Уху-у 💛'], hedgehog: ['Фыр!', 'Фыр-фыр!', 'Пых 💛'], dragon: ['Рррр! 🔥', 'Фшшш!', 'Ррр 💛'],
+    ghoul: ['zxc', '1000-7…', '993… 986…'], tsar: ['Бог в помощь!', 'Ну-с, учимся?', 'Весьма похвально!'] };
+  // Свои реплики у редких видов — иногда вместо общих.
+  var SPECIES_SAY = {
+    ghoul: ['1000-7… 993… 986…', 'Я просто хочу решить ЕГЭ', 'Мир — это таблица, где все ответы неверны', 'zxc', 'Я гуль. Но историю знаю', 'Тьма внутри. Строки — снаружи'],
+    tsar: ['1894 — начало моего царствования. Запомни!', '1905 — Манифест 17 октября. Моя подпись', 'Дома меня звали Ники', 'Хозяин земли Русской — и твоей подготовки', 'Ну-с, ещё таблицу?', 'Весьма похвально, сударь!'],
+  };
   var FACTS = [
     '862 — призвание варягов. С него всё и началось!',
     '988 — Крещение Руси. Запомнил?',
@@ -262,7 +268,10 @@
       setTimeout(function () { self.look(null); }, 1400); this.busy = Date.now() + 1500;
     } else if (a === 'hop') { this.jump(); this.busy = Date.now() + 800; }
     else this.act(a, a === 'yawn' ? 1800 : a === 'dance' ? 2300 : a === 'spin' ? 900 : 1900);
-    if (big && Math.random() < 0.3) this.say(Math.random() < 0.55 ? pick(FACTS) : pick(SAY[p.state] || SAY.ok), 3600);
+    if (big && Math.random() < 0.3) {
+      var own = SPECIES_SAY[p.species];
+      this.say(own && Math.random() < 0.45 ? pick(own) : Math.random() < 0.55 ? pick(FACTS) : pick(SAY[p.state] || SAY.ok), 3600);
+    }
   };
 
   // Общий такт: раз в полсекунды решаем, не пора ли кому-то что-то сделать.
@@ -515,7 +524,7 @@
     if (typeof window.popBackHandler === 'function') window.popBackHandler('modal:pet');
   }
 
-  var TABS = [['care', 'Уход'], ['wardrobe', 'Гардероб'], ['shop', 'Лавка'], ['boxes', 'Сундуки'], ['nick', 'Ник']];
+  var TABS = [['care', 'Уход'], ['wardrobe', 'Гардероб'], ['shop', 'Лавка'], ['boxes', 'Сундуки'], ['stable', 'Питомник'], ['nick', 'Ник']];
 
   function renderModal() {
     var body = $('pet-sheet-body'); if (!body) return;
@@ -674,6 +683,7 @@
     if (S.tab === 'shop') return paneShop();
     if (S.tab === 'boxes') return paneBoxes();
     if (S.tab === 'nick') return paneNick();
+    if (S.tab === 'stable') return paneStable();
     return paneCare();
   }
 
@@ -711,6 +721,67 @@
       return '<div class="pet-card"><div class="pet-ico">' + (PetArt.icons[c.id] || '•') + (own && c.kind !== 'toy' ? '<em>×' + own + '</em>' : '') + '</div>' +
         '<b>' + esc(c.name) + '</b><i>' + (c.kind === 'boost' ? '30 минут: монеты ×1,5, опыт ×2' : c.kind === 'freeze' ? 'Спасёт серию входов, если пропустишь день' : fxText(c.fx) + (c.kind === 'toy' ? ' · раз в 3 часа' : '')) + '</i>' + btn + '</div>';
     }).join('') + '</div>';
+  }
+
+  // ── Питомник: кто ждёт своей очереди и какие редкие виды можно добыть ──────
+  function speciesOf(id) { return (S.catalog.species || []).find(function (x) { return x.id === id; }) || { id: id, name: id }; }
+  function pctText(v) { return String(v).replace('.', ',') + '%'; }
+  function paneStable() {
+    var st = S.state, stable = st.stable || [];
+    var owned = {}; owned[st.pet.species] = true; stable.forEach(function (x) { owned[x.species] = true; });
+    var mini = function (sp, stage, eq) { return '<span class="pet-item-art">' + PetArt.render({ species: sp, stage: stage, state: 'ok', items: S.items, equipped: eq || {}, mini: true }) + '</span>'; };
+    var html = '<div class="pet-hint">В питомнике время стоит: пока питомец отдыхает, он не голодает и не грустит. Опыт и уровень у каждого свои.</div>';
+    html += '<div class="pet-grid items">' +
+      '<div class="pet-item worn rar-' + (speciesOf(st.pet.species).rare ? 'mythic' : 'common') + '">' + mini(st.pet.species, st.pet.stage, st.equipped) +
+        '<b>' + esc(st.pet.name) + '</b><i>' + esc(st.pet.stageName) + ' · ' + st.pet.level + ' ур.</i><span class="pet-tag">Сейчас со мной</span></div>' +
+      stable.map(function (x) {
+        return '<button type="button" class="pet-item rar-' + (speciesOf(x.species).rare ? 'mythic' : 'common') + '" onclick="PetUI.switchPet(' + x.index + ')">' + mini(x.species, x.stage, x.equipped) +
+          '<b>' + esc(x.name) + '</b><i>' + esc(x.stageName) + ' · ' + x.level + ' ур.</i><span class="pet-tag">Выпустить</span></button>';
+      }).join('') + '</div>';
+    var drops = S.catalog.rareSpeciesDrops || {}, frags = S.catalog.fragments || {}, have = st.fragments || {}, owners = S.catalog.owners || {};
+    html += '<div class="pet-rare-list">' + (S.catalog.species || []).filter(function (x) { return x.rare; }).map(function (sp) {
+      var f = frags[sp.fragment] || { need: 10, icon: '•', name: '' };
+      var n = have[sp.fragment] || 0;
+      var n2 = owners['species:' + sp.id];
+      var chest = (drops.box_chest || {})[sp.id], tsar = (drops.box_tsar || {})[sp.id];
+      var btn = owned[sp.id] ? '<span class="pet-tag">✓ Уже в питомнике</span>'
+        : n >= f.need ? '<button type="button" class="go" onclick="PetUI.craft(\'' + sp.id + '\', this)">Собрать из осколков</button>'
+        : '<span class="pet-tag">' + f.icon + ' ' + n + ' / ' + f.need + '</span>';
+      return '<div class="pet-rare rar-mythic' + (owned[sp.id] ? ' got' : '') + '">' +
+        '<span class="pet-rare-art">' + PetArt.render({ species: sp.id, stage: 'adult', state: 'ok', items: S.items, equipped: {}, mini: true }) + '</span>' +
+        '<div><b>' + esc(sp.name) + '</b>' +
+        '<i>Не продаётся. Сундук — ' + pctText(chest) + ', Царский ларец — ' + pctText(tsar) + ', или собери ' + f.need + ' ' + f.icon + ' ' + plural(f.need, 'осколок', 'осколка', 'осколков') + '.</i>' +
+        (n2 != null ? '<i>Есть у ' + n2 + ' ' + plural(n2, 'человека', 'человек', 'человек') + '</i>' : '') +
+        '<span class="petw-bar"><span style="width:' + Math.min(100, Math.round(n / f.need * 100)) + '%;background:var(--r-mythic)"></span></span>' + btn + '</div></div>';
+    }).join('') + '</div>';
+    return html;
+  }
+  function switchPet(index) {
+    act('/switch', { index: index }, function (st) {
+      var s = stageNow(); if (s) { s.act('wave', 1500); s.say(pick(SPECIES_SAY[st.pet.species] || ['Я тут!', 'Привет, соскучился!'])); }
+    });
+  }
+  function craft(species) {
+    act('/craft', { species: species }, function (st) {
+      S.catalog.owners = S.catalog.owners || {};
+      if (st.crafted) S.catalog.owners['species:' + species] = st.crafted.owners;
+      speciesReveal(species, st.crafted ? st.crafted.owners : null, null);
+    });
+  }
+  // Показ нового редкого питомца — из сундука или из осколков.
+  function speciesReveal(species, owners, box) {
+    var sp = speciesOf(species);
+    var st = S.state, idx = (st.stable || []).findIndex(function (x) { return x.species === species; });
+    haptic('heavy');
+    try { if (window.Sfx && window.Sfx.play) window.Sfx.play('win'); } catch (_) {}
+    var html = '<div class="rl-drop rar-mythic pet-new-species"><div class="rl-flash"></div>' +
+      '<div class="rl-art big">' + PetArt.render({ species: species, stage: 'baby', state: 'happy', items: S.items, equipped: {}, scene: 'day' }) + '</div>' +
+      '<b>Новый питомец: ' + esc(sp.name) + '!</b><i>' + (species === 'tsar' ? 'Самый редкий вид в игре' : 'Редкий вид') + ' · ' + esc((sp.stages || {}).baby || '') + '</i>' +
+      (owners != null ? '<div class="pet-own">Есть всего у ' + owners + ' ' + plural(owners, 'человека', 'человек', 'человек') + '</div>' : '') +
+      (idx >= 0 ? '<button type="button" class="go" onclick="PetUI.closeSheet();PetUI.switchPet(' + idx + ')">Выпустить сейчас</button>' : '') +
+      '<button type="button" class="pet-link" onclick="PetUI.closeSheet();PetUI.tab(\'stable\')">Пусть ждёт в питомнике</button></div>';
+    if (box) { var res = $('rl-result'); if (res) res.innerHTML = html; } else sheet('<div class="pet-roll">' + html + '</div>');
+    confetti();
   }
 
   function buyBtn(price, onclick) {
@@ -798,6 +869,9 @@
   var ERR = {
     not_enough_coins: 'Не хватает монет — реши ещё несколько строк',
     already_owned: 'Уже есть в гардеробе',
+    not_enough_fragments: 'Осколков пока не хватает',
+    stable_full: 'Питомник полон',
+    bad_index: 'Этого питомца уже нет в питомнике',
     not_owned: 'Сначала нужно купить',
     pet_sleeping: 'Питомец спит — поиграете утром',
     toy_cooldown: 'Он ещё не соскучился по этой игрушке',
@@ -1045,11 +1119,14 @@
     var strip = [];
     for (var i = 0; i < 34; i++) strip.push(pick());
     var WIN = 29;
-    strip[WIN] = S.items[drop.id];
+    strip[WIN] = drop.species ? { species: drop.species, rarity: 'mythic' } : S.items[drop.id];
     // пара «почти выпало» рядом с выигрышем — для азарта
     var shiny = pool.filter(function (x) { return x.rarity === 'legendary' || x.rarity === 'mythic'; });
     strip[WIN + 1] = shiny[Math.floor(Math.random() * shiny.length)];
-    var cells = strip.map(function (it) { return '<span class="rl-cell rar-' + it.rarity + '">' + PetArt.renderItem(it) + '</span>'; }).join('');
+    var cells = strip.map(function (it) {
+      var art = it.species ? PetArt.render({ species: it.species, stage: 'baby', state: 'happy', items: S.items, equipped: {}, mini: true }) : PetArt.renderItem(it);
+      return '<span class="rl-cell rar-' + it.rarity + '">' + art + '</span>';
+    }).join('');
     sheet('<div class="pet-roll"><b>' + esc(box.name) + '</b><div class="rl-window"><div class="rl-strip" id="rl-strip">' + cells + '</div><div class="rl-mark"></div></div><div id="rl-result"></div></div>');
     var el = $('rl-strip');
     var cell = 92; // ширина ячейки с отступом (см. pet.css .rl-cell)
@@ -1068,7 +1145,17 @@
     }, 4700);
   }
 
+  function fragmentsLine(fr) {
+    var f = S.catalog.fragments || {};
+    var parts = Object.keys(fr || {}).map(function (k) { return (f[k] ? f[k].icon + ' ' + f[k].name : k) + ' +' + fr[k]; });
+    return parts.length ? '<div class="pet-own">И ещё: ' + esc(parts.join(', ')) + '</div>' : '';
+  }
   function showDrop(box, drop) {
+    if (drop.species) {
+      S.catalog.owners = S.catalog.owners || {};
+      S.catalog.owners['species:' + drop.species] = drop.owners;
+      return speciesReveal(drop.species, drop.owners, box);
+    }
     var it = S.items[drop.id];
     haptic(drop.rarity === 'mythic' || drop.rarity === 'legendary' ? 'heavy' : 'medium');
     try { if (window.Sfx && window.Sfx.play) window.Sfx.play(drop.rarity === 'common' ? 'ok' : 'win'); } catch (_) {}
@@ -1080,6 +1167,7 @@
       (drop.duplicate ? '<div class="pet-hint">Уже было — превращено в <b>+' + fmt(drop.shards) + ' ' + COIN + '</b></div>'
         : '<button type="button" class="go" onclick="PetUI.wearDrop(\'' + it.id + '\')">Надеть</button>') +
       (drop.owners != null && !drop.duplicate ? '<div class="pet-own">Такая есть всего у ' + drop.owners + ' ' + plural(drop.owners, 'человека', 'человек', 'человек') + '</div>' : '') +
+      fragmentsLine(drop.fragments) +
       (again ? '<button type="button" onclick="PetUI.openBox(\'' + box.id + '\')">' + again + '</button>' : '') +
       '<button type="button" class="pet-link" onclick="PetUI.closeSheet()">Закрыть</button></div>';
     if (drop.rarity === 'legendary' || drop.rarity === 'mythic') confetti();
@@ -1110,7 +1198,7 @@
   function openHatch() {
     loadCatalog().then(function () {
       sheet('<div class="pet-hatch"><b>Кто вылупится?</b><i>Питомец живёт на твоих решениях: каждая верная строка — 2 монеты и сытость, выученный факт — 10 монет. На них — еда, лечение, наряды и сундуки.</i>' +
-        '<div class="pet-species">' + S.catalog.species.map(function (s) {
+        '<div class="pet-species">' + S.catalog.species.filter(function (s) { return !s.rare; }).map(function (s) {
           return '<button type="button" class="' + (s.id === hatchPick ? 'on' : '') + '" onclick="PetUI.pickSpecies(\'' + s.id + '\')">' +
             PetArt.render({ species: s.id, stage: 'baby', state: 'happy', items: S.items, equipped: {}, scene: 'day' }) + '<span>' + s.name + '</span></button>';
         }).join('') + '</div>' +
@@ -1161,7 +1249,7 @@
     open: open, close: close, tab: function (t) { S.tab = t; renderModal(); },
     shopSlot: function (s) { S.shopSlot = s; renderModal(); }, wardSlot: function (s) { S.wardSlot = s; renderModal(); },
     use: use, buy: buy, toggle: toggle, undressAll: undressAll, tryOn: tryOn, buyWear: buyWear, closeSheet: closeSheet,
-    quick: quick, tapPet: tapPet, widgetTap: widgetTap, boost: boost, openWheel: openWheel, spin: spin,
+    quick: quick, tapPet: tapPet, widgetTap: widgetTap, boost: boost, openWheel: openWheel, spin: spin, switchPet: switchPet, craft: craft,
     rename: rename, paint: paint, openBox: openBox, wearDrop: wearDrop, openHatch: openHatch, pickSpecies: pickSpecies, hatch: hatch,
     onLobby: onLobby, onAchievements: onAchievements, refresh: refresh, nickHtml: nickHtml, miniAvatar: miniAvatar,
     get state() { return S.state; }, get catalog() { return S.catalog; },

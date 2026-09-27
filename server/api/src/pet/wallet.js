@@ -206,6 +206,11 @@ function stageOf(level) {
   for (const s of STAGES) if (level >= s.from) stage = s;
   return stage;
 }
+// У редких видов у стадий свои имена: «Цесаревич», «Дед инсайд»…
+function stageName(species, stageId) {
+  const sp = C.SPECIES.find(x => x.id === species);
+  return (sp && sp.stages && sp.stages[stageId]) || (STAGES.find(x => x.id === stageId) || STAGES[0]).name;
+}
 // Награда за уровень: немного монет всегда, сундук на каждом 5-м, ларец на каждом 10-м.
 function levelReward(level) {
   return { coins: 20 + 5 * level, box: level % 10 === 0 ? 'box_tsar' : level % 5 === 0 ? 'box_chest' : null };
@@ -223,7 +228,7 @@ async function addXp(db, w, amount, events) {
     if (reward.box) await addItem(db, w.user_id, reward.box, 1, `level:${level}`);
     const stage = stageOf(level);
     events.push({ reason: 'level', delta: reward.coins, level, box: reward.box,
-      stage: stage.id, stageName: stage.name, stageUp: stage.id !== stageOf(level - 1).id });
+      stage: stage.id, stageName: stageName(w.pet.species, stage.id), stageUp: stage.id !== stageOf(level - 1).id });
   }
 }
 
@@ -404,9 +409,9 @@ function view(w, inv, now, extraIn = {}) {
     pet.xpTo = xpForLevel(pet.level + 1);
     const stage = stageOf(pet.level);
     pet.stage = stage.id;
-    pet.stageName = stage.name;
+    pet.stageName = stageName(pet.species, stage.id);
     const next = STAGES.find(s => s.from > pet.level);
-    pet.nextStage = next ? { id: next.id, name: next.name, level: next.from } : null;
+    pet.nextStage = next ? { id: next.id, name: stageName(pet.species, next.id), level: next.from } : null;
     pet.tapReadyAt = num(w.counters?.lastTap) + TAP_COOLDOWN_MS;
   }
   return {
@@ -428,6 +433,7 @@ function view(w, inv, now, extraIn = {}) {
     quests: questsView(w, profileCountersNow, now),
     boostUntil: num(w.counters?.boostUntil) > now ? num(w.counters?.boostUntil) : 0,
     fragments: w.counters?.fragments || {},
+    stable: stableView(w),
     catalogVersion: C.CATALOG_VERSION,
     now,
     ...extra,
@@ -473,7 +479,7 @@ function cleanName(raw) {
 // knownAchievements — ачивки, уже полученные ДО питомца: они оплачиваются нулём,
 // чтобы потом не «доплатились» тысячами разом.
 async function hatch(db, userId, docIds, { species, name, knownAchievements = [] }, now = Date.now()) {
-  if (!C.SPECIES.some(s => s.id === species)) throw httpError(400, 'bad_species');
+  if (!C.SPECIES.some(s => s.id === species && !s.rare)) throw httpError(400, 'bad_species');
   const counters = await profileCounters(db, userId, docIds);
   if (counters.solved < C.ECONOMY.hatchMinSolved) throw httpError(403, 'too_early', { need: C.ECONOMY.hatchMinSolved });
   const w = await lockWallet(db, userId);
@@ -670,6 +676,21 @@ async function openBox(db, userId, boxId, now = Date.now(), rand = crypto.random
   const pool = C.ITEMS.filter(item => item.rarity === rarity);
   const item = pool[rand(pool.length)];
   const inv = await inventory(db, userId);
+
+  // Редкий вид — отдельный бросок поверх вещи. Считаем «с верхнего края»
+  // диапазона: подставной бросок () => 0 в тестах вида не даёт никогда.
+  const fragments = rollFragments(box, rand);
+  for (const [kind, n] of Object.entries(fragments)) addFragment(w, kind, n);
+  const species = rollRareSpecies(w, box, rand);
+  if (species) {
+    addToStable(w, species, now);
+    if (box.pity) pity[box.id] = 0;
+    w.counters = { ...(w.counters || {}), boxes: num(w.counters?.boxes) + 1 };
+    await saveWallet(db, w);
+    return view(w, inv, now, {
+      drop: { species, rarity: 'mythic', owners: await speciesOwners(db, species), fragments },
+    });
+  }
   let shards = 0;
   if (inv[item.id]) {
     // Повтор не пропадает: превращается в монеты — 40% цены вещи.
@@ -684,8 +705,102 @@ async function openBox(db, userId, boxId, now = Date.now(), rand = crypto.random
   let owners = null;
   if (rarity === 'mythic' || rarity === 'legendary') owners = await ownersOf(db, item.id);
   return view(w, await inventory(db, userId), now, {
-    drop: { id: item.id, rarity, duplicate: !!shards, shards, owners },
+    drop: { id: item.id, rarity, duplicate: !!shards, shards, owners, fragments },
   });
+}
+
+// ── Питомник: редкие виды и смена питомца ─────────────────────────────────
+const TOP = 1000000; // броски в десятитысячных процента
+function hitTop(rand, pct) {
+  const edge = Math.round(pct * 10000);
+  return edge > 0 && rand(TOP) >= TOP - edge;
+}
+function ownedSpecies(w) {
+  const set = new Set((w.counters?.stable || []).map(p => p.species));
+  if (w.pet) set.add(w.pet.species);
+  return set;
+}
+function rollRareSpecies(w, box, rand) {
+  const table = C.RARE_SPECIES_DROPS[box.id];
+  if (!table) return null;
+  const owned = ownedSpecies(w);
+  if ((w.counters?.stable || []).length >= C.STABLE_MAX) return null;
+  // Сначала самый редкий: у кого нет Николая, бросок за него идёт первым.
+  for (const [species, pct] of Object.entries(table).sort((a, b) => a[1] - b[1])) {
+    if (hitTop(rand, pct) && !owned.has(species)) return species;
+  }
+  return null;
+}
+function rollFragments(box, rand) {
+  const out = {};
+  for (const [kind, pct] of Object.entries(C.FRAGMENT_DROPS[box.id] || {})) {
+    if (hitTop(rand, pct)) out[kind] = 1;
+  }
+  return out;
+}
+function newPet(species, now) {
+  const sp = C.SPECIES.find(x => x.id === species);
+  return { species, name: sp?.petName || sp?.name || 'Летописчик', sat: 80, mood: 90, health: 100, sick: false,
+    starvingH: 0, at: now, hatchedAt: now, toys: {}, xp: 0, equipped: {} };
+}
+function addToStable(w, species, now) {
+  const stable = [...(w.counters?.stable || []), newPet(species, now)];
+  w.counters = { ...(w.counters || {}), stable };
+}
+function stableView(w) {
+  return (w.counters?.stable || []).map((p, index) => {
+    const level = levelOf(num(p.xp));
+    const stage = stageOf(level).id;
+    return { index, species: p.species, name: p.name, level, stage, stageName: stageName(p.species, stage),
+      equipped: p.equipped || {}, sick: !!p.sick };
+  });
+}
+async function speciesOwners(db, species) {
+  const { rows } = await db.query(
+    "SELECT count(*)::int AS n FROM pet_wallets WHERE pet->>'species'=$1 OR counters->'stable' @> $2::jsonb",
+    [species, JSON.stringify([{ species }])]);
+  return rows[0]?.n || 0;
+}
+async function speciesShowcase(db) {
+  const out = {};
+  for (const sp of C.SPECIES.filter(x => x.rare)) out[`species:${sp.id}`] = await speciesOwners(db, sp.id);
+  return out;
+}
+
+// Собрать редкий вид из осколков.
+async function craft(db, userId, species, now = Date.now()) {
+  const sp = C.SPECIES.find(x => x.id === species && x.rare);
+  if (!sp) throw httpError(400, 'bad_species');
+  const w = await withPet(db, userId, now);
+  const frag = C.FRAGMENTS[sp.fragment];
+  const have = num(w.counters?.fragments?.[sp.fragment]);
+  if (have < frag.need) throw httpError(409, 'not_enough_fragments', { need: frag.need, have });
+  if (ownedSpecies(w).has(species)) throw httpError(409, 'already_owned');
+  if ((w.counters?.stable || []).length >= C.STABLE_MAX) throw httpError(409, 'stable_full');
+  w.counters = { ...(w.counters || {}), fragments: { ...(w.counters?.fragments || {}), [sp.fragment]: have - frag.need } };
+  addToStable(w, species, now);
+  await saveWallet(db, w);
+  return view(w, await inventory(db, userId), now, { crafted: { species, owners: await speciesOwners(db, species) } });
+}
+
+// Сменить питомца: выбранный из питомника выходит, нынешний уходит отдыхать.
+// В питомнике время стоит — голод и грусть не копятся, пока питомец отдыхает.
+async function switchPet(db, userId, index, now = Date.now()) {
+  const w = await withPet(db, userId, now);
+  const stable = [...(w.counters?.stable || [])];
+  const i = Number(index);
+  if (!Number.isInteger(i) || i < 0 || i >= stable.length) throw httpError(400, 'bad_index');
+  const incoming = { ...stable[i] };
+  const equipped = incoming.equipped || {};
+  delete incoming.equipped;
+  stable[i] = { ...w.pet, equipped: w.equipped || {} };
+  w.pet = { ...incoming, at: now };
+  const inv = await inventory(db, userId);
+  // Надетым остаётся только то, что по-прежнему есть в кладовой.
+  w.equipped = Object.fromEntries(Object.entries(equipped).filter(([, id]) => inv[id]));
+  w.counters = { ...(w.counters || {}), stable };
+  await saveWallet(db, w);
+  return view(w, inv, now);
 }
 
 async function ownersOf(db, itemId) {
@@ -764,10 +879,19 @@ async function mergeUserData(client, primaryId, secondaryId) {
     first.balance = Number(first.balance) + Number(second.balance);
     first.earned_total = Number(first.earned_total) + Number(second.earned_total);
     first.spent_total = Number(first.spent_total) + Number(second.spent_total);
+    const loser = keepSecondPet ? (first.pet ? { ...first.pet, equipped: first.equipped || {} } : null)
+      : (second.pet ? { ...second.pet, equipped: second.equipped || {} } : null);
     if (keepSecondPet) {
       first.pet = second.pet;
       first.equipped = second.equipped;
     }
+    // Питомник и осколки обоих складываются; второй питомец уходит в питомник.
+    const c1 = first.counters || {};
+    const c2 = second.counters || {};
+    const fragments = { ...(c1.fragments || {}) };
+    for (const [k, v] of Object.entries(c2.fragments || {})) fragments[k] = num(fragments[k]) + num(v);
+    const stable = [...(c1.stable || []), ...(c2.stable || []), ...(loser ? [loser] : [])].slice(0, C.STABLE_MAX);
+    first.counters = { ...c2, ...c1, fragments, stable };
     const m1 = first.marks || {};
     const m2 = second.marks || {};
     if (m2.solved !== undefined) {
@@ -804,6 +928,7 @@ async function mergeUserData(client, primaryId, secondaryId) {
 module.exports = {
   spin, dayTick, makeQuests, progressQuests, boostActive, PROFILE_COUNTERS, addFragment,
   tap, levelOf, xpForLevel, stageOf, levelReward, addXp, STAGES, TAP_COOLDOWN_MS,
+  craft, switchPet, speciesOwners, speciesShowcase, stageName,
   mskDay, prevDay, isNight, decayPet, petMoodState, profileCounters, credit, view, getState, hatch,
   buy, use, equip, rename, openBox, rollRarity, rewardAchievements, paintNick, rarityShowcase,
   mergeUserData, lockWallet, saveWallet, addItem, move, readWallet, inventory, nameStyleView, httpError,
