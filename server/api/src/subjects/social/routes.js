@@ -108,17 +108,33 @@ async function handleSocial(req, res, url, session, deps) {
     });
   }
 
-  // Заявка на роль учителя, поданная С САЙТА. До неё заявка существовала только
-  // кнопкой в боте: человек, вошедший через Google и не открывавший бота, не мог
-  // ни попросить роль, ни получить её — выдача шла по telegram id.
+  // 🔴 Роль учителя человек берёт САМ, ответ приходит сразу. Прежде здесь
+  // создавалась заявка, и учитель ждал, пока админ нажмёт кнопку в боте.
+  // Адрес маршрута оставлен прежним: у людей в браузерах висит выкаченный
+  // клиент, который зовёт именно его, и менять адрес значило бы сломать роль
+  // ровно тем, кто в этот момент её просит.
   if (method === 'POST' && path === '/me/teacher-request') {
     requireMutationAuth(req, session);
     // Гость живёт в одном браузере и исчезает вместе с ним. Классы и домашние
     // задания пережили бы такого учителя, а он их — нет.
     if (session.user.isAnonymous) throw fail('sign_in_required', 403);
-    const result = await store.requestTeacherRole(session.userId, [...env.adminTelegramIds], {});
+    const body = await readJson(req, 4096).catch(() => ({}));
+    const result = await store.claimTeacherRole(session.userId, [...env.adminTelegramIds], {
+      source: 'self',
+      inviteCode: String((body && body.invite) || ''),
+    });
     if (result.status === 'unknown') throw fail('user_not_found', 404);
     return json(res, 200, result);
+  }
+
+  // Кто меня пригласил — до того, как я согласился. Ссылка коллеги открывает
+  // приложение у человека, который нас видит впервые, и «стать учителем» без
+  // имени пригласившего выглядит как обычная кнопка из ниоткуда.
+  if (method === 'GET' && path === '/teacher-invite') {
+    const code = String(url.searchParams.get('code') || '');
+    const inviter = await store.resolveTeacherInvite(code, {});
+    // Несуществующий код отвечает так же, как чужой: 200 и пустое имя.
+    return json(res, 200, { valid: Boolean(inviter), invitedBy: inviter ? inviter.displayName : '' });
   }
 
   if (method === 'PATCH' && path === '/me/profile') {
@@ -221,7 +237,14 @@ async function handleSocial(req, res, url, session, deps) {
     requireTeacher(role);
 
     if (method === 'GET' && path === '/teacher/classes') {
-      return json(res, 200, { role, classes: await store.listClasses(userId, {}) });
+      // Код приглашения коллеги едет вместе со списком классов: кабинет и так
+      // зовёт этот маршрут при каждом открытии, а отдельный запрос ради десяти
+      // символов означал бы лишний круг до сервера на самом частом экране.
+      const [classes, inviteCode] = await Promise.all([
+        store.listClasses(userId, {}),
+        store.teacherInviteCode(userId, {}),
+      ]);
+      return json(res, 200, { role, classes, inviteCode });
     }
     if (method === 'POST' && path === '/teacher/classes') {
       requireMutationAuth(req, session);
