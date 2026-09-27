@@ -43,6 +43,9 @@ for (const col of [
     'notify_hw INTEGER DEFAULT 1', 'notify_duel INTEGER DEFAULT 1', 'last_duel_notify INTEGER DEFAULT 0',
     'notify_hw_done INTEGER DEFAULT 1', 'notify_join INTEGER DEFAULT 1',
     'notify_streak INTEGER DEFAULT 1', 'notify_digest INTEGER DEFAULT 1', 'notify_alerts INTEGER DEFAULT 1',
+    // «Питомец проголодался» — свой выключатель: напоминание о питомце не
+    // должно выключаться вместе с домашкой и наоборот.
+    'notify_pet INTEGER DEFAULT 1',
     // Ученик, не начавший диалог с ботом: Telegram запрещает боту писать первым.
     // Такому доставка не наладится НИКОГДА, сколько ни повторяй, — а раньше это
     // было видно только в stderr, и учитель просто не знал, почему ученик «не
@@ -1018,12 +1021,13 @@ bot.callbackQuery(/^sp:(.+)$/, async (ctx) => {
 
 // ---------- Настройки уведомлений ----------
 function settingsKb(userId) {
-    const u = db.prepare('SELECT notify_hw, notify_duel, notify_hw_done, notify_join, notify_streak, notify_digest, notify_alerts FROM users WHERE id = ?').get(userId) || {};
+    const u = db.prepare('SELECT notify_hw, notify_duel, notify_hw_done, notify_join, notify_streak, notify_digest, notify_alerts, notify_pet FROM users WHERE id = ?').get(userId) || {};
     const on = (v) => (v === undefined || v ? 'вкл ✅' : 'выкл ❌');
     const kb = new InlineKeyboard()
         .text(`📚 Домашка: ${on(u.notify_hw)}`, 'toggle_hw').row()
         .text(`⚔️ Дуэли: ${on(u.notify_duel)}`, 'toggle_duel').row()
-        .text(`🔥 Напоминания о серии: ${on(u.notify_streak)}`, 'toggle_streak');
+        .text(`🔥 Напоминания о серии: ${on(u.notify_streak)}`, 'toggle_streak').row()
+        .text(`🐾 Питомец просит есть: ${on(u.notify_pet)}`, 'toggle_pet');
     if (isTeacher(userId)) kb
         .row().text(`✅ Сдача ДЗ: ${on(u.notify_hw_done)}`, 'toggle_hw_done')
         .row().text(`➕ Новые ученики: ${on(u.notify_join)}`, 'toggle_join')
@@ -1033,12 +1037,19 @@ function settingsKb(userId) {
 }
 async function doSettings(ctx) { await ctx.reply('Какие уведомления присылать?', { reply_markup: settingsKb(ctx.from.id) }); }
 bot.command('settings', doSettings);
-const TOGGLE_COLS = { toggle_hw: 'notify_hw', toggle_duel: 'notify_duel', toggle_hw_done: 'notify_hw_done', toggle_join: 'notify_join', toggle_streak: 'notify_streak', toggle_digest: 'notify_digest', toggle_alerts: 'notify_alerts' };
+const TOGGLE_COLS = { toggle_hw: 'notify_hw', toggle_duel: 'notify_duel', toggle_hw_done: 'notify_hw_done', toggle_join: 'notify_join', toggle_streak: 'notify_streak', toggle_digest: 'notify_digest', toggle_alerts: 'notify_alerts', toggle_pet: 'notify_pet' };
 bot.callbackQuery(Object.keys(TOGGLE_COLS), async (ctx) => {
     const col = TOGGLE_COLS[ctx.callbackQuery.data];
     db.prepare(`UPDATE users SET ${col} = 1 - ${col} WHERE id = ?`).run(ctx.from.id);
     await ctx.answerCallbackQuery('Сохранено');
     try { await ctx.editMessageReplyMarkup({ reply_markup: settingsKb(ctx.from.id) }); } catch (e) {}
+});
+
+// Отказ от напоминаний питомца прямо из сообщения — только ВЫКЛЮЧАЕТ, как duel_off.
+bot.callbackQuery('pet_off', async (ctx) => {
+    db.prepare('UPDATE users SET notify_pet = 0 WHERE id = ?').run(ctx.from.id);
+    await ctx.answerCallbackQuery('Больше не буду 🐾 Включить обратно — /settings');
+    try { await ctx.editMessageReplyMarkup({ reply_markup: appKb() }); } catch (e) {}
 });
 
 // Отказ от вызовов на дуэль прямо из уведомления.
@@ -1381,6 +1392,17 @@ const TASK_LABELS = { task1: '№1 (Хронология)', task3: '№3 (Про
 const JOB_MAX_AGE_MS = 24 * 3600 * 1000;
 const NICK_WORD = { gold: 'золотой', silver: 'серебряный', bronze: 'бронзовый', violet: 'фиолетовый' };
 const BOX_WORD = { box_week: '«Ларец недели»', box_tsar: '«Царский ларец»', box_chest: '«Сундук летописца»' };
+const PET_EMOJI = { kitten: '🐱', owl: '🦉', hedgehog: '🦔', dragon: '🐉' };
+function petNudgeText(r) {
+    const name = String(r.name || 'Летописчик').replace(/[<>]/g, '').slice(0, 20);
+    const e = PET_EMOJI[r.species] || '🐾';
+    const lines = {
+        hungry: [`${e} ${name}: Я проголодался… 🥺`, 'Реши пару строк — на щи как раз хватит монет.'],
+        sick: [`${e} ${name}: Мне нехорошо 🤒`, 'Кажется, я заболел от голода. Реши немного — купим микстуру?'],
+        sad: [`${e} ${name}: Скучаю без тебя…`, 'Заглянешь? Я придумал, во что поиграть 🎲'],
+    }[r.reason] || [`${e} ${name}: Я тут!`, 'Загляни ко мне 👇'];
+    return lines.join('\n');
+}
 function weeklyTopText(r) {
     const place = Number(r.place) || 0;
     const medal = place === 1 ? '🥇' : place === 2 ? '🥈' : place === 3 ? '🥉' : '🏅';
@@ -1528,6 +1550,21 @@ function watchJobs() {
                         await sendSafe(chatId, weeklyTopText(r), { reply_markup: appKb() });
                         markRecipientDone.run(jobId, String(chatId));
                         await sleep(50);
+                    }
+                }
+                // «Питомец проголодался» (API, pet/nudge.js): одно задание на проход.
+                // Пишет сам питомец — от первого лица и по имени, которое дал ученик.
+                if (fresh && j.type === 'pet_nudge' && Array.isArray(j.recipients)) {
+                    for (const r of j.recipients.slice(0, 2000)) {
+                        const chatId = Number(r.tgId);
+                        if (!Number.isFinite(chatId) || isRecipientDone.get(jobId, String(chatId))) continue;
+                        const u = db.prepare('SELECT notify_pet FROM users WHERE id = ?').get(chatId);
+                        if (u && u.notify_pet === 0) { markRecipientDone.run(jobId, String(chatId)); continue; }
+                        const kb = appKb();
+                        try { kb.row().text('🔕 Не напоминать', 'pet_off'); } catch (e) {}
+                        await sendSafe(chatId, petNudgeText(r), { reply_markup: kb });
+                        markRecipientDone.run(jobId, String(chatId));
+                        await sleep(40);
                     }
                 }
                 markJobDone.run(jobId);

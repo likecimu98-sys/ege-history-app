@@ -72,6 +72,216 @@
   function rarityLabel(r) { var f = (S.catalog.rarities || []).find(function (x) { return x.id === r; }); return f ? f.label : r; }
   function slotLabel(s) { var f = (S.catalog.slots || []).find(function (x) { return x.id === s; }); return f ? f.label : s; }
 
+  // ── Живая сцена питомца ──────────────────────────────────────────────────
+  // Одна «Сцена» на каждое место, где живёт питомец: большая в окне питомца и
+  // маленькая в лобби. Сцена НЕ перерисовывает SVG, пока не изменилось то, что
+  // видно (вид, стадия, состояние, одежда, день/ночь): иначе каждое обновление
+  // монет обрывало бы моргание, взмах лапой и полёт еды на середине.
+  //
+  // Что питомец делает сам (idle), зависит от состояния:
+  //   спит — сопит; болеет — дрожит и вздыхает; голоден — гладит живот и
+  //   просит есть; грустит — вздыхает; в духе — машет, чешется, зевает,
+  //   оглядывается, виляет хвостом, пританцовывает, иногда делает пируэт
+  //   и рассказывает исторический факт.
+  var SPECIES_SOUND = { kitten: ['Мур!', 'Мяу!', 'Муррр 💛'], owl: ['Уху!', 'Ух-ух!', 'Уху-у 💛'], hedgehog: ['Фыр!', 'Фыр-фыр!', 'Пых 💛'], dragon: ['Рррр! 🔥', 'Фшшш!', 'Ррр 💛'] };
+  var FACTS = [
+    '862 — призвание варягов. С него всё и началось!',
+    '988 — Крещение Руси. Запомнил?',
+    '1242 — Ледовое побоище. Бррр, холодно!',
+    '1380 — Куликовская битва. Дмитрий Донской — красавчик',
+    '1480 — стояние на Угре. Конец ига!',
+    '1549 — первый Земский собор',
+    '1613 — Михаил Романов на престоле',
+    '1703 — Пётр I основал Петербург',
+    '1709 — Полтавская битва. Швед, держись!',
+    '1762 — манифест о вольности дворянства',
+    '1812 — Бородино. Кутузов, я горжусь!',
+    '1825 — восстание декабристов на Сенатской',
+    '1861 — отмена крепостного права',
+    '1905 — Манифест 17 октября',
+    '1922 — образован СССР',
+    '1941 — началась Великая Отечественная',
+    '1945 — Победа! 🎉',
+    '1957 — первый спутник. Он у меня в сундуке может быть!',
+    '1961 — Гагарин: «Поехали!»',
+    '1991 — распад СССР',
+  ];
+  var SAY = {
+    hungry: ['Я голодный… 🍲', 'Щи бы сейчас…', 'Живот урчит!', 'Покормишь? 🥺'],
+    sick: ['Мне плохо… 🤒', 'Микстурку бы…', 'Полечи меня…'],
+    sad: ['Поиграй со мной!', 'Скучно…', 'Давай поиграем? 🎲'],
+    sleep: ['Хррр…', 'Zzz…'],
+    ok: ['Решим ещё пару строк?', 'Люблю историю!', 'Как дела?', 'Кто сегодня в топе? Мы!', 'Мне нравится моя одёжка'],
+    happy: ['Ура! Всё отлично!', 'Лучший день!', 'Ты мой любимый ученик 💛', 'Я счастлив!'],
+    tickle: ['Ахаха, щекотно!', 'Хи-хи-хи! Хватит!', 'Ой-ой, щекотно!'],
+    wake: ['Тсс… я сплю 😴', 'Ммм… ещё пять минуток…'],
+    full: ['Я сыт! 🙂', 'Больше не лезет!'],
+    healthy: ['Я здоров как бык! 💪', 'Лечить нечего!'],
+    fed: ['Вкуснотища! 😋', 'Спасибо!', 'Ням-ням!', 'Добавки?'],
+    healed: ['Мне лучше! Спасибо!', 'Ожил! 💚'],
+    played: ['Ещё! Ещё!', 'Как весело!', 'Ура-а-а!'],
+    dressed: ['Мне идёт?', 'Красота!', 'Я модник!', 'Сфоткай меня!'],
+    coins: ['Ура, монетки!', 'Ты молодец!', 'Так держать!'],
+  };
+  function pick(list) { return list[Math.floor(Math.random() * list.length)]; }
+  function isNightNow() { var h = new Date(Date.now() + 3 * 3600e3).getUTCHours(); return h >= 23 || h < 7; }
+
+  var stages = [];
+  function Stage(host, kind) {
+    this.host = host; this.kind = kind; this.sig = ''; this.eq = null; this.busy = 0; this.nextIdle = Date.now() + 2500 + Math.random() * 2000;
+    this.say$ = document.createElement('div'); this.say$.className = 'pet-say'; host.appendChild(this.say$);
+    stages.push(this);
+  }
+  Stage.prototype.alive = function () { return document.body.contains(this.host) && this.host.offsetParent !== null && document.visibilityState !== 'hidden'; };
+  Stage.prototype.svg = function () { return this.host.querySelector('svg.pet-svg'); };
+  Stage.prototype.draw = function (st, opts) {
+    opts = opts || {};
+    var p = st.pet; if (!p) return;
+    var eq = p.sick ? {} : (st.equipped || {});
+    var scene = p.night || isNightNow() ? 'night' : 'day';
+    var sig = [p.species, p.stage, p.state, p.sick, JSON.stringify(eq), scene, S.catalog && S.catalog.version].join('|');
+    if (sig === this.sig && !opts.force) return;
+    var prevEq = this.eq;
+    this.sig = sig; this.eq = eq;
+    var old = this.svg();
+    var holder = document.createElement('div');
+    holder.innerHTML = PetArt.render({ species: p.species, stage: p.stage, state: p.state, items: S.items, equipped: eq, sick: p.sick, label: p.name, scene: scene });
+    var svg = holder.firstChild;
+    if (old) this.host.replaceChild(svg, old); else this.host.insertBefore(svg, this.host.firstChild);
+    // Надели новую вещь — она «вспыхивает» на месте и из-под неё облачко.
+    if (prevEq) {
+      var self = this;
+      Object.keys(eq).forEach(function (slot) {
+        if (eq[slot] !== prevEq[slot]) {
+          var g = svg.querySelector('.slot-' + slot);
+          if (g) g.classList.add('pop-in');
+          self.poof(SLOT_AT[slot] || [50, 50]);
+        }
+      });
+    }
+  };
+  // Где на рисунке (в процентах сцены) какая часть тела — для частиц и еды.
+  var SLOT_AT = { head: [50, 26], face: [50, 45], neck: [50, 66], body: [50, 76], hand: [73, 70], pet: [17, 86], aura: [50, 50], bg: [50, 50] };
+  var MOUTH = [50, 55];
+  Stage.prototype.act = function (name, ms) {
+    var svg = this.svg(); if (!svg) return;
+    var cls = name === 'eating' ? 'eating' : 'act-' + name;
+    svg.classList.remove(cls); void svg.getBoundingClientRect(); svg.classList.add(cls);
+    var self = this;
+    this.busy = Date.now() + (ms || 1600);
+    setTimeout(function () { var s = self.svg(); if (s) s.classList.remove(cls); }, ms || 1600);
+  };
+  Stage.prototype.jump = function () { this.act('hop', 650); };
+  Stage.prototype.say = function (text, ms) {
+    var el = this.say$; if (!el || !text) return;
+    el.textContent = text;
+    el.classList.add('on');
+    clearTimeout(this._sayT);
+    this._sayT = setTimeout(function () { el.classList.remove('on'); }, ms || 2600);
+  };
+  // Частица: эмодзи или число, взлетает от точки [x%, y%].
+  Stage.prototype.fx = function (content, at, opts) {
+    opts = opts || {};
+    var el = document.createElement('span');
+    el.className = 'pet-fx' + (opts.num ? ' num' : '');
+    if (opts.html) el.innerHTML = content; else el.textContent = content;
+    el.style.left = 'calc(' + at[0] + '% - 10px)';
+    el.style.top = 'calc(' + at[1] + '% - 12px)';
+    el.style.setProperty('--dx', (opts.dx != null ? opts.dx : (Math.random() * 40 - 20)) + 'px');
+    el.style.setProperty('--dy', (opts.dy != null ? opts.dy : -50 - Math.random() * 20) + 'px');
+    if (opts.delay) el.style.animationDelay = opts.delay + 'ms';
+    this.host.appendChild(el);
+    setTimeout(function () { el.remove(); }, 1300 + (opts.delay || 0));
+  };
+  Stage.prototype.burst = function (content, at, n) {
+    for (var i = 0; i < (n || 5); i++) {
+      var a = Math.PI * 2 * i / (n || 5) - Math.PI / 2;
+      this.fx(content, at, { dx: Math.cos(a) * 44, dy: Math.sin(a) * 38 - 18, delay: i * 40 });
+    }
+  };
+  Stage.prototype.poof = function (at) {
+    for (var i = 0; i < 7; i++) {
+      var el = document.createElement('span'); el.className = 'pet-poof';
+      el.style.left = at[0] + '%'; el.style.top = at[1] + '%';
+      var a = Math.PI * 2 * i / 7;
+      el.style.setProperty('--dx', (Math.cos(a) * 26) + 'px'); el.style.setProperty('--dy', (Math.sin(a) * 22) + 'px');
+      this.host.appendChild(el);
+      setTimeout(function (e) { return function () { e.remove(); }; }(el), 700);
+    }
+  };
+  // Взгляд: зрачки к точке экрана (или прямо, если null).
+  Stage.prototype.look = function (x, y) {
+    var svg = this.svg(); if (!svg) return;
+    if (x == null) { svg.style.setProperty('--lx', '0px'); svg.style.setProperty('--ly', '0px'); return; }
+    var r = this.host.getBoundingClientRect();
+    var cx = r.left + r.width / 2, cy = r.top + r.height * 0.45;
+    var dx = Math.max(-1, Math.min(1, (x - cx) / Math.max(120, r.width)));
+    var dy = Math.max(-1, Math.min(1, (y - cy) / Math.max(120, r.height)));
+    svg.style.setProperty('--lx', (dx * 3.6).toFixed(2) + 'px');
+    svg.style.setProperty('--ly', (dy * 3).toFixed(2) + 'px');
+  };
+  // Полёт еды/лекарства от кнопки ко рту.
+  Stage.prototype.fly = function (emoji, fromEl, done) {
+    var r0 = fromEl ? fromEl.getBoundingClientRect() : null;
+    var r1 = this.host.getBoundingClientRect();
+    var tx = r1.left + r1.width * MOUTH[0] / 100, ty = r1.top + r1.height * MOUTH[1] / 100;
+    if (!r0 || !r1.width) { if (done) done(); return; }
+    var el = document.createElement('div'); el.className = 'pet-fly'; el.textContent = emoji;
+    el.style.left = (r0.left + r0.width / 2 - 16) + 'px'; el.style.top = (r0.top + r0.height / 2 - 18) + 'px';
+    document.body.appendChild(el);
+    requestAnimationFrame(function () {
+      el.style.transform = 'translate(' + (tx - r0.left - r0.width / 2) + 'px,' + (ty - r0.top - r0.height / 2) + 'px) scale(.55)';
+      el.style.opacity = '0';
+    });
+    setTimeout(function () { el.remove(); if (done) done(); }, 640);
+  };
+
+  // Что питомец делает сам, пока на него смотрят.
+  Stage.prototype.idle = function () {
+    var st = S.state; if (!st || !st.pet) return;
+    var p = st.pet, big = this.kind === 'modal';
+    var r = Math.random();
+    if (p.state === 'sleep') { if (big && r < 0.3) this.say(pick(SAY.sleep), 1800); return; }
+    if (p.state === 'sick') { this.act(r < 0.5 ? 'shiver' : 'sigh', 1900); if (r < (big ? 0.5 : 0.25)) this.say(pick(SAY.sick)); return; }
+    if (p.state === 'hungry') { this.act('rub', 2100); if (r < (big ? 0.6 : 0.3)) this.say(pick(SAY.hungry)); return; }
+    if (p.state === 'sad') { this.act('sigh', 1900); if (r < (big ? 0.5 : 0.25)) this.say(pick(SAY.sad)); return; }
+    var acts = ['wave', 'scratch', 'look', 'tail', 'ears', 'look', 'hop'];
+    if (p.state === 'happy') acts.push('dance', 'dance', 'wave');
+    var h = new Date(Date.now() + 3 * 3600e3).getUTCHours();
+    if (h >= 21 || h < 9) acts.push('yawn', 'yawn');
+    if (Math.random() < 0.08) acts.push('spin');
+    var a = pick(acts);
+    if (a === 'look') { var self = this, svg = this.svg(); if (!svg) return;
+      svg.style.setProperty('--lx', '-3.4px'); setTimeout(function () { svg.style.setProperty('--lx', '3.4px'); }, 700);
+      setTimeout(function () { self.look(null); }, 1400); this.busy = Date.now() + 1500;
+    } else if (a === 'hop') { this.jump(); this.busy = Date.now() + 800; }
+    else this.act(a, a === 'yawn' ? 1800 : a === 'dance' ? 2300 : a === 'spin' ? 900 : 1900);
+    if (big && Math.random() < 0.3) this.say(Math.random() < 0.55 ? pick(FACTS) : pick(SAY[p.state] || SAY.ok), 3600);
+  };
+
+  // Общий такт: раз в полсекунды решаем, не пора ли кому-то что-то сделать.
+  setInterval(function () {
+    var now = Date.now();
+    stages = stages.filter(function (s) { return document.body.contains(s.host); });
+    stages.forEach(function (s) {
+      if (!s.alive() || now < s.busy || now < s.nextIdle) return;
+      s.nextIdle = now + (s.kind === 'modal' ? 4200 : 7000) + Math.random() * 4000;
+      try { s.idle(); } catch (_) {}
+    });
+  }, 500);
+  // Глаза следят за пальцем/мышью.
+  var lookRaf = 0, lookX = null, lookY = null;
+  document.addEventListener('pointermove', function (e) {
+    lookX = e.clientX; lookY = e.clientY;
+    if (lookRaf) return;
+    lookRaf = requestAnimationFrame(function () {
+      lookRaf = 0;
+      stages.forEach(function (s) { if (s.alive() && Date.now() > s.busy) s.look(lookX, lookY); });
+    });
+  }, { passive: true });
+  document.addEventListener('pointerleave', function () { stages.forEach(function (s) { s.look(null); }); });
+
+
   // ── Состояние ───────────────────────────────────────────────────────────
   function refresh(force) {
     if (S.loading) return Promise.resolve(S.state);
@@ -91,7 +301,7 @@
     var prev = S.state;
     S.state = st;
     window._petAwards = st && st.awards || {};
-    if (st && Array.isArray(st.events)) announce(st.events, prev);
+    if (st && Array.isArray(st.events)) { announce(st.events, prev); celebrateLevels(st.events); }
     if (st && st.hatched) syncAchievements();
     renderWidget();
     if (isOpen()) renderModal();
@@ -103,6 +313,8 @@
     events.forEach(function (e) { total += Number(e.delta) || 0; if (e.reason === 'streak') streak = e.streak; if (e.reason === 'cap') capped = e.lost; });
     if (total > 0) {
       floatCoins(total);
+      var stg = widgetStage || modalStage;
+      if (stg) setTimeout(function () { stg.act('dance', 2200); stg.say('+' + fmt(total) + '! ' + pick(SAY.coins), 2400); stg.burst('⭐', [50, 45], 5); }, 400);
       toast('💰', '+' + fmt(total) + ' монет' + (streak ? ' · серия ' + streak + ' дн.!' : ''), 'gold');
     }
     if (capped) setTimeout(function () { toast('⛔', 'Дневной потолок монет достигнут — завтра снова', 'warn'); }, 2200);
@@ -170,19 +382,8 @@
     try { if (typeof window.checkAchievements === 'function') window.checkAchievements(); } catch (_) {}
   }
 
-  function renderWidget() {
-    recheckAchievements();
-    var host = mountWidget(); if (!host) return;
-    var st = S.state;
-    if (!st || !S.catalog) { host.innerHTML = ''; return; }
-    if (!st.hatched) {
-      if (!eligible() || !st.canHatch) { host.innerHTML = ''; return; }
-      host.innerHTML = '<button type="button" class="petw petw-egg" onclick="PetUI.openHatch()">' +
-        '<span class="petw-ava egg-wobble">' + eggSvg() + '</span>' +
-        '<span class="petw-txt"><b>Из летописи что-то вылупляется…</b><i>Нажми — у тебя появится питомец</i></span>' +
-        '<span class="petw-go">›</span></button>';
-      return;
-    }
+  var widgetStage = null;
+  function statusLine(st) {
     var p = st.pet;
     var line = STATE_TEXT[p.state] || '';
     if (p.state === 'hungry' || (p.sat < 35 && p.state !== 'sleep')) {
@@ -190,11 +391,50 @@
       var need = shchi ? shchi.price - st.balance : 0;
       line = need > 0 ? 'Голодный · на щи нужно ещё ' + need + ' строк' : 'Проголодался — покорми';
     }
-    host.innerHTML = '<button type="button" class="petw st-' + p.state + '" onclick="PetUI.open()">' +
-      '<span class="petw-ava">' + PetArt.render({ species: p.species, state: p.state, items: S.items, equipped: st.equipped, sick: p.sick, label: p.name }) + '</span>' +
-      '<span class="petw-txt"><b>' + esc(p.name) + '</b><i>' + esc(line) + '</i>' +
-      '<span class="petw-bars">' + bar('Сытость', p.sat, 'b-sat') + bar('Настроение', p.mood, 'b-mood') + bar('Здоровье', p.health, 'b-hp') + '</span></span>' +
-      '<span class="petw-coins">' + COIN + ' ' + fmt(st.balance) + '</span></button>';
+    return line;
+  }
+  function renderWidget() {
+    recheckAchievements();
+    var host = mountWidget(); if (!host) return;
+    var st = S.state;
+    if (!st || !S.catalog) { host.innerHTML = ''; widgetStage = null; return; }
+    if (!st.hatched) {
+      widgetStage = null;
+      if (!eligible() || !st.canHatch) { host.innerHTML = ''; return; }
+      host.innerHTML = '<button type="button" class="petw petw-egg" onclick="PetUI.openHatch()">' +
+        '<span class="petw-ava egg-wobble">' + eggSvg() + '</span>' +
+        '<span class="petw-txt"><b>Из летописи что-то вылупляется…</b><i>Нажми — у тебя появится питомец' +
+        (st.balance ? ' · его уже ждут ' + fmt(st.balance) + ' монет' : '') + '</i></span>' +
+        '<span class="petw-go">›</span></button>';
+      return;
+    }
+    var p = st.pet;
+    // Каркас виджета строим один раз: сцена внутри живёт своей жизнью, и
+    // перестраивать её на каждое обновление монет — значит обрывать анимации.
+    if (!widgetStage || !host.contains(widgetStage.host)) {
+      host.innerHTML = '<button type="button" class="petw" onclick="PetUI.widgetTap(event)">' +
+        '<span class="petw-ava" id="petw-ava"></span>' +
+        '<span class="petw-txt"><b id="petw-name"></b><i id="petw-line"></i><span class="petw-bars" id="petw-bars"></span></span>' +
+        '<span class="petw-coins" id="petw-coins"></span></button>';
+      widgetStage = new Stage($('petw-ava'), 'widget');
+    }
+    host.firstChild.className = 'petw st-' + p.state;
+    $('petw-name').innerHTML = esc(p.name) + '<span class="petw-lv">ур. ' + p.level + '</span>';
+    $('petw-line').textContent = statusLine(st);
+    $('petw-bars').innerHTML = bar('Сытость', p.sat, 'b-sat') + bar('Настроение', p.mood, 'b-mood') + bar('Здоровье', p.health, 'b-hp');
+    $('petw-coins').innerHTML = COIN + ' ' + fmt(st.balance);
+    widgetStage.draw(st);
+  }
+
+  // Тап по виджету: питомец откликается и открывается его окно.
+  function widgetTap() {
+    if (widgetStage && S.state && S.state.pet) {
+      var p = S.state.pet;
+      widgetStage.act(p.state === 'sleep' ? 'ears' : 'giggle', 600);
+      widgetStage.say(p.state === 'sleep' ? pick(SAY.wake) : pick(SPECIES_SOUND[p.species] || SPECIES_SOUND.kitten), 1200);
+    }
+    haptic('light');
+    setTimeout(function () { open(); }, 260);
   }
 
   function eggSvg() {
@@ -203,14 +443,21 @@
   }
 
   // ── Экран питомца ───────────────────────────────────────────────────────
+  var modalStage = null;
   function ensureModal() {
     if ($('pet-modal')) return $('pet-modal');
     var m = document.createElement('div');
     m.id = 'pet-modal';
     m.className = 'pet-modal hidden';
-    m.innerHTML = '<div class="pet-sheet" role="dialog" aria-label="Питомец"><div id="pet-sheet-body"></div></div>';
+    // Сцена — постоянный узел: её не трогает перерисовка остального окна.
+    m.innerHTML = '<div class="pet-sheet" role="dialog" aria-label="Питомец">' +
+      '<div id="pet-headbox"></div>' +
+      '<div class="pet-stage" id="pet-stage" title="Погладь меня"></div>' +
+      '<div id="pet-sheet-body"></div></div>';
     m.addEventListener('click', function (e) { if (e.target === m) close(); });
     document.body.appendChild(m);
+    modalStage = new Stage($('pet-stage'), 'modal');
+    $('pet-stage').addEventListener('click', tapPet);
     return m;
   }
   function isOpen() { var m = $('pet-modal'); return !!(m && !m.classList.contains('hidden')); }
@@ -222,6 +469,15 @@
     if (typeof window.pushBackHandler === 'function') window.pushBackHandler('modal:pet', close);
     renderModal();
     refresh(true);
+    // Встречает хозяина.
+    setTimeout(function () {
+      if (!modalStage || !S.state || !S.state.pet) return;
+      var p = S.state.pet;
+      if (p.state === 'sleep') return modalStage.say(pick(SAY.sleep));
+      if (p.state === 'hungry' || p.state === 'sick' || p.state === 'sad') return modalStage.say(pick(SAY[p.state]));
+      modalStage.act('wave', 1700);
+      modalStage.say(pick(['Привет!', 'О, ты пришёл!', 'Я скучал!', 'Привет-привет!']));
+    }, 350);
   }
   function close() {
     var m = $('pet-modal'); if (!m) return;
@@ -235,22 +491,40 @@
   function renderModal() {
     var body = $('pet-sheet-body'); if (!body) return;
     var st = S.state;
-    if (!st || !st.hatched || !S.catalog) { body.innerHTML = '<div class="pet-empty">Загружаем питомца…</div>'; return; }
+    if (!st || !st.hatched || !S.catalog) { $('pet-headbox').innerHTML = ''; body.innerHTML = '<div class="pet-empty">Загружаем питомца…</div>'; return; }
     var p = st.pet;
     var daily = st.daily || {};
-    var html = '<div class="pet-head">' +
+    var lvlSpan = Math.max(1, p.xpTo - p.xpFrom), lvlIn = Math.max(0, p.xp - p.xpFrom);
+    $('pet-headbox').innerHTML = '<div class="pet-head">' +
       '<button type="button" class="pet-name" onclick="PetUI.rename()">' + esc(p.name) + ' <span>✎</span></button>' +
       '<span class="pet-coins">' + COIN + ' ' + fmt(st.balance) + '</span>' +
       '<button type="button" class="pet-x" onclick="PetUI.close()" aria-label="Закрыть">×</button></div>' +
-      '<div class="pet-stage" id="pet-stage">' + PetArt.render({ species: p.species, state: p.state, items: S.items, equipped: st.equipped, sick: p.sick, label: p.name }) + '</div>' +
+      '<div class="pet-level"><b>' + esc(p.stageName) + ' · ' + p.level + ' ур.</b>' + bar('Опыт', Math.round(lvlIn / lvlSpan * 100), '') +
+      '<span>' + fmt(lvlIn) + ' / ' + fmt(lvlSpan) + '</span></div>';
+    modalStage.draw(st);
+    var need = needs(st);
+    body.innerHTML =
+      '<div class="pet-grow">' + (p.nextStage ? 'На ' + p.nextStage.level + '-м уровне ' + esc(p.name) + ' вырастет: станет «' + esc(p.nextStage.name) + '»' : esc(p.name) + ' — мудрец. Выше только звёзды ✨') + '</div>' +
+      '<div class="pet-quick">' +
+        quickBtn('feed', '🍲', 'Покормить', need.feed) + quickBtn('heal', '💊', 'Лечить', need.heal) +
+        quickBtn('play', '🎲', 'Играть', need.play) + quickBtn('tap', '✋', 'Погладить', false) +
+      '</div>' +
       '<div class="pet-stats">' +
         statRow('🍲', 'Сытость', p.sat, 'b-sat') + statRow('😊', 'Настроение', p.mood, 'b-mood') + statRow('❤️', 'Здоровье', p.health, 'b-hp') +
       '</div>' +
       '<div class="pet-earn">Сегодня заработано <b>' + fmt(daily.earned) + '</b> из ' + fmt(daily.cap) + ' ' + COIN + (daily.streak > 1 ? ' · серия <b>' + daily.streak + '</b> дн.' : '') +
-      '<br><span>1 решённая строка = 1 монета · 1 балл ЕГЭ = 1 монета · победа в дуэли = 10</span></div>' +
+      '<br><span>1 решённая строка = 1 монета и 1 опыт · 1 балл ЕГЭ = 1 монета · победа в дуэли = 10 · уход тоже растит питомца</span></div>' +
       '<div class="pet-tabs">' + TABS.map(function (t) { return '<button type="button" class="' + (S.tab === t[0] ? 'on' : '') + '" onclick="PetUI.tab(\'' + t[0] + '\')">' + t[1] + '</button>'; }).join('') + '</div>' +
       '<div class="pet-pane">' + pane() + '</div>';
-    body.innerHTML = html;
+  }
+
+  function quickBtn(kind, ico, label, needNow) {
+    return '<button type="button" id="pq-' + kind + '" class="' + (needNow ? 'need' : '') + '" onclick="PetUI.quick(\'' + kind + '\', this)"><span>' + ico + '</span>' + label + '</button>';
+  }
+  // Чего питомец хочет прямо сейчас — подсветка кнопок.
+  function needs(st) {
+    var p = st.pet;
+    return { feed: p.sat < 40 && !p.night, heal: p.sick || p.health < 50, play: p.mood < 40 && !p.night };
   }
 
   function statRow(ico, label, v, cls) {
@@ -286,10 +560,10 @@
         var ready = last + 3 * 3600 * 1000;
         if (!own) btn = buyBtn(c.price, 'PetUI.buy(\'' + c.id + '\')');
         else if (ready > now) btn = '<button type="button" disabled>через ' + Math.ceil((ready - now) / 60000) + ' мин</button>';
-        else btn = '<button type="button" class="go" onclick="PetUI.use(\'' + c.id + '\')">Играть</button>';
+        else btn = '<button type="button" class="go" onclick="PetUI.use(\'' + c.id + '\', false, this)">Играть</button>';
       } else {
-        btn = own ? '<button type="button" class="go" onclick="PetUI.use(\'' + c.id + '\')">' + (c.kind === 'med' ? 'Лечить' : 'Дать') + '</button>'
-          : buyBtn(c.price, 'PetUI.use(\'' + c.id + '\', true)');
+        btn = own ? '<button type="button" class="go" onclick="PetUI.use(\'' + c.id + '\', false, this)">' + (c.kind === 'med' ? 'Лечить' : 'Дать') + '</button>'
+          : buyBtn(c.price, 'PetUI.use(\'' + c.id + '\', true, this)');
       }
       return '<div class="pet-card"><div class="pet-ico">' + (PetArt.icons[c.id] || '•') + (own && c.kind !== 'toy' ? '<em>×' + own + '</em>' : '') + '</div>' +
         '<b>' + esc(c.name) + '</b><i>' + fxText(c.fx) + (c.kind === 'toy' ? ' · раз в 3 часа' : '') + '</i>' + btn + '</div>';
@@ -377,7 +651,17 @@
   function nickClass(style) { return style ? 'nick-' + style.color : ''; }
 
   // ── Действия ────────────────────────────────────────────────────────────
-  function act(path, body, okFn) {
+  var ERR = {
+    not_enough_coins: 'Не хватает монет — реши ещё несколько строк',
+    already_owned: 'Уже есть в гардеробе',
+    not_owned: 'Сначала нужно купить',
+    pet_sleeping: 'Питомец спит — поиграете утром',
+    toy_cooldown: 'Он ещё не соскучился по этой игрушке',
+    top_color_active: 'У тебя заслуженный цвет за топ — перекрашивать жалко',
+    too_early: 'Порешай ещё немного — питомец пока в яйце',
+    rate_limited: 'Слишком часто — секунду',
+  };
+  function act(path, body, okFn, failFn) {
     if (S.busy) return Promise.resolve();
     S.busy = true;
     return api(path, body).then(function (st) {
@@ -388,47 +672,167 @@
       window._petAwards = st.awards || {};
       renderWidget(); if (isOpen()) renderModal();
       if (okFn) okFn(st);
+      if (Array.isArray(st.events)) celebrateLevels(st.events);
       return st;
     }).catch(function (e) {
-      var d = e.details || {};
-      var msg = {
-        not_enough_coins: 'Не хватает монет — реши ещё несколько строк',
-        already_owned: 'Уже есть в гардеробе',
-        not_owned: 'Сначала нужно купить',
-        pet_sleeping: 'Питомец спит — поиграете утром',
-        toy_cooldown: 'Он ещё не соскучился по этой игрушке',
-        top_color_active: 'У тебя заслуженный цвет за топ — перекрашивать жалко',
-        too_early: 'Порешай ещё немного — питомец пока в яйце',
-        rate_limited: 'Слишком часто — секунду',
-      }[e.message] || 'Не получилось: ' + e.message;
       S.busy = false;
-      toast('⚠️', msg, 'warn');
-      void d;
+      if (failFn && failFn(e) === true) return;
+      toast('⚠️', ERR[e.message] || 'Не получилось: ' + e.message, 'warn');
     });
   }
 
-  function jump() {
-    var stage = $('pet-stage'); if (!stage) return;
-    stage.classList.remove('pet-jump'); void stage.offsetWidth; stage.classList.add('pet-jump');
-  }
+  function stageNow() { return isOpen() ? modalStage : widgetStage; }
 
-  function use(id, buy) {
+  // Кормить / лечить / играть из кладовой или с покупкой. Анимация начинается
+  // сразу — еда уже летит, пока идёт запрос; отказ сервера питомец «объясняет».
+  function use(id, buy, fromEl) {
+    var it = S.items[id]; if (!it) return;
+    var stg = stageNow();
     haptic('light');
-    act('/use', { item: id, buy: !!buy }, function () {
-      jump();
-      var it = S.items[id];
-      toast(it && it.kind === 'med' ? '💊' : it && it.kind === 'toy' ? '🎉' : '😋', it ? it.name + ' — спасибо!' : 'Готово', 'ok');
-    });
+    var fly = it.kind !== 'toy' && stg && fromEl;
+    var landed = !fly, answered = null;
+    function finish() {
+      if (!landed || !answered) return;
+      if (answered.error) { if (stg) { stg.act('sigh', 1500); stg.say(answered.error === 'not_enough_coins' ? 'Монеток не хватает… Порешаем?' : ERR[answered.error] || 'Не вышло…'); } return; }
+      if (!stg) return;
+      var fx = it.fx || {};
+      if (it.kind === 'food') {
+        stg.act('eating', 1300);
+        stg.fx('✨', MOUTH, { dy: -30 });
+        setTimeout(function () {
+          stg.jump(); stg.say(pick(SAY.fed));
+          if (fx.sat) stg.fx('+' + fx.sat + ' 🍲', [50, 30], { num: true, dx: -26 });
+          if (fx.mood) stg.fx('+' + fx.mood + ' 😊', [50, 30], { num: true, dx: 26, delay: 150 });
+        }, 1250);
+      } else if (it.kind === 'med') {
+        stg.act('heal', 1600); stg.burst('💚', [50, 50], 6);
+        setTimeout(function () { stg.jump(); stg.say(pick(SAY.healed)); stg.fx('+' + (fx.health || 0) + ' ❤️', [50, 30], { num: true }); }, 900);
+      } else {
+        stg.fx(PetArt.icons[id] || '🎲', [50, 20], { dy: -70 });
+        stg.act('dance', 2200); stg.say(pick(SAY.played));
+        stg.fx('+' + (fx.mood || 0) + ' 😊', [50, 30], { num: true, delay: 300 });
+      }
+    }
+    if (fly) stg.fly(PetArt.icons[id] || '🍲', fromEl, function () { landed = true; finish(); });
+    act('/use', { item: id, buy: !!buy }, function () { answered = { ok: true }; finish(); },
+      function (e) { answered = { error: e.message }; finish(); return landed || !fly ? false : true; });
   }
-  function buy(id) { act('/buy', { item: id }, function () { toast('🛍️', 'Куплено: ' + S.items[id].name, 'ok'); }); }
+
+  // Быстрые кнопки под питомцем: сами выбирают, чем кормить и чем лечить.
+  // Сначала то, что уже лежит в кладовой, потом самое дешёвое из доступного.
+  function quick(kind, el) {
+    var st = S.state; if (!st || !st.pet) return;
+    var p = st.pet, inv = st.inventory || {}, stg = modalStage;
+    var foods = S.catalog.consumables.filter(function (c) { return c.kind === 'food'; });
+    if (kind === 'tap') return tapPet();
+    if (kind === 'feed') {
+      if (p.sat >= 92) { stg.say(pick(SAY.full)); stg.act('wave', 1200); return; }
+      var want = 100 - p.sat;
+      var owned = foods.filter(function (c) { return inv[c.id]; }).sort(function (a, b) { return a.fx.sat - b.fx.sat; });
+      var choice = owned.find(function (c) { return c.fx.sat >= want - 15; }) || owned[owned.length - 1];
+      var buy = false;
+      if (!choice) {
+        var afford = foods.filter(function (c) { return c.price <= st.balance; }).sort(function (a, b) { return a.price - b.price; });
+        choice = afford.find(function (c) { return c.fx.sat >= Math.min(want, 40); }) || afford[afford.length - 1];
+        buy = true;
+      }
+      if (!choice) { stg.act('rub', 1800); stg.say('Нужно ' + fmt(S.items.food_suhar.price - st.balance) + ' монет — реши пару строк!'); return; }
+      return use(choice.id, buy, el);
+    }
+    if (kind === 'heal') {
+      if (!p.sick && p.health >= 90) { stg.say(pick(SAY.healthy)); stg.act('dance', 1500); return; }
+      var med = inv.med_mikstura && p.sick ? 'med_mikstura' : inv.med_otvar ? 'med_otvar' : inv.med_mikstura ? 'med_mikstura' : null;
+      var buyMed = false;
+      if (!med) {
+        med = (p.sick || p.health < 40) && st.balance >= S.items.med_mikstura.price ? 'med_mikstura' : 'med_otvar';
+        buyMed = true;
+        if (st.balance < S.items[med].price) { stg.act('shiver', 1500); stg.say('На лекарство нужно ' + fmt(S.items[med].price - st.balance) + ' монет…'); return; }
+      }
+      return use(med, buyMed, el);
+    }
+    if (kind === 'play') {
+      if (p.night) { stg.say(pick(SAY.wake)); return; }
+      var now = Date.now();
+      var toys = S.catalog.consumables.filter(function (c) { return c.kind === 'toy' && inv[c.id]; });
+      var ready = toys.filter(function (c) { return now - ((p.toys || {})[c.id] || 0) >= 3 * 3600e3; }).sort(function (a, b) { return b.fx.mood - a.fx.mood; });
+      if (ready.length) return use(ready[0].id, false, el);
+      if (toys.length) { stg.say('Наигрался. Погладь меня пока!'); stg.act('wave', 1200); return; }
+      stg.say('Купи мне игрушку в «Уходе»! 🎲'); S.tab = 'care'; renderModal(); return;
+    }
+  }
+
+  // Погладить: реакция — всегда, награда (настроение и опыт) — раз в минуту.
+  // Много быстрых касаний подряд — щекотка: смех и пируэт.
+  var taps = [];
+  function tapPet(e) {
+    var st = S.state; if (!st || !st.pet || !modalStage) return;
+    var p = st.pet, now = Date.now();
+    taps = taps.filter(function (t) { return now - t < 2500; }); taps.push(now);
+    haptic('light');
+    var at = [50, 50];
+    if (e && e.clientX != null) {
+      var r = modalStage.host.getBoundingClientRect();
+      at = [((e.clientX - r.left) / r.width * 100), ((e.clientY - r.top) / r.height * 100)];
+    }
+    if (p.state === 'sleep') { modalStage.act('ears', 700); modalStage.say(pick(SAY.wake)); return; }
+    if (taps.length >= 4) {
+      taps = [];
+      modalStage.act('spin', 850); modalStage.say(pick(SAY.tickle)); modalStage.burst('😆', [50, 45], 5);
+    } else {
+      modalStage.act('giggle', 600);
+      modalStage.fx(p.sick ? '💧' : '💗', at);
+      if (Math.random() < 0.6) modalStage.say(pick(SPECIES_SOUND[p.species] || SPECIES_SOUND.kitten), 1200);
+    }
+    if (now >= (Number(p.tapReadyAt) || 0) && !S.busy) {
+      api('/tap', {}).then(function (st2) {
+        S.state = Object.assign({ hatched: true }, st2);
+        if (st2.tapped) modalStage.fx('+1 опыт', [50, 22], { num: true });
+        renderWidget(); renderModal();
+        celebrateLevels(st2.events || []);
+      }).catch(function () {});
+    }
+  }
+
+  // Новый уровень и рост: отдельное окно, а при смене стадии — «было → стало».
+  function celebrateLevels(events) {
+    var lv = (events || []).filter(function (e) { return e.reason === 'level'; });
+    if (!lv.length || !S.state || !S.state.pet) return;
+    var last = lv[lv.length - 1];
+    var grew = lv.find(function (e) { return e.stageUp; });
+    var coins = lv.reduce(function (a, e) { return a + (e.delta || 0); }, 0);
+    var boxes = lv.filter(function (e) { return e.box; }).map(function (e) { return S.items[e.box] ? S.items[e.box].name : e.box; });
+    var p = S.state.pet;
+    var eq = S.state.equipped || {};
+    var prevStage = { teen: 'baby', adult: 'teen', sage: 'adult' }[grew ? grew.stage : ''];
+    var art = grew
+      ? '<div class="grow"><div>' + PetArt.render({ species: p.species, stage: prevStage, state: 'ok', items: S.items, equipped: eq }) + '</div><i>→</i><div>' +
+        PetArt.render({ species: p.species, stage: grew.stage, state: 'happy', items: S.items, equipped: eq }) + '</div></div>'
+      : '<div class="pet-try-stage">' + PetArt.render({ species: p.species, stage: p.stage, state: 'happy', items: S.items, equipped: eq, scene: 'day' }) + '</div>';
+    setTimeout(function () {
+      confetti(); haptic('success');
+      try { if (window.Sfx && window.Sfx.play) window.Sfx.play('win'); } catch (_) {}
+      sheet('<div class="pet-lvlup"><div class="lv">' + last.level + ' уровень!</div>' + art +
+        (grew ? '<b>' + esc(p.name) + ' вырос — теперь ' + esc(grew.stageName) + '!</b>' : '<b>' + esc(p.name) + ' стал опытнее</b>') +
+        '<i>Награда: ' + COIN + ' ' + fmt(coins) + (boxes.length ? ' · ' + boxes.map(esc).join(', ') : '') + '</i>' +
+        '<button type="button" class="go" onclick="PetUI.closeSheet()">Ура!</button></div>');
+      var card = document.querySelector('#pet-sub .pet-sub-card');
+      if (card) card.classList.add('pet-try');
+    }, 900);
+  }
+
+  function buy(id) { act('/buy', { item: id }, function () { toast('🛍️', 'Куплено: ' + S.items[id].name, 'ok'); var s = stageNow(); if (s) { s.act('dance', 1400); s.say('Спасибо!'); } }); }
+  function afterDress(it) {
+    var s = stageNow(); if (!s) return;
+    setTimeout(function () { s.act('spin', 850); s.say(pick(SAY.dressed)); }, 350);
+  }
   function toggle(id) {
     var it = S.items[id]; var eq = S.state.equipped || {};
     var ch = {}; ch[it.slot] = eq[it.slot] === id ? null : id;
-    act('/equip', { changes: ch }, jump);
+    act('/equip', { changes: ch }, function () { if (ch[it.slot]) afterDress(it); });
   }
   function undressAll() {
     var ch = {}; Object.keys(S.state.equipped || {}).forEach(function (s) { ch[s] = null; });
-    act('/equip', { changes: ch });
+    act('/equip', { changes: ch }, function () { var s = stageNow(); if (s) { s.act('shiver', 900); s.say('Брр, прохладно!'); } });
   }
 
   // Примерка: питомец на весь экран в этой вещи + кнопка «Купить».
@@ -437,7 +841,7 @@
     var eq = Object.assign({}, st.equipped || {}); eq[it.slot] = id;
     var afford = st.balance >= it.price;
     sheet('<div class="pet-try rar-' + it.rarity + '">' +
-      '<div class="pet-try-stage">' + PetArt.render({ species: st.pet.species, state: 'happy', items: S.items, equipped: eq }) + '</div>' +
+      '<div class="pet-try-stage">' + PetArt.render({ species: st.pet.species, stage: st.pet.stage, state: 'happy', items: S.items, equipped: eq, scene: 'day' }) + '</div>' +
       '<b>' + esc(it.name) + '</b><i>' + rarityLabel(it.rarity) + ' · ' + slotLabel(it.slot) + ' · ' + esc(it.era) + '</i>' +
       (afford ? '<button type="button" class="go" onclick="PetUI.buyWear(\'' + id + '\')">Купить и надеть · ' + COIN + ' ' + fmt(it.price) + '</button>'
         : '<button type="button" disabled>' + COIN + ' ' + fmt(it.price) + ' · не хватает ' + fmt(it.price - st.balance) + '</button><div class="pet-hint">Это примерно ' + fmt(it.price - st.balance) + ' решённых строк</div>') +
@@ -448,7 +852,7 @@
     act('/buy', { item: id }, function () {
       var ch = {}; ch[it.slot] = id;
       closeSheet();
-      act('/equip', { changes: ch }, function () { jump(); toast('✨', it.name + ' — теперь твоё!', 'gold'); });
+      act('/equip', { changes: ch }, function () { afterDress(it); toast('✨', it.name + ' — теперь твоё!', 'gold'); });
     });
   }
 
@@ -538,7 +942,7 @@
   }
   function wearDrop(id) {
     var it = S.items[id]; var ch = {}; ch[it.slot] = id;
-    closeSheet(); act('/equip', { changes: ch }, jump);
+    closeSheet(); act('/equip', { changes: ch }, function () { afterDress(it); });
   }
   function plural(n, one, few, many) { var m10 = n % 10, m100 = n % 100; return m10 === 1 && m100 !== 11 ? one : (m10 >= 2 && m10 <= 4 && (m100 < 10 || m100 >= 20) ? few : many); }
 
@@ -564,7 +968,7 @@
       sheet('<div class="pet-hatch"><b>Кто вылупится?</b><i>Питомец живёт на твоих решениях: каждая верная строка — монета на еду, лечение и наряды.</i>' +
         '<div class="pet-species">' + S.catalog.species.map(function (s) {
           return '<button type="button" class="' + (s.id === hatchPick ? 'on' : '') + '" onclick="PetUI.pickSpecies(\'' + s.id + '\')">' +
-            PetArt.render({ species: s.id, state: 'happy', items: S.items, equipped: {} }) + '<span>' + s.name + '</span></button>';
+            PetArt.render({ species: s.id, stage: 'baby', state: 'happy', items: S.items, equipped: {}, scene: 'day' }) + '<span>' + s.name + '</span></button>';
         }).join('') + '</div>' +
         '<input id="pet-hatch-name" maxlength="20" placeholder="Имя питомца" value="Летописчик">' +
         '<button type="button" class="go" onclick="PetUI.hatch()">Вылупить 🥚</button></div>');
@@ -582,7 +986,7 @@
     act('/hatch', { species: hatchPick, name: name, knownAchievements: known }, function (st) {
       closeSheet(); confetti(); achSynced = true;
       var g = st.gift || {};
-      sheet('<div class="pet-hatch"><div class="pet-try-stage">' + PetArt.render({ species: st.pet.species, state: 'happy', items: S.items, equipped: {} }) + '</div>' +
+      sheet('<div class="pet-hatch"><div class="pet-try-stage">' + PetArt.render({ species: st.pet.species, stage: 'baby', state: 'happy', items: S.items, equipped: {}, scene: 'day' }) + '</div>' +
         '<b>Привет, я ' + esc(st.pet.name) + '!</b><i>Подарок на новоселье: ' + COIN + ' ' + fmt(g.coins) + ' и две тарелки щей' + (g.boxes ? ' · 🧰 ' + g.boxes + ' ' + plural(g.boxes, 'сундук', 'сундука', 'сундуков') + ' за твой стаж' : '') + '.</i>' +
         '<i>Корми меня, лечи и наряжай. Монеты — за каждую решённую строку.</i>' +
         '<button type="button" class="go" onclick="PetUI.closeSheet();PetUI.open(\'care\')">Познакомиться</button></div>');
@@ -598,7 +1002,7 @@
   }
   function miniAvatar(avatar) {
     if (!avatar || !avatar.species || !window.PetArt) return '';
-    return '<span class="lb-ava">' + PetArt.render({ species: avatar.species, state: avatar.sick ? 'sick' : 'ok', items: S.items, equipped: avatar.equipped || {}, mini: true, noBg: false }) + '</span>';
+    return '<span class="lb-ava">' + PetArt.render({ species: avatar.species, stage: avatar.stage, state: avatar.sick ? 'sick' : 'ok', items: S.items, equipped: avatar.equipped || {}, mini: true }) + '</span>';
   }
 
   // Вызывается из updateGlobalUI (лобби показалось) — не чаще раза в 20 секунд.
@@ -613,6 +1017,7 @@
     open: open, close: close, tab: function (t) { S.tab = t; renderModal(); },
     shopSlot: function (s) { S.shopSlot = s; renderModal(); }, wardSlot: function (s) { S.wardSlot = s; renderModal(); },
     use: use, buy: buy, toggle: toggle, undressAll: undressAll, tryOn: tryOn, buyWear: buyWear, closeSheet: closeSheet,
+    quick: quick, tapPet: tapPet, widgetTap: widgetTap,
     rename: rename, paint: paint, openBox: openBox, wearDrop: wearDrop, openHatch: openHatch, pickSpecies: pickSpecies, hatch: hatch,
     onLobby: onLobby, onAchievements: onAchievements, refresh: refresh, nickHtml: nickHtml, miniAvatar: miniAvatar,
     get state() { return S.state; }, get catalog() { return S.catalog; },

@@ -39,76 +39,140 @@
     dragon:   { fur: '#6cc070', belly: '#e9f5c9', inner: '#4f9a55', nose: '#3f7d45', spikes: '#f2b705' },
   };
 
-  // Задний план зверька: то, что за телом (иглы ежа, хвост дракона, хвост кота).
-  function speciesBack(sp, p) {
+  // ── Стадии роста ────────────────────────────────────────────────────────
+  // Питомец растёт с уровнем (сервер: pet/wallet.js, STAGES): Малыш → Подросток
+  // → Взрослый → Мудрец. Растёт буквально — масштаб тела, — и обрастает
+  // приметами вида: полоски у котёнка, хохолок и узор у совы, длинные иглы у
+  // ежа, крылья и рога у дракона. У Мудреца — золотой ореол и седые брови.
+  // Вещи сидят на той же анатомии, поэтому масштаб их не ломает.
+  var STAGE_SCALE = { baby: 0.82, teen: 0.91, adult: 1, sage: 1 };
+  var STAGE_RANK = { baby: 0, teen: 1, adult: 2, sage: 3 };
+  function atLeast(stage, need) { return (STAGE_RANK[stage] || 0) >= STAGE_RANK[need]; }
+
+  // Задний план зверька: то, что за телом (иглы, хвост, крылья, ореол).
+  function speciesBack(sp, p, stage) {
+    var s = '';
+    if (stage === 'sage') {
+      s += '<g class="pet-halo"><circle cx="100" cy="88" r="60" fill="none" stroke="#ffd23f" stroke-width="3" stroke-dasharray="4 7" opacity=".75"/>' +
+        '<circle cx="100" cy="88" r="66" fill="none" stroke="#ffe98a" stroke-width="1.5" opacity=".5"/></g>';
+    }
     if (sp === 'hedgehog') {
-      var s = '';
-      for (var i = 0; i < 11; i++) {
-        var a = (-170 + i * 16) * Math.PI / 180;
+      var n = atLeast(stage, 'adult') ? 15 : atLeast(stage, 'teen') ? 13 : 11;
+      var len = atLeast(stage, 'adult') ? 72 : atLeast(stage, 'teen') ? 67 : 62;
+      var span = 176 / n;
+      for (var i = 0; i < n; i++) {
+        var a = (-178 + i * span) * Math.PI / 180;
         var x1 = 100 + Math.cos(a) * 40, y1 = 92 + Math.sin(a) * 40;
-        var x2 = 100 + Math.cos(a) * 64, y2 = 92 + Math.sin(a) * 64;
-        var a2 = a + 0.2, x3 = 100 + Math.cos(a2) * 40, y3 = 92 + Math.sin(a2) * 40;
-        s += '<path d="M' + x1.toFixed(1) + ' ' + y1.toFixed(1) + ' L' + x2.toFixed(1) + ' ' + y2.toFixed(1) + ' L' + x3.toFixed(1) + ' ' + y3.toFixed(1) + 'Z" fill="' + p.spikes + '" ' + SW + '/>';
+        var x2 = 100 + Math.cos(a + span / 360 * Math.PI) * len, y2 = 92 + Math.sin(a + span / 360 * Math.PI) * len;
+        var a2 = a + span * Math.PI / 180, x3 = 100 + Math.cos(a2) * 40, y3 = 92 + Math.sin(a2) * 40;
+        s += '<path d="M' + x1.toFixed(1) + ' ' + y1.toFixed(1) + ' L' + x2.toFixed(1) + ' ' + y2.toFixed(1) + ' L' + x3.toFixed(1) + ' ' + y3.toFixed(1) + 'Z" fill="' + (i % 2 ? p.spikes : shade(p.spikes, 0.12)) + '" ' + SW + '/>';
       }
-      return s + '<ellipse cx="100" cy="150" rx="50" ry="36" fill="' + p.spikes + '" ' + SW + '/>';
+      return s + '<ellipse cx="100" cy="150" rx="50" ry="36" fill="' + p.spikes + '" ' + SW + '/>' +
+        '<path d="M58 140 l-8 -6 M60 158 l-10 0 M142 140 l8 -6 M140 158 l10 0" stroke="' + shade(p.spikes, -0.25) + '" stroke-width="3" stroke-linecap="round"/>';
     }
     if (sp === 'dragon') {
-      return '<path class="pet-tail" d="M130 170 Q170 178 176 150 Q178 140 186 138 Q180 158 168 172 Q150 190 126 182Z" fill="' + p.fur + '" ' + SW + '/>' +
+      if (atLeast(stage, 'teen')) {
+        var big = atLeast(stage, 'adult');
+        var wl = big ? 'M70 128 Q30 96 22 126 Q34 124 36 140 Q46 132 52 146 Q60 136 70 146Z' : 'M72 130 Q46 110 40 130 Q50 128 52 140 Q60 134 72 142Z';
+        var wr = big ? 'M130 128 Q170 96 178 126 Q166 124 164 140 Q154 132 148 146 Q140 136 130 146Z' : 'M128 130 Q154 110 160 130 Q150 128 148 140 Q140 134 128 142Z';
+        s += '<path class="pet-wing pet-wing-l" d="' + wl + '" fill="' + shade(p.fur, -0.18) + '" ' + SW + '/>';
+        s += '<path class="pet-wing pet-wing-r" d="' + wr + '" fill="' + shade(p.fur, -0.18) + '" ' + SW + '/>';
+      }
+      s += '<path class="pet-tail" d="M130 170 Q170 178 176 150 Q178 140 186 138 Q180 158 168 172 Q150 190 126 182Z" fill="' + p.fur + '" ' + SW + '/>' +
         '<path d="M176 150 L186 138 L184 152Z" fill="' + p.spikes + '" ' + SW + '/>' +
         '<path d="M72 126 L64 116 L78 120Z M128 126 L136 116 L122 120Z" fill="' + p.spikes + '" ' + SW + '/>';
+      return s;
     }
     if (sp === 'kitten') {
-      return '<path class="pet-tail" d="M132 172 Q172 176 168 140 Q166 128 176 124" fill="none" stroke="' + OUT + '" stroke-width="12" stroke-linecap="round"/>' +
-        '<path class="pet-tail" d="M132 172 Q172 176 168 140 Q166 128 176 124" fill="none" stroke="' + p.fur + '" stroke-width="7" stroke-linecap="round"/>';
+      var tip = atLeast(stage, 'teen') ? '<path d="M168 140 Q166 128 176 124" fill="none" stroke="' + shade(p.fur, -0.25) + '" stroke-width="7" stroke-linecap="round"/>' : '';
+      return s + '<g class="pet-tail"><path d="M132 172 Q172 176 168 140 Q166 128 176 124" fill="none" stroke="' + OUT + '" stroke-width="12" stroke-linecap="round"/>' +
+        '<path d="M132 172 Q172 176 168 140 Q166 128 176 124" fill="none" stroke="' + p.fur + '" stroke-width="7" stroke-linecap="round"/>' + tip + '</g>';
     }
-    return '';
+    if (sp === 'owl' && atLeast(stage, 'adult')) {
+      s += '<path class="pet-tail" d="M86 176 L78 194 L92 186 L100 198 L108 186 L122 194 L114 176Z" fill="' + shade(p.fur, -0.2) + '" ' + SW + '/>';
+    }
+    return s;
   }
 
-  function speciesBody(sp, p) {
+  function speciesBody(sp, p, stage) {
     var s = '';
     // ступни
     s += '<ellipse cx="84" cy="186" rx="13" ry="7" fill="' + shade(p.fur, -0.12) + '" ' + SW + '/>';
     s += '<ellipse cx="116" cy="186" rx="13" ry="7" fill="' + shade(p.fur, -0.12) + '" ' + SW + '/>';
-    // туловище
+    if (sp === 'owl' || sp === 'dragon') s += '<path d="M78 190 v-4 M84 191 v-4 M90 190 v-4 M110 190 v-4 M116 191 v-4 M122 190 v-4" stroke="' + OUT + '" stroke-width="1.6" stroke-linecap="round"/>';
+    // туловище + объём: тень справа, блик слева
     s += '<ellipse cx="100" cy="152" rx="40" ry="34" fill="' + p.fur + '" ' + SW + '/>';
+    s += '<path d="M122 124 Q144 146 132 178 Q126 184 116 185 Q138 158 122 124Z" fill="#000" opacity=".07"/>';
     s += '<ellipse cx="100" cy="158" rx="25" ry="23" fill="' + p.belly + '"/>';
+    s += '<ellipse cx="90" cy="148" rx="8" ry="5" fill="#fff" opacity=".35" transform="rotate(-30 90 148)"/>';
+    if (sp === 'kitten' && atLeast(stage, 'teen')) {
+      s += '<path d="M64 140 q8 3 12 0 M62 152 q9 3 13 0 M64 164 q8 3 12 0 M136 140 q-8 3 -12 0 M138 152 q-9 3 -13 0 M136 164 q-8 3 -12 0" fill="none" stroke="' + shade(p.fur, -0.28) + '" stroke-width="3" stroke-linecap="round"/>';
+    }
+    if (sp === 'owl' && atLeast(stage, 'teen')) {
+      for (var r = 0; r < (atLeast(stage, 'adult') ? 3 : 2); r++) {
+        for (var c = 0; c < 3; c++) {
+          var x = 90 + c * 10, y = 148 + r * 9;
+          s += '<path d="M' + (x - 3) + ' ' + y + ' L' + x + ' ' + (y + 3) + ' L' + (x + 3) + ' ' + y + '" fill="none" stroke="' + shade(p.fur, -0.1) + '" stroke-width="1.8" stroke-linecap="round"/>';
+        }
+      }
+    }
+    if (sp === 'dragon' && atLeast(stage, 'adult')) {
+      s += '<path d="M82 146 Q100 150 118 146 M80 157 Q100 161 120 157 M82 168 Q100 172 118 168" fill="none" stroke="' + shade(p.belly, -0.2) + '" stroke-width="2"/>';
+    }
+    if (sp === 'hedgehog' && atLeast(stage, 'teen')) {
+      s += '<circle cx="92" cy="152" r="2" fill="' + shade(p.belly, -0.2) + '"/><circle cx="108" cy="160" r="2" fill="' + shade(p.belly, -0.2) + '"/><circle cx="96" cy="168" r="2" fill="' + shade(p.belly, -0.2) + '"/>';
+    }
     return s;
   }
 
-  function speciesArms(sp, p) {
-    if (sp === 'owl') {
-      return '<path d="M62 132 Q44 152 58 176 Q66 162 68 140Z" fill="' + shade(p.fur, -0.15) + '" ' + SW + '/>' +
-        '<path class="pet-arm-r" d="M138 132 Q156 152 142 176 Q134 162 132 140Z" fill="' + shade(p.fur, -0.15) + '" ' + SW + '/>';
-    }
-    return '<ellipse cx="62" cy="152" rx="10" ry="15" transform="rotate(20 62 152)" fill="' + p.fur + '" ' + SW + '/>' +
-      '<ellipse class="pet-arm-r" cx="138" cy="152" rx="10" ry="15" transform="rotate(-20 138 152)" fill="' + p.fur + '" ' + SW + '/>';
+  // Лапы — отдельными группами на «шарнирах»: машут, чешутся, держат вещь.
+  function armL(sp, p) {
+    if (sp === 'owl') return '<g class="pet-arm-l"><path d="M62 132 Q44 152 58 176 Q66 162 68 140Z" fill="' + shade(p.fur, -0.15) + '" ' + SW + '/></g>';
+    return '<g class="pet-arm-l"><ellipse cx="62" cy="152" rx="10" ry="15" transform="rotate(20 62 152)" fill="' + p.fur + '" ' + SW + '/></g>';
+  }
+  function armR(sp, p) {
+    if (sp === 'owl') return '<path d="M138 132 Q156 152 142 176 Q134 162 132 140Z" fill="' + shade(p.fur, -0.15) + '" ' + SW + '/>';
+    return '<ellipse cx="138" cy="152" rx="10" ry="15" transform="rotate(-20 138 152)" fill="' + p.fur + '" ' + SW + '/>';
   }
 
-  function speciesHead(sp, p) {
+  function speciesHead(sp, p, stage) {
     var s = '';
     if (sp === 'kitten') {
-      s += '<path d="M60 70 L58 30 L90 50Z" fill="' + p.fur + '" ' + SW + '/><path d="M64 60 L63 40 L80 51Z" fill="' + p.inner + '"/>';
-      s += '<path d="M140 70 L142 30 L110 50Z" fill="' + p.fur + '" ' + SW + '/><path d="M136 60 L137 40 L120 51Z" fill="' + p.inner + '"/>';
+      s += '<g class="pet-ear-l"><path d="M60 70 L58 30 L90 50Z" fill="' + p.fur + '" ' + SW + '/><path d="M64 60 L63 40 L80 51Z" fill="' + p.inner + '"/>' +
+        (atLeast(stage, 'adult') ? '<path d="M58 30 l-3 -7 M60 31 l1 -8" stroke="' + OUT + '" stroke-width="1.6" stroke-linecap="round"/>' : '') + '</g>';
+      s += '<g class="pet-ear-r"><path d="M140 70 L142 30 L110 50Z" fill="' + p.fur + '" ' + SW + '/><path d="M136 60 L137 40 L120 51Z" fill="' + p.inner + '"/>' +
+        (atLeast(stage, 'adult') ? '<path d="M142 30 l3 -7 M140 31 l-1 -8" stroke="' + OUT + '" stroke-width="1.6" stroke-linecap="round"/>' : '') + '</g>';
     } else if (sp === 'owl') {
-      s += '<path d="M62 60 L56 34 L82 50Z" fill="' + shade(p.fur, -0.15) + '" ' + SW + '/>';
-      s += '<path d="M138 60 L144 34 L118 50Z" fill="' + shade(p.fur, -0.15) + '" ' + SW + '/>';
+      var tall = atLeast(stage, 'adult') ? 8 : 0;
+      s += '<path class="pet-ear-l" d="M62 60 L' + (56 - tall / 2) + ' ' + (34 - tall) + ' L82 50Z" fill="' + shade(p.fur, -0.15) + '" ' + SW + '/>';
+      s += '<path class="pet-ear-r" d="M138 60 L' + (144 + tall / 2) + ' ' + (34 - tall) + ' L118 50Z" fill="' + shade(p.fur, -0.15) + '" ' + SW + '/>';
     } else if (sp === 'hedgehog') {
       s += '<circle cx="66" cy="58" r="9" fill="' + p.fur + '" ' + SW + '/><circle cx="134" cy="58" r="9" fill="' + p.fur + '" ' + SW + '/>';
+      s += '<circle cx="66" cy="58" r="4.5" fill="' + p.inner + '"/><circle cx="134" cy="58" r="4.5" fill="' + p.inner + '"/>';
     } else if (sp === 'dragon') {
-      s += '<path d="M72 52 Q62 30 74 22 Q74 38 84 48Z" fill="#f4e3b0" ' + SW + '/>';
-      s += '<path d="M128 52 Q138 30 126 22 Q126 38 116 48Z" fill="#f4e3b0" ' + SW + '/>';
+      var h = atLeast(stage, 'adult') ? 10 : atLeast(stage, 'teen') ? 5 : 0;
+      s += '<path d="M72 52 Q' + (62 - h / 2) + ' ' + (30 - h) + ' ' + (74 - h / 3) + ' ' + (22 - h) + ' Q74 38 84 48Z" fill="#f4e3b0" ' + SW + '/>';
+      s += '<path d="M128 52 Q' + (138 + h / 2) + ' ' + (30 - h) + ' ' + (126 + h / 3) + ' ' + (22 - h) + ' Q126 38 116 48Z" fill="#f4e3b0" ' + SW + '/>';
     }
     s += '<circle cx="100" cy="88" r="46" fill="' + p.fur + '" ' + SW + '/>';
+    s += '<path d="M128 56 Q150 82 136 116 Q126 128 110 132 Q144 100 128 56Z" fill="#000" opacity=".06"/>';
     if (sp === 'owl') s += '<path d="M60 92 Q62 58 100 62 Q138 58 140 92 Q138 122 100 124 Q62 122 60 92Z" fill="' + p.belly + '"/>';
+    if (sp === 'owl' && atLeast(stage, 'teen')) s += '<path d="M92 44 Q96 30 100 42 Q104 28 108 44" fill="' + shade(p.fur, -0.15) + '" ' + SW + '/>';
     if (sp === 'hedgehog') s += '<ellipse cx="100" cy="98" rx="34" ry="28" fill="' + p.belly + '"/>';
     if (sp === 'dragon') s += '<ellipse cx="100" cy="104" rx="28" ry="18" fill="' + p.belly + '"/>';
+    if (sp === 'dragon' && atLeast(stage, 'teen')) s += '<path d="M92 46 L96 38 L100 46 L104 38 L108 46" fill="' + p.spikes + '" ' + SW + '/>';
+    if (sp === 'kitten' && atLeast(stage, 'teen')) s += '<path d="M92 50 v8 M100 48 v10 M108 50 v8" stroke="' + shade(p.fur, -0.28) + '" stroke-width="3.5" stroke-linecap="round"/>';
+    // блик на макушке — объём
+    s += '<ellipse cx="80" cy="62" rx="15" ry="8" fill="#fff" opacity=".28" transform="rotate(-28 80 62)"/>';
     return s;
   }
 
-  // Лицо зависит от состояния: happy / ok / sad / hungry / sick / sleep.
-  function face(sp, p, state) {
+  // Лицо: глаза (зрачки двигаются за пальцем), рот (жуёт, зевает), щёки.
+  // Состояние: happy / ok / sad / hungry / sick / sleep.
+  function face(sp, p, state, stage) {
     var s = '';
-    var eyeY = 90;
+    var baby = stage === 'baby';
+    var ex = baby ? 8 : 7, ey = baby ? 10 : 8.5;
     if (state === 'sleep') {
       s += '<path d="M74 91 Q82 97 90 91 M110 91 Q118 97 126 91" fill="none" stroke="' + OUT + '" stroke-width="3" stroke-linecap="round"/>';
     } else if (state === 'happy') {
@@ -116,16 +180,19 @@
     } else if (state === 'sick') {
       s += '<path d="M76 86 L88 96 M88 86 L76 96 M112 86 L124 96 M124 86 L112 96" stroke="' + OUT + '" stroke-width="3" stroke-linecap="round"/>';
     } else {
-      s += '<g class="pet-eyes"><ellipse cx="82" cy="' + eyeY + '" rx="7" ry="8.5" fill="' + OUT + '"/><ellipse cx="118" cy="' + eyeY + '" rx="7" ry="8.5" fill="' + OUT + '"/>' +
-        '<circle cx="84.5" cy="87" r="2.6" fill="#fff"/><circle cx="120.5" cy="87" r="2.6" fill="#fff"/></g>';
+      s += '<g class="pet-eyes"><g class="pet-pupils"><ellipse cx="82" cy="90" rx="' + ex + '" ry="' + ey + '" fill="' + OUT + '"/><ellipse cx="118" cy="90" rx="' + ex + '" ry="' + ey + '" fill="' + OUT + '"/>' +
+        '<circle cx="85" cy="86.5" r="' + (baby ? 3.2 : 2.6) + '" fill="#fff"/><circle cx="121" cy="86.5" r="' + (baby ? 3.2 : 2.6) + '" fill="#fff"/>' +
+        '<circle cx="79.5" cy="94" r="1.3" fill="#fff" opacity=".8"/><circle cx="115.5" cy="94" r="1.3" fill="#fff" opacity=".8"/></g></g>';
       if (state === 'sad') {
-        s += '<path d="M72 78 L90 82 M128 78 L110 82" stroke="' + OUT + '" stroke-width="2.5" stroke-linecap="round"/>';
+        // Брови «домиком» (внутренние концы выше) — грусть; наоборот было бы злостью.
+        s += '<path d="M72 82 L90 76 M128 82 L110 76" stroke="' + OUT + '" stroke-width="2.5" stroke-linecap="round"/>';
         s += '<path class="pet-tear" d="M76 100 Q73 106 76 109 Q79 106 76 100Z" fill="#7fc8f8"/>';
       }
     }
+    if (stage === 'sage' && state !== 'sick') s += '<path d="M70 76 Q80 70 90 76 M110 76 Q120 70 130 76" fill="none" stroke="#f4f4f4" stroke-width="4" stroke-linecap="round"/>';
     // щёчки
-    if (state !== 'sick') s += '<ellipse cx="70" cy="104" rx="7" ry="4" fill="#ff8fa3" opacity=".45"/><ellipse cx="130" cy="104" rx="7" ry="4" fill="#ff8fa3" opacity=".45"/>';
-    // нос / клюв / рот
+    if (state !== 'sick') s += '<g class="pet-cheeks"><ellipse cx="70" cy="104" rx="7" ry="4" fill="#ff8fa3" opacity=".45"/><ellipse cx="130" cy="104" rx="7" ry="4" fill="#ff8fa3" opacity=".45"/></g>';
+    // нос / клюв
     if (sp === 'owl') {
       s += '<path d="M94 100 L106 100 L100 111Z" fill="' + p.nose + '" ' + SW + '/>';
     } else if (sp === 'dragon') {
@@ -134,10 +201,16 @@
       s += '<path d="M96 100 L104 100 L100 104Z" fill="' + p.nose + '" stroke="' + OUT + '" stroke-width="1.5" stroke-linejoin="round"/>';
     }
     var my = sp === 'owl' ? 116 : 107;
-    if (state === 'hungry') s += '<ellipse cx="100" cy="' + (my + 3) + '" rx="5" ry="6" fill="#7a2233" ' + SW + '/>';
-    else if (state === 'sad' || state === 'sick') s += '<path d="M92 ' + (my + 5) + ' Q100 ' + (my - 1) + ' 108 ' + (my + 5) + '" fill="none" stroke="' + OUT + '" stroke-width="2.5" stroke-linecap="round"/>';
-    else if (state === 'sleep') s += '<ellipse cx="100" cy="' + (my + 2) + '" rx="3" ry="2.5" fill="' + OUT + '"/>';
-    else if (sp !== 'owl') s += '<path d="M92 ' + my + ' Q96 ' + (my + 5) + ' 100 ' + (my + 1) + ' Q104 ' + (my + 5) + ' 108 ' + my + '" fill="none" stroke="' + OUT + '" stroke-width="2.5" stroke-linecap="round"/>';
+    var mouth;
+    if (state === 'hungry') mouth = '<ellipse cx="100" cy="' + (my + 3) + '" rx="5" ry="6" fill="#7a2233" ' + SW + '/>';
+    else if (state === 'sad' || state === 'sick') mouth = '<path d="M92 ' + (my + 5) + ' Q100 ' + (my - 1) + ' 108 ' + (my + 5) + '" fill="none" stroke="' + OUT + '" stroke-width="2.5" stroke-linecap="round"/>';
+    else if (state === 'sleep') mouth = '<ellipse cx="100" cy="' + (my + 2) + '" rx="3" ry="2.5" fill="' + OUT + '"/>';
+    else if (state === 'happy') mouth = '<path d="M91 ' + my + ' Q100 ' + (my + 11) + ' 109 ' + my + 'Z" fill="#7a2233" ' + SW + '/><path d="M95 ' + (my + 5) + ' Q100 ' + (my + 9) + ' 105 ' + (my + 5) + '" fill="#ff8fa3"/>';
+    else if (sp !== 'owl') mouth = '<path d="M92 ' + my + ' Q96 ' + (my + 5) + ' 100 ' + (my + 1) + ' Q104 ' + (my + 5) + ' 108 ' + my + '" fill="none" stroke="' + OUT + '" stroke-width="2.5" stroke-linecap="round"/>';
+    else mouth = '';
+    s += '<g class="pet-mouth">' + mouth + '</g>';
+    // Открытый рот для еды и зевка — скрыт, пока не нужен (см. pet.css .eating / .act-yawn).
+    s += '<g class="pet-chomp"><ellipse cx="100" cy="' + (my + 3) + '" rx="8" ry="9" fill="#7a2233" ' + SW + '/><ellipse cx="100" cy="' + (my + 8) + '" rx="5" ry="3" fill="#ff8fa3"/></g>';
     if (sp === 'kitten' && state !== 'sick') s += '<path d="M60 98 L46 95 M60 103 L46 105 M140 98 L154 95 M140 103 L154 105" stroke="' + OUT + '" stroke-width="1.6" stroke-linecap="round"/>';
     return s;
   }
@@ -263,7 +336,8 @@
 
   // Одежда (туловище 60…140 × 118…186)
   function torso(fill, extra) { return '<path d="M62 136 Q66 118 100 118 Q134 118 138 136 L140 170 Q100 190 60 170Z" fill="' + fill + '" ' + SW + '/>' + (extra || ''); }
-  function sleeves(fill) { return '<ellipse cx="62" cy="150" rx="11" ry="16" transform="rotate(20 62 150)" fill="' + fill + '" ' + SW + '/><ellipse class="pet-arm-r" cx="138" cy="150" rx="11" ry="16" transform="rotate(-20 138 150)" fill="' + fill + '" ' + SW + '/>'; }
+  // Рукава — в тех же «шарнирах», что и лапы: машет лапа — машет и рукав.
+  function sleeves(fill) { return '<g class="pet-arm-l"><ellipse cx="62" cy="150" rx="11" ry="16" transform="rotate(20 62 150)" fill="' + fill + '" ' + SW + '/></g><g class="pet-arm-r"><ellipse cx="138" cy="150" rx="11" ry="16" transform="rotate(-20 138 150)" fill="' + fill + '" ' + SW + '/></g>'; }
   T.shirt = function (c) { return torso(c0(c, 0), '<path d="M100 120 L100 150" stroke="' + c0(c, 1) + '" stroke-width="3"/><path d="M84 120 Q100 128 116 120" fill="none" stroke="' + c0(c, 1) + '" stroke-width="4"/><path d="M60 168 Q100 186 140 168" fill="none" stroke="' + c0(c, 1) + '" stroke-width="4"/>') + sleeves(c0(c, 0)); };
   T.coat = function (c) { return torso(c0(c, 0), '<path d="M100 118 L100 184" stroke="' + OUT + '" stroke-width="2"/><path d="M78 118 Q100 136 122 118" fill="' + c0(c, 1) + '" ' + SW + '/><path d="M62 166 Q100 184 138 166 L140 174 Q100 192 60 174Z" fill="' + c0(c, 1) + '" ' + SW + '/>') + sleeves(c0(c, 0)); };
   T.stripes = function (c) {
@@ -441,17 +515,48 @@
   T.a_fire = function (c) { var s = ''; for (var i = 0; i < 9; i++) { var x = 24 + i * 19; s += '<path class="it-flicker" style="animation-delay:' + (i * 0.15) + 's" d="M' + x + ' 196 Q' + (x - 10) + ' 176 ' + x + ' 156 Q' + (x + 10) + ' 176 ' + x + ' 196Z" fill="' + (i % 2 ? c0(c, 0) : c0(c, 1)) + '" opacity=".75"/>'; } return s; };
   T.a_vortex = function (c) { return '<g class="it-spin" opacity=".7"><path d="M100 110 m-80 0 a80 80 0 1 1 160 0" fill="none" stroke="' + c0(c, 0) + '" stroke-width="4" stroke-dasharray="10 12" stroke-linecap="round"/><path d="M100 110 m-66 0 a66 66 0 1 0 132 0" fill="none" stroke="' + c0(c, 1) + '" stroke-width="3" stroke-dasharray="6 10" stroke-linecap="round"/></g>'; };
 
-  // Спецэффекты состояния
+  // Спецэффекты состояния, которые висят в воздухе (не на голове).
   function extras(state) {
     if (state === 'sleep') return '<g class="pet-zzz" font-family="Arial" font-weight="900" fill="#6b7cff"><text x="140" y="56" font-size="16">z</text><text x="152" y="40" font-size="20">z</text><text x="166" y="22" font-size="24">Z</text></g>';
-    if (state === 'sick') return '<g><path d="M78 52 Q100 34 124 50 Q128 62 100 64 Q74 64 78 52Z" fill="#9fd3f7" ' + SW + '/><path d="M96 40 L104 36 L108 44 L100 46Z" fill="#dff1fd" stroke="' + OUT + '" stroke-width="1.5"/><path d="M84 54 Q92 50 100 54" fill="none" stroke="#fff" stroke-width="2.5" stroke-linecap="round"/></g><path class="pet-tear" d="M134 72 Q130 80 134 83 Q138 80 134 72Z" fill="#7fc8f8"/>';
-    if (state === 'hungry') return '<g transform="translate(142 170)"><path d="M-14 0 Q0 14 14 0Z" fill="#c9b89a" ' + SW + '/><path d="M-16 0 H16" ' + SW + '/></g>';
+    if (state === 'hungry') return '<g class="pet-bowl" transform="translate(150 178)"><path d="M-15 0 Q0 15 15 0Z" fill="#c9b89a" ' + SW + '/><path d="M-17 0 H17" ' + SW + '/></g>' +
+      '<g class="pet-think"><circle cx="146" cy="58" r="3" fill="#fff" ' + SW + '/><circle cx="154" cy="46" r="5" fill="#fff" ' + SW + '/><ellipse cx="170" cy="26" rx="18" ry="14" fill="#fff" ' + SW + '/><text x="170" y="32" text-anchor="middle" font-size="16">🍲</text></g>';
+    if (state === 'sad') return '<g class="pet-think"><circle cx="146" cy="58" r="3" fill="#fff" ' + SW + '/><circle cx="154" cy="46" r="5" fill="#fff" ' + SW + '/><ellipse cx="170" cy="26" rx="18" ry="14" fill="#fff" ' + SW + '/><text x="170" y="32" text-anchor="middle" font-size="16">🎲</text></g>';
     if (state === 'happy') return '<g class="pet-hearts"><path d="M156 60 c-3 -6 -12 -3 -8 4 l8 7 8 -7 c4 -7 -5 -10 -8 -4Z" fill="#ff6b8a"/></g>';
     return '';
   }
+  // Пузырь со льдом у больного — на голове, поэтому рисуется внутри головы.
+  function sickHead() {
+    return '<g class="pet-icebag"><path d="M78 52 Q100 34 124 50 Q128 62 100 64 Q74 64 78 52Z" fill="#9fd3f7" ' + SW + '/><path d="M96 40 L104 36 L108 44 L100 46Z" fill="#dff1fd" stroke="' + OUT + '" stroke-width="1.5"/><path d="M84 54 Q92 50 100 54" fill="none" stroke="#fff" stroke-width="2.5" stroke-linecap="round"/></g>' +
+      '<path class="pet-tear" d="M134 72 Q130 80 134 83 Q138 80 134 72Z" fill="#7fc8f8"/>';
+  }
 
-  // Порядок слоёв: фон → спутник → зад зверька → тело → одежда → лапы → голова →
-  // лицо → очки/маска → шапка → шея → в руке → сияние → эффект состояния.
+  // Сцена по умолчанию, пока нет купленного «места»: днём — небо с облаками и
+  // лужайка, ночью — звёзды и луна. Питомец живёт в том же времени, что ученик.
+  function scene(night) {
+    var id = uid('scene');
+    if (night) {
+      var stars = '';
+      [[24, 22], [58, 40], [92, 16], [138, 30], [176, 50], [30, 70], [168, 94], [120, 58], [70, 96], [186, 16]].forEach(function (pt, i) {
+        stars += '<circle class="it-twinkle" style="animation-delay:' + (i * 0.37).toFixed(2) + 's" cx="' + pt[0] + '" cy="' + pt[1] + '" r="' + (i % 3 ? 1.3 : 2) + '" fill="#fff"/>';
+      });
+      return '<defs><linearGradient id="' + id + '" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#1b2150"/><stop offset="1" stop-color="#3a3f7a"/></linearGradient></defs>' +
+        '<rect width="200" height="200" fill="url(#' + id + ')"/>' + stars +
+        '<circle cx="160" cy="36" r="14" fill="#fff4c2"/><circle cx="166" cy="31" r="12" fill="url(#' + id + ')"/>' +
+        '<path d="M0 176 Q100 166 200 176 L200 200 L0 200Z" fill="#2c3263"/>';
+    }
+    return '<defs><linearGradient id="' + id + '" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#bfe3ff"/><stop offset="1" stop-color="#f3fbff"/></linearGradient></defs>' +
+      '<rect width="200" height="200" fill="url(#' + id + ')"/>' +
+      '<g class="it-drift"><ellipse cx="40" cy="36" rx="18" ry="7" fill="#fff"/><ellipse cx="52" cy="31" rx="12" ry="7" fill="#fff"/></g>' +
+      '<g class="it-drift" style="animation-delay:-9s"><ellipse cx="150" cy="56" rx="16" ry="6" fill="#fff"/><ellipse cx="160" cy="52" rx="10" ry="6" fill="#fff"/></g>' +
+      '<path d="M0 176 Q100 166 200 176 L200 200 L0 200Z" fill="#a8d88a"/>' +
+      '<path d="M20 182 l2 -6 2 6 M60 186 l2 -6 2 6 M150 184 l2 -6 2 6 M180 188 l2 -6 2 6" stroke="#6fb453" stroke-width="2" fill="none"/>';
+  }
+
+  function escAttr(v) { return String(v == null ? '' : v).replace(/[&<>"']/g, function (ch) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]; }); }
+
+  // Порядок слоёв: фон → спутник → тень → [зад зверька → тело → одежда → левая
+  // лапа → голова (лицо, очки, шапка) → шея → правая лапа с вещью] → сияние.
+  // Всё в квадратных скобках растёт со стадией — от земли, чтобы ступни стояли.
   function render(opts) {
     opts = opts || {};
     var items = opts.items || {};                    // id → {art:{t,c}, rarity}
@@ -459,21 +564,28 @@
     var sp = SPECIES[opts.species] ? opts.species : 'kitten';
     var p = SPECIES[sp];
     var state = opts.state || 'ok';
+    var stage = STAGE_SCALE[opts.stage] ? opts.stage : 'adult';
+    var k = STAGE_SCALE[stage];
     function layer(slot) {
       var id = eq[slot]; if (!id || !items[id]) return '';
       var art = items[id].art || {}; var fn = T[art.t];
       return fn ? '<g class="slot-' + slot + ' r-' + items[id].rarity + '">' + fn(art.c || []) + '</g>' : '';
     }
-    var body = '<g class="pet-body">' +
-      speciesBack(sp, p) + speciesBody(sp, p) + layer('body') + speciesArms(sp, p) +
-      '<g class="pet-head">' + speciesHead(sp, p) + face(sp, p, state) + layer('face') + layer('head') + '</g>' +
-      layer('neck') + layer('hand') + '</g>';
+    var body = '<g transform="translate(100 190) scale(' + k + ') translate(-100 -190)"><g class="pet-body">' +
+      speciesBack(sp, p, stage) + speciesBody(sp, p, stage) + layer('body') + armL(sp, p) +
+      '<g class="pet-head">' + speciesHead(sp, p, stage) + face(sp, p, state, stage) + layer('face') + layer('head') +
+      (state === 'sick' ? sickHead() : '') + '</g>' +
+      layer('neck') + '<g class="pet-arm-r">' + armR(sp, p) + layer('hand') + '</g></g></g>';
+    var bg = '';
+    if (eq.bg) bg = layer('bg');
+    else if (opts.scene) bg = scene(opts.scene === 'night');
     // Фон режем по рамке: у питомца overflow виден (шапки и сияние выходят за край),
     // а у фона — нет, иначе круг «Открытого космоса» вылезал бы на соседей.
-    var bg = eq.bg ? '<svg x="0" y="0" width="200" height="200" viewBox="0 0 200 200" overflow="hidden">' + layer('bg') + '</svg>' : '';
-    var cls = 'pet-svg st-' + state + (opts.anim === false ? ' no-anim' : '') + (opts.mini ? ' mini' : '');
-    return '<svg class="' + cls + '" viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="' + (opts.label || 'Питомец') + '">' +
-      bg + layer('pet') + body + layer('aura') + (opts.mini ? '' : extras(state)) + '</svg>';
+    if (bg) bg = '<svg x="0" y="0" width="200" height="200" viewBox="0 0 200 200" overflow="hidden">' + bg + '</svg>';
+    var shadow = '<ellipse class="pet-shadow" cx="100" cy="191" rx="' + (46 * k).toFixed(1) + '" ry="5" fill="#000" opacity=".13"/>';
+    var cls = 'pet-svg st-' + state + ' stage-' + stage + ' sp-' + sp + (opts.anim === false ? ' no-anim' : '') + (opts.mini ? ' mini' : '');
+    return '<svg class="' + cls + '" viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="' + escAttr(opts.label || 'Питомец') + '">' +
+      bg + layer('pet') + shadow + body + layer('aura') + (opts.mini ? '' : extras(state)) + '</svg>';
   }
 
   // Одна вещь отдельно — для карточек лавки и гардероба. Для вещей на голову,
@@ -498,5 +610,5 @@
     box_chest: '🧰', box_tsar: '👑', box_week: '🏆',
   };
 
-  window.PetArt = { render: render, renderItem: renderItem, templates: T, species: SPECIES, icons: ICONS, shade: shade };
+  window.PetArt = { render: render, renderItem: renderItem, templates: T, species: SPECIES, icons: ICONS, shade: shade, stageScale: STAGE_SCALE };
 })();

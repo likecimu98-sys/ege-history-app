@@ -28,7 +28,9 @@
 <body>
 <h1>Летописчик — все вещи</h1>
 <div class="bar" id="species"></div>
+<div class="bar" id="stages"></div>
 <div class="states" id="states"></div>
+<div class="states" id="acts"></div>
 <div class="bar" id="slots"></div>
 <div class="grid" id="grid"></div>
 <script>var module = { exports: {} };</script>
@@ -37,7 +39,7 @@
   var CAT = module.exports.publicCatalog();
   var items = {}; CAT.items.forEach(function (i) { items[i.id] = i; });
   var q = new URLSearchParams(location.search);
-  var species = q.get('sp') || 'kitten', slot = q.get('slot') || 'all';
+  var species = q.get('sp') || 'kitten', slot = q.get('slot') || 'all', stage = q.get('stage') || 'adult';
   function btns(el, list, cur, on) {
     el.innerHTML = list.map(function (x) { return '<button class="' + (x[0] === cur ? 'on' : '') + '" data-v="' + x[0] + '">' + x[1] + '</button>'; }).join('');
     el.onclick = function (e) { var v = e.target.dataset.v; if (v) on(v); };
@@ -45,12 +47,21 @@
   function draw() {
     btns(document.getElementById('species'), CAT.species.map(function (s) { return [s.id, s.name]; }), species, function (v) { species = v; draw(); });
     btns(document.getElementById('slots'), [['all', 'Все (' + CAT.items.length + ')']].concat(CAT.slots.map(function (s) { return [s.id, s.label]; })), slot, function (v) { slot = v; draw(); });
+    btns(document.getElementById('stages'), [['baby', 'Малыш'], ['teen', 'Подросток'], ['adult', 'Взрослый'], ['sage', 'Мудрец']], stage, function (v) { stage = v; draw(); });
     document.getElementById('states').innerHTML = ['happy', 'ok', 'sad', 'hungry', 'sick', 'sleep'].map(function (st) {
-      return '<div>' + PetArt.render({ species: species, state: st, items: items, equipped: {} }) + st + '</div>';
+      return '<div>' + PetArt.render({ species: species, stage: stage, state: st, items: items, equipped: {}, scene: st === 'sleep' ? 'night' : 'day' }) + st + '</div>';
     }).join('');
+    // Действия — на время анимации вешается класс act-*, как делает pet.js.
+    document.getElementById('acts').innerHTML = ['wave', 'scratch', 'rub', 'yawn', 'giggle', 'spin', 'dance', 'shiver', 'sigh', 'eating'].map(function (a) {
+      return '<div data-act="' + a + '">' + PetArt.render({ species: species, stage: stage, state: 'ok', items: items, equipped: { hand: 'hand_pero', head: 'hat_treugolka' } }) + a + '</div>';
+    }).join('');
+    document.querySelectorAll('#acts [data-act]').forEach(function (d) {
+      var svg = d.querySelector('svg'), a = d.dataset.act;
+      setInterval(function () { svg.classList.remove(a === 'eating' ? 'eating' : 'act-' + a); void svg.getBoundingClientRect(); svg.classList.add(a === 'eating' ? 'eating' : 'act-' + a); }, 2500);
+    });
     document.getElementById('grid').innerHTML = CAT.items.filter(function (i) { return slot === 'all' || i.slot === slot; }).map(function (i) {
       var eq = {}; eq[i.slot] = i.id;
-      return '<div class="card rar-' + i.rarity + '"><div class="pet">' + PetArt.render({ species: species, state: 'ok', items: items, equipped: eq }) + '</div>' +
+      return '<div class="card rar-' + i.rarity + '"><div class="pet">' + PetArt.render({ species: species, stage: stage, state: 'ok', items: items, equipped: eq }) + '</div>' +
         '<div class="icon">' + PetArt.renderItem(i) + '</div><b>' + i.name + '</b><i>' + i.rarity + ' · ' + (i.price || 'коробка') + '</i></div>';
     }).join('');
   }

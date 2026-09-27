@@ -169,6 +169,55 @@ async function profileCounters(db, userId, docIds) {
   return { solved: num(row.solved), ege: num(row.ege), duelWins: num(row.duel) };
 }
 
+// ── Уровни и рост ─────────────────────────────────────────────────────────
+// Питомец растёт от опыта: монеты за решение, бонусы дня и уход (кормить,
+// лечить, играть, гладить). Опыт только растёт — питомец не «худеет» в уровнях,
+// даже если его забросили: наказание за заброшенность — голод и болезнь, а не
+// потеря того, что ученик уже вырастил.
+// Шаг от уровня n к n+1 — 100 + 40·(n−1) опыта: 2-й уровень — за день занятий,
+// 5-й — примерно за неделю, 15-й — за месяц-полтора, 30-й — за полгода.
+const STAGES = [
+  { id: 'baby', from: 1, name: 'Малыш' },
+  { id: 'teen', from: 5, name: 'Подросток' },
+  { id: 'adult', from: 15, name: 'Взрослый' },
+  { id: 'sage', from: 30, name: 'Мудрец' },
+];
+function xpForLevel(level) {
+  let sum = 0;
+  for (let k = 1; k < level; k += 1) sum += 100 + 40 * (k - 1);
+  return sum;
+}
+function levelOf(xp) {
+  let level = 1;
+  while (level < 99 && xpForLevel(level + 1) <= xp) level += 1;
+  return level;
+}
+function stageOf(level) {
+  let stage = STAGES[0];
+  for (const s of STAGES) if (level >= s.from) stage = s;
+  return stage;
+}
+// Награда за уровень: немного монет всегда, сундук на каждом 5-м, ларец на каждом 10-м.
+function levelReward(level) {
+  return { coins: 20 + 5 * level, box: level % 10 === 0 ? 'box_tsar' : level % 5 === 0 ? 'box_chest' : null };
+}
+const XP = { feed: 5, heal: 5, play: 3, tap: 1 };
+
+async function addXp(db, w, amount, events) {
+  if (!amount || !w.pet) return;
+  const before = levelOf(num(w.pet.xp));
+  w.pet = { ...w.pet, xp: num(w.pet.xp) + Math.max(0, Math.round(amount)) };
+  const after = levelOf(w.pet.xp);
+  for (let level = before + 1; level <= after; level += 1) {
+    const reward = levelReward(level);
+    await move(db, w, reward.coins, 'level', String(level));
+    if (reward.box) await addItem(db, w.user_id, reward.box, 1, `level:${level}`);
+    const stage = stageOf(level);
+    events.push({ reason: 'level', delta: reward.coins, level, box: reward.box,
+      stage: stage.id, stageName: stage.name, stageUp: stage.id !== stageOf(level - 1).id });
+  }
+}
+
 // ── Начисление за решение ─────────────────────────────────────────────────
 // Возвращает список событий для всплывашек клиента: [{reason, delta, ...}].
 async function credit(db, w, counters, now) {
@@ -219,6 +268,9 @@ async function credit(db, w, counters, now) {
 
   // Решение радует питомца само по себе: +1 настроения за каждые 5 строк.
   if (d.solved) w.pet = { ...w.pet, mood: round2(clamp(Number(w.pet.mood) + d.solved / 5)) };
+  // Опыт — за всё заработанное решением (бонусы дня тоже: это тоже занятия).
+  const xpGain = events.reduce((sum, e) => sum + (['solve', 'daily', 'streak'].includes(e.reason) ? e.delta : 0), 0);
+  await addXp(db, w, xpGain, events);
   return events;
 }
 
@@ -234,6 +286,16 @@ function view(w, inv, now, extra = {}) {
     for (const key of ['sat', 'mood', 'health']) pet[key] = Math.round(Number(pet[key]) || 0);
     pet.state = petMoodState(w.pet, now);
     pet.night = isNight(now);
+    pet.xp = num(w.pet.xp);
+    pet.level = levelOf(pet.xp);
+    pet.xpFrom = xpForLevel(pet.level);
+    pet.xpTo = xpForLevel(pet.level + 1);
+    const stage = stageOf(pet.level);
+    pet.stage = stage.id;
+    pet.stageName = stage.name;
+    const next = STAGES.find(s => s.from > pet.level);
+    pet.nextStage = next ? { id: next.id, name: next.name, level: next.from } : null;
+    pet.tapReadyAt = num(w.counters?.lastTap) + TAP_COOLDOWN_MS;
   }
   return {
     // view() зовут только для вылупившегося питомца — признак в каждом ответе,
@@ -362,6 +424,7 @@ async function use(db, userId, itemId, { buyNow = false } = {}, now = Date.now()
   const item = C.BY_ID.get(itemId);
   if (!item || !['food', 'med', 'toy'].includes(item.kind)) throw httpError(400, 'bad_item');
   const w = await withPet(db, userId, now);
+  const events = [];
   if (item.kind === 'toy') {
     const inv = await inventory(db, userId);
     if (!inv[itemId]) throw httpError(409, 'not_owned');
@@ -369,12 +432,14 @@ async function use(db, userId, itemId, { buyNow = false } = {}, now = Date.now()
     const last = Number(w.pet.toys?.[itemId]) || 0;
     if (now - last < C.TOY_COOLDOWN_MS) throw httpError(429, 'toy_cooldown', { readyAt: last + C.TOY_COOLDOWN_MS });
     w.pet = applyFx({ ...w.pet, toys: { ...(w.pet.toys || {}), [itemId]: now } }, item.fx);
+    await addXp(db, w, XP.play, events);
   } else {
     if (!(await takeItem(db, userId, itemId))) {
       if (!buyNow) throw httpError(409, 'not_owned');
       await move(db, w, -item.price, 'buy', itemId, { qty: 1, used: true });
     }
     w.pet = applyFx(w.pet, item.fx);
+    await addXp(db, w, item.kind === 'med' ? XP.heal : XP.feed, events);
     if (item.kind === 'food') {
       const counters = { ...(w.counters || {}) };
       const today = mskDay(now);
@@ -386,7 +451,31 @@ async function use(db, userId, itemId, { buyNow = false } = {}, now = Date.now()
     }
   }
   await saveWallet(db, w);
-  return view(w, await inventory(db, userId), now, { used: itemId });
+  return view(w, await inventory(db, userId), now, { used: itemId, events });
+}
+
+// Погладить. Реакцию клиент рисует всегда, а настроение и опыт сервер даёт не
+// чаще раза в минуту и не больше 30 раз в день: иначе автокликер вырастил бы
+// питомца без единой решённой строки. Спящего погладить можно — но он спит.
+const TAP_COOLDOWN_MS = 60 * 1000;
+const TAPS_PER_DAY = 30;
+async function tap(db, userId, now = Date.now()) {
+  const w = await withPet(db, userId, now);
+  const counters = { ...(w.counters || {}) };
+  const today = mskDay(now);
+  if (counters.tapDay !== today) { counters.tapDay = today; counters.taps = 0; }
+  const events = [];
+  let counted = false;
+  if (!isNight(now) && now - num(counters.lastTap) >= TAP_COOLDOWN_MS && num(counters.taps) < TAPS_PER_DAY) {
+    counters.lastTap = now;
+    counters.taps = num(counters.taps) + 1;
+    w.pet = applyFx(w.pet, { mood: 2 });
+    counted = true;
+  }
+  w.counters = counters;
+  if (counted) await addXp(db, w, XP.tap, events);
+  await saveWallet(db, w);
+  return view(w, await inventory(db, userId), now, { tapped: counted, events });
 }
 
 // Надеть. null — снять. Надеть можно только своё и только в свой слот.
@@ -583,6 +672,7 @@ async function mergeUserData(client, primaryId, secondaryId) {
 }
 
 module.exports = {
+  tap, levelOf, xpForLevel, stageOf, levelReward, addXp, STAGES, TAP_COOLDOWN_MS,
   mskDay, prevDay, isNight, decayPet, petMoodState, profileCounters, credit, view, getState, hatch,
   buy, use, equip, rename, openBox, rollRarity, rewardAchievements, paintNick, rarityShowcase,
   mergeUserData, lockWallet, saveWallet, addItem, move, readWallet, inventory, nameStyleView, httpError,

@@ -69,18 +69,19 @@ test('кошелёк, питомец, коробки, итоги недели, �
   // 3. Решил 100 строк и 5 баллов ЕГЭ: в тот же день — без бонуса дня (день начат вылуплением).
   await setProfile('111', u1, { totalSolved: 1300, egePoints: 45 });
   st = await tx(c => W.getState(c, u1, ['111'], t + 3600e3));
-  assert.equal(st.balance, 700 + 105, JSON.stringify(st.events));
+  assert.equal(st.balance, 700 + 105 + 30, JSON.stringify(st.events)); // +30 — награда за 2-й уровень
   // Откат счётчика и обратно — денег не печатает.
   await setProfile('111', u1, { totalSolved: 1000 });
   await tx(c => W.getState(c, u1, ['111'], t + 3700e3));
   await setProfile('111', u1, { totalSolved: 1300 });
   st = await tx(c => W.getState(c, u1, ['111'], t + 3800e3));
-  assert.equal(st.balance, 805);
+  assert.equal(st.balance, 835);
 
   // 4. Следующий день: бонус 15 + серия 2; потолок 2000.
   await setProfile('111', u1, { totalSolved: 5300 });
   st = await tx(c => W.getState(c, u1, ['111'], t + 24 * 3600e3));
-  assert.equal(st.balance, 805 + 15 + 2000, JSON.stringify(st.events));
+  const lvl4 = st.events.filter(e => e.reason === 'level').reduce((s, e) => s + e.delta, 0);
+  assert.equal(st.balance, 835 + 15 + 2000 + lvl4, JSON.stringify(st.events));
   assert.ok(st.events.some(e => e.reason === 'cap' && e.lost === 2000));
   assert.equal(st.daily.streak, 2);
 
@@ -177,6 +178,42 @@ test('кошелёк, питомец, коробки, итоги недели, �
   await tx(c => W.buy(c, u1, 'hat_kartuz', 1, monday));
   await assert.rejects(tx(c => W.buy(c, u1, 'hat_kartuz', 1, monday)), /already_owned/);
   assert.equal(Number((await W.readWallet(db, u1)).balance), b0 - 90);
+
+  // 13. Рост: решение даёт опыт, переход уровня — событие с наградой.
+  {
+    await setProfile('111', u1, { totalSolved: 99999 });
+    const t3 = Date.parse('2026-10-06T09:00:00Z');
+    const st3 = await tx(c => W.getState(c, u1, ['111'], t3));
+    const lv = st3.events.filter(e => e.reason === 'level');
+    assert.ok(lv.length >= 3, 'за 2000 монет решения — несколько уровней: ' + JSON.stringify(st3.events));
+    for (const e of lv) assert.equal(e.box, W.levelReward(e.level).box, `награда уровня ${e.level}`);
+    assert.ok(lv.some(e => e.level === 10 && e.box === 'box_tsar'), 'на 10-м уровне ларец');
+    assert.equal(st3.pet.stage, W.stageOf(st3.pet.level).id);
+    assert.equal(st3.pet.level, lv[lv.length - 1].level);
+    // Погладить: раз в минуту даёт опыт, чаще — только реакция.
+    const a1 = await tx(c => W.tap(c, u1, t3 + 1000));
+    const a2 = await tx(c => W.tap(c, u1, t3 + 2000));
+    assert.equal(a1.tapped, true); assert.equal(a2.tapped, false);
+    const a3 = await tx(c => W.tap(c, u1, t3 + 62000));
+    assert.equal(a3.tapped, true);
+    assert.equal(a3.pet.xp, st3.pet.xp + 2);
+  }
+
+  // 14. Напоминание «проголодался»: днём, голодному, не чаще раза в 48 часов.
+  {
+    const nudge = require('../src/pet/nudge').nudge;
+    await db.query("INSERT INTO user_identities(user_id, provider, subject) VALUES($1,'telegram','5550001')", [u1]);
+    // питомец заходил 8 часов назад и с тех пор голодает
+    await db.query("UPDATE pet_wallets SET pet = pet || jsonb_build_object('sat', 0, 'at', $2::bigint) WHERE user_id=$1",
+      [u1, Date.parse('2026-10-07T02:00:00Z')]);
+    const noon = Date.parse('2026-10-07T10:00:00Z'); // 13:00 МСК
+    assert.equal(await nudge(pool, tx, noon), 1);
+    assert.equal(await nudge(pool, tx, noon + 3600e3), 0, 'повтор раньше 48 часов не шлём');
+    const night = Date.parse('2026-10-07T20:00:00Z'); // 23:00 МСК
+    assert.equal(await nudge(pool, tx, night), 0, 'ночью не шлём');
+    const job = await db.query("SELECT data FROM notification_jobs WHERE doc_id LIKE 'pet_nudge_%'");
+    assert.ok(['hungry', 'sick'].includes(job.rows[0].data.recipients[0].reason));
+  }
 
   // Журнал сходится с балансом у каждого.
   const sums = await db.query(`SELECT w.user_id, w.balance::int b, COALESCE(sum(l.delta),0)::int s

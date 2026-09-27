@@ -1,9 +1,9 @@
 {
   "updated": "2026-09-27",
   "counts": {
-    "radius": 152,
+    "radius": 132,
     "font-too-small": 204,
-    "shadow-literal": 71
+    "shadow-literal": 68
   },
   "byFile": {
     "radius": {
@@ -11,7 +11,6 @@
       "cram.html": 7,
       "exam-mode.js": 15,
       "index.html": 2,
-      "pet.css": 20,
       "styles.css": 14,
       "swipe-mode.js": 9,
       "tools-and-docs/pet-gallery.html": 1,
@@ -39,7 +38,6 @@
       "cram.html": 12,
       "exam-mode.js": 10,
       "index.html": 2,
-      "pet.css": 3,
       "styles.css": 20,
       "swipe-mode.js": 2,
       "theme-classic.css": 10,

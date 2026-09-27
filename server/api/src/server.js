@@ -83,7 +83,7 @@ async function leaderboardRows(type, limit) {
   // Цвет ника и мини-аватар — из кошелька «Летописчика». LEFT JOIN: у кого
   // питомца нет, строка рейтинга остаётся прежней.
   const petCols = `, w.name_style AS pet_style, w.pet->>'species' AS pet_species,
-    (w.pet->>'sick')::boolean AS pet_sick, w.equipped AS pet_equipped
+    (w.pet->>'sick')::boolean AS pet_sick, w.equipped AS pet_equipped, w.pet->>'xp' AS pet_xp
     FROM student_profiles LEFT JOIN pet_wallets w ON w.user_id = student_profiles.user_id`;
   if (type === 'duel') {
     sql = `SELECT data${petCols}
@@ -124,6 +124,7 @@ async function leaderboardRows(type, limit) {
       nameStyle: petWallet.nameStyleView(row.pet_style, Date.now()),
       // Мини-аватар: вид питомца и надетое. Больной питомец одежду не носит.
       avatar: row.pet_species ? { species: row.pet_species, sick: !!row.pet_sick,
+        stage: petWallet.stageOf(petWallet.levelOf(Number(row.pet_xp) || 0)).id,
         equipped: row.pet_sick ? {} : (row.pet_equipped || {}) } : null,
     };
   });
@@ -1119,6 +1120,12 @@ async function start() {
   };
   weeklyTick();
   setInterval(weeklyTick, 15 * 60 * 1000).unref();
+  // «Питомец проголодался» — не чаще раза в двое суток на человека, только днём
+  // (правила внутри pet/nudge.js). Проход раз в полчаса.
+  const nudgeTick = () => require('./pet/nudge').nudge(pool, tx)
+    .then(n => { if (n) log('info', 'pet.nudge.queued', { recipients: n }); })
+    .catch(error => log('warn', 'pet.nudge.failed', { message: error.message }));
+  setInterval(nudgeTick, 30 * 60 * 1000).unref();
   server.listen(env.port, env.host, () => log('info', 'server.started', { host: env.host, port: env.port }));
 }
 

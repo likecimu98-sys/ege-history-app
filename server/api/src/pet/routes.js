@@ -57,6 +57,8 @@ async function handlePet(req, res, url, session, deps) {
       return json(res, 200, await run(c => W.use(c, userId, String(body.item || ''), { buyNow: !!body.buy })));
     case '/equip':
       return json(res, 200, await run(c => W.equip(c, userId, body.changes && typeof body.changes === 'object' ? body.changes : {})));
+    case '/tap':
+      return json(res, 200, await run(c => W.tap(c, userId)));
     case '/rename':
       return json(res, 200, await run(c => W.rename(c, userId, body.name)));
     case '/open-box':

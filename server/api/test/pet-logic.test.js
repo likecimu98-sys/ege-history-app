@@ -107,3 +107,31 @@ test('московский день и граница суток', () => {
   assert.equal(W.mskDay(Date.parse('2026-09-28T21:00:00Z')), '2026-09-29');
   assert.equal(W.prevDay('2026-10-01'), '2026-09-30');
 });
+
+test('уровни: 2-й за 100 опыта, шаг растёт на 40, стадии 1/5/15/30', () => {
+  assert.equal(W.xpForLevel(1), 0);
+  assert.equal(W.xpForLevel(2), 100);
+  assert.equal(W.xpForLevel(3), 240);
+  assert.equal(W.levelOf(99), 1);
+  assert.equal(W.levelOf(100), 2);
+  assert.equal(W.levelOf(W.xpForLevel(15)), 15);
+  assert.equal(W.stageOf(4).id, 'baby');
+  assert.equal(W.stageOf(5).id, 'teen');
+  assert.equal(W.stageOf(15).id, 'adult');
+  assert.equal(W.stageOf(30).id, 'sage');
+});
+
+test('награда за уровень: сундук на 5-м, ларец на 10-м', () => {
+  assert.equal(W.levelReward(5).box, 'box_chest');
+  assert.equal(W.levelReward(10).box, 'box_tsar');
+  assert.equal(W.levelReward(7).box, null);
+  assert.ok(W.levelReward(7).coins > 0);
+});
+
+test('напоминание: голод, болезнь и тоска — повод, сытость — нет', () => {
+  const { reasonFor } = require('../src/pet/nudge');
+  assert.equal(reasonFor({ sat: 10, mood: 80 }), 'hungry');
+  assert.equal(reasonFor({ sat: 90, mood: 80, sick: true }), 'sick');
+  assert.equal(reasonFor({ sat: 90, mood: 10 }), 'sad');
+  assert.equal(reasonFor({ sat: 90, mood: 90 }), null);
+});
