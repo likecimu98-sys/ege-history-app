@@ -770,10 +770,11 @@ function _hasEntryIntent() {
     try {
         const p = new URLSearchParams(location.search);
         for (const k of p.keys()) {
-            if (!/^(utm_.*|yclid|gclid|fbclid|_boot|v|open)$/.test(k)) return true;
+            if (!/^(utm_.*|yclid|gclid|fbclid|_boot|v|open|ref)$/.test(k)) return true;
         }
         const tg = window.Telegram && window.Telegram.WebApp;
-        if (tg && tg.initDataUnsafe && tg.initDataUnsafe.start_param) return true;
+        // Приглашение другом (ref_…) — не дело: новичку по нему тоже лёгкий старт.
+        if (tg && tg.initDataUnsafe && tg.initDataUnsafe.start_param && !/^ref_/.test(tg.initDataUnsafe.start_param)) return true;
     } catch (e) {}
     return false;
 }
@@ -1055,6 +1056,19 @@ const _petRelease = (() => {
     try { return new URL(document.currentScript.src).searchParams.get('v') || ''; } catch (e) { return ''; }
 })();
 let _petLoading = null;
+// Приглашение в «Летописчика»: ?ref=<публичный id питомца> или start_param
+// ref_<id> в Telegram. Запоминаем сразу — сам pet.js грузится позже, а награду
+// сервер засчитает при вылуплении (оба получают сундук). Ключ не аккаунтный:
+// ссылку открыл этот человек, и сервер сам проверит, что аккаунт новый.
+(() => {
+    try {
+        const m = /[?&]ref=([a-f0-9]{6,32})(?:&|$)/.exec(location.search);
+        const tg = window.Telegram && window.Telegram.WebApp;
+        const sp = tg && tg.initDataUnsafe && tg.initDataUnsafe.start_param;
+        const code = m ? m[1] : (sp && /^ref_([a-f0-9]{6,32})$/.test(sp) ? sp.slice(4) : null);
+        if (code) localStorage.setItem('pet_ref', code);
+    } catch (e) {}
+})();
 window.loadPetModule = function() {
     if (window.PetUI) return Promise.resolve(window.PetUI);
     if (_petLoading) return _petLoading;

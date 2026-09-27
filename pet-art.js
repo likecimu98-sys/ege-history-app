@@ -363,6 +363,15 @@
     return s;
   }
 
+  // Икона стиля недели («Кто круче?»): радужное кольцо на неделю.
+  function styleAura() {
+    var id = uid('sty');
+    return '<defs><linearGradient id="' + id + '" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#ff4d6d"/><stop offset=".33" stop-color="#ffd23f"/>' +
+      '<stop offset=".66" stop-color="#4dabf7"/><stop offset="1" stop-color="#a855f7"/></linearGradient></defs>' +
+      '<circle class="it-spin" cx="100" cy="112" r="88" fill="none" stroke="url(#' + id + ')" stroke-width="4.5" stroke-dasharray="14 8" opacity=".9"/>' +
+      '<text x="100" y="22" text-anchor="middle" font-size="18">👑</text>';
+  }
+
   // Сияние по самой редкой надетой вещи — чтобы редкость видели другие.
   var RANK_OF = { common: 0, rare: 1, epic: 2, legendary: 3, mythic: 4 };
   function rarityAura(best) {
@@ -1296,7 +1305,7 @@
     var shadow = '<ellipse class="pet-shadow" cx="100" cy="191" rx="' + (46 * (stage === 'baby' ? STAGE_SCALE.baby : 1)).toFixed(1) + '" ry="5" fill="#000" opacity=".13"/>';
     var cls = 'pet-svg st-' + state + ' stage-' + stage + ' sp-' + sp + cls3 + (best ? ' best-' + best : '') + (opts.anim === false ? ' no-anim' : '') + (opts.mini ? ' mini' : '');
     return '<svg class="' + cls + '" viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="' + escAttr(opts.label || 'Питомец') + '">' +
-      bg + rarityAura(best) + layer('pet') + shadow + body + layer('aura') + (opts.mini ? '' : extras(state)) + '</svg>';
+      bg + (opts.styleIcon ? styleAura() : '') + rarityAura(best) + layer('pet') + shadow + body + layer('aura') + (opts.mini ? '' : extras(state)) + '</svg>';
   }
 
   // Одна вещь отдельно — для карточек лавки и гардероба. Для вещей на голову,

@@ -62,6 +62,18 @@ const FRAGMENT_DROPS = {
 };
 const STABLE_MAX = 8;
 
+// Хвастовство без шума. Реакции — только положительные; «Кто круче?» — 20
+// голосов в день за крошку опыта; икона стиля недели — 500 монет и сияние.
+// Приглашение: обоим сундук, когда приглашённый вылупит питомца (а это уже
+// 10 минут решения), не больше 30 наград одному пригласившему.
+const SOCIAL = {
+  reactions: ['🔥', '👑', '😂', '💯'],
+  battleDaily: 20,
+  battleXp: 2,
+  stylePrize: { coins: 500, days: 7, minVotes: 5 },
+  referral: { box: 'box_chest', maxPerInviter: 30, accountMaxAgeDays: 30 },
+};
+
 // [id, слот, редкость, цена|null (только из коробок), название, эпоха, [шаблон, ...цвета]]
 const RAW = [
   // ── Головные уборы (30) ───────────────────────────────────────────────
@@ -448,7 +460,7 @@ function publicCatalog() {
     rarities: RARITIES.map(id => ({ id, label: RARITY_LABEL[id] })),
     slots: SLOTS.map(id => ({ id, label: SLOT_LABEL[id] })),
     species: SPECIES,
-    rareSpeciesDrops: RARE_SPECIES_DROPS, fragments: FRAGMENTS, fragmentDrops: FRAGMENT_DROPS,
+    rareSpeciesDrops: RARE_SPECIES_DROPS, fragments: FRAGMENTS, fragmentDrops: FRAGMENT_DROPS, social: SOCIAL,
     items: ITEMS,
     consumables: CONSUMABLES,
     boxes: BOXES,
@@ -469,11 +481,11 @@ function publicCatalog() {
 }
 
 // Меняется вместе с содержимым каталога: клиент кэширует каталог по версии.
-const CATALOG_VERSION = '2026-09-28-3';
+const CATALOG_VERSION = '2026-09-28-4';
 
 module.exports = {
   RARITIES, RARITY_VALUE, DUPLICATE_SHARE, SLOTS, SPECIES, ITEMS, CONSUMABLES, BOXES,
-  RARE_SPECIES_DROPS, FRAGMENTS, FRAGMENT_DROPS, STABLE_MAX,
+  RARE_SPECIES_DROPS, FRAGMENTS, FRAGMENT_DROPS, STABLE_MAX, SOCIAL,
   NICK_PAINT, NICK_COLORS, TOP_NICK_COLORS, ECONOMY, ACHIEVEMENT_REWARD, ACHIEVEMENTS,
   WEEKLY_PRIZES, MONTHLY_PRIZES, DUEL_PRIZES, LOGIN_STREAK, WHEEL, QUESTS,
   TOY_COOLDOWN_MS, CATALOG_VERSION, BY_ID, prizeFor, itemValue, publicCatalog,

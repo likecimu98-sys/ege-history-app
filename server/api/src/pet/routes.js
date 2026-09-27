@@ -6,6 +6,7 @@
 const { tx, pool } = require('../db');
 const C = require('./catalog');
 const W = require('./wallet');
+const S = require('./social');
 
 const PREFIX = '/api/v1/pet';
 
@@ -34,6 +35,20 @@ async function handlePet(req, res, url, session, deps) {
     return json(res, 200, state);
   }
 
+  // Профиль чужого питомца, «Кто круче?» и новости — только для вошедших.
+  if (req.method === 'GET' && path.startsWith('/profile/')) {
+    requireSession(session);
+    return json(res, 200, await S.profile(pool, session.userId, decodeURIComponent(path.slice('/profile/'.length))));
+  }
+  if (req.method === 'GET' && path === '/battle') {
+    requireSession(session);
+    return json(res, 200, await tx(client => S.battle(client, session.userId)));
+  }
+  if (req.method === 'GET' && path === '/news') {
+    requireSession(session);
+    return json(res, 200, await S.news(pool));
+  }
+
   if (req.method !== 'POST') {
     throw Object.assign(new Error('not_found'), { statusCode: 404 });
   }
@@ -49,6 +64,7 @@ async function handlePet(req, res, url, session, deps) {
       return json(res, 200, await run(c => W.hatch(c, userId, ctx.docIds, {
         species: String(body.species || ''), name: body.name,
         knownAchievements: Array.isArray(body.knownAchievements) ? body.knownAchievements : [],
+        ref: body.ref ? String(body.ref) : null,
       })));
     }
     case '/buy':
@@ -66,6 +82,11 @@ async function handlePet(req, res, url, session, deps) {
     case '/open-box':
       if (!limiter.take(`${scope}:pet-box`, 30).ok) return json(res, 429, { error: 'rate_limited' });
       return json(res, 200, await run(c => W.openBox(c, userId, String(body.box || ''))));
+    case '/react':
+      if (!limiter.take(`${scope}:pet-react`, 60).ok) return json(res, 429, { error: 'rate_limited' });
+      return json(res, 200, await run(c => S.react(c, userId, String(body.publicId || ''), String(body.emoji || ''))));
+    case '/battle':
+      return json(res, 200, await run(c => S.vote(c, userId, String(body.pick || ''))));
     case '/craft':
       return json(res, 200, await run(c => W.craft(c, userId, String(body.species || ''))));
     case '/switch':

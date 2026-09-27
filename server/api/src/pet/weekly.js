@@ -180,4 +180,33 @@ async function finalizeDuelWeek(pool, tx, now = Date.now()) {
   return finalizeByLedger(pool, tx, `duel:${week}`, from, to, [week], 'duelWins', C.DUEL_PRIZES, 'duel');
 }
 
-module.exports = { snapshot, finalize, finalizeMonth, finalizeDuelWeek, monthKey, prevMonthKey, SNAPSHOT_SIZE };
+// Икона стиля прошлой недели: больше всех голосов в «Кто круче?». 500 монет,
+// особое сияние на неделю и новость во дворе. Нужно хотя бы 5 голосов —
+// иначе «икону» делал бы один случайный голос.
+async function finalizeStyleWeek(pool, tx, now = Date.now()) {
+  const week = mondayStr(new Date(now - 7 * DAY));
+  const key = `style:${week}`;
+  const P = C.SOCIAL.stylePrize;
+  return tx(async client => {
+    const claim = await client.query('INSERT INTO weekly_awards(week) VALUES($1) ON CONFLICT DO NOTHING RETURNING week', [key]);
+    if (!claim.rowCount) return null;
+    const { rows } = await client.query(`SELECT winner, count(*)::int AS n FROM pet_votes WHERE week=$1
+      GROUP BY winner HAVING count(*) >= $2 ORDER BY n DESC, winner LIMIT 1`, [week, P.minVotes]);
+    const results = [];
+    for (const row of rows) {
+      const w = await W.lockWallet(client, row.winner);
+      if (!w.pet) continue;
+      const paid = await W.move(client, w, P.coins, 'weekly', key, { place: 1, source: 'style', votes: row.n });
+      if (paid) {
+        w.awards = { ...(w.awards || {}), styleIcon: { week, until: now + P.days * DAY }, styleWins: (Number(w.awards?.styleWins) || 0) + 1 };
+      }
+      await W.saveWallet(client, w);
+      await W.addNews(client, 'style', row.winner, { pet: w.pet.name, votes: row.n });
+      results.push({ userId: row.winner, votes: row.n });
+    }
+    await client.query('UPDATE weekly_awards SET results=$2 WHERE week=$1', [key, JSON.stringify(results)]);
+    return { key, winners: results.length };
+  });
+}
+
+module.exports = { snapshot, finalize, finalizeMonth, finalizeDuelWeek, finalizeStyleWeek, monthKey, prevMonthKey, SNAPSHOT_SIZE };

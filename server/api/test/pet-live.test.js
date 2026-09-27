@@ -304,6 +304,75 @@ test('экономика v3, питомец, коробки, итоги, рей�
     await assert.rejects(tx(c => W.switchPet(c, u1, 99, tNow)), /bad_index/);
   }
 
+  // 22. Хвастовство: профиль по публичному id, реакция раз в сутки и не себе,
+  //     «Кто круче?» только за показанную пару и не больше 20 в день, икона стиля
+  //     недели один раз, новости двора, приглашение — обоим по сундуку.
+  {
+    const S = require('../src/pet/social');
+    const WK2 = require('../src/pet/weekly');
+    const { mondayStr } = require('../src/moscow-time');
+    const tNow = Date.now();
+    const mk = async name => {
+      const u = await newUser(name);
+      await db.query(`INSERT INTO pet_wallets(user_id, pet) VALUES($1, '{"species":"kitten","name":"Мурка","xp":0}')`, [u]);
+      return u;
+    };
+    const va = await mk('Вера'); const vb = await mk('Гена'); const vc = await mk('Даша');
+    const pub = async u => (await db.query('SELECT public_id FROM pet_wallets WHERE user_id=$1', [u])).rows[0].public_id;
+    const pa = await pub(va);
+    assert.match(pa, /^[a-f0-9]{12}$/);
+    let pr = await S.profile(db, vb, pa, tNow);
+    assert.equal(pr.profile.name, 'Мурка'); assert.equal(pr.profile.self, false);
+    assert.ok(!('user_id' in pr.profile) && !JSON.stringify(pr).includes(va), 'uuid наружу не уходит');
+    pr = await tx(c => S.react(c, vb, pa, '🔥', tNow));
+    assert.equal(pr.profile.reactions['🔥'], 1); assert.equal(pr.profile.myReaction, '🔥');
+    await assert.rejects(tx(c => S.react(c, vb, pa, '👑', tNow)), /already_reacted/);
+    await assert.rejects(tx(c => S.react(c, va, pa, '👑', tNow)), /self/);
+    await assert.rejects(tx(c => S.react(c, vb, pa, '💩', tNow)), /bad_emoji/);
+    await assert.rejects(S.profile(db, vb, 'deadbeef00', tNow), /no_pet/);
+
+    await assert.rejects(tx(c => S.vote(c, va, 'a', tNow)), /no_pair/);
+    let b = await tx(c => S.battle(c, va, tNow));
+    assert.equal(b.battle.left, C.SOCIAL.battleDaily);
+    assert.ok(b.battle.a && b.battle.b && b.battle.a.publicId !== pa && b.battle.b.publicId !== pa, 'себя в паре нет');
+    const again = await tx(c => S.battle(c, va, tNow));
+    assert.equal(again.battle.a.publicId, b.battle.a.publicId, 'пара держится до голоса');
+    for (let i = 0; i < C.SOCIAL.battleDaily; i++) b = await tx(c => S.vote(c, va, 'a', tNow));
+    assert.equal(b.battle.left, 0); assert.equal(b.battle.a, null);
+    await assert.rejects(tx(c => S.vote(c, va, 'a', tNow)), /votes_done|no_pair/);
+
+    // Икона стиля прошлой недели: 6 голосов за Гену.
+    const lastWeek = mondayStr(new Date(tNow - 7 * D));
+    for (let i = 0; i < 6; i++) {
+      await db.query('INSERT INTO pet_votes(voter, day, week, winner, loser) VALUES($1,$2,$3,$4,$5)', [vc, '2000-01-01', lastWeek, vb, va]);
+    }
+    await db.query('DELETE FROM weekly_awards WHERE week=$1', ['style:' + lastWeek]);
+    const style = await WK2.finalizeStyleWeek(pool, tx, tNow);
+    assert.equal(style.winners, 1);
+    assert.equal(await WK2.finalizeStyleWeek(pool, tx, tNow), null, 'икона недели — один раз');
+    const gena = await W.readWallet(db, vb);
+    assert.equal(Number(gena.balance), C.SOCIAL.stylePrize.coins);
+    assert.ok(W.styleIconActive(gena, tNow));
+    const nw = await S.news(db, tNow);
+    assert.ok(nw.news.some(n => n.kind === 'style' && n.pet === 'Мурка'), JSON.stringify(nw));
+
+    // Приглашение: новый ученик вылупляет по ссылке Веры.
+    const ur = await newUser('Ерёма');
+    await setProfile('777', ur, { name: 'Ерёма Ж', totalSolved: 40 });
+    const stR = await tx(c => W.hatch(c, ur, ['777'], { species: 'dragon', ref: pa }, tNow));
+    assert.equal(stR.gift.invited, true);
+    assert.equal(stR.inventory.box_chest, 1);
+    const veraInv = await W.inventory(db, va);
+    assert.equal(veraInv.box_chest, 1);
+    const us = await newUser('Самозванец');
+    await setProfile('778', us, { totalSolved: 40 });
+    const own = await pub(ur);
+    const stS = await tx(c => W.hatch(c, us, ['778'], { species: 'owl', ref: 'zz' }, tNow));
+    assert.equal(stS.gift.invited, false);
+    assert.equal(await tx(c => W.rewardReferral(c, ur, own)), false, 'себя пригласить нельзя');
+    assert.equal(await tx(c => W.rewardReferral(c, ur, pa)), false, 'приглашённый — один раз');
+  }
+
   // Журнал сходится с балансом у каждого (кроме старичка: его журнал — выдуманный v2).
   const sums = await db.query(`SELECT w.user_id, w.balance::int b, COALESCE(sum(l.delta),0)::int s
     FROM pet_wallets w LEFT JOIN pet_ledger l ON l.user_id=w.user_id GROUP BY w.user_id, w.balance`);

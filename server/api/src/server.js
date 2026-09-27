@@ -83,7 +83,8 @@ async function leaderboardRows(type, limit) {
   // Цвет ника и мини-аватар — из кошелька «Летописчика». LEFT JOIN: у кого
   // питомца нет, строка рейтинга остаётся прежней.
   const petCols = `, w.name_style AS pet_style, w.pet->>'species' AS pet_species,
-    (w.pet->>'sick')::boolean AS pet_sick, w.equipped AS pet_equipped, w.pet->>'xp' AS pet_xp
+    (w.pet->>'sick')::boolean AS pet_sick, w.equipped AS pet_equipped, w.pet->>'xp' AS pet_xp,
+    w.public_id AS pet_public_id, w.awards AS pet_awards
     FROM student_profiles LEFT JOIN pet_wallets w ON w.user_id = student_profiles.user_id`;
   if (type === 'duel') {
     sql = `SELECT data${petCols}
@@ -125,6 +126,9 @@ async function leaderboardRows(type, limit) {
       // Мини-аватар: вид питомца и надетое. Больной питомец одежду не носит.
       avatar: row.pet_species ? { species: row.pet_species, sick: !!row.pet_sick,
         stage: petWallet.stageOf(petWallet.levelOf(Number(row.pet_xp) || 0)).id,
+        // Публичный id — чтобы по тапу открыть профиль питомца; не doc_id и не uuid.
+        publicId: row.pet_public_id || null,
+        styleIcon: petWallet.styleIconActive({ awards: row.pet_awards }, Date.now()),
         equipped: row.pet_sick ? {} : (row.pet_equipped || {}) } : null,
     };
   });
@@ -1120,6 +1124,8 @@ async function start() {
       if (month) log('info', 'pet.month.finalized', month);
       const duel = await petWeekly.finalizeDuelWeek(pool, tx);
       if (duel) log('info', 'pet.duel.finalized', duel);
+      const style = await petWeekly.finalizeStyleWeek(pool, tx);
+      if (style) log('info', 'pet.style.finalized', style);
     } catch (error) { log('warn', 'pet.weekly.failed', { message: error.message }); }
   };
   // Экономика v3: разовый пересчёт уже выданных монет (см. pet/rebalance.js).

@@ -30,6 +30,8 @@ function httpError(status, code, extra) {
 function mskDay(ms) {
   return new Date(ms + MSK).toISOString().slice(0, 10);
 }
+// Неделя — та же, что у топа недели (понедельник по Москве).
+function weekOf(ms) { return require('../moscow-time').mondayStr(new Date(ms)); }
 function prevDay(day) {
   return new Date(Date.parse(day + 'T00:00:00Z') - DAY).toISOString().slice(0, 10);
 }
@@ -227,8 +229,10 @@ async function addXp(db, w, amount, events) {
     await move(db, w, reward.coins, 'level', String(level));
     if (reward.box) await addItem(db, w.user_id, reward.box, 1, `level:${level}`);
     const stage = stageOf(level);
+    const stageUp = stage.id !== stageOf(level - 1).id;
     events.push({ reason: 'level', delta: reward.coins, level, box: reward.box,
-      stage: stage.id, stageName: stageName(w.pet.species, stage.id), stageUp: stage.id !== stageOf(level - 1).id });
+      stage: stage.id, stageName: stageName(w.pet.species, stage.id), stageUp });
+    if (stageUp && stage.id === 'sage') await addNews(db, 'sage', w.user_id, { pet: w.pet.name, species: w.pet.species });
   }
 }
 
@@ -434,6 +438,8 @@ function view(w, inv, now, extraIn = {}) {
     boostUntil: num(w.counters?.boostUntil) > now ? num(w.counters?.boostUntil) : 0,
     fragments: w.counters?.fragments || {},
     stable: stableView(w),
+    publicId: w.public_id || null,
+    styleIcon: styleIconActive(w, now),
     catalogVersion: C.CATALOG_VERSION,
     now,
     ...extra,
@@ -478,7 +484,7 @@ function cleanName(raw) {
 // первый же день. Вместо этого — подарок по стажу коробками.
 // knownAchievements — ачивки, уже полученные ДО питомца: они оплачиваются нулём,
 // чтобы потом не «доплатились» тысячами разом.
-async function hatch(db, userId, docIds, { species, name, knownAchievements = [] }, now = Date.now()) {
+async function hatch(db, userId, docIds, { species, name, knownAchievements = [], ref = null }, now = Date.now()) {
   if (!C.SPECIES.some(s => s.id === species && !s.rare)) throw httpError(400, 'bad_species');
   const counters = await profileCounters(db, userId, docIds);
   if (counters.solved < C.ECONOMY.hatchMinSolved) throw httpError(403, 'too_early', { need: C.ECONOMY.hatchMinSolved });
@@ -497,7 +503,31 @@ async function hatch(db, userId, docIds, { species, name, knownAchievements = []
     if (C.ACHIEVEMENTS[id]) await move(db, w, 0, 'achievement', id, { preHatch: true });
   }
   await saveWallet(db, w);
-  return { hatched: true, ...view(w, await inventory(db, userId), now, { gift: { coins: C.ECONOMY.welcomeCoins, boxes } }) };
+  const invited = ref ? await rewardReferral(db, userId, ref) : false;
+  return { hatched: true, ...view(w, await inventory(db, userId), now, { gift: { coins: C.ECONOMY.welcomeCoins, boxes, invited } }) };
+}
+
+// Приглашение: засчитывается при вылуплении — а вылупить можно только после
+// 10 минут решения, так что «пустой» аккаунт награды не приносит. Аккаунт
+// приглашённого должен быть новым, себя пригласить нельзя, у пригласившего —
+// потолок наград.
+async function rewardReferral(db, userId, ref) {
+  const code = String(ref || '').slice(0, 32);
+  if (!/^[a-f0-9]{6,32}$/.test(code)) return false;
+  const R = C.SOCIAL.referral;
+  const { rows } = await db.query('SELECT user_id FROM pet_wallets WHERE public_id=$1 AND pet IS NOT NULL', [code]);
+  const inviter = rows[0]?.user_id;
+  if (!inviter || inviter === userId) return false;
+  const fresh = await db.query(`SELECT 1 FROM app_users WHERE id=$1 AND created_at > now() - ($2 || ' days')::interval`,
+    [userId, String(R.accountMaxAgeDays)]);
+  if (!fresh.rowCount) return false;
+  const count = await db.query('SELECT count(*)::int AS n FROM pet_referrals WHERE inviter=$1', [inviter]);
+  if ((count.rows[0]?.n || 0) >= R.maxPerInviter) return false;
+  const ins = await db.query('INSERT INTO pet_referrals(invitee, inviter) VALUES($1,$2) ON CONFLICT DO NOTHING', [userId, inviter]);
+  if (!ins.rowCount) return false;
+  await addItem(db, userId, R.box, 1, 'referral');
+  await addItem(db, inviter, R.box, 1, 'referral');
+  return true;
 }
 
 async function withPet(db, userId, now) {
@@ -684,6 +714,7 @@ async function openBox(db, userId, boxId, now = Date.now(), rand = crypto.random
   const species = rollRareSpecies(w, box, rand);
   if (species) {
     addToStable(w, species, now);
+    await addNews(db, 'species', userId, { species, pet: w.pet.name });
     if (box.pity) pity[box.id] = 0;
     w.counters = { ...(w.counters || {}), boxes: num(w.counters?.boxes) + 1 };
     await saveWallet(db, w);
@@ -704,9 +735,25 @@ async function openBox(db, userId, boxId, now = Date.now(), rand = crypto.random
   await saveWallet(db, w);
   let owners = null;
   if (rarity === 'mythic' || rarity === 'legendary') owners = await ownersOf(db, item.id);
+  if (rarity === 'mythic' && !shards) await addNews(db, 'mythic', userId, { item: item.id, pet: w.pet.name });
   return view(w, await inventory(db, userId), now, {
     drop: { id: item.id, rarity, duplicate: !!shards, shards, owners, fragments },
   });
+}
+
+// ── Новости двора и имя хозяина ───────────────────────────────────────────
+// Имя — в том же виде, что в рейтинге («Аня К.»): оно и так публично там.
+async function ownerName(db, userId) {
+  const { rows } = await db.query(
+    "SELECT data->>'name' AS name FROM student_profiles WHERE user_id=$1 AND data->>'_mergedInto' IS NULL LIMIT 1", [userId]);
+  return require('../display-name').leaderboardName(rows[0]?.name);
+}
+async function addNews(db, kind, userId, params) {
+  const who = await ownerName(db, userId);
+  await db.query('INSERT INTO pet_news(kind, user_id, params) VALUES($1,$2,$3)', [kind, userId, JSON.stringify({ who, ...params })]);
+}
+function styleIconActive(w, now) {
+  return num(w.awards?.styleIcon?.until) > now;
 }
 
 // ── Питомник: редкие виды и смена питомца ─────────────────────────────────
@@ -780,6 +827,7 @@ async function craft(db, userId, species, now = Date.now()) {
   w.counters = { ...(w.counters || {}), fragments: { ...(w.counters?.fragments || {}), [sp.fragment]: have - frag.need } };
   addToStable(w, species, now);
   await saveWallet(db, w);
+  await addNews(db, 'species', userId, { species, pet: w.pet.name, crafted: true });
   return view(w, await inventory(db, userId), now, { crafted: { species, owners: await speciesOwners(db, species) } });
 }
 
@@ -928,7 +976,7 @@ async function mergeUserData(client, primaryId, secondaryId) {
 module.exports = {
   spin, dayTick, makeQuests, progressQuests, boostActive, PROFILE_COUNTERS, addFragment,
   tap, levelOf, xpForLevel, stageOf, levelReward, addXp, STAGES, TAP_COOLDOWN_MS,
-  craft, switchPet, speciesOwners, speciesShowcase, stageName,
+  craft, switchPet, speciesOwners, speciesShowcase, stageName, weekOf, ownerName, addNews, styleIconActive, rewardReferral,
   mskDay, prevDay, isNight, decayPet, petMoodState, profileCounters, credit, view, getState, hatch,
   buy, use, equip, rename, openBox, rollRarity, rewardAchievements, paintNick, rarityShowcase,
   mergeUserData, lockWallet, saveWallet, addItem, move, readWallet, inventory, nameStyleView, httpError,

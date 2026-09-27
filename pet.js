@@ -157,7 +157,7 @@
     this.sig = sig; this.eq = eq;
     var old = this.svg();
     var holder = document.createElement('div');
-    holder.innerHTML = PetArt.render({ species: p.species, stage: p.stage, state: p.state, items: S.items, equipped: eq, sick: p.sick, label: p.name, scene: scene });
+    holder.innerHTML = PetArt.render({ species: p.species, stage: p.stage, state: p.state, items: S.items, equipped: eq, sick: p.sick, label: p.name, scene: scene, styleIcon: !!st.styleIcon });
     var svg = holder.firstChild;
     if (old) this.host.replaceChild(svg, old); else this.host.insertBefore(svg, this.host.firstChild);
     // Надели новую вещь — она «вспыхивает» на месте и из-под неё облачко.
@@ -462,6 +462,7 @@
     $('petw-bars').innerHTML = bar('Сытость', p.sat, 'b-sat') + bar('Настроение', p.mood, 'b-mood') + bar('Здоровье', p.health, 'b-hp');
     $('petw-coins').innerHTML = COIN + ' ' + fmt(st.balance);
     widgetStage.draw(st);
+    newsLine(host);
   }
 
   // Тап по виджету: питомец откликается и открывается его окно.
@@ -524,7 +525,7 @@
     if (typeof window.popBackHandler === 'function') window.popBackHandler('modal:pet');
   }
 
-  var TABS = [['care', 'Уход'], ['wardrobe', 'Гардероб'], ['shop', 'Лавка'], ['boxes', 'Сундуки'], ['stable', 'Питомник'], ['nick', 'Ник']];
+  var TABS = [['care', 'Уход'], ['wardrobe', 'Гардероб'], ['shop', 'Лавка'], ['boxes', 'Сундуки'], ['stable', 'Питомник'], ['yard', 'Двор'], ['nick', 'Ник']];
 
   function renderModal() {
     var body = $('pet-sheet-body'); if (!body) return;
@@ -684,6 +685,7 @@
     if (S.tab === 'boxes') return paneBoxes();
     if (S.tab === 'nick') return paneNick();
     if (S.tab === 'stable') return paneStable();
+    if (S.tab === 'yard') return paneYard();
     return paneCare();
   }
 
@@ -782,6 +784,180 @@
       '<button type="button" class="pet-link" onclick="PetUI.closeSheet();PetUI.tab(\'stable\')">Пусть ждёт в питомнике</button></div>';
     if (box) { var res = $('rl-result'); if (res) res.innerHTML = html; } else sheet('<div class="pet-roll">' + html + '</div>');
     confetti();
+  }
+
+  // ── Двор: хвастаться без шума ─────────────────────────────────────────────
+  // Общей ленты нет: профиль по тапу в топе, «Кто круче?», карточка для друзей и
+  // три-пять громких новостей за сутки.
+  function paneYard() {
+    var st = S.state;
+    if (!S.newsAt || Date.now() - S.newsAt > 5 * 60 * 1000) loadNews(true);
+    var soc = S.catalog.social || {};
+    return '<div class="pet-yard">' +
+      '<button type="button" class="pet-yard-btn" onclick="PetUI.battle()"><span>⚔️</span><b>Кто круче?</b><i>Два случайных питомца — выбери образ круче. ' + (soc.battleDaily || 20) + ' голосов в день, за каждый опыт. Лучший образ недели получит ' + fmt((soc.stylePrize || {}).coins || 500) + ' ' + COIN + ' и корону</i></button>' +
+      '<button type="button" class="pet-yard-btn" onclick="PetUI.share()"><span>📣</span><b>Похвастаться друзьям</b><i>Картинка с твоим питомцем и ссылкой. Друг вылупит своего — вам обоим по сундуку</i></button>' +
+      (st.publicId ? '<button type="button" class="pet-yard-btn" onclick="PetUI.profile(\'' + st.publicId + '\')"><span>👀</span><b>Мой профиль</b><i>Как питомца видят другие и сколько реакций собрал</i></button>' : '') +
+      '<div class="pet-news"><b>Новости двора</b>' + newsList() + '</div>' +
+      '<div class="pet-hint">Тапни по питомцу в топе — откроется его профиль. Там можно поставить 🔥 👑 😂 💯 — одну реакцию в день.</div>' +
+    '</div>';
+  }
+  function newsText(n) {
+    var who = esc(n.who || 'Кто-то'), pet = esc(n.pet || '');
+    if (n.kind === 'species') return '🥚 ' + who + ': новый редкий питомец — ' + esc(speciesOf(n.species).name) + (n.crafted ? ' (собран из осколков)' : '') + '!';
+    if (n.kind === 'mythic') { var it = S.items[n.item]; return '🔥 ' + who + ': мифическая вещь «' + esc(it ? it.name : n.item) + '»!'; }
+    if (n.kind === 'sage') { var sp = speciesOf(n.species); return '✨ ' + who + ': ' + pet + ' — теперь «' + esc((sp.stages || {}).sage || 'Мудрец') + '»'; }
+    if (n.kind === 'style') return '👑 Икона стиля недели — ' + pet + ' (' + who + ')';
+    return '';
+  }
+  function newsList() {
+    var list = (S.news || []).map(newsText).filter(Boolean);
+    if (!list.length) return '<i>Пока тихо. Выбей мифическую вещь или вырасти Мудреца — и про тебя узнает весь двор.</i>';
+    return list.map(function (t) { return '<div>' + t + '</div>'; }).join('');
+  }
+  function loadNews(rerender) {
+    S.newsAt = Date.now();
+    return api('/news').then(function (r) {
+      S.news = (r && r.news) || [];
+      if (rerender && isOpen() && S.tab === 'yard') renderModal();
+      var host = mountWidget(); if (host) newsLine(host);
+    }).catch(function () {});
+  }
+  // Тихая строка под виджетом: одна свежая новость, если она есть.
+  function newsLine(host) {
+    if (!S.newsAt || Date.now() - S.newsAt > 10 * 60 * 1000) { loadNews(false); return; }
+    var line = host.querySelector('.petw-news');
+    var text = (S.news || []).map(newsText).filter(Boolean)[0];
+    if (!text) { if (line) line.remove(); return; }
+    if (!line) { line = document.createElement('div'); line.className = 'petw-news'; host.appendChild(line); }
+    line.innerHTML = text;
+  }
+
+  // Профиль питомца: свой или чужой (из топа).
+  var REACT_LABEL = { '🔥': 'Огонь', '👑': 'Король', '😂': 'Ору', '💯': 'Сотка' };
+  function profile(publicId) {
+    loadCatalog().then(function () { return api('/profile/' + encodeURIComponent(publicId)); }).then(function (r) {
+      S.profile = r.profile; profileSheet();
+    }).catch(function (e) {
+      toast('🐾', e && e.message === 'no_pet' ? 'Питомца у этого ученика пока нет' : 'Профиль не открылся — попробуй ещё раз', 'bad');
+    });
+  }
+  function profileSheet() {
+    var pr = S.profile; if (!pr) return;
+    var c = pr.collection || {}, by = c.byRarity || {};
+    var best = pr.bestItem && S.items[pr.bestItem];
+    var chips = (pr.rareSpecies || []).map(function (id) { return '<span class="pp-chip rar-mythic">' + esc(speciesOf(id).name) + '</span>'; });
+    if (pr.styleIcon) chips.unshift('<span class="pp-chip rar-legendary">👑 Икона стиля</span>');
+    if (pr.awards && pr.awards.top1) chips.push('<span class="pp-chip">🥇 ×' + pr.awards.top1 + '</span>');
+    var reacts = (S.catalog.social && S.catalog.social.reactions || ['🔥', '👑', '😂', '💯']).map(function (e) {
+      var n = (pr.reactions || {})[e] || 0, mine = pr.myReaction === e;
+      var dis = pr.self || !!pr.myReaction;
+      return '<button type="button" class="pp-react' + (mine ? ' on' : '') + '"' + (dis ? ' disabled' : '') + ' title="' + REACT_LABEL[e] + '" onclick="PetUI.react(\'' + e + '\')"><span>' + e + '</span><b>' + n + '</b></button>';
+    }).join('');
+    sheet('<div class="pet-profile">' +
+      '<div class="pet-try-stage">' + PetArt.render({ species: pr.species, stage: pr.stage, state: 'happy', items: S.items, equipped: pr.equipped || {}, scene: 'day', styleIcon: !!pr.styleIcon, label: pr.name }) + '</div>' +
+      '<b class="pp-name">' + esc(pr.name) + '</b><i>' + esc(pr.stageName) + ' · ' + pr.level + ' ур. · хозяин ' + esc(pr.owner) + '</i>' +
+      (chips.length ? '<div class="pp-chips">' + chips.join('') + '</div>' : '') +
+      '<div class="pp-stats"><span><b>' + (c.owned || 0) + '</b>/' + (c.total || 0) + ' вещей</span><span class="rar-mythic"><b>' + (by.mythic || 0) + '</b> миф</span><span class="rar-legendary"><b>' + (by.legendary || 0) + '</b> легенд</span>' +
+        (pr.styleVotes ? '<span><b>' + pr.styleVotes + '</b> голосов за неделю</span>' : '') + '</div>' +
+      (best ? '<div class="pp-best rar-' + best.rarity + '"><span class="pet-item-art">' + PetArt.renderItem(best) + '</span><div><i>Самая редкая вещь</i><b>' + esc(best.name) + '</b><span class="pet-rarity">' + rarityLabel(best.rarity) + '</span></div></div>' : '') +
+      '<div class="pp-reacts">' + reacts + '</div>' +
+      '<i class="pp-note">' + (pr.self ? 'Так твоего питомца видят другие. Реакции ставят те, кто открыл тебя в топе.' : pr.myReaction ? 'Сегодня твоя реакция уже стоит' : 'Одна реакция в день — выбирай!') + '</i>' +
+      (pr.self ? '<button type="button" class="go" onclick="PetUI.share()">📣 Похвастаться друзьям</button>' : '') +
+      '<button type="button" class="pet-link" onclick="PetUI.closeSheet()">Закрыть</button></div>');
+  }
+  function react(emoji) {
+    var pr = S.profile; if (!pr || pr.self || pr.myReaction) return;
+    haptic('light');
+    api('/react', { publicId: pr.publicId, emoji: emoji }).then(function (r) {
+      S.profile = r.profile; profileSheet();
+      var b = document.querySelector('.pp-react.on'); if (b) b.classList.add('pop');
+    }).catch(function (e) { toast('🐾', e && e.message === 'already_reacted' ? 'Сегодня реакция этому питомцу уже стоит' : 'Не получилось', 'bad'); });
+  }
+
+  // «Кто круче?» — два случайных питомца, голос за образ.
+  function battle() {
+    api('/battle').then(function (r) { S.battle = r.battle; battleSheet(); })
+      .catch(function () { toast('⚔️', 'Баттл не открылся — попробуй ещё раз', 'bad'); });
+  }
+  function battleCard(p, side) {
+    return '<button type="button" class="pb-card" id="pb-' + side + '" onclick="PetUI.vote(\'' + side + '\')">' +
+      PetArt.render({ species: p.species, stage: p.stage, state: 'happy', items: S.items, equipped: p.equipped || {}, scene: 'day', styleIcon: !!p.styleIcon, label: p.name }) +
+      '<b>' + esc(p.name) + '</b><i>' + esc(p.stageName) + ' · ' + p.level + ' ур.</i></button>';
+  }
+  function battleSheet() {
+    var b = S.battle || {};
+    var body = !b.left ? '<div class="pet-hint">Голоса на сегодня закончились — возвращайся завтра. Итоги недели — в понедельник.</div>'
+      : !b.a ? '<div class="pet-hint">Пока не с кем сравнить — позови друзей завести питомца!</div>'
+      : '<div class="pb-pair">' + battleCard(b.a, 'a') + '<span class="pb-vs">VS</span>' + battleCard(b.b, 'b') + '</div>';
+    sheet('<div class="pet-battle"><b>Кто круче?</b><i>Выбери образ, который нравится больше. Осталось голосов: ' + (b.left || 0) + ' из ' + (b.daily || 20) + ' · за голос +' + ((S.catalog.social || {}).battleXp || 2) + ' опыта</i>' +
+      body + '<button type="button" class="pet-link" onclick="PetUI.closeSheet()">Закрыть</button></div>');
+  }
+  function vote(side) {
+    if (S.voting) return; S.voting = true;
+    haptic('light');
+    var el = $('pb-' + side); if (el) el.classList.add('win');
+    var other = $('pb-' + (side === 'a' ? 'b' : 'a')); if (other) other.classList.add('lose');
+    api('/battle', { pick: side }).then(function (r) {
+      setTimeout(function () { S.voting = false; S.battle = r.battle; battleSheet(); }, 420);
+      if (Array.isArray(r.events) && r.events.length) celebrateLevels(r.events);
+    }).catch(function () { S.voting = false; battle(); });
+  }
+
+  // Карточка «Похвастаться»: картинка из SVG питомца + ссылка-приглашение.
+  function shareUrl() { return location.origin + '/?ref=' + encodeURIComponent(S.state.publicId || ''); }
+  function share() {
+    var st = S.state; if (!st || !st.pet) return;
+    var p = st.pet, url = shareUrl();
+    var text = 'Мой питомец ' + p.name + ' (' + p.stageName + ', ' + p.level + ' ур.) растёт, пока я готовлюсь к ЕГЭ по истории. Заведи своего — по ссылке нам обоим сундук!';
+    var svg = PetArt.render({ species: p.species, stage: p.stage, state: 'happy', items: S.items, equipped: st.equipped || {}, scene: 'day', anim: false, styleIcon: !!st.styleIcon });
+    svg = svg.replace(/^<svg([^>]*)>/, '<svg$1 width="820" height="820"><style>.pet-chomp{display:none}</style>');
+    var img = new Image();
+    img.onload = function () {
+      try {
+        var cv = document.createElement('canvas'); cv.width = 1080; cv.height = 1350;
+        var g = cv.getContext('2d');
+        var bgr = g.createLinearGradient(0, 0, 1080, 1350); bgr.addColorStop(0, '#2b1260'); bgr.addColorStop(1, '#0f766e');
+        g.fillStyle = bgr; g.fillRect(0, 0, 1080, 1350);
+        g.fillStyle = 'rgba(255,255,255,.08)'; g.beginPath(); g.arc(540, 560, 470, 0, Math.PI * 2); g.fill();
+        g.drawImage(img, 130, 120, 820, 820);
+        g.textAlign = 'center'; g.fillStyle = '#fff';
+        g.font = '900 84px system-ui, -apple-system, Segoe UI, Roboto, sans-serif'; g.fillText(p.name, 540, 1040);
+        g.font = '700 44px system-ui, -apple-system, Segoe UI, Roboto, sans-serif'; g.fillStyle = '#ffe98a'; g.fillText(p.stageName + ' · ' + p.level + ' уровень', 540, 1105);
+        g.font = '700 38px system-ui, -apple-system, Segoe UI, Roboto, sans-serif'; g.fillStyle = 'rgba(255,255,255,.85)';
+        g.fillText('Растёт, пока я готовлюсь к ЕГЭ по истории', 540, 1190);
+        g.font = '900 42px system-ui, -apple-system, Segoe UI, Roboto, sans-serif'; g.fillStyle = '#fff'; g.fillText('reshay-istoriyu.ru', 540, 1270);
+        cv.toBlob(function (blob) { shareSheet(blob, url, text); }, 'image/png');
+      } catch (_) { shareSheet(null, url, text); }
+    };
+    img.onerror = function () { shareSheet(null, url, text); };
+    img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg);
+  }
+  function shareSheet(blob, url, text) {
+    S.shareBlob = blob; S.shareUrl = url; S.shareText = text;
+    var preview = blob ? '<img class="pet-share-img" alt="Карточка питомца" src="' + URL.createObjectURL(blob) + '">' : '';
+    var canFiles = false;
+    try { canFiles = !!(blob && navigator.canShare && navigator.canShare({ files: [new File([blob], 'pet.png', { type: 'image/png' })] })); } catch (_) {}
+    sheet('<div class="pet-share"><b>Похвастаться питомцем</b>' + preview +
+      '<i>Друг откроет ссылку, порешает 10 минут и вылупит своего питомца — вам обоим по сундуку.</i>' +
+      (canFiles ? '<button type="button" class="go" onclick="PetUI.shareSend(\'files\')">Отправить картинку</button>' : '') +
+      '<button type="button" class="' + (canFiles ? '' : 'go') + '" onclick="PetUI.shareSend(\'tg\')">Ссылка в Telegram</button>' +
+      (blob ? '<button type="button" onclick="PetUI.shareSend(\'save\')">Сохранить картинку</button>' : '') +
+      '<button type="button" class="pet-link" onclick="PetUI.closeSheet()">Закрыть</button></div>');
+  }
+  function shareSend(kind) {
+    var url = S.shareUrl, text = S.shareText, blob = S.shareBlob;
+    if (kind === 'files' && blob) {
+      navigator.share({ files: [new File([blob], 'pet.png', { type: 'image/png' })], text: text + ' ' + url }).catch(function () {});
+      return;
+    }
+    if (kind === 'save' && blob) {
+      var a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'moy-pitomec.png';
+      document.body.appendChild(a); a.click(); a.remove();
+      return;
+    }
+    var link = 'https://t.me/share/url?url=' + encodeURIComponent(url) + '&text=' + encodeURIComponent(text);
+    var tg = window.Telegram && window.Telegram.WebApp;
+    if (tg && tg.openTelegramLink) tg.openTelegramLink(link); else window.open(link, '_blank', 'noopener');
   }
 
   function buyBtn(price, onclick) {
@@ -1215,11 +1391,14 @@
   function hatch() {
     var name = $('pet-hatch-name') ? $('pet-hatch-name').value : '';
     var known = (window.state && window.state.stats && window.state.stats.achievements) || [];
-    act('/hatch', { species: hatchPick, name: name, knownAchievements: known }, function (st) {
+    var ref = null; try { ref = localStorage.getItem('pet_ref'); } catch (_) {}
+    act('/hatch', { species: hatchPick, name: name, knownAchievements: known, ref: ref }, function (st) {
       closeSheet(); confetti(); achSynced = true;
+      try { localStorage.removeItem('pet_ref'); } catch (_) {}
       var g = st.gift || {};
       sheet('<div class="pet-hatch"><div class="pet-try-stage">' + PetArt.render({ species: st.pet.species, stage: 'baby', state: 'happy', items: S.items, equipped: {}, scene: 'day' }) + '</div>' +
         '<b>Привет, я ' + esc(st.pet.name) + '!</b><i>Подарок на новоселье: ' + COIN + ' ' + fmt(g.coins) + ' и две тарелки щей' + (g.boxes ? ' · 🧰 ' + g.boxes + ' ' + plural(g.boxes, 'сундук', 'сундука', 'сундуков') + ' за твой стаж' : '') + '.</i>' +
+        (g.invited ? '<i>🎁 Приглашение друга сработало — вам обоим по сундуку!</i>' : '') +
         '<i>Корми меня, лечи и наряжай. Монеты — за каждую решённую строку.</i>' +
         '<button type="button" class="go" onclick="PetUI.closeSheet();PetUI.open(\'care\')">Познакомиться</button></div>');
     });
@@ -1234,7 +1413,12 @@
   }
   function miniAvatar(avatar) {
     if (!avatar || !avatar.species || !window.PetArt) return '';
-    return '<span class="lb-ava">' + PetArt.render({ species: avatar.species, stage: avatar.stage, state: avatar.sick ? 'sick' : 'ok', items: S.items, equipped: avatar.equipped || {}, mini: true }) + '</span>';
+    var art = PetArt.render({ species: avatar.species, stage: avatar.stage, state: avatar.sick ? 'sick' : 'ok', items: S.items, equipped: avatar.equipped || {}, mini: true, styleIcon: !!avatar.styleIcon });
+    // С публичным id аватар — кнопка: тап открывает профиль питомца с реакциями.
+    if (avatar.publicId && /^[a-f0-9]{6,32}$/.test(avatar.publicId)) {
+      return '<button type="button" class="lb-ava tap" title="Профиль питомца" onclick="event.stopPropagation();PetUI.profile(\'' + avatar.publicId + '\')">' + art + '</button>';
+    }
+    return '<span class="lb-ava">' + art + '</span>';
   }
 
   // Вызывается из updateGlobalUI (лобби показалось) — не чаще раза в 20 секунд.
@@ -1250,6 +1434,7 @@
     shopSlot: function (s) { S.shopSlot = s; renderModal(); }, wardSlot: function (s) { S.wardSlot = s; renderModal(); },
     use: use, buy: buy, toggle: toggle, undressAll: undressAll, tryOn: tryOn, buyWear: buyWear, closeSheet: closeSheet,
     quick: quick, tapPet: tapPet, widgetTap: widgetTap, boost: boost, openWheel: openWheel, spin: spin, switchPet: switchPet, craft: craft,
+    profile: profile, react: react, battle: battle, vote: vote, share: share, shareSend: shareSend,
     rename: rename, paint: paint, openBox: openBox, wearDrop: wearDrop, openHatch: openHatch, pickSpecies: pickSpecies, hatch: hatch,
     onLobby: onLobby, onAchievements: onAchievements, refresh: refresh, nickHtml: nickHtml, miniAvatar: miniAvatar,
     get state() { return S.state; }, get catalog() { return S.catalog; },
