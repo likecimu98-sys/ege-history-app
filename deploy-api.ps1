@@ -22,7 +22,8 @@ param(
     [string]$KeyPath = $(if (Test-Path -LiteralPath (Join-Path $env:USERPROFILE '.ssh\id_ed25519_deploy')) { Join-Path $env:USERPROFILE '.ssh\id_ed25519_deploy' } else { Join-Path $env:USERPROFILE '.ssh\id_ed25519' }),
     [string]$KnownHostsPath = (Join-Path $env:USERPROFILE '.ssh\known_hosts'),
     [switch]$SkipDirtyCheck,
-    [switch]$AllowBehindOrigin
+    [switch]$AllowBehindOrigin,
+    [switch]$AllowBehindLive
 )
 
 $ErrorActionPreference = 'Stop'
@@ -76,6 +77,24 @@ try {
             if ($LASTEXITCODE -ne 0) { throw 'HEAD does not contain origin/master. Run: git merge origin/master (or pass -AllowBehindOrigin for a deliberate rollback).' }
         } else {
             Write-Warning 'git fetch origin failed - rollback guard skipped.'
+        }
+    }
+
+    # Live-release guard (2026-09-27). The origin guard cannot see work another
+    # agent deployed WITHOUT pushing it: that day the teacher self-serve API
+    # (commits 4336178/d91cf9a, local master only) was live, and three pet deploys
+    # made from origin/master silently removed it. Every release stamps its commit
+    # into /opt/ege-history-api/RELEASE; refuse to ship a HEAD that does not contain it.
+    if (-not $AllowBehindLive) {
+        $liveStamp = (& ssh @sshOptions $Vps "cat /opt/ege-history-api/RELEASE 2>/dev/null || true") -join ' '
+        $liveSha = if ($liveStamp -match '^\S+\s+([0-9a-f]{7,40})\b') { $Matches[1] } else { '' }
+        if ($liveSha) {
+            $known = & git -c $gitTrust -C $repoRoot rev-parse -q --verify "$liveSha^{commit}"
+            if ($LASTEXITCODE -ne 0 -or -not $known) { throw "Live release runs commit $liveSha, which this repository does not have: someone deployed unpushed work. Get it pushed and merged first (or pass -AllowBehindLive for a deliberate rollback)." }
+            & git -c $gitTrust -C $repoRoot merge-base --is-ancestor $liveSha HEAD
+            if ($LASTEXITCODE -ne 0) { throw "HEAD does not contain the live commit $liveSha. Merge it first (or pass -AllowBehindLive for a deliberate rollback)." }
+        } else {
+            Write-Warning 'Live release carries no commit stamp - live guard skipped.'
         }
     }
 
