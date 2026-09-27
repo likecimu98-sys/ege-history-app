@@ -7,14 +7,14 @@
             signInWithCredential, signOut, initializeFirestore, collection, doc, setDoc, getDoc,
             getDocs, addDoc, updateDoc, deleteDoc, deleteField, onSnapshot, query, where,
             orderBy, limit, runTransaction, arrayUnion, arrayRemove, vpsApiFetch, refreshVpsAuth
-        } from "./vps-sync-compat.js?v=20260926-3";
+        } from "./vps-sync-compat.js?v=20260927-1";
 
         // jsPDF грузился с cdnjs.cloudflare.com без SRI — то есть посторонний скрипт
         // исполнялся с полными правами страницы, а при недоступности CDN (у части
         // нашей аудитории это обычное дело) экспорт PDF просто не работал. Довод тот
         // же, что и для telegram-web-app.js: своя копия с того же origin.
         // Версия совпадает с прежней CDN-ной — 2.5.1, лежит в vendor/.
-        const VENDOR_JSPDF = 'vendor/jspdf.umd.min.js?v=20260926-3';
+        const VENDOR_JSPDF = 'vendor/jspdf.umd.min.js?v=20260927-1';
 
         const cloudConfig = { projectId: 'vps-postgresql' };
         
@@ -2939,6 +2939,12 @@
             const tabs = `<div style="display:flex;gap:6px;margin-bottom:10px">${tabBtn('weekly', '🔥 Неделя')}${tabBtn('solved', '📚 Всё время')}${tabBtn('duel', '⚔️ Дуэли')}</div>`;
             cont.innerHTML = tabs + '<p class="text-[10px] font-bold text-gray-500 text-center py-4">⏳ Загрузка...</p>';
             const escTop = v => String(v == null ? '' : v).replace(/[<>&]/g, c => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;' }[c]));
+            // Цветной ник и мини-аватар «Летописчика» (pet.js). Модуль грузится
+            // лениво; если его нет — строка топа ровно прежняя, только имя.
+            const pet = window.loadPetModule ? await window.loadPetModule().catch(() => null) : null;
+            if (pet && pet.ready) await pet.ready().catch(() => null);
+            const nameTop = s => pet ? pet.nickHtml(s.displayName || 'Аноним', s.nameStyle) : escTop(s.displayName || 'Аноним');
+            const avaTop = s => (pet && s.avatar) ? pet.miniAvatar(s.avatar) : '';
             try {
                 // ── Вкладка «🔥 Неделя» ──
                 if (tab === 'weekly') {
@@ -2949,7 +2955,7 @@
                     const myLine = `<div style="text-align:center;font-size:11px;font-weight:900;color:#059669;margin-bottom:8px">Твой счёт за неделю: 🔥${mine} ${mine === 1 ? 'строка' : mine >= 2 && mine <= 4 ? 'строки' : 'строк'}</div>`;
                     let ht = '<div class="flex flex-col gap-2">';
                     rows.forEach((s, idx) => {
-                        ht += `<div class="bg-white dark:bg-[#1e1e1e] rounded-xl p-3 shadow-sm border border-gray-100 dark:border-[#2c2c2c] flex justify-between items-center transition-transform hover:-translate-y-0.5"><div class="flex items-center gap-3"><span class="text-xl sm:text-2xl drop-shadow-sm font-black">${idx===0?'🥇':(idx===1?'🥈':(idx===2?'🥉':`<span class="text-gray-400 w-5 inline-block text-center text-base">${idx+1}</span>`))}</span><div class="flex flex-col"><span class="font-black text-xs sm:text-sm text-gray-800 dark:text-gray-300 leading-tight">${escTop(s.displayName || 'Аноним')}</span>${(s.weeklyEgePoints || 0) > 0 ? `<span class="text-[11px] font-bold text-yellow-600 dark:text-yellow-400 leading-tight">⭐ ${s.weeklyEgePoints} балл. ЕГЭ</span>` : ''}</div></div><div class="text-right flex flex-col items-end"><span class="text-sm font-black text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/30 px-2 py-0.5 rounded-lg border border-emerald-100 dark:border-emerald-800/50">🔥${s.weeklyScore || 0}</span></div></div>`;
+                        ht += `<div class="bg-white dark:bg-[#1e1e1e] rounded-xl p-3 shadow-sm border border-gray-100 dark:border-[#2c2c2c] flex justify-between items-center transition-transform hover:-translate-y-0.5"><div class="flex items-center gap-3"><span class="text-xl sm:text-2xl drop-shadow-sm font-black">${idx===0?'🥇':(idx===1?'🥈':(idx===2?'🥉':`<span class="text-gray-400 w-5 inline-block text-center text-base">${idx+1}</span>`))}</span>${avaTop(s)}<div class="flex flex-col"><span class="font-black text-xs sm:text-sm text-gray-800 dark:text-gray-300 leading-tight">${nameTop(s)}</span>${(s.weeklyEgePoints || 0) > 0 ? `<span class="text-[11px] font-bold text-yellow-600 dark:text-yellow-400 leading-tight">⭐ ${s.weeklyEgePoints} балл. ЕГЭ</span>` : ''}</div></div><div class="text-right flex flex-col items-end"><span class="text-sm font-black text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/30 px-2 py-0.5 rounded-lg border border-emerald-100 dark:border-emerald-800/50">🔥${s.weeklyScore || 0}</span></div></div>`;
                     });
                     if (!rows.length) ht += '<p class="text-[11px] font-bold text-gray-500 text-center py-4">Неделя только началась — реши пару строк и займи первое место! 🔥</p>';
                     ht += '</div>';
@@ -2972,7 +2978,7 @@
                     rows.forEach((s, idx) => {
                         ht += `<div class="bg-white dark:bg-[#1e1e1e] rounded-xl p-3 shadow-sm border border-gray-100 dark:border-[#2c2c2c] flex justify-between items-center">
                             <div class="flex items-center gap-3"><span class="text-xl sm:text-2xl drop-shadow-sm font-black">${idx===0?'🥇':(idx===1?'🥈':(idx===2?'🥉':`<span class="text-gray-400 w-5 inline-block text-center text-base">${idx+1}</span>`))}</span>
-                            <div class="flex flex-col"><span class="font-black text-xs sm:text-sm text-gray-800 dark:text-gray-300 leading-tight">${escTop(s.displayName || 'Аноним')}</span>
+                            ${avaTop(s)}<div class="flex flex-col"><span class="font-black text-xs sm:text-sm text-gray-800 dark:text-gray-300 leading-tight">${nameTop(s)}</span>
                             <span class="text-[9px] font-bold text-gray-400 leading-tight">${s.duelWins || 0} побед · ${s.duelLosses || 0} пораж. · матчей: ${s.duelGames || 0}</span></div></div>
                             <span class="text-sm font-black text-purple-600 dark:text-purple-400 bg-purple-50 dark:bg-purple-900/30 px-2 py-0.5 rounded-lg border border-purple-100 dark:border-purple-800/50">🏅${s.duelRating || 1000}</span></div>`;
                     });
@@ -2990,7 +2996,7 @@
                 tL.forEach((s, idx) => {
                     // @username убран намеренно: показывать посторонним телеграм-контакт
                     // школьника нельзя. Имя приходит уже сокращённым («Иван И.»).
-                    ht += `<div class="bg-white dark:bg-[#1e1e1e] rounded-xl p-3 shadow-sm border border-gray-100 dark:border-[#2c2c2c] flex justify-between items-center transition-transform hover:-translate-y-0.5"><div class="flex items-center gap-3"><span class="text-xl sm:text-2xl drop-shadow-sm font-black">${idx===0?'🥇':(idx===1?'🥈':(idx===2?'🥉':`<span class="text-gray-400 w-5 inline-block text-center text-base">${idx+1}</span>`))}</span><div class="flex flex-col"><span class="font-black text-xs sm:text-sm text-gray-800 dark:text-gray-300 leading-tight">${escTop(s.displayName || 'Аноним')}</span></div></div><div class="text-right flex flex-col items-end"><span class="text-sm font-black text-examBlue dark:text-blue-400 bg-blue-50 dark:bg-blue-900/30 px-2 py-0.5 rounded-lg border border-blue-100 dark:border-blue-800/50">${s.totalSolved || 0}</span></div></div>`;
+                    ht += `<div class="bg-white dark:bg-[#1e1e1e] rounded-xl p-3 shadow-sm border border-gray-100 dark:border-[#2c2c2c] flex justify-between items-center transition-transform hover:-translate-y-0.5"><div class="flex items-center gap-3"><span class="text-xl sm:text-2xl drop-shadow-sm font-black">${idx===0?'🥇':(idx===1?'🥈':(idx===2?'🥉':`<span class="text-gray-400 w-5 inline-block text-center text-base">${idx+1}</span>`))}</span>${avaTop(s)}<div class="flex flex-col"><span class="font-black text-xs sm:text-sm text-gray-800 dark:text-gray-300 leading-tight">${nameTop(s)}</span></div></div><div class="text-right flex flex-col items-end"><span class="text-sm font-black text-examBlue dark:text-blue-400 bg-blue-50 dark:bg-blue-900/30 px-2 py-0.5 rounded-lg border border-blue-100 dark:border-blue-800/50">${s.totalSolved || 0}</span></div></div>`;
                 });
                 if (!tL.length) ht += '<p class="text-[11px] font-bold text-gray-500 text-center py-4">Пока пусто — реши первое задание! 📚</p>';
                 ht += '</div>'; cont.innerHTML = tabs + ht;

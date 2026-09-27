@@ -2214,37 +2214,90 @@ function checkConsecutiveDays(dailyStats, neededDays) {
 }
 
 // --- СПИСОК АЧИВОК ---
+// Ачивки ученика. rarity — редкость (common/rare/epic/legendary): от неё зависит
+// рамка и сколько монет «Летописчика» платит сервер (server/api/src/pet/catalog.js,
+// ACHIEVEMENTS — id обязаны совпадать, иначе за ачивку просто не заплатят; это
+// сверяет tools-and-docs/pet-catalog.selftest.js).
+// goal/cur — для полосы прогресса у ещё не открытых: «Архивариус 1340 / 2000».
+// Выдача остаётся на клиенте, как и была; сервер лишь платит за каждую ОДИН раз.
+const _ach = (s) => s.achievementsData || {};
+const _pet = () => (window.PetUI && window.PetUI.state && window.PetUI.state.hatched) ? window.PetUI.state : null;
+const _petCounter = (key) => { const p = _pet(); return p ? Number((p.counters || {})[key]) || 0 : 0; };
+const _awards = () => window._petAwards || {};
+const _visual = (s) => (Number(s.visualArchitectureSolved) || 0) + (Number(s.visualPaintingSolved) || 0);
+const _mocks = (s) => (s.mockExams && Array.isArray(s.mockExams.history)) ? s.mockExams.history : [];
+const _bestMock = (s) => _mocks(s).reduce((m, r) => Math.max(m, Number(r.score) || 0), 0);
+const _maxMock = (s) => _mocks(s).some(r => Number(r.maxScore) > 0 && Number(r.score) >= Number(r.maxScore));
+const _consecutive = (s) => { let n = 0; for (let k = 1; k <= 120; k++) { if (checkConsecutiveDays(s.dailyStats, k)) n = k; else break; } return n; };
+const _count = (goal, cur) => ({ goal, cur: (s) => Math.min(goal, Math.floor(Number(cur(s)) || 0)), check: (s) => (Number(cur(s)) || 0) >= goal });
 const achievementsList = [
-    { id: 'lines_50', name: 'Новик', desc: 'Решить 50 строк', icon: '🌱', check: (s) => s.totalSolvedEver >= 50 },
-    { id: 'lines_500', name: 'Летописец', desc: 'Решить 500 строк', icon: '📜', check: (s) => s.totalSolvedEver >= 500 },
-    { id: 'lines_2000', name: 'Архивариус', desc: 'Решить 2000 строк', icon: '📚', check: (s) => s.totalSolvedEver >= 2000 },
-    { id: 'lines_5000', name: 'Мастер эпох', desc: 'Решить 5000 строк', icon: '🏛️', check: (s) => s.totalSolvedEver >= 5000 },
-    { id: 'streak_20', name: 'Искра знания', desc: 'Стрик 20 без ошибок', icon: '✨', check: (s) => s.streak >= 20 },
-    { id: 'streak_50', name: 'Пламя просвещения', desc: 'Стрик 50 без ошибок', icon: '🔥', check: (s) => s.streak >= 50 },
-    { id: 'streak_100', name: 'Абсолютный монолит', desc: 'Стрик 100 без ошибок', icon: '💎', check: (s) => s.streak >= 100 },
-    { id: 'days_7', name: 'Марафонец', desc: 'Заходить 7 дней подряд', icon: '🏃', check: (s) => checkConsecutiveDays(s.dailyStats, 7) },
-    { id: 'days_30', name: 'Железная воля', desc: 'Заходить 30 дней подряд', icon: '🦾', check: (s) => checkConsecutiveDays(s.dailyStats, 30) },
-    { id: 'night', name: 'Полуночник', desc: 'Решить 50 строк после 00:00', icon: '🦉', check: (s) => (s.achievementsData?.nightOwls || 0) >= 50 },
-    { id: 'morning', name: 'Ранняя пташка', desc: 'Решить 50 строк до 08:00', icon: '🌅', check: (s) => (s.achievementsData?.earlyBirds || 0) >= 50 },
-    { id: 'mistakes_0', name: 'Работа над ошибками', desc: 'Свести пул ошибок к 0 (если было 20+)', icon: '🛠️', check: (s) => (s.achievementsData?.maxMistakes || 0) >= 20 && window.state.mistakesPool.length === 0 },
-    { id: 'hw_5', name: 'Любимец учителя', desc: 'Выполнить ДЗ 5 раз', icon: '🍎', check: (s) => (s.achievementsData?.hwDone || 0) >= 5 },
-    { id: 'hw_25', name: 'Прилежный ученик', desc: 'Выполнить ДЗ 25 раз', icon: '📒', check: (s) => (s.achievementsData?.hwDone || 0) >= 25 },
-    { id: 'hw_70', name: 'Гранит науки', desc: 'Выполнить ДЗ 70 раз', icon: '🪨', check: (s) => (s.achievementsData?.hwDone || 0) >= 70 },
-    { id: 'hw_150', name: 'Машина дисциплины', desc: 'Выполнить ДЗ 150 раз', icon: '🤖', check: (s) => (s.achievementsData?.hwDone || 0) >= 150 },
-    { id: 'hw_perfect', name: 'С первого раза', desc: 'Выполнить ДЗ без ошибок', icon: '🎯', check: (s) => (s.achievementsData?.hwPerfect || 0) >= 1 },
-    { id: 'hw_ontime_1', name: 'В срок', desc: 'Сдать ДЗ вовремя', icon: '✅', check: (s) => (s.achievementsData?.hwOnTime || 0) >= 1 },
-    { id: 'hw_ontime_10', name: 'Пунктуальный', desc: 'Сдать вовремя 10 ДЗ', icon: '⏱️', check: (s) => (s.achievementsData?.hwOnTime || 0) >= 10 },
-    { id: 'hw_ontime_30', name: 'Часы по тебе сверяют', desc: 'Сдать вовремя 30 ДЗ', icon: '🕰️', check: (s) => (s.achievementsData?.hwOnTime || 0) >= 30 },
-    { id: 'hw_streak_3', name: 'Три в ряд', desc: '3 ДЗ вовремя подряд', icon: '🔗', check: (s) => (s.achievementsData?.hwStreakMax || 0) >= 3 },
-    { id: 'hw_streak_7', name: 'Неделя дисциплины', desc: '7 ДЗ вовремя подряд', icon: '🌟', check: (s) => (s.achievementsData?.hwStreakMax || 0) >= 7 },
-    { id: 'hw_streak_15', name: 'Несокрушимый график', desc: '15 ДЗ вовремя подряд', icon: '🚀', check: (s) => (s.achievementsData?.hwStreakMax || 0) >= 15 },
-    { id: 'hw_streak_30', name: 'Железная воля учёбы', desc: '30 ДЗ вовремя подряд', icon: '🏅', check: (s) => (s.achievementsData?.hwStreakMax || 0) >= 30 },
-    { id: 'hw_streak_50', name: 'Легенда класса', desc: '50 ДЗ вовремя подряд', icon: '🦾', check: (s) => (s.achievementsData?.hwStreakMax || 0) >= 50 },
-    { id: 'hw_streak_70', name: 'Абсолютная дисциплина', desc: '70 ДЗ вовремя подряд', icon: '👑', check: (s) => (s.achievementsData?.hwStreakMax || 0) >= 70 },
-    { id: 'top_3', name: 'Бронзовый призер', desc: 'Топ-3 недели по строкам', icon: '🥉', check: (s) => s.achievements?.includes('top_3') },
-    { id: 'top_1', name: 'Царь горы', desc: 'Топ-1 недели', icon: '👑', check: (s) => s.achievements?.includes('top_1') },
-    { id: 'top_1_x3', name: 'Император рейтинга', desc: 'Топ-1 недели 3 раза', icon: '🌟', check: (s) => s.achievements?.includes('top_1_x3') },
-    { id: 'all_achievements', name: 'Абсолютный Историк', desc: 'Собрать все остальные ачивки', icon: '🏆', check: (s) => (s.achievements || []).filter(id => id !== 'all_achievements').length >= (achievementsList.length - 1) }
+    { id: 'lines_50', name: 'Новик', desc: 'Решить 50 строк', icon: '🌱', rarity: 'common', ..._count(50, s => s.totalSolvedEver) },
+    { id: 'lines_500', name: 'Летописец', desc: 'Решить 500 строк', icon: '📜', rarity: 'rare', ..._count(500, s => s.totalSolvedEver) },
+    { id: 'lines_2000', name: 'Архивариус', desc: 'Решить 2000 строк', icon: '📚', rarity: 'epic', ..._count(2000, s => s.totalSolvedEver) },
+    { id: 'lines_5000', name: 'Мастер эпох', desc: 'Решить 5000 строк', icon: '🏛️', rarity: 'legendary', ..._count(5000, s => s.totalSolvedEver) },
+    { id: 'lines_10000', name: 'Живая летопись', desc: 'Решить 10 000 строк', icon: '🗿', rarity: 'legendary', ..._count(10000, s => s.totalSolvedEver) },
+    { id: 'streak_20', name: 'Искра знания', desc: 'Стрик 20 без ошибок', icon: '✨', rarity: 'common', ..._count(20, s => s.streak) },
+    { id: 'streak_50', name: 'Пламя просвещения', desc: 'Стрик 50 без ошибок', icon: '🔥', rarity: 'rare', ..._count(50, s => s.streak) },
+    { id: 'streak_100', name: 'Абсолютный монолит', desc: 'Стрик 100 без ошибок', icon: '💎', rarity: 'epic', ..._count(100, s => s.streak) },
+    { id: 'days_7', name: 'Марафонец', desc: 'Заходить 7 дней подряд', icon: '🏃', rarity: 'rare', ..._count(7, _consecutive) },
+    { id: 'days_30', name: 'Железная воля', desc: 'Заходить 30 дней подряд', icon: '🦾', rarity: 'epic', ..._count(30, _consecutive) },
+    { id: 'days_100', name: 'Сто дней летописи', desc: 'Заходить 100 дней подряд', icon: '📅', rarity: 'legendary', ..._count(100, _consecutive) },
+    { id: 'night', name: 'Полуночник', desc: 'Решить 50 строк после 00:00', icon: '🦉', rarity: 'rare', ..._count(50, s => _ach(s).nightOwls) },
+    { id: 'morning', name: 'Ранняя пташка', desc: 'Решить 50 строк до 08:00', icon: '🌅', rarity: 'rare', ..._count(50, s => _ach(s).earlyBirds) },
+    { id: 'mistakes_0', name: 'Работа над ошибками', desc: 'Свести пул ошибок к 0 (если было 20+)', icon: '🛠️', rarity: 'rare', check: (s) => (_ach(s).maxMistakes || 0) >= 20 && window.state.mistakesPool.length === 0 },
+    { id: 'task1_200', name: 'Хронолог', desc: 'Решить 200 строк задания №1', icon: '⏳', rarity: 'rare', ..._count(200, s => (s.solvedByTask || {}).task1) },
+    { id: 'task3_200', name: 'Знаток процессов', desc: 'Решить 200 строк задания №3', icon: '🔗', rarity: 'rare', ..._count(200, s => (s.solvedByTask || {}).task3) },
+    { id: 'task4_200', name: 'Картограф', desc: 'Решить 200 строк задания №4', icon: '📍', rarity: 'rare', ..._count(200, s => (s.solvedByTask || {}).task4) },
+    { id: 'task5_200', name: 'Портретист', desc: 'Решить 200 строк задания №5', icon: '👤', rarity: 'rare', ..._count(200, s => (s.solvedByTask || {}).task5) },
+    { id: 'task7_200', name: 'Искусствовед', desc: 'Решить 200 строк задания №7', icon: '🎨', rarity: 'rare', ..._count(200, s => (s.solvedByTask || {}).task7) },
+    { id: 'ege_100', name: 'Сотня баллов', desc: 'Набрать 100 баллов ЕГЭ в пробниках и заданиях ФИПИ', icon: '⭐', rarity: 'rare', ..._count(100, s => s.egePoints) },
+    { id: 'ege_1000', name: 'Тысяча баллов', desc: 'Набрать 1000 баллов ЕГЭ', icon: '🌟', rarity: 'epic', ..._count(1000, s => s.egePoints) },
+    { id: 'mock_1', name: 'Первый пробник', desc: 'Сдать первый пробник', icon: '📝', rarity: 'common', ..._count(1, s => _mocks(s).length) },
+    { id: 'mock_15', name: 'Уверенный ответ', desc: 'Набрать 15+ баллов в пробнике', icon: '🎓', rarity: 'rare', ..._count(15, _bestMock) },
+    { id: 'mock_max', name: 'Без единой ошибки', desc: 'Сдать пробник на максимум', icon: '🏆', rarity: 'epic', check: (s) => _maxMock(s) },
+    { id: 'mock_10x', name: 'Десять пробников', desc: 'Сдать 10 пробников', icon: '🗂️', rarity: 'epic', ..._count(10, s => _mocks(s).length) },
+    { id: 'duel_1', name: 'Первая победа', desc: 'Выиграть дуэль', icon: '⚔️', rarity: 'common', ..._count(1, s => s.duelWins) },
+    { id: 'duel_10', name: 'Дуэлянт', desc: 'Выиграть 10 дуэлей', icon: '🤺', rarity: 'rare', ..._count(10, s => s.duelWins) },
+    { id: 'duel_50', name: 'Гроза соперников', desc: 'Выиграть 50 дуэлей', icon: '🛡️', rarity: 'epic', ..._count(50, s => s.duelWins) },
+    { id: 'duel_200', name: 'Непобедимый', desc: 'Выиграть 200 дуэлей', icon: '🐉', rarity: 'legendary', ..._count(200, s => s.duelWins) },
+    { id: 'visual_50', name: 'Глаз искусствоведа', desc: '50 картин и памятников в визуале', icon: '🖼️', rarity: 'rare', ..._count(50, _visual) },
+    { id: 'visual_300', name: 'Хранитель Эрмитажа', desc: '300 картин и памятников в визуале', icon: '🏰', rarity: 'epic', ..._count(300, _visual) },
+    { id: 'tetris_1', name: 'Датрис', desc: 'Сыграть в «Датрис»', icon: '🧱', rarity: 'common', ..._count(1, s => s.tetrisGames) },
+    { id: 'match_1', name: 'Подбор', desc: 'Сыграть в «Подбор»', icon: '🧩', rarity: 'common', ..._count(1, s => s.matchGames) },
+    { id: 'order_1', name: 'Кто раньше?', desc: 'Сыграть в «Кто раньше»', icon: '🔢', rarity: 'common', ..._count(1, s => s.orderGames) },
+    { id: 'vov_20', name: 'Память о Победе', desc: 'Выучить 20 заданий режима «ВОВ»', icon: '🎖️', rarity: 'rare', ..._count(20, s => Object.keys(s.vovLearned || {}).length) },
+    { id: 'hw_5', name: 'Любимец учителя', desc: 'Выполнить ДЗ 5 раз', icon: '🍎', rarity: 'common', ..._count(5, s => _ach(s).hwDone) },
+    { id: 'hw_25', name: 'Прилежный ученик', desc: 'Выполнить ДЗ 25 раз', icon: '📒', rarity: 'rare', ..._count(25, s => _ach(s).hwDone) },
+    { id: 'hw_70', name: 'Гранит науки', desc: 'Выполнить ДЗ 70 раз', icon: '🪨', rarity: 'epic', ..._count(70, s => _ach(s).hwDone) },
+    { id: 'hw_150', name: 'Машина дисциплины', desc: 'Выполнить ДЗ 150 раз', icon: '🤖', rarity: 'legendary', ..._count(150, s => _ach(s).hwDone) },
+    { id: 'hw_perfect', name: 'С первого раза', desc: 'Выполнить ДЗ без ошибок', icon: '🎯', rarity: 'common', ..._count(1, s => _ach(s).hwPerfect) },
+    { id: 'hw_ontime_1', name: 'В срок', desc: 'Сдать ДЗ вовремя', icon: '✅', rarity: 'common', ..._count(1, s => _ach(s).hwOnTime) },
+    { id: 'hw_ontime_10', name: 'Пунктуальный', desc: 'Сдать вовремя 10 ДЗ', icon: '⏱️', rarity: 'rare', ..._count(10, s => _ach(s).hwOnTime) },
+    { id: 'hw_ontime_30', name: 'Часы по тебе сверяют', desc: 'Сдать вовремя 30 ДЗ', icon: '🕰️', rarity: 'epic', ..._count(30, s => _ach(s).hwOnTime) },
+    { id: 'hw_streak_3', name: 'Три в ряд', desc: '3 ДЗ вовремя подряд', icon: '🔗', rarity: 'common', ..._count(3, s => _ach(s).hwStreakMax) },
+    { id: 'hw_streak_7', name: 'Неделя дисциплины', desc: '7 ДЗ вовремя подряд', icon: '🌟', rarity: 'rare', ..._count(7, s => _ach(s).hwStreakMax) },
+    { id: 'hw_streak_15', name: 'Несокрушимый график', desc: '15 ДЗ вовремя подряд', icon: '🚀', rarity: 'epic', ..._count(15, s => _ach(s).hwStreakMax) },
+    { id: 'hw_streak_30', name: 'Железная воля учёбы', desc: '30 ДЗ вовремя подряд', icon: '🏅', rarity: 'epic', ..._count(30, s => _ach(s).hwStreakMax) },
+    { id: 'hw_streak_50', name: 'Легенда класса', desc: '50 ДЗ вовремя подряд', icon: '🦾', rarity: 'legendary', ..._count(50, s => _ach(s).hwStreakMax) },
+    { id: 'hw_streak_70', name: 'Абсолютная дисциплина', desc: '70 ДЗ вовремя подряд', icon: '👑', rarity: 'legendary', ..._count(70, s => _ach(s).hwStreakMax) },
+    // Топ недели. Раньше проверка ссылалась сама на себя (includes('top_1')), и
+    // ачивку не получал никто. Теперь места считает сервер при подведении недели
+    // (server/api/src/pet/weekly.js) и отдаёт счётчики в состоянии питомца.
+    { id: 'top_10', name: 'В десятке', desc: 'Попасть в топ-10 недели', icon: '🔟', rarity: 'rare', ..._count(1, () => _awards().top10) },
+    { id: 'top_3', name: 'Бронзовый призёр', desc: 'Топ-3 недели по строкам', icon: '🥉', rarity: 'epic', ..._count(1, () => _awards().top3) },
+    { id: 'top_1', name: 'Царь горы', desc: 'Топ-1 недели', icon: '👑', rarity: 'legendary', ..._count(1, () => _awards().top1) },
+    { id: 'top_1_x3', name: 'Император рейтинга', desc: 'Топ-1 недели 3 раза', icon: '🌟', rarity: 'legendary', ..._count(3, () => _awards().top1) },
+    // Питомец «Летописчик».
+    { id: 'pet_hatch', name: 'Новоселье', desc: 'Вырастить питомца из яйца', icon: '🥚', rarity: 'common', check: () => !!_pet() },
+    { id: 'pet_dress', name: 'Первый наряд', desc: 'Надеть на питомца вещь', icon: '🎩', rarity: 'common', check: () => { const p = _pet(); return !!p && Object.keys(p.equipped || {}).length > 0; } },
+    { id: 'pet_full_look', name: 'При полном параде', desc: 'Надеть на питомца 5 вещей сразу', icon: '🤵', rarity: 'rare', ..._count(5, () => { const p = _pet(); return p ? Object.keys(p.equipped || {}).length : 0; }) },
+    { id: 'pet_box_10', name: 'Кладоискатель', desc: 'Открыть 10 сундуков', icon: '🧰', rarity: 'rare', ..._count(10, () => _petCounter('boxes')) },
+    { id: 'pet_legendary', name: 'Легенда гардероба', desc: 'Получить легендарную вещь', icon: '✨', rarity: 'epic', check: () => { const p = _pet(); const b = p && (p.counters || {}).bestRarity; return b === 'legendary' || b === 'mythic'; } },
+    { id: 'pet_mythic', name: 'Миф наяву', desc: 'Получить мифическую вещь', icon: '🔥', rarity: 'legendary', check: () => { const p = _pet(); return !!p && (p.counters || {}).bestRarity === 'mythic'; } },
+    { id: 'pet_era_set', name: 'Дух эпохи', desc: 'Собрать 4 вещи одной эпохи', icon: '🏺', rarity: 'epic', ..._count(1, () => _petCounter('erasOf4')) },
+    { id: 'pet_fed_7', name: 'Заботливый хозяин', desc: 'Кормить питомца 7 дней подряд', icon: '🍲', rarity: 'rare', ..._count(7, () => _petCounter('fedStreak')) },
+    { id: 'pet_rich', name: 'Купец первой гильдии', desc: 'Накопить 5000 монет', icon: '💰', rarity: 'rare', ..._count(5000, () => { const p = _pet(); return p ? p.balance : 0; }) },
+    { id: 'all_achievements', name: 'Абсолютный Историк', desc: 'Собрать все остальные ачивки', icon: '🏆', rarity: 'legendary', check: (s) => (s.achievements || []).filter(id => id !== 'all_achievements').length >= (achievementsList.length - 1) }
 ];
 
 

@@ -2127,3 +2127,50 @@ button.stat-card:hover { border-color: var(--c-border-2); }
     position: absolute;
     left: -2px; right: -2px; top: -8px; bottom: -8px;
 }
+
+/* ── Ачивки: витрина и окно «открыта» (ui.js openAchievementsModal / showAchievementUnlock) ── */
+.ach-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; }
+@media (min-width: 640px) { .ach-grid { grid-template-columns: repeat(3, 1fr); } }
+@media (min-width: 1000px) { .ach-grid { grid-template-columns: repeat(5, 1fr); } }
+.ach-summary { grid-column: 1 / -1; font-size: 13px; font-weight: 700; color: #6b7280; text-align: center; }
+.ach-summary b { color: #111827; }
+html.dark .ach-summary b { color: #e5e7eb; }
+.ach-common { --ac: #8b93a1; } .ach-rare { --ac: #3b82f6; } .ach-epic { --ac: #a855f7; } .ach-legendary { --ac: #f59e0b; }
+.ach-card { display: flex; flex-direction: column; align-items: center; text-align: center; gap: 3px; padding: 12px 8px 10px; border-radius: 16px;
+  background: #fff; border: 2px solid #eceef2; position: relative; }
+html.dark .ach-card { background: #1e1e1e; border-color: #2c2c2c; }
+.ach-card.ach-done { border-color: var(--ac); box-shadow: 0 4px 14px color-mix(in srgb, var(--ac) 22%, transparent); }
+.ach-card:not(.ach-done) .ach-ico { filter: grayscale(1); opacity: .45; }
+.ach-ico { font-size: 34px; line-height: 1.15; }
+.ach-card b { font-size: 12px; font-weight: 900; line-height: 1.2; color: #1f2330; }
+html.dark .ach-card b { color: #e5e7eb; }
+.ach-card i { font-style: normal; font-size: 11px; color: #9ca3af; line-height: 1.25; }
+.ach-bar { width: 100%; height: 6px; border-radius: 99px; background: #eceef2; overflow: hidden; margin-top: 4px; }
+html.dark .ach-bar { background: #2c2c2c; }
+.ach-bar span { display: block; height: 100%; border-radius: 99px; background: var(--ac); }
+.ach-prog { font-size: 11px; font-weight: 800; color: #6b7280; font-variant-numeric: tabular-nums; }
+.ach-foot { display: flex; justify-content: space-between; width: 100%; margin-top: 4px; font-size: 11px; font-weight: 800; }
+.ach-rar { color: var(--ac); }
+.ach-coins { color: #b7791f; display: inline-flex; align-items: center; gap: 2px; }
+.ach-coin { display: inline-block; width: 11px; height: 11px; border-radius: 50%; font-style: normal;
+  background: radial-gradient(circle at 35% 30%, #fff3b0 0 18%, #ffd23f 19% 55%, #e0a100 56% 100%); box-shadow: inset 0 0 0 1px #b27b00; }
+.ach-pop { position: fixed; inset: 0; z-index: 10050; display: flex; align-items: center; justify-content: center; background: rgba(10, 8, 16, .55);
+  animation: ach-fade .2s ease-out; padding: 16px; }
+.ach-pop.out { opacity: 0; transition: opacity .25s; }
+@keyframes ach-fade { from { opacity: 0; } }
+.ach-pop-card { position: relative; width: 100%; max-width: 320px; background: #fff; border-radius: 24px; padding: 22px 18px 16px; text-align: center;
+  display: flex; flex-direction: column; align-items: center; gap: 4px; overflow: hidden; border: 3px solid var(--ac);
+  animation: ach-in .5s cubic-bezier(.3, 1.6, .5, 1); }
+html.dark .ach-pop-card { background: #1e1e1e; color: #e5e7eb; }
+@keyframes ach-in { from { transform: scale(.5) rotate(-6deg); opacity: 0; } }
+.ach-pop-glow { position: absolute; inset: -40% -40% auto; height: 220px; background: radial-gradient(circle, color-mix(in srgb, var(--ac) 45%, transparent), transparent 65%); pointer-events: none; }
+.ach-pop-ico { position: relative; font-size: 64px; line-height: 1.1; animation: ach-bounce 1.2s ease-in-out infinite; }
+@keyframes ach-bounce { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-6px); } }
+.ach-pop-title { position: relative; font-size: 12px; font-weight: 900; letter-spacing: .08em; text-transform: uppercase; color: var(--ac); }
+.ach-pop-card b { position: relative; font-size: 20px; font-weight: 900; }
+.ach-pop-card i { position: relative; font-style: normal; font-size: 13px; color: #6b7280; }
+.ach-pop-rar { font-size: 12px; font-weight: 800; color: var(--ac); }
+.ach-pop-coins { margin-top: 4px; font-weight: 900; font-size: 16px; color: #b7791f; display: inline-flex; align-items: center; gap: 4px; }
+.ach-pop-coins .ach-coin { width: 16px; height: 16px; }
+.ach-pop-card button { margin-top: 10px; width: 100%; border: 0; border-radius: 14px; padding: 10px; font-weight: 900; color: #fff; background: var(--ac); cursor: pointer; }
+.ach-pop-many { position: relative; display: flex; flex-wrap: wrap; justify-content: center; gap: 6px; font-size: 30px; margin: 6px 0; }

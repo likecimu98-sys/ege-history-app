@@ -99,15 +99,15 @@
     <link rel="manifest" href="manifest.webmanifest">
     <link rel="icon" type="image/png" href="assets/icons/icon-192.png">
     <link rel="apple-touch-icon" href="assets/icons/icon-180.png">
-    <link rel="stylesheet" href="tokens.css?v=20260926-3">
-    <link rel="stylesheet" href="output.css?v=20260926-3">
-    <link rel="stylesheet" href="theme-classic.css?v=20260926-3">
-    <link rel="stylesheet" href="styles.css?v=20260926-3">
+    <link rel="stylesheet" href="tokens.css?v=20260927-1">
+    <link rel="stylesheet" href="output.css?v=20260927-1">
+    <link rel="stylesheet" href="theme-classic.css?v=20260927-1">
+    <link rel="stylesheet" href="styles.css?v=20260927-1">
     
     <!-- Самохостинг telegram-web-app.js: telegram.org часто недоступен (сеть/VPN),
          тогда window.Telegram не создавался → known_tg_id не считывался → случайный id «через раз».
          Локальная копия отдаётся с того же origin и кэшируется service worker'ом. -->
-    <script src="vendor/telegram-web-app.js?v=20260926-3" defer></script>
+    <script src="vendor/telegram-web-app.js?v=20260927-1" defer></script>
 
     <style>
         /* Этот inline-блок намеренно МИНИМАЛЕН: только то, что должно сработать на
@@ -333,7 +333,7 @@
 
     <script>
       (function() {
-      var BOOT_RELEASE = '20260926-3';
+      var BOOT_RELEASE = '20260927-1';
         var bootT0 = Date.now();
         // 🔴 Диагностика загрузки НЕ должна зависеть только от fetch.
         // 30.07 два айфона скачали страницу и ВСЕ 20 скриптов (200 в логе), но не
@@ -591,28 +591,28 @@
          диагностика поломок сама стала способом их устроить.
          Единственное, что теряется с defer, — ошибки инлайн-скриптов ВЫШЕ по
          документу. Они уже покрыты своим отчётом (bootSignal('error')). -->
-    <script src="telemetry.js?v=20260926-3" defer></script>
+    <script src="telemetry.js?v=20260927-1" defer></script>
 
     <!-- JS разбит на модули: config → utils → state → table → ui → modes → app -->
     <!-- Порядок defer гарантирован браузером: выполняются строго по порядку в DOM -->
-    <script src="config.js?v=20260926-3" defer></script>
-    <script src="utils.js?v=20260926-3" defer></script>
-    <script src="exam-scoring.js?v=20260926-3" defer></script>
-    <script src="state.js?v=20260926-3" defer></script>
-    <script src="table.js?v=20260926-3" defer></script>
-    <script src="ui.js?v=20260926-3" defer></script>
-    <script src="modes.js?v=20260926-3" defer></script>
-    <script src="swipe-data.js?v=20260926-3" defer></script>
-    <script src="swipe-mode.js?v=20260926-3" defer></script>
-    <script src="match-mode.js?v=20260926-3" defer></script>
-    <script src="order-mode.js?v=20260926-3" defer></script>
-    <script src="order-data.js?v=20260926-3" defer></script>
-    <script src="tetris-mode.js?v=20260926-3" defer></script>
-    <script src="duel-react.js?v=20260926-3" defer></script>
-    <script src="vov-mode.js?v=20260926-3" defer></script>
-    <script src="visual-trainer.js?v=20260926-3" defer></script>
-    <script src="exam-mode.js?v=20260926-3" defer></script>
-    <script src="app.js?v=20260926-3" defer></script>
+    <script src="config.js?v=20260927-1" defer></script>
+    <script src="utils.js?v=20260927-1" defer></script>
+    <script src="exam-scoring.js?v=20260927-1" defer></script>
+    <script src="state.js?v=20260927-1" defer></script>
+    <script src="table.js?v=20260927-1" defer></script>
+    <script src="ui.js?v=20260927-1" defer></script>
+    <script src="modes.js?v=20260927-1" defer></script>
+    <script src="swipe-data.js?v=20260927-1" defer></script>
+    <script src="swipe-mode.js?v=20260927-1" defer></script>
+    <script src="match-mode.js?v=20260927-1" defer></script>
+    <script src="order-mode.js?v=20260927-1" defer></script>
+    <script src="order-data.js?v=20260927-1" defer></script>
+    <script src="tetris-mode.js?v=20260927-1" defer></script>
+    <script src="duel-react.js?v=20260927-1" defer></script>
+    <script src="vov-mode.js?v=20260927-1" defer></script>
+    <script src="visual-trainer.js?v=20260927-1" defer></script>
+    <script src="exam-mode.js?v=20260927-1" defer></script>
+    <script src="app.js?v=20260927-1" defer></script>
 
     <!-- ШАПКА -->
     <header id="main-header" class="sticky top-0 z-50 no-print transition-colors duration-400 pt-2 pb-2 sm:pt-3 sm:pb-3 px-4">
@@ -705,6 +705,10 @@
                  Это единственное на экране пятно со сплошной заливкой — так и задумано:
                  заливка цветом = «сюда», всё остальное = поверхность плюс акцент. -->
             <div id="main-action"></div>
+
+            <!-- «Летописчик» — питомец ученика. Пусто, пока ученик не порешал ~10 минут:
+                 новичка первым экраном не пугаем. Содержимое рисует pet.js (грузится лениво). -->
+            <div id="lobby-pet"></div>
 
             <!-- 🔴 Связь с облаком. Показывается ТОЛЬКО при устойчивом отказе входа
                  или синхронизации. До 01.08.2026 такой отказ был немым: клиент
@@ -1271,7 +1275,7 @@
     <div id="achievements-modal" class="fixed inset-0 bg-black/80 z-[10006] hidden flex-col items-center justify-center backdrop-blur-sm opacity-0 transition-opacity no-print modal-content-hidden">
         <div class="bg-white dark:bg-[#1e1e1e] rounded-2xl w-[95%] max-w-4xl max-h-[90vh] flex flex-col shadow-2xl overflow-hidden">
             <div class="p-4 border-b border-gray-200 dark:border-[#2c2c2c] flex justify-between items-center bg-gray-50 dark:bg-[#181818] shrink-0"><div><h2 class="text-lg sm:text-xl font-black text-gray-800 dark:text-gray-300 flex items-center gap-2">🏆 Ачивки</h2></div><button data-action="hideModal" data-arg="achievements-modal" class="text-3xl text-gray-400 hover:text-rose-500 transition-colors leading-none">&times;</button></div>
-            <div class="flex-grow p-4 overflow-y-auto custom-scroll bg-gray-100 dark:bg-[#121212]"><div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3" id="achievements-grid"></div></div>
+            <div class="flex-grow p-4 overflow-y-auto custom-scroll bg-gray-100 dark:bg-[#121212]"><div class="ach-grid" id="achievements-grid"></div></div>
         </div>
     </div>
     
@@ -1534,11 +1538,11 @@
     <!-- jsPDF грузится лениво (см. loadJsPDFOnDemand в cloud-sync.js) — не нужен при старте -->
 
     <!-- === PWA + first-party cloud sync loader === -->
-    <script src="pwa.js?v=20260926-3" defer></script>
+    <script src="pwa.js?v=20260927-1" defer></script>
 
     <!-- Ядро (факты, ~659 КБ): нужно для лобби и заданий. Приложение ОТКРЫВАЕТСЯ сразу
          после него — defer парсит HTML параллельно, порядок выполнения гарантирован. -->
-    <script src="data.js?v=20260926-3" defer></script>
+    <script src="data.js?v=20260927-1" defer></script>
     <!-- app:ready диспатчит инлайн-вотчер готовности в начале <body> (см. watchBoot):
          отдельный boot-ready.js убран — свежий файл не лежал в старом SW-кэше и на
          моргнувшей сети вис, не давая снять заставку. -->

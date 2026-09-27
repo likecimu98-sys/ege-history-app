@@ -260,7 +260,7 @@ const ACHIEVEMENTS = {
   top_3: 'epic', top_1: 'legendary', top_1_x3: 'legendary', top_10: 'rare',
   all_achievements: 'legendary',
   duel_1: 'common', duel_10: 'rare', duel_50: 'epic', duel_200: 'legendary',
-  mock_1: 'common', mock_20: 'rare', mock_10x: 'epic',
+  mock_1: 'common', mock_15: 'rare', mock_max: 'epic', mock_10x: 'epic',
   ege_100: 'rare', ege_1000: 'epic',
   visual_50: 'rare', visual_300: 'epic',
   tetris_1: 'common', match_1: 'common', order_1: 'common', vov_20: 'rare',

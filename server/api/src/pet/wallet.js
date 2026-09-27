@@ -236,6 +236,9 @@ function view(w, inv, now, extra = {}) {
     pet.night = isNight(now);
   }
   return {
+    // view() зовут только для вылупившегося питомца — признак в каждом ответе,
+    // иначе клиент по ответу /achievements решал, что питомца нет, и прятал виджет.
+    hatched: !!w.pet,
     balance: Number(w.balance) || 0,
     earnedTotal: Number(w.earned_total) || 0,
     pet,

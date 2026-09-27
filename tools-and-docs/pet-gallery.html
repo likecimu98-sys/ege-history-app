@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Летописчик — галерея вещей</title>
+<!-- Инструмент разработки: все вещи каталога на всех четырёх зверьках.
+     Открывать через локальный сервер из корня репозитория:
+     http://localhost:8123/tools-and-docs/pet-gallery.html
+     На прод не попадает (tools-and-docs/ — export-ignore). -->
+<script>document.write('<link rel="stylesheet" href="../pet.css?t=' + Date.now() + '">');</script>
+<style>
+  body { font: 14px/1.35 system-ui, sans-serif; margin: 0; padding: 16px; background: #f5f3ef; color: #222; }
+  h1 { font-size: 20px; margin: 0 0 8px; }
+  .bar { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; position: sticky; top: 0; background: #f5f3ef; padding: 6px 0; z-index: 2; }
+  .bar button { border: 1px solid #ccc; background: #fff; border-radius: 8px; padding: 6px 10px; cursor: pointer; }
+  .bar button.on { background: #222; color: #fff; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; }
+  .card { background: #fff; border-radius: 14px; padding: 8px; border: 2px solid var(--rc); text-align: center; }
+  .card .pet { width: 134px; height: 134px; margin: 0 auto; }
+  .card .icon { width: 64px; height: 64px; margin: 4px auto; }
+  .card b { display: block; font-size: 12px; }
+  .card i { display: block; font-size: 11px; color: var(--rc); font-style: normal; font-weight: 700; }
+  .states { display: flex; gap: 10px; flex-wrap: wrap; margin: 8px 0 18px; }
+  .states div { width: 120px; text-align: center; font-size: 12px; background: #fff; border-radius: 12px; padding: 6px; }
+</style>
+</head>
+<body>
+<h1>Летописчик — все вещи</h1>
+<div class="bar" id="species"></div>
+<div class="states" id="states"></div>
+<div class="bar" id="slots"></div>
+<div class="grid" id="grid"></div>
+<script>var module = { exports: {} };</script>
+<script>document.write('<script src="../server/api/src/pet/catalog.js?t=' + Date.now() + '"><\/script><script src="../pet-art.js?t=' + Date.now() + '"><\/script>');</script>
+<script>
+  var CAT = module.exports.publicCatalog();
+  var items = {}; CAT.items.forEach(function (i) { items[i.id] = i; });
+  var q = new URLSearchParams(location.search);
+  var species = q.get('sp') || 'kitten', slot = q.get('slot') || 'all';
+  function btns(el, list, cur, on) {
+    el.innerHTML = list.map(function (x) { return '<button class="' + (x[0] === cur ? 'on' : '') + '" data-v="' + x[0] + '">' + x[1] + '</button>'; }).join('');
+    el.onclick = function (e) { var v = e.target.dataset.v; if (v) on(v); };
+  }
+  function draw() {
+    btns(document.getElementById('species'), CAT.species.map(function (s) { return [s.id, s.name]; }), species, function (v) { species = v; draw(); });
+    btns(document.getElementById('slots'), [['all', 'Все (' + CAT.items.length + ')']].concat(CAT.slots.map(function (s) { return [s.id, s.label]; })), slot, function (v) { slot = v; draw(); });
+    document.getElementById('states').innerHTML = ['happy', 'ok', 'sad', 'hungry', 'sick', 'sleep'].map(function (st) {
+      return '<div>' + PetArt.render({ species: species, state: st, items: items, equipped: {} }) + st + '</div>';
+    }).join('');
+    document.getElementById('grid').innerHTML = CAT.items.filter(function (i) { return slot === 'all' || i.slot === slot; }).map(function (i) {
+      var eq = {}; eq[i.slot] = i.id;
+      return '<div class="card rar-' + i.rarity + '"><div class="pet">' + PetArt.render({ species: species, state: 'ok', items: items, equipped: eq }) + '</div>' +
+        '<div class="icon">' + PetArt.renderItem(i) + '</div><b>' + i.name + '</b><i>' + i.rarity + ' · ' + (i.price || 'коробка') + '</i></div>';
+    }).join('');
+  }
+  draw();
+</script>
+</body>
+</html>

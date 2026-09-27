@@ -1091,17 +1091,22 @@ window.creditActiveHwItem = creditActiveHwItem;
 function checkAchievements() {
     if (!window.state.stats.achievements) window.state.stats.achievements = [];
     if (!window.state.stats.achievementsData) window.state.stats.achievementsData = { nightOwls: 0, earlyBirds: 0, hwDone: 0, hwPerfect: 0, maxMistakes: 0 };
-    let unlockedAny = false;
+    const unlocked = [];
     if (typeof achievementsList !== 'undefined') {
         achievementsList.forEach(ach => {
             if (!window.state.stats.achievements.includes(ach.id) && ach.check(window.state.stats)) {
                 window.state.stats.achievements.push(ach.id);
-                unlockedAny = true;
-                showToast('🏆', `Ачивка открыта: ${ach.name}!`, 'bg-yellow-500', 'border-yellow-700');
+                unlocked.push(ach);
             }
         });
     }
-    if (unlockedAny) saveProgress();
+    if (unlocked.length) {
+        saveProgress();
+        if (typeof window.showAchievementUnlock === 'function') window.showAchievementUnlock(unlocked);
+        else showToast('🏆', `Ачивка открыта: ${unlocked[0].name}!`, 'bg-yellow-500', 'border-yellow-700');
+        // Монеты за ачивку начисляет сервер — ровно один раз за каждую.
+        if (window.PetUI) window.PetUI.onAchievements(unlocked.map(a => a.id));
+    }
 }
 
 // --- Загрузка из localStorage ---

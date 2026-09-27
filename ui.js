@@ -1047,8 +1047,37 @@ document.addEventListener('app:ready', function initPullToRefresh() {
     lobby.addEventListener('touchend', function() { pulling = false; }, { passive: true });
 }, { once: true });
 
+// «Летописчик» (питомец ученика) — три файла, которые НЕ входят в стартовую
+// загрузку: приложение открывается без них, а питомец подгружается на простое
+// после app:ready. Версия — та же ?v=, что у самого ui.js, иначе Service Worker
+// отдавал бы старый pet.js по неизменной ссылке (см. AGENTS.md про RELEASE).
+const _petRelease = (() => {
+    try { return new URL(document.currentScript.src).searchParams.get('v') || ''; } catch (e) { return ''; }
+})();
+let _petLoading = null;
+window.loadPetModule = function() {
+    if (window.PetUI) return Promise.resolve(window.PetUI);
+    if (_petLoading) return _petLoading;
+    const v = _petRelease ? '?v=' + encodeURIComponent(_petRelease) : '';
+    const css = document.createElement('link');
+    css.rel = 'stylesheet'; css.href = 'pet.css' + v;
+    document.head.appendChild(css);
+    const load = src => new Promise((resolve, reject) => {
+        const s = document.createElement('script');
+        s.src = src + v; s.onload = resolve;
+        s.onerror = () => { s.remove(); reject(new Error('pet_load_failed:' + src)); };
+        document.body.appendChild(s);
+    });
+    _petLoading = load('pet-art.js').then(() => load('pet.js')).then(() => window.PetUI)
+        .catch(e => { _petLoading = null; console.warn('[pet]', e.message); return null; });
+    return _petLoading;
+};
+
 document.addEventListener('app:ready', function() {
     patchHeaderDOM();
+    // Питомец — на простое, чтобы не отнимать сеть у первого экрана.
+    const petIdle = window.requestIdleCallback || (fn => setTimeout(fn, 1500));
+    petIdle(() => window.loadPetModule(), { timeout: 4000 });
     if (typeof updateGlobalUI === 'function') updateGlobalUI();
     // data.js уже загружен — можно корректно посчитать дела
     if (typeof window.refreshDetectiveCaseOptions === 'function') window.refreshDetectiveCaseOptions();
@@ -2717,6 +2746,9 @@ else initLobbyTabs();
 function updateGlobalUI() {
     renderMainAction();
     renderLobbySide();
+    // Питомец сам решает, пора ли спросить сервер (не чаще раза в 20 секунд):
+    // сюда приходят после каждого возврата в лобби — ровно когда могли решить строк.
+    if (window.PetUI) window.PetUI.onLobby();
     const now = Date.now();
     let totalL = 0, freshL = 0;
     Object.values(window.state.stats.factStreaks || {}).forEach(d => {
@@ -3112,10 +3144,98 @@ window.saveProfileName = function() {
     if (window.syncProgressToCloud) window.syncProgressToCloud();
 };
 
+// Ачивки: редкость, награда монетами «Летописчика» и прогресс к ещё не открытым.
+// Сначала открытые, потом — ближайшие к открытию: так видно, к чему тянуться.
+// Классы ach-* живут в styles.css (не Tailwind): готовый output.css новых
+// утилит не содержит, а пересборка CSS ради одной витрины — лишний риск.
+const ACH_RARITY = { common: ['Обычная', 50], rare: ['Редкая', 150], epic: ['Эпическая', 400], legendary: ['Легендарная', 1000] };
+function achReward(rarity) {
+    const cat = window.PetUI && window.PetUI.catalog;
+    const r = cat && cat.achievementRewards ? cat.achievementRewards[rarity] : null;
+    return r != null ? r : (ACH_RARITY[rarity] || ACH_RARITY.common)[1];
+}
 window.openAchievementsModal = function() {
-    const gr = $('achievements-grid'); if (gr && typeof achievementsList !== 'undefined') { let ht = ''; achievementsList.forEach(a => { const isU = window.state.stats.achievements.includes(a.id); ht += `<div class="achievement-card bg-white dark:bg-[#1e1e1e] border ${isU ? 'border-yellow-400 shadow-[0_4px_15px_rgba(250,204,21,0.2)]' : 'border-gray-100 dark:border-[#2c2c2c]'} rounded-2xl p-4 flex flex-col items-center text-center relative ${isU ? '' : 'achievement-locked'}"><div class="text-4xl mb-3 drop-shadow-sm">${a.icon}</div><h4 class="font-black text-[10px] sm:text-xs text-gray-800 dark:text-gray-300 mb-1 leading-tight uppercase tracking-wide">${a.name}</h4><p class="text-[9px] font-bold text-gray-400 leading-tight mt-1">${a.desc}</p></div>`; }); gr.innerHTML = ht; }
+    const gr = $('achievements-grid');
+    if (gr && typeof achievementsList !== 'undefined') {
+        const s = window.state.stats;
+        const got = new Set(s.achievements || []);
+        const rows = achievementsList.map(a => {
+            const done = got.has(a.id);
+            let cur = null;
+            try { cur = (!done && a.goal && typeof a.cur === 'function') ? a.cur(s) : null; } catch (e) { cur = null; }
+            const ratio = done ? 2 : (cur != null && a.goal ? cur / a.goal : 0);
+            return { a, done, cur, ratio };
+        }).sort((x, y) => y.ratio - x.ratio);
+        const opened = rows.filter(r => r.done).length;
+        const earned = rows.filter(r => r.done).reduce((n, r) => n + achReward(r.a.rarity || 'common'), 0);
+        let ht = `<div class="ach-summary">Открыто <b>${opened}</b> из ${rows.length}${window.PetUI && window.PetUI.state && window.PetUI.state.hatched ? ` · за ачивки питомцу платят монетами` : ''}</div>`;
+        rows.forEach(({ a, done, cur }) => {
+            const rar = a.rarity || 'common';
+            const label = (ACH_RARITY[rar] || ACH_RARITY.common)[0];
+            const bar = (!done && cur != null && a.goal > 1)
+                ? `<div class="ach-bar"><span style="width:${Math.max(4, Math.round(cur / a.goal * 100))}%"></span></div><div class="ach-prog">${cur.toLocaleString('ru-RU')} / ${a.goal.toLocaleString('ru-RU')}</div>`
+                : '';
+            ht += `<div class="ach-card ach-${rar}${done ? ' ach-done' : ''}">
+                <div class="ach-ico">${a.icon}</div>
+                <b>${a.name}</b><i>${a.desc}</i>${bar}
+                <div class="ach-foot"><span class="ach-rar">${label}</span><span class="ach-coins">${done ? '✓' : '+' + achReward(rar)}<em class="ach-coin"></em></span></div>
+            </div>`;
+        });
+        gr.innerHTML = ht;
+    }
     showModal('achievements-modal');
 };
+
+// Окно «Ачивка открыта!». Несколько подряд — по очереди, не пачкой тостов.
+const _achQueue = [];
+let _achShowing = false;
+window.showAchievementUnlock = function(list) {
+    list = list || [];
+    // Пачкой открывается при выходе новых ачивок: у старичков разом сработают
+    // «200 строк задания №4» и соседние. Десять окон подряд — наказание, а не
+    // праздник: больше двух — одно общее окно со значками.
+    if (list.length > 2) {
+        _achQueue.push({ multi: list, rarity: list.reduce((best, a) => {
+            const order = ['common', 'rare', 'epic', 'legendary'];
+            return order.indexOf(a.rarity || 'common') > order.indexOf(best) ? a.rarity : best;
+        }, 'common') });
+    } else list.forEach(a => _achQueue.push(a));
+    if (!_achShowing) _achNext();
+};
+function _achNext() {
+    const a = _achQueue.shift();
+    if (!a) { _achShowing = false; return; }
+    _achShowing = true;
+    const rar = a.rarity || 'common';
+    const hatched = !!(window.PetUI && window.PetUI.state && window.PetUI.state.hatched);
+    const el = document.createElement('div');
+    el.className = 'ach-pop ach-' + rar;
+    if (a.multi) {
+        const sum = a.multi.reduce((n, x) => n + achReward(x.rarity || 'common'), 0);
+        el.innerHTML = `<div class="ach-pop-card"><div class="ach-pop-glow"></div>
+            <div class="ach-pop-title">Новые ачивки: ${a.multi.length}</div>
+            <div class="ach-pop-many">${a.multi.map(x => `<span title="${x.name}">${x.icon}</span>`).join('')}</div>
+            <i>${a.multi.slice(0, 4).map(x => x.name).join(', ')}${a.multi.length > 4 ? ' и ещё ' + (a.multi.length - 4) : ''}</i>
+            ${hatched ? `<div class="ach-pop-coins">+${sum} <em class="ach-coin"></em> питомцу</div>` : ''}
+            <button type="button">Посмотреть все</button></div>`;
+        const closeMany = () => { el.classList.add('out'); setTimeout(() => { el.remove(); _achNext(); }, 250); };
+        el.addEventListener('click', e => { closeMany(); if (e.target.tagName === 'BUTTON') window.openAchievementsModal(); });
+        document.body.appendChild(el);
+        setTimeout(closeMany, 6000);
+        return;
+    }
+    el.innerHTML = `<div class="ach-pop-card"><div class="ach-pop-glow"></div><div class="ach-pop-ico">${a.icon}</div>
+        <div class="ach-pop-title">Ачивка открыта!</div><b>${a.name}</b><i>${a.desc}</i>
+        <div class="ach-pop-rar">${(ACH_RARITY[rar] || ACH_RARITY.common)[0]}</div>
+        ${hatched ? `<div class="ach-pop-coins">+${achReward(rar)} <em class="ach-coin"></em> питомцу</div>` : ''}
+        <button type="button">Круто!</button></div>`;
+    const close = () => { el.classList.add('out'); setTimeout(() => { el.remove(); _achNext(); }, 250); };
+    el.addEventListener('click', close);
+    document.body.appendChild(el);
+    try { if (window.Sfx && window.Sfx.play) window.Sfx.play('win'); } catch (e) {}
+    try { if (typeof haptic === 'function') haptic('success'); } catch (e) {}
+    setTimeout(close, 4200);
+}
 
 window.openTeacherModal = async function() {
     const authorized = window.checkTeacherRole ? await window.checkTeacherRole() : false;

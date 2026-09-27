@@ -1,7 +1,7 @@
 'use strict';
 
-const APP_VERSION = '2026-09-26-vps-130';
-const RELEASE_ASSET_VERSION = '20260926-3';
+const APP_VERSION = '2026-09-27-vps-131';
+const RELEASE_ASSET_VERSION = '20260927-1';
 // ⚠️ Версия НАБОРА КАРТИНОК, а не версия приложения. Поднимай её ТОЛЬКО когда
 // меняется состав offline-assets.json — добавились, удалились или переснялись
 // файлы. От бампа APP_VERSION она не зависит и зависеть не должна.
@@ -66,6 +66,11 @@ const CORE_URLS = [
     `./app.js?v=${RELEASE_ASSET_VERSION}`,
     `./cloud-sync.js?v=${RELEASE_ASSET_VERSION}`,
     `./vps-sync-compat.js?v=${RELEASE_ASSET_VERSION}`,
+    // «Летописчик» (питомец): НЕ в стартовой загрузке страницы, но прогрев кэша
+    // фоновый — чтобы питомец жил и офлайн. ui.js грузит их с тем же ?v=.
+    `./pet-art.js?v=${RELEASE_ASSET_VERSION}`,
+    `./pet.js?v=${RELEASE_ASSET_VERSION}`,
+    `./pet.css?v=${RELEASE_ASSET_VERSION}`,
     // Тяжёлые visual*.generated.js НЕ прекэшируем на install: они загружаются только
     // при открытии визуальных режимов и затем кэшируются fetch-handler'ом.
     `./data.js?v=${RELEASE_ASSET_VERSION}`,
