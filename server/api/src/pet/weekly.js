@@ -124,7 +124,11 @@ async function queueNotifications(client, week, results) {
 // с разбивкой в details. Значит, в зачёт идут только ученики с питомцем — и это
 // честно: без питомца нет и кошелька, куда класть награду.
 // Разовость — строка в weekly_awards с ключом 'month:YYYY-MM' / 'duel:<неделя>'.
-const MSK_OFFSET = "interval '3 hours'";
+// Полночь по Москве как момент времени (timestamptz), не зависящий от
+// часового пояса сессии базы. Раньше было «дата − 3 часа»: это timestamp без
+// пояса, и база трактовала его в своём TimeZone — при сессии в МСК граница
+// недели уезжала на 3 часа, и вечер воскресенья выпадал из недели.
+const MSK_MIDNIGHT = expr => `((${expr})::timestamp AT TIME ZONE 'Europe/Moscow')`;
 
 function monthKey(ms) {
   return new Date(ms + 3 * 3600 * 1000).toISOString().slice(0, 7);
@@ -163,8 +167,8 @@ async function finalizeByLedger(pool, tx, key, fromSql, toSql, params, field, ta
 // Прошлый месяц: подводится в первый тик нового месяца (по Москве).
 async function finalizeMonth(pool, tx, now = Date.now()) {
   const month = prevMonthKey(now);
-  const from = `(($1 || '-01')::date - ${MSK_OFFSET})`;
-  const to = `((($1 || '-01')::date + interval '1 month') - ${MSK_OFFSET})`;
+  const from = MSK_MIDNIGHT("($1 || '-01')::date");
+  const to = MSK_MIDNIGHT("(($1 || '-01')::date + interval '1 month')");
   return finalizeByLedger(pool, tx, `month:${month}`, from, to, [month], 'lines', C.MONTHLY_PRIZES, 'month',
     (w, place, prize) => {
       if (!prize.title) return;
@@ -175,8 +179,8 @@ async function finalizeMonth(pool, tx, now = Date.now()) {
 // Прошлая неделя дуэлей: по победам, за которые заплачено в ту неделю.
 async function finalizeDuelWeek(pool, tx, now = Date.now()) {
   const week = mondayStr(new Date(now - 7 * DAY));
-  const from = `($1::date - ${MSK_OFFSET})`;
-  const to = `(($1::date + interval '7 days') - ${MSK_OFFSET})`;
+  const from = MSK_MIDNIGHT('$1::date');
+  const to = MSK_MIDNIGHT("($1::date + interval '7 days')");
   return finalizeByLedger(pool, tx, `duel:${week}`, from, to, [week], 'duelWins', C.DUEL_PRIZES, 'duel');
 }
 
@@ -199,6 +203,7 @@ async function finalizeStyleWeek(pool, tx, now = Date.now()) {
       const paid = await W.move(client, w, P.coins, 'weekly', key, { place: 1, source: 'style', votes: row.n });
       if (paid) {
         w.awards = { ...(w.awards || {}), styleIcon: { week, until: now + P.days * DAY }, styleWins: (Number(w.awards?.styleWins) || 0) + 1 };
+        W.addFragment(w, 'ink', 1); // капля чернил — к Сквидварду
       }
       await W.saveWallet(client, w);
       await W.addNews(client, 'style', row.winner, { pet: w.pet.name, votes: row.n });

@@ -501,7 +501,7 @@ html.dark .pet-wheel-pin { border-top-color: #ececf1; }
 .pet-guide-art { width: 150px; height: 150px; margin: 0 auto; }
 .pet-guide-art .pet-svg { width: 100%; height: 100%; border-radius: var(--r-md); }
 .pet-guide-pair { display: flex; gap: 8px; justify-content: center; }
-.pet-guide-pair .pet-guide-art { width: 120px; height: 120px; margin: 0; }
+.pet-guide-pair .pet-guide-art { width: 96px; height: 96px; margin: 0; }
 .pet-guide-emoji { font-size: 40px; letter-spacing: 6px; padding: 18px 0; }
 .pet-guide-dots { display: flex; gap: 6px; justify-content: center; }
 .pet-guide-dots i { width: 7px; height: 7px; border-radius: var(--r-full); background: var(--pet-track, #e3e5ea); }

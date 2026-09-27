@@ -40,6 +40,7 @@
     // Редкие виды рисуются своей анатомией (renderHuman); цвета — для значков.
     ghoul:    { fur: '#1d1d22', belly: '#ecebf2', inner: '#e0341a', nose: '#1d1b24' },
     tsar:     { fur: '#56633f', belly: '#f3d3ba', inner: '#e3b448', nose: '#7a5230' },
+    squid:    { fur: '#a9d6c5', belly: '#d4efe5', inner: '#8c6a34', nose: '#20302b' },
   };
 
   // ── Стадии роста ────────────────────────────────────────────────────────
@@ -232,6 +233,9 @@
     dragon: { fur: '#3fae6e', belly: '#e6f3c4', ink: '#123d27', iris: '#ffd23f', mark: '#1f7a48', spikes: '#e2a92b' },
   };
   var V3_HEAD_T = 'translate(100 70) scale(0.8) translate(-100 -88)';
+  // Взрослый и Мудрец — голова меньше относительно тела: пропорции взрослее
+  // (отзыв владельца: «персонажи слишком детские»). Подросток — как был.
+  function v3HeadT(stage) { return stage === 'teen' ? V3_HEAD_T : 'translate(100 71) scale(0.75) translate(-100 -88)'; }
   var V3_BODY_T = 'translate(100 101) scale(0.84 0.92) translate(-100 -118)';
   var V3_NECK_T = 'translate(100 104) scale(0.84) translate(-100 -126)';
 
@@ -344,7 +348,7 @@
     else if (mood === 'sad' || mood === 'sick' || mood === 'hungry') s += '<path d="M70 80 L91 74 M130 80 L109 74" stroke="' + brow + '" stroke-width="' + bw + '" stroke-linecap="round"/>';
     else if (mood !== 'happy' && mood !== 'sleep') s += '<path d="M70 76 Q81 71 92 76 M108 76 Q119 71 130 76" fill="none" stroke="' + brow + '" stroke-width="' + bw + '" stroke-linecap="round"/>';
     if (mood === 'sad') s += '<path class="pet-tear" d="M76 100 Q73 106 76 109 Q79 106 76 100Z" fill="#7fc8f8"/>';
-    if (state !== 'sick') s += '<g class="pet-cheeks"><ellipse cx="68" cy="106" rx="7" ry="3.5" fill="#ff8fa3" opacity=".3"/><ellipse cx="132" cy="106" rx="7" ry="3.5" fill="#ff8fa3" opacity=".3"/></g>';
+    if (state !== 'sick' && stage === 'teen') s += '<g class="pet-cheeks"><ellipse cx="68" cy="106" rx="7" ry="3.5" fill="#ff8fa3" opacity=".3"/><ellipse cx="132" cy="106" rx="7" ry="3.5" fill="#ff8fa3" opacity=".3"/></g>';
     if (sp === 'owl') s += '<path d="M94 100 L106 100 L100 114Z" fill="#f2b705" stroke="' + ink + '" stroke-width="2.4" stroke-linejoin="round"/>';
     else if (sp === 'dragon') s += '<path d="M92 104 q2 -2 4 0 M104 104 q2 -2 4 0" stroke="' + ink + '" stroke-width="2.2" stroke-linecap="round" fill="none"/>';
     else s += '<path d="M95 102 L105 102 L100 108Z" fill="#3a2020" stroke="' + ink + '" stroke-width="1.6" stroke-linejoin="round"/>';
@@ -396,13 +400,13 @@
   // шапки, очки и маски из лавки подходят без перерисовки. Встроенный костюм
   // вида (фуражка, маска) прячется, если в слот надета вещь.
   var HUMAN = {
-    tsar: { skin: '#f3d3ba', ink: '#3a2a20', hair: '#7a5230', iris: '#6f9cc9', coat: '#56633f', coatD: '#3f4a2e',
-      gold: '#e3b448', pants: '#2b2f3a', boots: '#1b1b1f' },
+    tsar: { skin: '#f3d3ba', ink: '#3a2a20', hair: '#4a3222', beard: '#8a5e3c', iris: '#6f9cc9', coat: '#56633f', coatD: '#3f4a2e',
+      dolman: '#3d4a66', gold: '#e3b448', pants: '#2b2f3a', boots: '#1b1b1f' },
     ghoul: { skin: '#ecebf2', ink: '#1d1b24', hair: '#f4f4f8', hairD: '#c3c5d2', iris: '#8a8f9c', coat: '#1d1d22', coatD: '#101014',
       red: '#e0341a', pants: '#1d1d22', boots: '#0d0d10' },
   };
   function humanHeadT(stage) {
-    return stage === 'baby' ? 'translate(100 72) scale(0.92) translate(-100 -88)' : V3_HEAD_T;
+    return stage === 'baby' ? 'translate(100 72) scale(0.92) translate(-100 -88)' : v3HeadT(stage);
   }
   function hLine(p, w) { return 'stroke="' + p.ink + '" stroke-width="' + (w || 2.6) + '" stroke-linejoin="round"'; }
 
@@ -438,6 +442,24 @@
       s += '<path d="M72 104 Q100 96 128 104 L132 160 Q100 166 68 160Z" fill="#f4f6fa" ' + o + '/>';
       s += '<path d="M76 104 L100 132 L124 104 L128 118 L100 140 L72 118Z" fill="#27458f" ' + o + '/><path d="M80 112 L100 134 L120 112" fill="none" stroke="#fff" stroke-width="1.8"/>';
       s += '<path d="M96 132 L100 142 L104 132Z" fill="#b3262d"/>';
+      return s;
+    }
+    if (sp === 'tsar' && stage === 'adult') {
+      // Гусарский доломан, как на портрете: тёмно-синий, золотые шнуры поперёк
+      // груди, аксельбант, Георгиевский крест, чёрный каракулевый ворот.
+      s += '<path d="M72 104 Q100 96 128 104 L134 160 Q100 168 66 160Z" fill="' + p.dolman + '" ' + o + '/>';
+      s += '<path d="M72 104 Q100 96 128 104 L126 112 Q100 104 74 112Z" fill="#000" opacity=".12"/>';
+      for (var gi = 0; gi < 5; gi++) {
+        var gy = 114 + gi * 9, half = 22 - gi * 1.5;
+        s += '<path d="M' + (100 - half) + ' ' + gy + ' L' + (100 + half) + ' ' + gy + '" stroke="' + p.gold + '" stroke-width="2.6" stroke-linecap="round"/>' +
+          '<path d="M' + (100 - half) + ' ' + gy + ' q-5 -4 -3 2 q2 4 3 -2 M' + (100 + half) + ' ' + gy + ' q5 -4 3 2 q-2 4 -3 -2" fill="none" stroke="' + p.gold + '" stroke-width="1.8"/>' +
+          '<circle cx="' + (100 - half - 4) + '" cy="' + gy + '" r="1.8" fill="' + p.gold + '" stroke="' + p.ink + '" stroke-width=".6"/><circle cx="' + (100 + half + 4) + '" cy="' + gy + '" r="1.8" fill="' + p.gold + '" stroke="' + p.ink + '" stroke-width=".6"/>';
+      }
+      s += '<path d="M124 106 C130 118 126 132 114 138 M126 108 C134 122 128 138 116 144" fill="none" stroke="' + p.gold + '" stroke-width="2.2"/>';
+      s += '<rect x="80" y="152" width="6" height="7" fill="#f08a24" stroke="' + p.ink + '" stroke-width=".6"/><path d="M82 152 v7 M84 152 v7" stroke="#15151a" stroke-width="1"/>' +
+        '<path d="M83 159 l0 8 M79 163 l8 0" stroke="#fbfaf5" stroke-width="3"/>';
+      s += '<path d="M88 98 Q100 104 112 98 L112 108 Q100 112 88 108Z" fill="#1b1b1f" ' + hLine(p, 1.6) + '/>';
+      for (var ci = 0; ci < 6; ci++) s += '<circle cx="' + (90 + ci * 4) + '" cy="' + (103 + (ci % 2) * 2) + '" r="1.4" fill="none" stroke="#4a4a52" stroke-width=".9"/>';
       return s;
     }
     if (sp === 'tsar') {
@@ -476,10 +498,11 @@
 
   function humanArm(sp, p, stage, side) {
     var o = hLine(p), l = side === 'l';
-    var sleeve = sp === 'tsar' ? (stage === 'baby' ? '#f4f6fa' : stage === 'sage' ? '#2f4a35' : p.coat) : p.coat;
+    var sleeve = sp === 'tsar' ? (stage === 'baby' ? '#f4f6fa' : stage === 'sage' ? '#2f4a35' : stage === 'adult' ? p.dolman : p.coat) : p.coat;
     var d = l ? 'M74 106 C62 116 58 134 60 152 L71 152 C71 138 74 124 82 114Z' : 'M126 106 C138 116 142 134 140 152 L129 152 C129 138 126 124 118 114Z';
     var s = '<path d="' + d + '" fill="' + sleeve + '" ' + o + '/>';
     if (sp === 'tsar' && stage === 'baby') s += '<path d="' + (l ? 'M60 146 L71 146' : 'M129 146 L140 146') + '" stroke="#27458f" stroke-width="3"/>';
+    if (sp === 'tsar' && stage === 'adult') s += '<path d="' + (l ? 'M60 146 L71 146 M61 142 Q66 138 70 142' : 'M129 146 L140 146 M130 142 Q134 138 139 142') + '" stroke="' + p.gold + '" stroke-width="2" fill="none"/>';
     var hx = l ? 65.5 : 134.5;
     s += '<circle cx="' + hx + '" cy="156" r="6.5" fill="' + p.skin + '" ' + hLine(p, 2.2) + '/>';
     if (sp === 'ghoul') s += '<path d="M' + (hx - 4) + ' 160 l1 2 M' + hx + ' 161 l0 2.2 M' + (hx + 4) + ' 160 l-1 2" stroke="#0b0b0b" stroke-width="2.2" stroke-linecap="round"/>';
@@ -497,16 +520,24 @@
     s += '<circle cx="52" cy="94" r="7" fill="' + p.skin + '" ' + hLine(p, 2.4) + '/><circle cx="148" cy="94" r="7" fill="' + p.skin + '" ' + hLine(p, 2.4) + '/>';
     s += '<ellipse cx="100" cy="90" rx="44" ry="48" fill="' + p.skin + '" ' + o + '/>';
     s += '<path d="M128 56 Q150 86 136 118 Q126 132 110 136 Q144 104 128 56Z" fill="#000" opacity=".05"/>';
-    if (sp === 'tsar') {
-      // Волосы с пробором; у Мудреца — седина на висках.
+    if (sp === 'tsar' && (stage === 'adult' || stage === 'sage')) {
+      // Император по фотопортрету: короткие тёмные волосы с косым пробором,
+      // залысины на висках, уши открыты; борода клином, светлее волос.
+      s += '<path d="M58 84 C54 56 72 38 100 38 C128 38 146 56 142 84 C140 76 138 68 132 62 C128 66 122 66 118 60 C110 54 96 52 86 56 C76 60 68 64 64 70 C61 74 59 79 58 84Z" fill="' + p.hair + '" ' + o + '/>';
+      s += '<path d="M84 42 Q80 50 78 58" stroke="' + shade(p.hair, 0.35) + '" stroke-width="2.2" fill="none" stroke-linecap="round"/>';
+      s += '<path d="M96 44 Q112 46 128 58 M100 50 Q116 52 130 62" stroke="' + shade(p.hair, 0.2) + '" stroke-width="1.4" fill="none" opacity=".7"/>';
+      if (stage === 'sage') s += '<path d="M60 82 C60 74 62 70 66 66 M140 82 C140 74 138 70 134 66" stroke="#d9d9d9" stroke-width="3.6" fill="none" stroke-linecap="round"/>';
+      var bd = stage === 'sage' ? shade(p.beard, 0.18) : p.beard;
+      s += '<path d="M60 100 C60 118 70 132 82 142 C88 148 94 156 100 158 C106 156 112 148 118 142 C130 132 140 118 140 100 C134 112 126 120 116 122 Q108 118 100 120 Q92 118 84 122 C74 120 66 112 60 100Z" fill="' + bd + '" ' + o + '/>';
+      // Прядки бороды — светлые и тёмные штрихи.
+      for (var bi = 0; bi < 9; bi++) {
+        var bx = 72 + bi * 7, dx = bi < 4 ? 5 : bi > 4 ? -5 : 0;
+        s += '<path d="M' + bx + ' ' + (126 - Math.abs(4 - bi)) + ' q' + (dx / 2) + ' 10 ' + dx + ' ' + (18 - Math.abs(4 - bi) * 3) + '" stroke="' + shade(bd, bi % 2 ? 0.28 : -0.22) + '" stroke-width="1.4" fill="none" opacity=".85"/>';
+      }
+    } else if (sp === 'tsar') {
+      // Волосы с пробором.
       s += '<path d="M56 88 C52 58 72 40 100 40 C128 40 148 58 144 88 C140 72 132 62 116 58 C100 56 84 60 72 66 C62 72 58 80 56 88Z" fill="' + p.hair + '" ' + o + '/>';
       s += '<path d="M112 44 Q104 52 96 60" stroke="' + shade(p.hair, -0.25) + '" stroke-width="2" fill="none"/>';
-      if (stage === 'sage') s += '<path d="M56 86 C56 76 60 70 64 66 M144 86 C144 76 140 70 136 66" stroke="#d9d9d9" stroke-width="4" fill="none" stroke-linecap="round"/>';
-      if (stage === 'adult' || stage === 'sage') {
-        var beard = stage === 'sage' ? shade(p.hair, 0.12) : p.hair;
-        s += '<path d="M58 98 Q58 140 100 148 Q142 140 142 98 Q136 118 124 124 Q112 118 100 122 Q88 118 76 124 Q64 118 58 98Z" fill="' + beard + '" ' + o + '/>';
-        if (stage === 'sage') s += '<path d="M88 132 Q100 140 112 132 M92 140 Q100 144 108 140" stroke="#e6e6e6" stroke-width="1.6" fill="none" opacity=".8"/>';
-      }
     } else {
       // Белая чёлка на глаза.
       s += '<path d="M52 92 C48 54 72 36 100 36 C130 36 152 54 148 92 L140 72 L134 90 L126 68 L118 92 L110 66 L100 96 L92 66 L84 88 L76 68 L68 86 L62 70Z" fill="' + p.hair + '" ' + o + '/>';
@@ -544,8 +575,14 @@
     else if (mood === 'inside') s += '<path d="M70 79 L92 80 M108 80 L130 79" stroke="' + brow + '" stroke-width="3" stroke-linecap="round"/>';
     else if (mood !== 'happy' && mood !== 'sleep') s += '<path d="M70 78 Q81 73 92 78 M108 78 Q119 73 130 78" fill="none" stroke="' + brow + '" stroke-width="3.2" stroke-linecap="round"/>';
     if (mood === 'sad') s += '<path class="pet-tear" d="M76 102 Q73 108 76 111 Q79 108 76 102Z" fill="#7fc8f8"/>';
-    // Нос.
-    s += '<path d="M100 96 Q95 106 100 109" fill="none" stroke="' + shade(p.skin, -0.3) + '" stroke-width="2.2" stroke-linecap="round"/>';
+    // Нос. У взрослого Николая — прямой, с крыльями ноздрей; под глазами тени.
+    if (sp === 'tsar' && (stage === 'adult' || stage === 'sage')) {
+      s += '<path d="M99 84 L97 104 Q96 108 100 109 Q104 108 103 104" fill="none" stroke="' + shade(p.skin, -0.32) + '" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>' +
+        '<path d="M94 106 Q96 109 99 108 M106 106 Q104 109 101 108" fill="none" stroke="' + shade(p.skin, -0.32) + '" stroke-width="1.4"/>' +
+        '<path d="M72 100 Q81 104 90 100 M110 100 Q119 104 128 100" fill="none" stroke="' + shade(p.skin, -0.22) + '" stroke-width="1.4" opacity=".8"/>';
+    } else {
+      s += '<path d="M100 96 Q95 106 100 109" fill="none" stroke="' + shade(p.skin, -0.3) + '" stroke-width="2.2" stroke-linecap="round"/>';
+    }
     if (sp === 'tsar' && stage === 'baby') s += '<g class="pet-cheeks"><ellipse cx="70" cy="108" rx="7" ry="3.5" fill="#ff8fa3" opacity=".35"/><ellipse cx="130" cy="108" rx="7" ry="3.5" fill="#ff8fa3" opacity=".35"/></g>';
     var my = 118, mouth;
     if (mood === 'happy') mouth = '<path d="M89 ' + my + ' Q100 ' + (my + 11) + ' 111 ' + my + 'Z" fill="#6a1e2c" stroke="' + ink + '" stroke-width="2.2"/>';
@@ -558,10 +595,11 @@
     s += '<g class="pet-chomp"><ellipse cx="100" cy="' + (my + 3) + '" rx="8" ry="9" fill="#6a1e2c" stroke="' + ink + '" stroke-width="2.2"/><ellipse cx="100" cy="' + (my + 8) + '" rx="5" ry="3" fill="#ff8fa3"/></g>';
     // Усы — поверх рта: у Наследника тонкие, у Императора пышные.
     if (sp === 'tsar' && stage !== 'baby') {
-      var mc = stage === 'sage' ? shade(p.hair, 0.12) : p.hair;
+      var mc = p.hair;
       s += stage === 'teen'
         ? '<path d="M100 111 Q90 110 82 115 Q92 113 100 114 Q108 113 118 115 Q110 110 100 111Z" fill="' + mc + '" ' + hLine(p, 1.4) + '/>'
-        : '<path d="M100 110 Q88 106 76 116 Q70 120 66 116 Q72 124 84 118 Q94 115 100 116 Q106 115 116 118 Q128 124 134 116 Q130 120 124 116 Q112 106 100 110Z" fill="' + mc + '" ' + hLine(p, 1.8) + '/>';
+        : '<path d="M100 109 C92 104 80 106 72 114 C68 118 64 120 60 118 C64 126 76 126 86 120 C92 117 97 117 100 118 C103 117 108 117 114 120 C124 126 136 126 140 118 C136 120 132 118 128 114 C120 106 108 104 100 109Z" fill="' + (stage === 'sage' ? shade(p.beard, 0.18) : shade(p.beard, 0.08)) + '" ' + hLine(p, 1.8) + '/>' +
+          '<path d="M96 112 Q84 112 74 118 M104 112 Q116 112 126 118" stroke="' + shade(p.beard, -0.25) + '" stroke-width="1.2" fill="none" opacity=".8"/>';
     }
     // Встроенный облик вида — только если слот свободен.
     if (sp === 'ghoul' && !eq.face) {
@@ -580,7 +618,8 @@
           '<ellipse cx="100" cy="42" rx="44" ry="11" fill="#f8f9fc" ' + hLine(p, 2.4) + '/><rect x="60" y="42" width="80" height="10" rx="3" fill="#15151a" ' + hLine(p, 2) + '/>' +
           '<text x="100" y="50.5" text-anchor="middle" font-size="6.5" font-weight="900" fill="' + p.gold + '" font-family="Arial">ШТАНДАРТЪ</text>';
       }
-      if (stage === 'sage') return '';
+      // Император — с непокрытой головой, как на портрете; фуражка — у Наследника.
+      if (stage === 'sage' || stage === 'adult') return '';
       // Офицерская фуражка с кокардой.
       return '<path d="M52 50 Q100 20 148 50 Q100 60 52 50Z" fill="' + p.coat + '" ' + hLine(p, 2.6) + '/>' +
         '<rect x="58" y="48" width="84" height="11" rx="3" fill="#b3262d" ' + hLine(p, 2.2) + '/>' +
@@ -610,6 +649,180 @@
       '<g class="pet-head"><g transform="' + headT + '">' + humanHead(sp, p, stage, eq) + humanFace(sp, p, state, stage, eq) +
       layer('face') + humanHat(sp, p, stage, eq) + layer('head') + (sick ? sickHead() : '') + '</g></g>' +
       '<g class="pet-arm-r">' + humanArm(sp, p, stage, 'r') + layer('hand') + '</g></g></g>';
+  }
+
+
+  // ── Сквидвард (по разрешению правообладателя, со слов владельца 27.09.2026) ─
+  // Малыш и Подросток — классический ворчун: голова-купол, длинный свисающий
+  // нос, тяжёлые веки над жёлтыми глазами с красными зрачками, коричневая
+  // рубашка. Взрослый — мем «Красавчик Сквидвард»: вытянутое лицо с квадратной
+  // челюстью, складки-морщины, пухлые губы, бычья шея, мускулы, горчичная
+  // рубашка с V-вырезом и волосы на груди. Мудрец — то же в чёрно-белом
+  // «гигачад»-свете. Голова — в координатах головы малыша: вещи садятся.
+  var SQUID = {
+    young: { skin: '#a9d6c5', skinL: '#d4efe5', skinD: '#78ab99', ink: '#20302b', shirt: '#8c6a34', shirtD: '#6e5226', sclera: '#efe3a4', iris: '#b0392b', lips: '#d8b59c' },
+    chad: { skin: '#a9d6c5', skinL: '#d4efe5', skinD: '#6f9f8e', ink: '#1a2622', shirt: '#a8862a', shirtD: '#7d6320', sclera: '#efe3a4', iris: '#a33a2a', lips: '#d8b59c' },
+    mono: { skin: '#c4c4c4', skinL: '#f4f4f4', skinD: '#6e6e6e', ink: '#0d0d0d', shirt: '#8a8a8a', shirtD: '#4c4c4c', sclera: '#e8e8e8', iris: '#3a3a3a', lips: '#b0b0b0' },
+  };
+  function squidPal(stage) { return stage === 'sage' ? SQUID.mono : (stage === 'adult' ? SQUID.chad : SQUID.young); }
+  function squidChad(stage) { return stage === 'adult' || stage === 'sage'; }
+  function squidHeadT(stage) {
+    if (stage === 'baby') return 'translate(100 76) scale(0.86) translate(-100 -88)';
+    if (stage === 'teen') return 'translate(100 71) scale(0.78) translate(-100 -88)';
+    return 'translate(100 54) scale(0.66) translate(-100 -88)';
+  }
+  function sqL(p, w) { return 'stroke="' + p.ink + '" stroke-width="' + (w || 2.6) + '" stroke-linejoin="round" stroke-linecap="round"'; }
+
+  // Нога-щупальце: гладкое, с закруглённым носком (как у героя мультфильма).
+  function squidLeg(p, d, w) {
+    return '<path d="' + d + '" fill="none" stroke="' + p.ink + '" stroke-width="' + (w + 2.6) + '" stroke-linecap="round"/>' +
+      '<path d="' + d + '" fill="none" stroke="' + p.skin + '" stroke-width="' + w + '" stroke-linecap="round"/>' +
+      '<path d="' + d + '" fill="none" stroke="' + p.skinL + '" stroke-width="' + Math.max(1.2, w * 0.25) + '" stroke-linecap="round" opacity=".6" transform="translate(-1 -1)"/>';
+  }
+
+  function squidBack(p, stage) {
+    if (stage !== 'sage') return '';
+    // Лучи и контровой свет — «легендарное фото».
+    var s = '<g opacity=".5">';
+    for (var i = 0; i < 12; i++) {
+      var a = (-90 + (i - 5.5) * 13) * Math.PI / 180;
+      s += '<path d="M100 96 L' + (100 + Math.cos(a) * 110).toFixed(1) + ' ' + (96 + Math.sin(a) * 110).toFixed(1) + ' L' + (100 + Math.cos(a + 0.09) * 110).toFixed(1) + ' ' + (96 + Math.sin(a + 0.09) * 110).toFixed(1) + 'Z" fill="#ffffff"/>';
+    }
+    return s + '</g><ellipse class="rar-glow" cx="100" cy="188" rx="58" ry="9" fill="#111" opacity=".45"/>';
+  }
+
+  function squidBody(p, stage, ids) {
+    var s = '', o = sqL(p), chad = squidChad(stage);
+    // Ноги: четыре щупальца из-под рубашки.
+    var w = chad ? 8 : 6.5;
+    s += squidLeg(p, 'M84 156 C80 168 76 178 72 184 C70 188 74 191 80 189', w);
+    s += squidLeg(p, 'M94 158 C93 170 92 180 92 186 C92 190 96 191 100 189', w);
+    s += squidLeg(p, 'M106 158 C107 170 108 180 108 186 C108 190 104 191 100 189', w);
+    s += squidLeg(p, 'M116 156 C120 168 124 178 128 184 C130 188 126 191 120 189', w);
+    if (!chad) {
+      // Классика: худая шея и коричневая рубашка с коротким рукавом.
+      s += '<path d="M94 92 L94 108 L106 108 L106 92Z" fill="' + p.skin + '" ' + o + '/>';
+      s += '<path d="M74 106 Q100 98 126 106 L130 158 Q100 166 70 158Z" fill="' + p.shirt + '" ' + o + '/>';
+      s += '<path d="M90 104 L100 114 L110 104" fill="' + p.skin + '" ' + sqL(p, 2) + '/>';
+      s += '<path d="M76 150 Q100 156 124 150" fill="none" stroke="' + p.shirtD + '" stroke-width="1.6" opacity=".7"/>';
+      s += '<path d="M124 110 Q132 130 126 152" fill="none" stroke="#fff" stroke-width="2" opacity=".2"/>';
+      return s;
+    }
+    // Красавчик: бычья шея, широченные плечи, V-вырез, волосы на груди.
+    // Длинная бычья шея — фирменная деталь мема.
+    s += '<path d="M84 90 C84 102 82 112 78 120 L122 120 C118 112 116 102 116 90Z" fill="' + p.skin + '" ' + o + '/>';
+    s += '<path d="M88 96 Q91 108 86 118 M112 96 Q109 108 114 118 M95 104 Q100 108 105 104" fill="none" stroke="' + p.ink + '" stroke-width="1.4" opacity=".75"/>';
+    s += '<path d="M52 128 C54 116 68 112 84 118 L100 140 L116 118 C132 112 146 116 148 128 C150 140 144 154 134 163 Q100 171 66 163 C56 154 50 140 52 128Z" fill="' + p.shirt + '" ' + o + '/>';
+    s += '<path d="M84 118 L100 140 L116 118 Q100 122 84 118Z" fill="' + p.skin + '" ' + sqL(p, 2) + '/>';
+    s += '<path d="M60 136 Q74 130 86 142 M140 136 Q126 130 114 142 M78 154 Q100 161 122 154" fill="none" stroke="' + p.shirtD + '" stroke-width="1.8" opacity=".85"/>';
+    // Волосы на груди — завитки.
+    [[92, 126], [97, 130], [103, 130], [108, 126], [100, 134], [95, 122], [105, 122]].forEach(function (c) {
+      s += '<path d="M' + c[0] + ' ' + c[1] + ' q1.8 -2.6 2.6 0 q.6 2 -1.2 2.2" fill="none" stroke="' + p.ink + '" stroke-width="1"/>';
+    });
+    s += '<path d="M136 126 Q146 142 134 160" fill="none" stroke="#fff" stroke-width="2.4" opacity=".25"/>';
+    return s;
+  }
+
+  function squidArm(p, stage, side) {
+    var l = side === 'l', chad = squidChad(stage), s = '', dir = l ? -1 : 1;
+    if (!chad) {
+      var sx = l ? 76 : 124;
+      s += '<path d="M' + sx + ' 106 Q' + (sx + dir * 10) + ' 108 ' + (sx + dir * 11) + ' 118 L' + (sx + dir * 3) + ' 122Z" fill="' + p.shirt + '" ' + sqL(p, 2) + '/>';
+      s += squidLeg(p, 'M' + (sx + dir * 7) + ' 120 C' + (sx + dir * 10) + ' 134 ' + (sx + dir * 8) + ' 146 ' + (sx + dir * 2) + ' 154', 5.5);
+      return s;
+    }
+    // Мускулистая рука: рукав на плече, бицепс, локоть, предплечье, кисть.
+    var bx = l ? 56 : 144;
+    var X = function (dx) { return (bx + dir * dx).toFixed(1); };
+    s += '<path d="M' + X(-6) + ' 122 C' + X(10) + ' 118 ' + X(20) + ' 130 ' + X(18) + ' 142 C' + X(16) + ' 150 ' + X(12) + ' 154 ' + X(12) + ' 158 C' + X(16) + ' 166 ' + X(12) + ' 176 ' + X(4) + ' 180 C' + X(-2) + ' 183 ' + X(-8) + ' 180 ' + X(-7) + ' 174 C' + X(-8) + ' 166 ' + X(-6) + ' 160 ' + X(-4) + ' 154 C' + X(-8) + ' 144 ' + X(-10) + ' 132 ' + X(-6) + ' 122Z" fill="' + p.skin + '" ' + sqL(p) + '/>';
+    s += '<path d="M' + X(6) + ' 128 Q' + X(16) + ' 136 ' + X(10) + ' 148 M' + X(-4) + ' 154 Q' + X(4) + ' 158 ' + X(12) + ' 156 M' + X(2) + ' 162 Q' + X(8) + ' 168 ' + X(6) + ' 176" fill="none" stroke="' + p.skinD + '" stroke-width="1.6"/>';
+    s += '<path d="M' + X(-8) + ' 118 C' + X(6) + ' 114 ' + X(18) + ' 120 ' + X(18) + ' 132 L' + X(-6) + ' 134Z" fill="' + p.shirt + '" ' + sqL(p, 2) + '/>';
+    return s;
+  }
+
+  function squidHead(p, stage, ids) {
+    var o = sqL(p, 3), s = '', chad = squidChad(stage);
+    if (!chad) {
+      // Голова-купол: широкий лысый верх, лицо сужается книзу.
+      s += '<path d="M100 8 C142 8 160 36 158 64 C156 84 146 94 134 100 C130 114 118 128 100 130 C82 128 70 114 66 100 C54 94 44 84 42 64 C40 36 58 8 100 8Z" fill="url(#' + ids.fur + ')" ' + o + '/>';
+      s += '<ellipse cx="74" cy="30" rx="13" ry="7" fill="#fff" opacity=".35" transform="rotate(-28 74 30)"/>';
+      s += '<path d="M138 26 Q160 52 150 84 Q144 94 132 100 Q154 70 138 26Z" fill="#000" opacity=".08"/>';
+      // Складка на лбу между глаз.
+      s += '<path d="M94 70 Q100 62 106 70" fill="none" stroke="' + p.skinD + '" stroke-width="1.8"/>';
+      return s;
+    }
+    // Красавчик: тот же купол, но лицо вытянуто вниз квадратной челюстью.
+    s += '<path d="M100 8 C142 8 160 36 158 64 C156 82 148 92 138 98 C138 118 136 138 130 150 L118 158 L82 158 L70 150 C64 138 62 118 62 98 C52 92 44 82 42 64 C40 36 58 8 100 8Z" fill="url(#' + ids.fur + ')" ' + o + '/>';
+    s += '<ellipse cx="74" cy="30" rx="13" ry="7" fill="#fff" opacity=".35" transform="rotate(-28 74 30)"/>';
+    s += '<path d="M140 30 Q162 58 148 90 Q140 120 132 150 Q134 100 140 30Z" fill="#000" opacity=".08"/>';
+    // Складки-морщины: лоб, между бровей, щёки, углы челюсти, подбородок.
+    var line = function (d, w) { return '<path d="' + d + '" fill="none" stroke="' + p.ink + '" stroke-width="' + (w || 1.5) + '" stroke-linecap="round" opacity=".85"/>'; };
+    s += line('M92 60 Q90 70 94 80 M108 60 Q110 70 106 80');
+    s += line('M80 44 Q76 54 80 62 M120 44 Q124 54 120 62', 1.3);
+    s += line('M72 100 Q70 120 78 138 M128 100 Q130 120 122 138');
+    s += line('M66 116 Q68 134 74 146 M134 116 Q132 134 126 146', 1.3);
+    s += line('M90 150 Q100 154 110 150');
+    s += line('M84 140 Q86 146 92 148 M116 140 Q114 146 108 148', 1.2);
+    return s;
+  }
+
+  function squidFace(p, state, stage) {
+    var s = '', ink = p.ink, chad = squidChad(stage);
+    var mood = state === 'ok' ? 'grump' : state;
+    // Глаза: жёлтые белки, красные зрачки, тяжёлые веки цвета кожи.
+    var eye = function (cx, mirror) {
+      var e = '<ellipse cx="' + cx + '" cy="90" rx="13" ry="10" fill="' + p.sclera + '" stroke="' + ink + '" stroke-width="2.2"/>';
+      if (mood === 'happy') return '<path d="M' + (cx - 12) + ' 92 Q' + cx + ' 82 ' + (cx + 12) + ' 92" fill="none" stroke="' + ink + '" stroke-width="3.2" stroke-linecap="round"/>';
+      if (mood === 'sleep') return '<path d="M' + (cx - 12) + ' 91 Q' + cx + ' 97 ' + (cx + 12) + ' 91" fill="none" stroke="' + ink + '" stroke-width="3" stroke-linecap="round"/>';
+      e += '<g class="pet-pupils"><ellipse cx="' + (cx + (mirror ? -2 : 2)) + '" cy="93" rx="3.6" ry="3" fill="' + p.iris + '"/><circle cx="' + (cx + (mirror ? -2 : 2)) + '" cy="93" r="1.3" fill="' + ink + '"/></g>';
+      var lid = mood === 'grump' ? 0.62 : mood === 'sad' ? 0.45 : mood === 'sick' ? 0.7 : 0.3;
+      var ly = 80 + lid * 14;
+      e += '<path d="M' + (cx - 14) + ' 90 C' + (cx - 12) + ' 78 ' + (cx + 12) + ' 78 ' + (cx + 14) + ' 90 L' + (cx + 13) + ' ' + ly.toFixed(1) + ' Q' + cx + ' ' + (ly + 2).toFixed(1) + ' ' + (cx - 13) + ' ' + ly.toFixed(1) + 'Z" fill="' + p.skin + '" stroke="' + ink + '" stroke-width="2.2" stroke-linejoin="round"/>';
+      e += '<path d="M' + (cx - 11) + ' 101 Q' + cx + ' 105 ' + (cx + 11) + ' 101" fill="none" stroke="' + p.skinD + '" stroke-width="1.6"/>';
+      return e;
+    };
+    s += '<g class="pet-eyes">' + eye(86, false) + eye(114, true) + '</g>';
+    // Рот (за носом) и губы у красавчика.
+    var my = chad ? 132 : 118, mouth;
+    if (chad) {
+      mouth = mood === 'happy'
+        ? '<path d="M86 ' + my + ' Q100 ' + (my + 12) + ' 114 ' + my + ' Q100 ' + (my + 3) + ' 86 ' + my + 'Z" fill="#5a1c28" stroke="' + ink + '" stroke-width="1.8"/>'
+        : '<path d="M86 ' + my + ' Q93 ' + (my - 6) + ' 100 ' + (my - 3) + ' Q107 ' + (my - 6) + ' 114 ' + my + ' Q100 ' + (my + 2) + ' 86 ' + my + 'Z" fill="' + p.lips + '" stroke="' + ink + '" stroke-width="1.8"/>' +
+          '<path d="M86 ' + my + ' Q100 ' + (my + 10) + ' 114 ' + my + ' Q100 ' + (my + 3) + ' 86 ' + my + 'Z" fill="' + shade(p.lips, -0.08) + '" stroke="' + ink + '" stroke-width="1.8"/>';
+    } else if (mood === 'happy') {
+      mouth = '<path d="M84 ' + my + ' Q100 ' + (my + 10) + ' 116 ' + my + '" fill="none" stroke="' + ink + '" stroke-width="2.4" stroke-linecap="round"/>';
+    } else if (mood === 'hungry') {
+      mouth = '<ellipse cx="100" cy="' + (my + 4) + '" rx="6" ry="5" fill="#5a1c28" stroke="' + ink + '" stroke-width="2"/>';
+    } else {
+      mouth = '<path d="M80 ' + (my + 4) + ' Q88 ' + (my - 1) + ' 94 ' + (my + 1) + ' M106 ' + (my + 1) + ' Q112 ' + (my - 1) + ' 120 ' + (my + 4) + '" fill="none" stroke="' + ink + '" stroke-width="2.4" stroke-linecap="round"/>';
+    }
+    s += '<g class="pet-mouth">' + mouth + '</g>';
+    s += '<g class="pet-chomp"><ellipse cx="100" cy="' + (my + 2) + '" rx="8" ry="8" fill="#5a1c28" stroke="' + ink + '" stroke-width="2"/></g>';
+    // Нос: у ворчуна — длинный, свисает до рта; у красавчика — прямой и точёный.
+    s += chad
+      ? '<path d="M96 92 C95 104 93 114 92 120 C92 126 97 128 100 126 C103 128 108 126 108 120 C107 114 105 104 104 92Z" fill="' + p.skin + '" stroke="' + ink + '" stroke-width="2" stroke-linejoin="round"/>' +
+        '<path d="M95 122 Q97 125 99 123 M105 122 Q103 125 101 123" fill="none" stroke="' + ink + '" stroke-width="1.2"/>'
+      : '<path d="M95 92 C92 106 88 118 90 128 C92 138 108 138 110 128 C112 118 108 106 105 92Z" fill="' + p.skin + '" stroke="' + ink + '" stroke-width="2.2" stroke-linejoin="round"/>' +
+        '<path d="M92 124 Q100 130 108 124" fill="none" stroke="' + p.skinD + '" stroke-width="1.6"/>' +
+        '<ellipse cx="96" cy="112" rx="2" ry="6" fill="#fff" opacity=".35"/>';
+    if (mood === 'sad') s += '<path class="pet-tear" d="M76 102 Q73 108 76 111 Q79 108 76 102Z" fill="#7fc8f8"/>';
+    return s;
+  }
+
+  function renderSquid(stage, state, layer, eq, sick) {
+    var p = squidPal(stage);
+    var ids = { fur: uid('sqf') };
+    var defs = '<defs><radialGradient id="' + ids.fur + '" cx="36%" cy="24%" r="85%"><stop offset="0" stop-color="' + p.skinL + '"/><stop offset=".5" stop-color="' + p.skin + '"/><stop offset="1" stop-color="' + p.skinD + '"/></radialGradient></defs>';
+    var k = stage === 'baby' ? 0.82 : stage === 'teen' ? 0.92 : 1;
+    return defs + squidBack(p, stage) +
+      '<g transform="translate(100 190) scale(' + k + ') translate(-100 -190)"><g class="pet-body">' +
+      squidBody(p, stage, ids) +
+      '<g transform="' + V3_BODY_T + '">' + layer('body') + '</g>' +
+      '<g class="pet-arm-l">' + squidArm(p, stage, 'l') + '</g>' +
+      '<g transform="' + V3_NECK_T + '">' + layer('neck') + '</g>' +
+      '<g class="pet-head"><g transform="' + squidHeadT(stage) + '">' + squidHead(p, stage, ids) + squidFace(p, state, stage) +
+      layer('face') + layer('head') + (sick ? sickHead() : '') + '</g></g>' +
+      '<g class="pet-arm-r">' + squidArm(p, stage, 'r') + layer('hand') + '</g></g></g>';
   }
 
   // ── Шаблоны вещей ───────────────────────────────────────────────────────
@@ -1415,7 +1628,10 @@
     var best = null;
     Object.keys(eq).forEach(function (slot) { var it = items[eq[slot]]; if (it && (!best || RANK_OF[it.rarity] > RANK_OF[best])) best = it.rarity; });
     var body, cls3 = '';
-    if (HUMAN[sp]) {
+    if (sp === 'squid') {
+      cls3 = ' v3 human';
+      body = renderSquid(stage, state, layer, eq, state === 'sick');
+    } else if (HUMAN[sp]) {
       cls3 = ' v3 human';
       body = renderHuman(sp, stage, state, layer, eq, state === 'sick');
     } else if (stage === 'baby') {
@@ -1434,7 +1650,7 @@
         v3Back(sp, q, ids, stage) + v3Body(sp, q, ids, stage) +
         '<g transform="' + V3_BODY_T + '">' + layer('body') + '</g>' + v3ArmL(sp, q, ids) +
         '<g transform="' + V3_NECK_T + '">' + layer('neck') + '</g>' +
-        '<g class="pet-head"><g transform="' + V3_HEAD_T + '">' + v3Head(sp, q, ids, stage) + v3Face(sp, q, state, stage) + layer('face') + layer('head') +
+        '<g class="pet-head"><g transform="' + v3HeadT(stage) + '">' + v3Head(sp, q, ids, stage) + v3Face(sp, q, state, stage) + layer('face') + layer('head') +
         (state === 'sick' ? sickHead() : '') + '</g></g>' +
         '<g class="pet-arm-r">' + v3ArmR(sp, q, ids) + layer('hand') + '</g></g></g>';
     }
@@ -1470,7 +1686,7 @@
     food_suhar: '🍞', food_shchi: '🍲', food_pirog: '🥧', food_pryanik: '🍪', food_pir: '🍗',
     med_otvar: '🍵', med_mikstura: '💊', toy_volchok: '🌀', toy_babki: '🎲', toy_lapta: '🏏',
     boost_elixir: '⚡', streak_freeze: '🧊',
-    box_chest: '🧰', box_tsar: '👑', box_week: '🏆',
+    box_chest: '🧰', box_tsar: '👑', box_emperor: '💎', box_week: '🏆',
   };
 
   window.PetArt = { render: render, renderItem: renderItem, templates: T, species: SPECIES, icons: ICONS, shade: shade, stageScale: STAGE_SCALE };

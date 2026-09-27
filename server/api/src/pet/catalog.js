@@ -40,15 +40,20 @@ const SPECIES = [
     stages: { baby: 'Новичок', teen: 'Гуль', adult: 'Дед инсайд', sage: 'Одноглазый король' } },
   { id: 'tsar', name: 'Николай II', rare: true, fragment: 'faberge', petName: 'Ники',
     stages: { baby: 'Цесаревич', teen: 'Наследник', adult: 'Император', sage: 'Император с державой' } },
+  // Сквидвард: ворчун, который во взрослом облике становится «Красавчиком»
+  // (решение владельца 27.09.2026; разрешение Nickelodeon — со слов владельца).
+  { id: 'squid', name: 'Сквидвард', rare: true, fragment: 'ink', petName: 'Сквидвард',
+    stages: { baby: 'Малыш Сквидвард', teen: 'Сквидвард', adult: 'Красавчик Сквидвард', sage: 'Сквидвард-гигачад' } },
 ];
 
 // Шанс редкого вида при открытии коробки, в процентах (решение владельца:
 // Николай — 0,05% из сундука и 2% из ларца; Гуль чуть чаще). Бросок отдельный,
 // поверх обычного, поэтому шансы вещей в коробке не меняются.
 const RARE_SPECIES_DROPS = {
-  box_chest: { tsar: 0.05, ghoul: 0.3 },
-  box_tsar: { tsar: 2, ghoul: 5 },
-  box_week: { tsar: 2, ghoul: 5 },
+  box_chest: { tsar: 0.05, squid: 0.15, ghoul: 0.3 },
+  box_tsar: { tsar: 2, squid: 3, ghoul: 5 },
+  box_week: { tsar: 2, squid: 3, ghoul: 5 },
+  box_emperor: { tsar: 4, squid: 6, ghoul: 8 },
 };
 // Осколки — запасной путь к редкому виду: падают из ларцов, за 1-е место недели,
 // за 30 дней серии входов и изредка с колеса.
@@ -59,10 +64,13 @@ const FRAGMENTS = {
   // труднее Николая, хотя задуман проще. Теперь ещё колесо и 7 кругов подряд.
   dark: { name: 'Осколок тьмы', icon: '🖤', species: 'ghoul', need: 6,
     sources: 'колесо (1%), каждые 7 ежедневных кругов подряд, ларцы (3%)' },
+  ink: { name: 'Капля чернил', icon: '🦑', species: 'squid', need: 8,
+    sources: 'Императорский ларец (6%), Царский ларец и Ларец недели (3%), 1-е место в «Кто круче?»' },
 };
 const FRAGMENT_DROPS = {
-  box_tsar: { faberge: 3, dark: 3 },
-  box_week: { faberge: 3, dark: 3 },
+  box_tsar: { faberge: 3, dark: 3, ink: 3 },
+  box_week: { faberge: 3, dark: 3, ink: 3 },
+  box_emperor: { faberge: 5, dark: 5, ink: 6 },
 };
 const STABLE_MAX = 8;
 
@@ -339,6 +347,11 @@ const BOXES = [
   { id: 'box_tsar', kind: 'box', name: 'Царский ларец', price: 700,
     odds: { common: 0, rare: 55, epic: 33, legendary: 10, mythic: 2 },
     pity: { every: 30, atLeast: 'legendary' } },
+  // Самый дорогой ларец: только эпик и выше, гарант мифа каждые 12 открытий,
+  // лучшие шансы на редких питомцев (решение владельца: «700 — дёшево»).
+  { id: 'box_emperor', kind: 'box', name: 'Императорский ларец', price: 1500,
+    odds: { common: 0, rare: 0, epic: 45, legendary: 40, mythic: 15 },
+    pity: { every: 12, atLeast: 'mythic' } },
   { id: 'box_week', kind: 'box', name: 'Ларец недели', price: null,
     odds: { common: 0, rare: 0, epic: 60, legendary: 32, mythic: 8 },
     pity: null },
@@ -503,7 +516,7 @@ function publicCatalog() {
 }
 
 // Меняется вместе с содержимым каталога: клиент кэширует каталог по версии.
-const CATALOG_VERSION = '2026-09-28-7';
+const CATALOG_VERSION = '2026-09-28-8';
 
 module.exports = {
   RARITIES, RARITY_VALUE, DUPLICATE_SHARE, SLOTS, SPECIES, ITEMS, CONSUMABLES, BOXES,

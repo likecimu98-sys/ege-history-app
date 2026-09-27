@@ -282,15 +282,23 @@ test('экономика v3, питомец, коробки, итоги, рей�
     assert.equal(s.fragments.dark, 1);
     assert.equal(s.stable.at(-1).stageName, 'Новичок');
     await assert.rejects(tx(c => W.craft(c, u1, 'tsar', tNow)), /not_enough_fragments/);
-    await tx(c => W.addItem(c, u1, 'box_chest', 2, 'test'));
+    await tx(c => W.addItem(c, u1, 'box_chest', 3, 'test'));
     await tx(c => W.addItem(c, u1, 'box_tsar', 1, 'test'));
     s = await tx(c => W.openBox(c, u1, 'box_chest', tNow, top));
     assert.equal(s.drop.species, 'tsar', JSON.stringify(s.drop));
     assert.equal(s.drop.owners, 1);
+    // Следующий по редкости — Сквидвард (0,15%), он у всех в новинку.
     s = await tx(c => W.openBox(c, u1, 'box_chest', tNow, top));
-    assert.ok(s.drop.id && !s.drop.species, 'оба вида уже есть — выпадает вещь');
+    assert.equal(s.drop.species, 'squid', JSON.stringify(s.drop));
+    assert.equal(s.stable.find(p => p.species === 'squid').stageName, 'Малыш Сквидвард');
+    s = await tx(c => W.openBox(c, u1, 'box_chest', tNow, top));
+    assert.ok(s.drop.id && !s.drop.species, 'все редкие виды уже есть — выпадает вещь');
     s = await tx(c => W.openBox(c, u1, 'box_tsar', tNow, top));
-    assert.deepEqual(s.drop.fragments, { faberge: 1, dark: 1 });
+    assert.deepEqual(s.drop.fragments, { faberge: 1, dark: 1, ink: 1 });
+    // Императорский ларец: только эпик и выше.
+    await tx(c => W.addItem(c, u1, 'box_emperor', 1, 'test'));
+    s = await tx(c => W.openBox(c, u1, 'box_emperor', tNow, () => 0));
+    assert.equal(s.drop.rarity, 'epic');
     assert.equal(s.fragments.dark, 2);
     const main = s.pet.species;
     const tsarAt = s.stable.findIndex(p => p.species === 'tsar');
@@ -352,6 +360,7 @@ test('экономика v3, питомец, коробки, итоги, рей�
     assert.equal(await WK2.finalizeStyleWeek(pool, tx, tNow), null, 'икона недели — один раз');
     const gena = await W.readWallet(db, vb);
     assert.equal(Number(gena.balance), C.SOCIAL.stylePrize.coins);
+    assert.equal(gena.counters.fragments.ink, 1, 'икона стиля — капля чернил');
     assert.ok(W.styleIconActive(gena, tNow));
     const nw = await S.news(db, tNow);
     assert.ok(nw.news.some(n => n.kind === 'style' && n.pet === 'Мурка'), JSON.stringify(nw));

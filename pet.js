@@ -711,8 +711,8 @@
         text: 'Каждая верная строка — ' + (r.solved || 2) + ' монеты, выученный факт — ' + (r.facts || 10) + ', победа в дуэли — ' + (r.duelWins || 30) + '. Решаешь — питомец сыт и растёт: Малыш → Подросток → Взрослый → Мудрец.' },
       { art: '<div class="pet-guide-emoji">🍲 💊 🎲 ✋</div>', title: 'Уход — пара секунд в день',
         text: 'Корми, лечи, играй и гладь. Голодный питомец грустит, а заболевший не носит одежду. Ночью он спит.' },
-      { art: '<div class="pet-guide-pair">' + art({ species: 'tsar', stage: 'adult' }) + art({ species: 'ghoul', stage: 'adult' }) + '</div>', title: 'Сундуки и редкие питомцы',
-        text: 'В сундуках 189 вещей от обычных до мифических. А ещё там живут редкие питомцы: Николай II (' + String((drops.box_tsar || {}).tsar || 2).replace('.', ',') + '% в Царском ларце) и Гуль (' + String((drops.box_tsar || {}).ghoul || 5).replace('.', ',') + '%). Их можно собрать и из осколков — смотри «Питомник».',
+      { art: '<div class="pet-guide-pair">' + art({ species: 'tsar', stage: 'adult' }) + art({ species: 'squid', stage: 'adult' }) + art({ species: 'ghoul', stage: 'adult' }) + '</div>', title: 'Сундуки и редкие питомцы',
+        text: 'В сундуках ' + ((S.catalog && S.catalog.items) || []).length + ' вещей от обычных до мифических. А ещё там живут редкие питомцы: Николай II, Сквидвард и Гуль — лучше всего шансы в Императорском ларце (' + pctText((drops.box_emperor || {}).tsar) + ', ' + pctText((drops.box_emperor || {}).squid) + ' и ' + pctText((drops.box_emperor || {}).ghoul) + '). Их можно собрать и из осколков — смотри «Питомник».',
         go: ['Смотреть сундуки', "PetUI.guideGo('boxes')"] },
       { art: '<div class="pet-guide-emoji">⚔️ 👀 🔥 📣</div>', title: 'Двор: похвастаться и сравнить',
         text: 'Тапни по питомцу в любом топе — откроется его профиль, поставь 🔥 👑 😂 💯. В «Кто круче?» выбирай лучший образ — победитель недели получает 500 монет и корону. Позови друга ссылкой — обоим сундук.',
@@ -756,6 +756,7 @@
     var owned = {}; if (st.pet) owned[st.pet.species] = 1; (st.stable || []).forEach(function (x) { owned[x.species] = 1; });
     if (!owned.tsar) out.push({ html: '👑 Николай II живёт в Царском ларце — шанс 2%', go: "PetUI.open('stable')" });
     if (!owned.ghoul) out.push({ html: '🖤 Гуль «дед инсайд» — 5% в Царском ларце или 6 осколков тьмы', go: "PetUI.open('stable')" });
+    if (!owned.squid) out.push({ html: '🦑 Сквидвард вырастает в Красавчика — 6% в Императорском ларце', go: "PetUI.open('boxes')" });
     out.push({ html: '👀 Тапни по питомцу в топе — профиль и реакции', go: 'PetUI.openTop()' });
     return out;
   }
@@ -1208,8 +1209,9 @@
     var rare = '<button type="button" class="pet-rare-banner" onclick="PetUI.tab(\'stable\')">' +
       '<span class="pet-rare-banner-art">' + PetArt.render({ species: 'tsar', stage: 'sage', state: 'happy', items: S.items, equipped: {}, mini: true }) + '</span>' +
       '<span class="pet-rare-banner-art">' + PetArt.render({ species: 'ghoul', stage: 'sage', state: 'ok', items: S.items, equipped: {}, mini: true }) + '</span>' +
-      '<span><b>В сундуках живут редкие питомцы</b><i>Николай II — ' + pctText((drops.box_chest || {}).tsar) + ' в сундуке, ' + pctText((drops.box_tsar || {}).tsar) + ' в Царском ларце. Гуль — ' +
-      pctText((drops.box_chest || {}).ghoul) + ' и ' + pctText((drops.box_tsar || {}).ghoul) + '. Или собери из осколков →</i></span></button>';
+      '<span class="pet-rare-banner-art">' + PetArt.render({ species: 'squid', stage: 'adult', state: 'ok', items: S.items, equipped: {}, mini: true }) + '</span>' +
+      '<span><b>В сундуках живут редкие питомцы</b><i>Николай II, Сквидвард и Гуль: в Императорском ларце — ' + pctText((drops.box_emperor || {}).tsar) + ', ' +
+      pctText((drops.box_emperor || {}).squid) + ' и ' + pctText((drops.box_emperor || {}).ghoul) + ', в Царском — ' + pctText((drops.box_tsar || {}).tsar) + ', ' + pctText((drops.box_tsar || {}).squid) + ' и ' + pctText((drops.box_tsar || {}).ghoul) + '. Или собери из осколков →</i></span></button>';
     return rare + '<div class="pet-boxes">' + S.catalog.boxes.map(function (b) {
       var own = inv[b.id] || 0;
       var odds = Object.keys(b.odds).filter(function (r) { return b.odds[r] > 0; }).map(function (r) {
