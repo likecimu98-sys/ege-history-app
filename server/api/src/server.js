@@ -1166,6 +1166,8 @@ async function start() {
   // (правила внутри pet/nudge.js). Проход раз в полчаса.
   const nudgeTick = () => require('./pet/nudge').nudge(pool, tx)
     .then(n => { if (n) log('info', 'pet.nudge.queued', { recipients: n }); })
+    .then(() => require('./pet/nudge').streakNudge(pool, tx))
+    .then(n => { if (n) log('info', 'pet.streak_nudge.queued', { recipients: n }); })
     .catch(error => log('warn', 'pet.nudge.failed', { message: error.message }));
   setInterval(nudgeTick, 30 * 60 * 1000).unref();
   server.listen(env.port, env.host, () => log('info', 'server.started', { host: env.host, port: env.port }));

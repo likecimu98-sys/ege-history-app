@@ -56,4 +56,36 @@ async function nudge(pool, tx, now = Date.now()) {
   });
 }
 
-module.exports = { nudge, reasonFor };
+// «Серия входов сгорит в полночь»: вечером, 19:00–22:00 по Москве, тем, у кого
+// серия от 3 дней и кто вчера заходил, а сегодня ещё нет. Раз в сутки на
+// человека; тот же выключатель «🐾 Питомец» в боте. Это самое сильное
+// «вернись сегодня» — теряется то, что копил много дней.
+async function streakNudge(pool, tx, now = Date.now()) {
+  const hour = mskHour(now);
+  if (hour < 19 || hour >= 22) return 0;
+  const today = W.mskDay(now);
+  const yesterday = W.prevDay(today);
+  return tx(async client => {
+    const { rows } = await client.query(`SELECT w.user_id, w.pet, w.counters,
+        (SELECT i.subject FROM user_identities i WHERE i.user_id = w.user_id AND i.provider = 'telegram' LIMIT 1) AS tg
+      FROM pet_wallets w WHERE w.pet IS NOT NULL AND w.counters->>'loginDay' = $1
+        AND COALESCE((w.counters->>'loginStreak')::int, 0) >= 3
+        AND COALESCE(w.counters->>'streakNudgeDay', '') <> $2
+      FOR UPDATE OF w SKIP LOCKED`, [yesterday, today]);
+    const recipients = [];
+    for (const row of rows) {
+      if (!row.tg || !/^\d+$/.test(String(row.tg))) continue;
+      const streak = Number(row.counters?.loginStreak) || 0;
+      recipients.push({ tgId: String(row.tg), name: String(row.pet.name || 'Летописчик').slice(0, 20), species: row.pet.species, reason: 'streak', streak });
+      await client.query(`UPDATE pet_wallets SET counters = counters || jsonb_build_object('streakNudgeDay', $2::text)
+        WHERE user_id = $1`, [row.user_id, today]);
+    }
+    if (!recipients.length) return 0;
+    const id = `pet_streak_${today}_${hour}`;
+    await client.query(`INSERT INTO notification_jobs(doc_id, data, status) VALUES($1, $2, 'pending')
+      ON CONFLICT (doc_id) DO NOTHING`, [id, JSON.stringify({ type: 'pet_nudge', recipients, ts: now })]);
+    return recipients.length;
+  });
+}
+
+module.exports = { nudge, streakNudge, reasonFor };

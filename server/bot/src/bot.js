@@ -1392,7 +1392,7 @@ const TASK_LABELS = { task1: '№1 (Хронология)', task3: '№3 (Про
 const JOB_MAX_AGE_MS = 24 * 3600 * 1000;
 const NICK_WORD = { gold: 'золотой', silver: 'серебряный', bronze: 'бронзовый', violet: 'фиолетовый' };
 const BOX_WORD = { box_week: '«Ларец недели»', box_tsar: '«Царский ларец»', box_chest: '«Сундук летописца»' };
-const PET_EMOJI = { kitten: '🐱', owl: '🦉', hedgehog: '🦔', dragon: '🐉' };
+const PET_EMOJI = { kitten: '🐱', owl: '🦉', hedgehog: '🦔', dragon: '🐉', ghoul: '🖤', tsar: '👑' };
 function petNudgeText(r) {
     const name = String(r.name || 'Летописчик').replace(/[<>]/g, '').slice(0, 20);
     const e = PET_EMOJI[r.species] || '🐾';
@@ -1400,6 +1400,7 @@ function petNudgeText(r) {
         hungry: [`${e} ${name}: Я проголодался… 🥺`, 'Реши пару строк — на щи как раз хватит монет.'],
         sick: [`${e} ${name}: Мне нехорошо 🤒`, 'Кажется, я заболел от голода. Реши немного — купим микстуру?'],
         sad: [`${e} ${name}: Скучаю без тебя…`, 'Заглянешь? Я придумал, во что поиграть 🎲'],
+        streak: [`${e} ${name}: Серия ${Number(r.streak) || 0} дн. сгорит в полночь 🔥`, 'Зайди на минутку — колесо и задания дня уже ждут.'],
     }[r.reason] || [`${e} ${name}: Я тут!`, 'Загляни ко мне 👇'];
     return lines.join('\n');
 }

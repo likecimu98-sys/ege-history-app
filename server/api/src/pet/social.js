@@ -82,7 +82,9 @@ async function react(db, viewerId, publicId, emoji, now = Date.now()) {
     'INSERT INTO pet_reactions(from_user, to_user, day, emoji) VALUES($1,$2,$3,$4) ON CONFLICT DO NOTHING',
     [viewerId, row.user_id, W.mskDay(now), emoji]);
   if (!rowCount) throw httpError(409, 'already_reacted');
-  return profile(db, viewerId, publicId, now);
+  const me = await W.lockWallet(db, viewerId);
+  if (me.pet) { W.markRound(me, 'react', now); await W.saveWallet(db, me); }
+  return { ...(await profile(db, viewerId, publicId, now)), round: me.pet ? W.roundView(me, now) : null };
 }
 
 // «Кто круче?». Пару выбирает сервер и помнит её: голосовать можно только за
@@ -137,9 +139,10 @@ async function vote(db, userId, pick, now = Date.now()) {
   const events = [];
   await W.addXp(db, w, C.SOCIAL.battleXp, events);
   w.counters = { ...(w.counters || {}), battle: null, votes: num(w.counters?.votes) + 1 };
+  W.markRound(w, 'vote', now);
   const next = await battleView(db, w, now);
   await W.saveWallet(db, w);
-  return { ...next, events, voted: pick };
+  return { ...next, events, voted: pick, round: W.roundView(w, now) };
 }
 
 // «Новости двора»: не больше пяти за последние сутки.

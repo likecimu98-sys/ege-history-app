@@ -482,3 +482,39 @@ html.dark .pet-wheel-pin { border-top-color: #ececf1; }
 .pet-share button.go, .pet-profile button.go { background: #22a35a; color: #fff; }
 .pet-share button.pet-link, .pet-profile button.pet-link, .pet-battle button.pet-link { background: none; }
 .pet-profile .pet-try-stage, .pet-share .pet-try-stage { margin: 0 auto; }
+
+/* ── Ежедневный круг, гайд, бегущая строка, баннер редких ───────────────── */
+.pet-round { display: grid; gap: 6px; padding: 10px; border-radius: var(--r-md); background: color-mix(in srgb, var(--r-rare) 8%, var(--pet-card, #fff)); border: 1px dashed color-mix(in srgb, var(--r-rare) 45%, transparent); }
+.pet-round.ready { border-style: solid; border-color: var(--r-legendary); background: color-mix(in srgb, var(--r-legendary) 14%, var(--pet-card, #fff)); animation: pet-myth-border 2s linear infinite; }
+.pet-round > b { font-size: 13.5px; }
+.pet-round small { font-size: 11px; color: var(--pet-mute, #6b7280); }
+.pet-round-step { display: flex; align-items: center; gap: 8px; text-align: left; padding: 7px 10px; border-radius: var(--r-sm); border: 1px solid var(--pet-line, #ececf1); background: var(--pet-card, #fff); color: inherit; font: inherit; font-size: 13px; font-weight: 700; cursor: pointer; }
+.pet-round-step span { width: 22px; text-align: center; }
+.pet-round-step em { margin-left: auto; font-style: normal; color: var(--pet-mute, #6b7280); }
+.pet-round-step.done { opacity: .6; cursor: default; font-weight: 600; }
+.pet-round button.go { border: 0; border-radius: var(--r-sm); padding: 9px 12px; font-weight: 800; background: #22a35a; color: #fff; cursor: pointer; }
+.pet-help { font-weight: 900; font-size: 16px; }
+.pet-note { font-size: 12px; line-height: 1.4; text-align: left; padding: 8px 10px; border-radius: var(--r-sm); background: var(--pet-soft, #efece6); color: var(--pet-mute, #5b6070); }
+.pet-guide { display: grid; gap: 8px; text-align: center; }
+.pet-guide b { font-size: 17px; }
+.pet-guide p { margin: 0; font-size: 13.5px; line-height: 1.45; color: var(--pet-mute, #5b6070); }
+.pet-guide-art { width: 150px; height: 150px; margin: 0 auto; }
+.pet-guide-art .pet-svg { width: 100%; height: 100%; border-radius: var(--r-md); }
+.pet-guide-pair { display: flex; gap: 8px; justify-content: center; }
+.pet-guide-pair .pet-guide-art { width: 120px; height: 120px; margin: 0; }
+.pet-guide-emoji { font-size: 40px; letter-spacing: 6px; padding: 18px 0; }
+.pet-guide-dots { display: flex; gap: 6px; justify-content: center; }
+.pet-guide-dots i { width: 7px; height: 7px; border-radius: var(--r-full); background: var(--pet-track, #e3e5ea); }
+.pet-guide-dots i.on { background: var(--r-rare); width: 18px; }
+.pet-guide-nav { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.pet-guide-nav button { border: 0; border-radius: var(--r-sm); padding: 9px 12px; font-weight: 800; font-size: 13px; background: var(--pet-soft, #efece6); color: inherit; cursor: pointer; }
+.pet-guide-nav button.go { background: #22a35a; color: #fff; }
+.pet-guide button.pet-link, .pet-guide-nav button.pet-link { background: none; }
+button.petw-news { display: block; width: 100%; text-align: left; border: 0; background: none; cursor: pointer; font: inherit; font-size: 12px; font-weight: 700; color: var(--pet-mute, #6b7280); padding: 6px 4px 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; animation: pet-pop-in .35s ease-out; }
+button.petw-news em { font-style: normal; color: var(--r-rare); }
+.pet-rare-banner { display: flex; align-items: center; gap: 6px; width: 100%; text-align: left; margin-bottom: 10px; padding: 8px; border-radius: var(--r-md); border: 2px solid var(--r-mythic);
+  background: linear-gradient(135deg, color-mix(in srgb, var(--r-mythic) 14%, var(--pet-card, #fff)), color-mix(in srgb, var(--r-legendary) 14%, var(--pet-card, #fff))); color: inherit; font: inherit; cursor: pointer; }
+.pet-rare-banner-art { width: 56px; height: 56px; flex: 0 0 56px; }
+.pet-rare-banner-art .pet-svg { width: 100%; height: 100%; }
+.pet-rare-banner b { display: block; font-size: 13.5px; }
+.pet-rare-banner i { font-style: normal; font-size: 11.5px; color: var(--pet-mute, #6b7280); line-height: 1.3; }

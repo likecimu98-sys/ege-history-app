@@ -374,6 +374,40 @@ function questsView(w, counters, now) {
     progress: counters ? Math.min(i.target, Math.max(0, (counters[i.kind] || 0) - i.base)) : num(i.progress) })) };
 }
 
+// ── Ежедневный круг ────────────────────────────────────────────────────────
+// Шаги отмечаются там, где случаются (колесо, задания, голос, реакция), в
+// counters — поэтому круг виден в каждом ответе, без лишних запросов.
+function roundView(w, now) {
+  const today = mskDay(now), c = w.counters || {};
+  const votes = c.roundVotes?.day === today ? num(c.roundVotes.n) : 0;
+  const steps = [
+    { id: 'spin', done: c.spinDay === today },
+    { id: 'quests', done: !!(c.quests && c.quests.day === today && c.quests.allDone) },
+    { id: 'votes', done: votes >= C.DAILY_ROUND.votes, progress: Math.min(votes, C.DAILY_ROUND.votes), target: C.DAILY_ROUND.votes },
+    { id: 'react', done: c.reactDay === today },
+  ];
+  return { steps, done: steps.every(x => x.done), claimed: c.roundDay === today, streak: num(c.roundStreak) };
+}
+function markRound(w, step, now) {
+  const today = mskDay(now), c = { ...(w.counters || {}) };
+  if (step === 'vote') c.roundVotes = { day: today, n: (c.roundVotes?.day === today ? num(c.roundVotes.n) : 0) + 1 };
+  if (step === 'react') c.reactDay = today;
+  w.counters = c;
+}
+async function claimRound(db, userId, now = Date.now()) {
+  const w = await withPet(db, userId, now);
+  const r = roundView(w, now);
+  if (r.claimed) throw httpError(409, 'round_claimed');
+  if (!r.done) throw httpError(409, 'round_not_done');
+  const today = mskDay(now);
+  const c = w.counters || {};
+  const streak = c.roundLast === prevDay(today) ? num(c.roundStreak) + 1 : 1;
+  w.counters = { ...c, roundDay: today, roundLast: today, roundStreak: streak };
+  await addItem(db, userId, C.DAILY_ROUND.reward, 1, `round:${today}`);
+  await saveWallet(db, w);
+  return view(w, await inventory(db, userId), now, { roundReward: { box: C.DAILY_ROUND.reward, streak } });
+}
+
 // Колесо удачи: одно вращение в московские сутки, бросок на сервере.
 async function spin(db, userId, now = Date.now(), rand = crypto.randomInt) {
   const w = await withPet(db, userId, now);
@@ -437,6 +471,7 @@ function view(w, inv, now, extraIn = {}) {
     quests: questsView(w, profileCountersNow, now),
     boostUntil: num(w.counters?.boostUntil) > now ? num(w.counters?.boostUntil) : 0,
     fragments: w.counters?.fragments || {},
+    round: roundView(w, now),
     stable: stableView(w),
     publicId: w.public_id || null,
     styleIcon: styleIconActive(w, now),
@@ -976,7 +1011,7 @@ async function mergeUserData(client, primaryId, secondaryId) {
 module.exports = {
   spin, dayTick, makeQuests, progressQuests, boostActive, PROFILE_COUNTERS, addFragment,
   tap, levelOf, xpForLevel, stageOf, levelReward, addXp, STAGES, TAP_COOLDOWN_MS,
-  craft, switchPet, speciesOwners, speciesShowcase, stageName, weekOf, ownerName, addNews, styleIconActive, rewardReferral,
+  craft, switchPet, speciesOwners, speciesShowcase, stageName, roundView, markRound, claimRound, weekOf, ownerName, addNews, styleIconActive, rewardReferral,
   mskDay, prevDay, isNight, decayPet, petMoodState, profileCounters, credit, view, getState, hatch,
   buy, use, equip, rename, openBox, rollRarity, rewardAchievements, paintNick, rarityShowcase,
   mergeUserData, lockWallet, saveWallet, addItem, move, readWallet, inventory, nameStyleView, httpError,

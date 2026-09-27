@@ -1336,21 +1336,26 @@
       '<path d="M32 189 l-3 3 M34 189 l0 4 M36 189 l3 3 M40 189 l-3 3 M42 189 l0 4 M44 189 l3 3" stroke="#f08a24" stroke-width="1.6" stroke-linecap="round"/></g>');
   };
 
-  // Галстук Столыпина: строгий шёлковый галстук эпохи с золотой булавкой.
-  // Название — отсылка к думской остроте 1907 года («столыпинский галстук»),
-  // но рисуем именно галстук: петли на шее у питомца не будет.
+  // «Столыпинский галстук» — исторический мем (так в 1907 г. Родичев назвал
+  // виселицу военно-полевых судов): верёвочная петля вместо галстука, узел
+  // витками у горла, конец свисает как галстук. Справка к шутке — в каталоге.
   T.stolypin = function (c) {
-    var t = c0(c, 0, '#1b2a4a'), g = c0(c, 1, '#e9c46a');
-    var cl = uid('stl');
-    return '<g class="it-shine"><defs><clipPath id="' + cl + '"><path d="M95 133 L88 166 L100 176 L112 166 L105 133Z"/></clipPath></defs>' +
-      '<path d="M84 118 L98 126 L94 132 L82 124Z M116 118 L102 126 L106 132 L118 124Z" fill="#fbfaf5" ' + SW + '/>' +
-      '<path d="M95 133 L88 166 L100 176 L112 166 L105 133Z" fill="' + t + '" ' + SW + '/>' +
-      '<g clip-path="url(#' + cl + ')" stroke="' + g + '" stroke-width="2" opacity=".75">' +
-        '<path d="M80 150 L120 130 M80 160 L120 140 M80 170 L120 150 M80 180 L120 160"/></g>' +
-      '<path d="M93 124 L107 124 L105 134 L95 134Z" fill="' + shade(t, 0.15) + '" ' + SW + '/>' +
-      '<path d="M97 126 L103 126" stroke="#fff" stroke-width="1" opacity=".35"/>' +
-      '<rect x="92" y="147" width="16" height="3" rx="1.5" fill="' + g + '" stroke="' + OUT + '" stroke-width="1"/>' +
-      '<circle cx="100" cy="148.5" r="3.6" fill="' + g + '" stroke="' + OUT + '" stroke-width="1"/><circle cx="100" cy="148.5" r="1.4" fill="#c0392b"/></g>';
+    var r = c0(c, 0, '#d9c9a0'), d = c0(c, 1, '#8a6a44');
+    var rope = function (path, w) {
+      return '<path d="' + path + '" fill="none" stroke="' + OUT + '" stroke-width="' + (w + 2.4) + '" stroke-linecap="round"/>' +
+        '<path d="' + path + '" fill="none" stroke="' + r + '" stroke-width="' + w + '" stroke-linecap="round"/>' +
+        '<path d="' + path + '" fill="none" stroke="' + d + '" stroke-width="' + (w - 1) + '" stroke-dasharray="1.6 3.2" stroke-linecap="butt" opacity=".55"/>';
+    };
+    var coils = '';
+    for (var i = 0; i < 6; i++) {
+      var y = 131 + i * 3.6;
+      coils += '<rect x="93.5" y="' + y.toFixed(1) + '" width="13" height="4.2" rx="2.1" fill="' + r + '" stroke="' + OUT + '" stroke-width="1.3"/>' +
+        '<path d="M95.5 ' + (y + 3.4).toFixed(1) + ' L104.5 ' + (y + 0.8).toFixed(1) + '" stroke="' + d + '" stroke-width="1" opacity=".6"/>';
+    }
+    return rope('M80 118 Q84 131 97 132 M120 118 Q116 131 103 132', 4.2) +
+      rope('M100 152 Q99 162 101 172', 4.2) +
+      '<path d="M98.5 172 l-1.5 4 M101 173 l0 4 M103.4 172 l1.6 4" stroke="' + d + '" stroke-width="1.3" stroke-linecap="round"/>' +
+      coils;
   };
 
   function extras(state) {

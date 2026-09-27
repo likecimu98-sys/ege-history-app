@@ -373,6 +373,40 @@ test('экономика v3, питомец, коробки, итоги, рей�
     assert.equal(await tx(c => W.rewardReferral(c, ur, pa)), false, 'приглашённый — один раз');
   }
 
+  // 23. Ежедневный круг: колесо + задания + 5 голосов + реакция = сундук, раз в
+  //     сутки. Напоминание «серия сгорит» — вечером и один раз.
+  {
+    const S = require('../src/pet/social');
+    const { streakNudge } = require('../src/pet/nudge');
+    const tNow = Date.now();
+    const today = W.mskDay(tNow);
+    const [vera] = (await db.query("SELECT w.user_id, w.public_id FROM pet_wallets w JOIN app_users a ON a.id=w.user_id WHERE a.display_name='Вера'")).rows;
+    const [gena] = (await db.query("SELECT w.public_id FROM pet_wallets w JOIN app_users a ON a.id=w.user_id WHERE a.display_name='Гена'")).rows;
+    let st = await tx(c => W.equip(c, vera.user_id, {}, tNow));
+    assert.equal(st.round.steps.find(x => x.id === 'votes').done, true, 'голоса шага 22 засчитаны');
+    await assert.rejects(tx(c => W.claimRound(c, vera.user_id, tNow)), /round_not_done/);
+    await tx(c => W.spin(c, vera.user_id, tNow));
+    await db.query(`UPDATE pet_wallets SET counters = counters || jsonb_build_object('quests', jsonb_build_object('day', $2::text, 'allDone', true, 'list', '[]'::jsonb)) WHERE user_id=$1`, [vera.user_id, today]);
+    const reacted = await tx(c => S.react(c, vera.user_id, gena.public_id, '💯', tNow));
+    assert.equal(reacted.round.done, true, JSON.stringify(reacted.round));
+    const before = (await W.inventory(db, vera.user_id)).box_chest || 0;
+    st = await tx(c => W.claimRound(c, vera.user_id, tNow));
+    assert.equal(st.inventory.box_chest, before + 1);
+    assert.equal(st.round.claimed, true);
+    await assert.rejects(tx(c => W.claimRound(c, vera.user_id, tNow)), /round_claimed/);
+
+    const evening = Date.parse(today + 'T16:30:00Z'); // 19:30 МСК
+    const uS = await newUser('Серийный');
+    await db.query("INSERT INTO user_identities(user_id, provider, subject) VALUES($1,'telegram','5550077')", [uS]);
+    await db.query(`INSERT INTO pet_wallets(user_id, pet, counters) VALUES($1, '{"species":"owl","name":"Филин"}', $2)`,
+      [uS, JSON.stringify({ loginDay: W.prevDay(W.mskDay(evening)), loginStreak: 5 })]);
+    assert.ok(await streakNudge(pool, tx, evening) >= 1);
+    assert.equal(await streakNudge(pool, tx, evening + 60000), 0, 'раз в сутки');
+    assert.equal(await streakNudge(pool, tx, Date.parse(today + 'T08:00:00Z')), 0, 'только вечером');
+    const job = (await db.query("SELECT data FROM notification_jobs WHERE doc_id LIKE 'pet_streak_%'")).rows[0];
+    assert.ok(job.data.recipients.some(r => r.reason === 'streak' && r.streak === 5));
+  }
+
   // Журнал сходится с балансом у каждого (кроме старичка: его журнал — выдуманный v2).
   const sums = await db.query(`SELECT w.user_id, w.balance::int b, COALESCE(sum(l.delta),0)::int s
     FROM pet_wallets w LEFT JOIN pet_ledger l ON l.user_id=w.user_id GROUP BY w.user_id, w.balance`);

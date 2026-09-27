@@ -62,6 +62,21 @@ const FRAGMENT_DROPS = {
 };
 const STABLE_MAX = 8;
 
+// «Ежедневный круг» — привычка на каждый день: колесо, все три задания дня,
+// 5 голосов в «Кто круче?» и одна реакция чужому питомцу. За весь круг —
+// сундук, раз в московские сутки. Каждый шаг ведёт в свой уголок питомца,
+// поэтому круг заодно знакомит с тем, что иначе лежит глубоко во вкладках.
+const DAILY_ROUND = { votes: 5, reward: 'box_chest' };
+
+// Короткие исторические справки к вещам — видны при примерке. Шутка работает,
+// только если за ней стоит факт из курса.
+const ITEM_NOTES = {
+  neck_stolypin: '«Столыпинский галстук» — так депутат Ф. Родичев в 1907 г. назвал виселицу: военно-полевые суды 1906–1907 гг. при П. Столыпине. Столыпин вызвал его на дуэль, Родичев извинился. Для ЕГЭ: военно-полевые суды, аграрная реформа, «Третьеиюньская монархия».',
+  bg_amber: 'Янтарная комната — дар Фридриха Вильгельма I Петру I (1716). Похищена нацистами в 1941 г., воссоздана в Царском Селе к 2003 г.',
+  pet_eagle: 'Двуглавый орёл — герб Московского государства со времён Ивана III (после брака с Софьей Палеолог, 1472).',
+  pet_sivka: '«Сивка-бурка, вещая каурка» — волшебный конь русской сказки; сказки собрал А. Н. Афанасьев в 1855–1863 гг.',
+};
+
 // Хвастовство без шума. Реакции — только положительные; «Кто круче?» — 20
 // голосов в день за крошку опыта; икона стиля недели — 500 монет и сияние.
 // Приглашение: обоим сундук, когда приглашённый вылупит питомца (а это уже
@@ -165,7 +180,7 @@ const RAW = [
   ['neck_barmy', 'neck', 'epic', 2400, 'Бармы', 'Московское царство', ['barmy', '#e9c46a', '#b3123a', '#1d8a5a']],
   ['neck_andrey', 'neck', 'epic', 2800, 'Орден Андрея Первозванного', 'Империя', ['order', '#2f63c9', '#e9c46a']],
   ['neck_chain', 'neck', 'legendary', 9000, 'Золотая цепь канцлера', 'Империя', ['chain', '#e9c46a', '#b8912f']],
-  ['neck_stolypin', 'neck', 'legendary', 9500, 'Галстук Столыпина', 'Империя', ['stolypin', '#1b2a4a', '#e9c46a']],
+  ['neck_stolypin', 'neck', 'legendary', 9500, 'Столыпинский галстук', 'Империя', ['stolypin', '#d9c9a0', '#8a6a44']],
 
   // ── В руке (18) ──────────────────────────────────────────────────────
   ['hand_pero', 'hand', 'common', 60, 'Гусиное перо', 'Русь', ['quill', '#f4f1e6', '#1f1f24']],
@@ -286,10 +301,11 @@ const RAW = [
   ['aura_1000_7', 'aura', 'mythic', null, '«1000-7»', 'Дед инсайд', ['a_thousand']],
 ];
 
-const ITEMS = RAW.map(([id, slot, rarity, price, name, era, art]) => ({
+const ITEMS_BASE = RAW.map(([id, slot, rarity, price, name, era, art]) => ({
   id, kind: 'wear', slot, rarity, price, name, era,
   art: { t: art[0], c: art.slice(1) },
 }));
+const ITEMS = ITEMS_BASE.map(item => (ITEM_NOTES[item.id] ? { ...item, note: ITEM_NOTES[item.id] } : item));
 
 // Кладовая: еда, лекарства, игрушки. Еда и лекарства тратятся, игрушки — навсегда.
 const CONSUMABLES = [
@@ -461,7 +477,7 @@ function publicCatalog() {
     rarities: RARITIES.map(id => ({ id, label: RARITY_LABEL[id] })),
     slots: SLOTS.map(id => ({ id, label: SLOT_LABEL[id] })),
     species: SPECIES,
-    rareSpeciesDrops: RARE_SPECIES_DROPS, fragments: FRAGMENTS, fragmentDrops: FRAGMENT_DROPS, social: SOCIAL,
+    rareSpeciesDrops: RARE_SPECIES_DROPS, fragments: FRAGMENTS, fragmentDrops: FRAGMENT_DROPS, social: SOCIAL, dailyRound: DAILY_ROUND,
     items: ITEMS,
     consumables: CONSUMABLES,
     boxes: BOXES,
@@ -482,11 +498,11 @@ function publicCatalog() {
 }
 
 // Меняется вместе с содержимым каталога: клиент кэширует каталог по версии.
-const CATALOG_VERSION = '2026-09-28-5';
+const CATALOG_VERSION = '2026-09-28-6';
 
 module.exports = {
   RARITIES, RARITY_VALUE, DUPLICATE_SHARE, SLOTS, SPECIES, ITEMS, CONSUMABLES, BOXES,
-  RARE_SPECIES_DROPS, FRAGMENTS, FRAGMENT_DROPS, STABLE_MAX, SOCIAL,
+  RARE_SPECIES_DROPS, FRAGMENTS, FRAGMENT_DROPS, STABLE_MAX, SOCIAL, DAILY_ROUND,
   NICK_PAINT, NICK_COLORS, TOP_NICK_COLORS, ECONOMY, ACHIEVEMENT_REWARD, ACHIEVEMENTS,
   WEEKLY_PRIZES, MONTHLY_PRIZES, DUEL_PRIZES, LOGIN_STREAK, WHEEL, QUESTS,
   TOY_COOLDOWN_MS, CATALOG_VERSION, BY_ID, prizeFor, itemValue, publicCatalog,

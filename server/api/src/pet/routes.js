@@ -87,6 +87,8 @@ async function handlePet(req, res, url, session, deps) {
       return json(res, 200, await run(c => S.react(c, userId, String(body.publicId || ''), String(body.emoji || ''))));
     case '/battle':
       return json(res, 200, await run(c => S.vote(c, userId, String(body.pick || ''))));
+    case '/round':
+      return json(res, 200, await run(c => W.claimRound(c, userId)));
     case '/craft':
       return json(res, 200, await run(c => W.craft(c, userId, String(body.species || ''))));
     case '/switch':
