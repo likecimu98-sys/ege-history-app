@@ -160,13 +160,22 @@ async function move(db, w, delta, reason, ref = null, details = {}) {
 // Счётчики профиля — берём максимум по всем живым документам человека.
 // Слитые дубли (_mergedInto) не считаем: это надгробие прежней личности.
 const NUMERIC = field => `MAX(CASE WHEN data->>'${field}' ~ '^[0-9]+([.][0-9]+)?$' THEN (data->>'${field}')::numeric ELSE 0 END)`;
+// Какое поле профиля — какой счётчик кошелька. Все монотонные (клиент сливает
+// их через max), поэтому дельта против отметки честно значит «сделано с прошлого раза».
+const PROFILE_COUNTERS = {
+  solved: 'totalSolved', ege: 'egePoints', duelWins: 'duelWins', duelGames: 'duelGames',
+  facts: 'factsLearned', mockPoints: 'mockPoints', mocksDone: 'mocksDone', fipiPoints: 'fipiPoints',
+  perfect: 'perfectTables', hwOnTime: 'hwOnTime',
+};
 async function profileCounters(db, userId, docIds) {
+  const cols = Object.entries(PROFILE_COUNTERS).map(([key, field]) => `${NUMERIC(field)} AS "${key}"`).join(', ');
   const { rows } = await db.query(
-    `SELECT ${NUMERIC('totalSolved')} AS solved, ${NUMERIC('egePoints')} AS ege, ${NUMERIC('duelWins')} AS duel
-     FROM student_profiles WHERE (user_id=$1 OR doc_id=ANY($2::text[])) AND data->>'_mergedInto' IS NULL`,
+    `SELECT ${cols} FROM student_profiles WHERE (user_id=$1 OR doc_id=ANY($2::text[])) AND data->>'_mergedInto' IS NULL`,
     [userId, [...(docIds || [])]]);
   const row = rows[0] || {};
-  return { solved: num(row.solved), ege: num(row.ege), duelWins: num(row.duel) };
+  const out = {};
+  for (const key of Object.keys(PROFILE_COUNTERS)) out[key] = num(row[key]);
+  return out;
 }
 
 // ── Уровни и рост ─────────────────────────────────────────────────────────
@@ -220,58 +229,159 @@ async function addXp(db, w, amount, events) {
 
 // ── Начисление за решение ─────────────────────────────────────────────────
 // Возвращает список событий для всплывашек клиента: [{reason, delta, ...}].
+// Ставки — C.ECONOMY.rates по счётчикам профиля. Баллы ЕГЭ за таблицу в
+// тренажёре (ege) не платятся: таблица уже оплачена строками.
+function boostActive(w, now) {
+  return now < num(w.counters?.boostUntil) + C.ECONOMY.boostGraceMs;
+}
+
 async function credit(db, w, counters, now) {
   const events = [];
   if (!w.pet || !w.marks || w.marks.solved === undefined) return events;
   const marks = { ...w.marks };
-  const d = {
-    solved: Math.max(0, counters.solved - num(marks.solved)),
-    ege: Math.max(0, counters.ege - num(marks.ege)),
-    duelWins: Math.max(0, counters.duelWins - num(marks.duelWins)),
-  };
-  // Отметки только растут: откат счётчика (другое устройство прислало меньше)
-  // не должен потом «доначислить» то же самое второй раз.
-  marks.solved = Math.max(num(marks.solved), counters.solved);
-  marks.ege = Math.max(num(marks.ege), counters.ege);
-  marks.duelWins = Math.max(num(marks.duelWins), counters.duelWins);
+  const d = {};
+  for (const key of Object.keys(PROFILE_COUNTERS)) {
+    // Новый счётчик у старого кошелька: отметку ставим на текущее — задним числом не платим.
+    if (marks[key] === undefined) marks[key] = counters[key];
+    d[key] = Math.max(0, counters[key] - num(marks[key]));
+    // Отметки только растут: откат счётчика (другое устройство прислало меньше)
+    // не должен потом «доначислить» то же самое второй раз.
+    marks[key] = Math.max(num(marks[key]), counters[key]);
+  }
   w.marks = marks;
 
-  const raw = d.solved * C.ECONOMY.perLine + d.ege * C.ECONOMY.perEgePoint + d.duelWins * C.ECONOMY.perDuelWin;
-  if (!raw) return events;
+  let raw = 0;
+  const parts = {};
+  for (const [key, rate] of Object.entries(C.ECONOMY.rates)) {
+    if (d[key]) { parts[key] = d[key]; raw += d[key] * rate; }
+  }
+  const boosted = boostActive(w, now);
+  if (boosted) raw = Math.round(raw * 1.5);
 
   const today = mskDay(now);
   const daily = { ...(w.daily || {}) };
-  if (daily.day !== today) {
-    // Новый день с решением: бонус за первый вход и серия дней подряд.
-    daily.streak = daily.lastDay === prevDay(today) ? num(daily.streak) + 1 : 1;
-    daily.lastDay = today;
-    daily.day = today;
-    daily.earned = 0;
-    await move(db, w, C.ECONOMY.firstSolveOfDay, 'daily', today);
-    events.push({ reason: 'daily', delta: C.ECONOMY.firstSolveOfDay });
-    const streakBonus = C.ECONOMY.streakBonus[daily.streak]
-      || (daily.streak > 30 && daily.streak % 30 === 0 ? C.ECONOMY.streakBonus[30] : 0);
-    if (streakBonus) {
-      await move(db, w, streakBonus, 'streak', String(daily.streak));
-      events.push({ reason: 'streak', delta: streakBonus, streak: daily.streak });
-    }
-  }
+  if (daily.day !== today) { daily.day = today; daily.earned = 0; }
   const room = Math.max(0, C.ECONOMY.dailyEarnCap - num(daily.earned));
   const paid = Math.min(raw, room);
   daily.earned = num(daily.earned) + paid;
   w.daily = daily;
   if (paid) {
-    await move(db, w, paid, 'solve', null, { lines: d.solved, ege: d.ege, duelWins: d.duelWins });
-    events.push({ reason: 'solve', delta: paid, lines: d.solved, ege: d.ege, duelWins: d.duelWins });
+    await move(db, w, paid, 'solve', null, { ...parts, lines: d.solved, boosted });
+    events.push({ reason: 'solve', delta: paid, parts, boosted });
   }
   if (paid < raw) events.push({ reason: 'cap', delta: 0, lost: raw - paid });
 
-  // Решение радует питомца само по себе: +1 настроения за каждые 5 строк.
-  if (d.solved) w.pet = { ...w.pet, mood: round2(clamp(Number(w.pet.mood) + d.solved / 5)) };
-  // Опыт — за всё заработанное решением (бонусы дня тоже: это тоже занятия).
-  const xpGain = events.reduce((sum, e) => sum + (['solve', 'daily', 'streak'].includes(e.reason) ? e.delta : 0), 0);
-  await addXp(db, w, xpGain, events);
+  if (d.solved) {
+    // Питается знаниями: решение само кормит (+4 сытости за 10 строк) и радует.
+    const fed = applyFx(w.pet, { sat: d.solved * C.ECONOMY.feedPerLine, mood: d.solved / 5 });
+    w.pet = { ...w.pet, sat: round2(fed.sat), mood: round2(fed.mood), starvingH: fed.sat > 0 ? 0 : w.pet.starvingH };
+  }
+  await addXp(db, w, paid * (boosted ? 2 : 1), events);
+  await progressQuests(db, w, counters, now, events);
   return events;
+}
+
+// ── День: серия входов, колесо, задания ───────────────────────────────────
+// Первый GET /pet за московские сутки — это «вход». Серия растёт, если вчера
+// тоже заходил; один пропущенный день спасает заморозка из кладовой.
+async function dayTick(db, w, counters, now, events) {
+  const today = mskDay(now);
+  const c = { ...(w.counters || {}) };
+  if (c.loginDay === today) return;
+  const yesterday = prevDay(today);
+  let streak = 1;
+  if (c.loginDay === yesterday) streak = num(c.loginStreak) + 1;
+  else if (c.loginDay === prevDay(yesterday) && (await takeItem(db, w.user_id, 'streak_freeze'))) {
+    streak = num(c.loginStreak) + 1;
+    events.push({ reason: 'freeze', delta: 0 });
+  }
+  c.loginDay = today;
+  c.loginStreak = streak;
+  w.counters = c;
+  const step = C.LOGIN_STREAK.find(s => s.day === streak)
+    || (streak > 30 && streak % 30 === 0 ? C.LOGIN_STREAK[C.LOGIN_STREAK.length - 1] : null);
+  if (step) {
+    for (const [item, qty] of step.items) await addItem(db, w.user_id, item, qty, `login:${streak}`);
+    if (step.fragment) addFragment(w, step.fragment, 1);
+    events.push({ reason: 'login', delta: 0, streak, items: step.items, fragment: step.fragment || null });
+  }
+  // Задания дня — от сегодняшних счётчиков.
+  w.counters = { ...w.counters, quests: makeQuests(w.user_id, today, counters) };
+}
+
+function addFragment(w, kind, n) {
+  const c = { ...(w.counters || {}) };
+  c.fragments = { ...(c.fragments || {}), [kind]: num(c.fragments?.[kind]) + n };
+  w.counters = c;
+}
+
+// Детерминированно по человеку и дню: перезагрузка не перебросит задания.
+function seedRand(seed) {
+  let h = 2166136261;
+  for (const ch of String(seed)) { h ^= ch.charCodeAt(0); h = Math.imul(h, 16777619); }
+  return () => { h ^= h << 13; h ^= h >>> 17; h ^= h << 5; return ((h >>> 0) % 100000) / 100000; };
+}
+function makeQuests(userId, day, counters) {
+  const r = seedRand(userId + ':' + day);
+  const lines = C.QUESTS.lines[Math.floor(r() * C.QUESTS.lines.length)];
+  const pool = C.QUESTS.other.slice();
+  const picked = [];
+  while (picked.length < 2 && pool.length) {
+    const q = pool.splice(Math.floor(r() * pool.length), 1)[0];
+    if (!picked.some(p => p.kind === q.kind)) picked.push(q);
+  }
+  const list = [{ kind: 'solved', target: lines.target, reward: lines.reward, text: 'Реши {n} строк' }, ...picked]
+    .map((q, i) => ({ id: `${day}:${i}`, kind: q.kind, target: q.target, reward: q.reward,
+      text: q.text.replace('{n}', q.target), base: counters[q.kind] || 0, done: false }));
+  return { day, list, allDone: false };
+}
+
+async function progressQuests(db, w, counters, now, events) {
+  const q = w.counters?.quests;
+  if (!q || q.day !== mskDay(now)) return;
+  let changed = false;
+  for (const item of q.list) {
+    const progress = Math.min(item.target, Math.max(0, (counters[item.kind] || 0) - item.base));
+    if (progress !== item.progress) { item.progress = progress; changed = true; }
+    if (item.done) continue;
+    if (progress >= item.target) {
+      item.done = true; changed = true;
+      await move(db, w, item.reward, 'quest', item.id);
+      events.push({ reason: 'quest', delta: item.reward, text: item.text });
+    }
+  }
+  if (!q.allDone && q.list.every(i => i.done)) {
+    q.allDone = true; changed = true;
+    await addItem(db, w.user_id, C.QUESTS.allDoneBox, 1, `quests:${q.day}`);
+    events.push({ reason: 'quests_all', delta: 0, box: C.QUESTS.allDoneBox });
+  }
+  if (changed) w.counters = { ...w.counters, quests: q };
+}
+
+function questsView(w, counters, now) {
+  const q = w.counters?.quests;
+  if (!q || q.day !== mskDay(now)) return null;
+  return { allDone: q.allDone, list: q.list.map(i => ({ id: i.id, kind: i.kind, text: i.text, target: i.target, reward: i.reward, done: i.done,
+    progress: counters ? Math.min(i.target, Math.max(0, (counters[i.kind] || 0) - i.base)) : num(i.progress) })) };
+}
+
+// Колесо удачи: одно вращение в московские сутки, бросок на сервере.
+async function spin(db, userId, now = Date.now(), rand = crypto.randomInt) {
+  const w = await withPet(db, userId, now);
+  const today = mskDay(now);
+  if (w.counters?.spinDay === today) throw httpError(409, 'already_spun');
+  const total = C.WHEEL.reduce((a, x) => a + x.w, 0);
+  let pick = rand(total), prize = C.WHEEL[0], index = 0;
+  for (let i = 0; i < C.WHEEL.length; i += 1) {
+    if (pick < C.WHEEL[i].w) { prize = C.WHEEL[i]; index = i; break; }
+    pick -= C.WHEEL[i].w;
+  }
+  w.counters = { ...(w.counters || {}), spinDay: today };
+  if (prize.coins) await move(db, w, prize.coins, 'spin', today, { prize: prize.id });
+  if (prize.item) await addItem(db, userId, prize.item, 1, `spin:${today}`);
+  if (prize.fragment) addFragment(w, prize.fragment, 1);
+  await saveWallet(db, w);
+  return view(w, await inventory(db, userId), now, { spin: { index, id: prize.id, coins: prize.coins || 0, item: prize.item || null, fragment: prize.fragment || null } });
 }
 
 // ── Вид для клиента ───────────────────────────────────────────────────────
@@ -280,7 +390,9 @@ function nameStyleView(style, now) {
   return { color: style.color, until: Number(style.until), crown: !!style.crown };
 }
 
-function view(w, inv, now, extra = {}) {
+function view(w, inv, now, extraIn = {}) {
+  // Счётчики профиля нужны только для прогресса заданий — наружу их не отдаём.
+  const { counters: profileCountersNow, ...extra } = extraIn;
   const pet = w.pet ? { ...w.pet } : null;
   if (pet) {
     for (const key of ['sat', 'mood', 'health']) pet[key] = Math.round(Number(pet[key]) || 0);
@@ -310,8 +422,12 @@ function view(w, inv, now, extra = {}) {
     pity: w.pity || {},
     awards: w.awards || {},
     counters: w.counters || {},
-    daily: { earned: num(w.daily?.earned), streak: num(w.daily?.streak), day: w.daily?.day || null,
-      cap: C.ECONOMY.dailyEarnCap },
+    daily: { earned: w.daily?.day === mskDay(now) ? num(w.daily?.earned) : 0, cap: C.ECONOMY.dailyEarnCap,
+      loginStreak: num(w.counters?.loginStreak), spinReady: w.counters?.spinDay !== mskDay(now),
+      nextChest: (C.LOGIN_STREAK.find(s => s.day > num(w.counters?.loginStreak)) || { day: (Math.floor(num(w.counters?.loginStreak) / 30) + 1) * 30 }).day },
+    quests: questsView(w, profileCountersNow, now),
+    boostUntil: num(w.counters?.boostUntil) > now ? num(w.counters?.boostUntil) : 0,
+    fragments: w.counters?.fragments || {},
     catalogVersion: C.CATALOG_VERSION,
     now,
     ...extra,
@@ -339,9 +455,11 @@ async function getState(db, userId, docIds, now = Date.now()) {
   }
   const w = await lockWallet(db, userId);
   w.pet = decayPet(w.pet, now);
-  const events = await credit(db, w, counters, now);
+  const events = [];
+  await dayTick(db, w, counters, now, events);
+  events.push(...(await credit(db, w, counters, now)));
   await saveWallet(db, w);
-  return { hatched: true, ...view(w, await inventory(db, userId), now, { events }) };
+  return { hatched: true, ...view(w, await inventory(db, userId), now, { events, counters }) };
 }
 
 function cleanName(raw) {
@@ -363,7 +481,8 @@ async function hatch(db, userId, docIds, { species, name, knownAchievements = []
   w.pet = { species, name: cleanName(name), sat: 80, mood: 90, health: 100, sick: false, starvingH: 0,
     at: now, hatchedAt: now, toys: {} };
   w.marks = { ...counters };
-  w.daily = { day: mskDay(now), earned: 0, streak: 1, lastDay: mskDay(now) };
+  w.daily = { day: mskDay(now), earned: 0 };
+  w.counters = { ...(w.counters || {}), loginDay: mskDay(now), loginStreak: 1, quests: makeQuests(userId, mskDay(now), counters) };
   await move(db, w, C.ECONOMY.welcomeCoins, 'welcome');
   const boxes = Math.min(C.ECONOMY.veteranBoxMax, Math.floor(counters.solved / C.ECONOMY.veteranBoxPerLines));
   if (boxes) await addItem(db, userId, 'box_chest', boxes, 'veteran');
@@ -401,8 +520,10 @@ async function buy(db, userId, itemId, qty = 1, now = Date.now()) {
   const w = await withPet(db, userId, now);
   const inv = await inventory(db, userId);
   const unique = item.kind === 'wear' || item.kind === 'toy';
-  const count = unique ? 1 : Math.max(1, Math.min(20, num(qty) || 1));
+  const count = unique || item.kind === 'freeze' ? 1 : Math.max(1, Math.min(20, num(qty) || 1));
   if (unique && inv[itemId]) throw httpError(409, 'already_owned');
+  // Заморозка серии: в кладовой не больше одной — это страховка, а не запас.
+  if (item.kind === 'freeze' && inv[itemId]) throw httpError(409, 'already_owned');
   await move(db, w, -item.price * count, 'buy', itemId, { qty: count });
   if (unique) {
     // Вторая линия к FOR UPDATE: уникальную вещь база не положит дважды, и
@@ -422,10 +543,19 @@ async function buy(db, userId, itemId, qty = 1, now = Date.now()) {
 // Кормить / лечить / играть. buy:true — «купить и сразу дать» одним нажатием.
 async function use(db, userId, itemId, { buyNow = false } = {}, now = Date.now()) {
   const item = C.BY_ID.get(itemId);
-  if (!item || !['food', 'med', 'toy'].includes(item.kind)) throw httpError(400, 'bad_item');
+  if (!item || !['food', 'med', 'toy', 'boost'].includes(item.kind)) throw httpError(400, 'bad_item');
   const w = await withPet(db, userId, now);
   const events = [];
-  if (item.kind === 'toy') {
+  if (item.kind === 'boost') {
+    // Один ускоритель за раз: второй не продлевает первый, а ждёт в кладовой.
+    if (num(w.counters?.boostUntil) > now) throw httpError(409, 'boost_active', { until: num(w.counters.boostUntil) });
+    if (!(await takeItem(db, userId, itemId))) {
+      if (!buyNow) throw httpError(409, 'not_owned');
+      await move(db, w, -item.price, 'buy', itemId, { qty: 1, used: true });
+    }
+    w.counters = { ...(w.counters || {}), boostUntil: now + item.fx.minutes * 60 * 1000 };
+    events.push({ reason: 'boost', delta: 0, until: w.counters.boostUntil });
+  } else if (item.kind === 'toy') {
     const inv = await inventory(db, userId);
     if (!inv[itemId]) throw httpError(409, 'not_owned');
     if (isNight(now)) throw httpError(409, 'pet_sleeping');
@@ -672,6 +802,7 @@ async function mergeUserData(client, primaryId, secondaryId) {
 }
 
 module.exports = {
+  spin, dayTick, makeQuests, progressQuests, boostActive, PROFILE_COUNTERS, addFragment,
   tap, levelOf, xpForLevel, stageOf, levelReward, addXp, STAGES, TAP_COOLDOWN_MS,
   mskDay, prevDay, isNight, decayPet, petMoodState, profileCounters, credit, view, getState, hatch,
   buy, use, equip, rename, openBox, rollRarity, rewardAchievements, paintNick, rarityShowcase,

@@ -366,3 +366,32 @@ html.dark .petw-lv { background: #2e2342; color: #c4b5fd; }
 @keyframes pet-hop-body { 0% { transform: translateY(0) scale(1, 1); } 20% { transform: translateY(0) scale(1.06, .92); } 50% { transform: translateY(-18px) scale(.96, 1.05); } 80% { transform: translateY(0) scale(1.04, .95); } 100% { transform: none; } }
 .pet-svg.act-hop .pet-shadow { transform-box: fill-box; transform-origin: 50% 50%; animation: pet-hop-shadow .6s ease-in-out; }
 @keyframes pet-hop-shadow { 50% { transform: scale(.7); opacity: .07; } }
+
+/* ── «Сегодня»: колесо, серия, ускоритель, задания ─────────────────────── */
+.pet-day { background: var(--pet-card, #fff); border: 1px solid var(--pet-line, #ececf1); border-radius: var(--r-md); padding: 10px 12px; margin: 2px 0 10px; display: grid; gap: 8px; }
+.pet-day-row { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+.pet-day-chip { border: 1px solid var(--pet-line, #e5e5ea); background: var(--pet-soft, #f6f3ee); color: inherit; border-radius: var(--r-md); padding: 8px 6px; font: inherit; font-size: 13px; font-weight: 800; cursor: pointer; }
+.pet-day-chip.hot { background: linear-gradient(90deg, #f59e0b, #ef4444); color: #fff; border-color: transparent; animation: pet-need 1.6s ease-in-out infinite; outline: 2px solid rgba(245, 158, 11, .3); }
+.pet-day-chip.on { background: linear-gradient(90deg, #6366f1, #a855f7); color: #fff; border-color: transparent; }
+.pet-day-chip[disabled] { opacity: .9; cursor: default; }
+.pet-streak { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; font-size: 13px; }
+.pet-streak .dots { display: inline-flex; gap: 4px; }
+.pet-streak .dots i { width: 12px; height: 12px; border-radius: var(--r-full); background: var(--pet-track, #eceef2); display: inline-block; }
+.pet-streak .dots i.on { background: #f97316; }
+.pet-streak .dots i.chest { width: 16px; height: 16px; border-radius: var(--r-sm); background: #fde68a; box-shadow: inset 0 0 0 2px #f59e0b; }
+.pet-streak .dots i.chest.on { background: #f59e0b; }
+.pet-streak small { color: var(--pet-mute, #6b7280); font-size: 12px; }
+.pet-quests { display: grid; gap: 6px; font-size: 13px; }
+.pet-quest { display: grid; grid-template-columns: 1fr 80px auto; align-items: center; gap: 8px; }
+.pet-quest .petw-bar > span { background: #22a35a; }
+.pet-quest em { font-style: normal; font-size: 12px; font-weight: 800; color: var(--pet-mute, #6b7280); font-variant-numeric: tabular-nums; }
+.pet-quest.done span:first-child { color: #16a34a; }
+.pet-wheel { display: flex; flex-direction: column; align-items: center; text-align: center; gap: 6px; }
+.pet-wheel b { font-size: 18px; font-weight: 900; }
+.pet-wheel i { font-style: normal; font-size: 13px; color: var(--pet-mute, #6b7280); }
+.pet-wheel-box { position: relative; width: 250px; height: 250px; margin: 6px 0; }
+.pet-wheel-svg { width: 100%; height: 100%; }
+.pet-wheel-pin { position: absolute; left: 50%; top: -6px; margin-left: -12px; width: 0; height: 0; border-left: 12px solid transparent; border-right: 12px solid transparent; border-top: 22px solid #1f2330; z-index: 2; }
+html.dark .pet-wheel-pin { border-top-color: #ececf1; }
+.pet-wheel-prize { font-size: 22px; font-weight: 900; animation: rl-pop .45s cubic-bezier(.3, 1.6, .5, 1); }
+.pet-wheel button { margin-top: 6px; border: 0; border-radius: var(--r-md); padding: 10px 12px; font-weight: 900; font-size: 15px; background: #22a35a; color: #fff; width: 100%; cursor: pointer; }

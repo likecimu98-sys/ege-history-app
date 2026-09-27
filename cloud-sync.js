@@ -7,14 +7,14 @@
             signInWithCredential, signOut, initializeFirestore, collection, doc, setDoc, getDoc,
             getDocs, addDoc, updateDoc, deleteDoc, deleteField, onSnapshot, query, where,
             orderBy, limit, runTransaction, arrayUnion, arrayRemove, vpsApiFetch, refreshVpsAuth
-        } from "./vps-sync-compat.js?v=20260927-2";
+        } from "./vps-sync-compat.js?v=20260927-3";
 
         // jsPDF грузился с cdnjs.cloudflare.com без SRI — то есть посторонний скрипт
         // исполнялся с полными правами страницы, а при недоступности CDN (у части
         // нашей аудитории это обычное дело) экспорт PDF просто не работал. Довод тот
         // же, что и для telegram-web-app.js: своя копия с того же origin.
         // Версия совпадает с прежней CDN-ной — 2.5.1, лежит в vendor/.
-        const VENDOR_JSPDF = 'vendor/jspdf.umd.min.js?v=20260927-2';
+        const VENDOR_JSPDF = 'vendor/jspdf.umd.min.js?v=20260927-3';
 
         const cloudConfig = { projectId: 'vps-postgresql' };
         
@@ -3900,7 +3900,8 @@
             // разделов визуала ниже — с оглядкой на метку сброса.
             ['totalSolvedEver','streak','bestSpeedrunScore','flashcardsSolved','totalTimeSpent',
              'egePoints',
-             'duelGames','duelWins','duelLosses','duelDraws','matchGames','orderBest','orderGames','tetrisBest','tetrisGames'].forEach(k => {
+             'duelGames','duelWins','duelLosses','duelDraws','matchGames','orderBest','orderGames','tetrisBest','tetrisGames',
+             'factsLearned','fipiPoints','mockPoints','mocksDone','perfectTables'].forEach(k => {
                 const hasValue = states.some(s => s.stats?.[k] !== undefined);
                 if (hasValue) st[k] = Math.max(...states.map(s => Number(s.stats?.[k]) || 0));
             });
@@ -4123,6 +4124,8 @@
             // Круг по банку ФИПИ. Без записи в этом списке поле не уезжает в облако
             // вовсе — и ротация работала бы только на одном устройстве.
             'examSolved',
+            // Счётчики «Летописчика» — см. SAVE_FIELDS в state.js.
+            'factsLearned','fipiPoints','mockPoints','mocksDone','perfectTables',
             // Согласие на обработку ПД — см. SAVE_FIELDS в state.js.
             'consent'
         ];
@@ -4869,6 +4872,14 @@
                 knownGoogleId: googleId,
                 totalSolved: window.state.stats.totalSolvedEver || 0,
                 egePoints: window.state.stats.egePoints || 0,         // накопленные ЕГЭ-баллы
+                // Счётчики, за прирост которых сервер платит монеты питомцу.
+                factsLearned: Number(s.factsLearned) || 0,
+                fipiPoints: Number(s.fipiPoints) || 0,
+                mockPoints: Number(s.mockPoints) || 0,
+                mocksDone: Number(s.mocksDone) || 0,
+                perfectTables: Number(s.perfectTables) || 0,
+                hwOnTime: Number((s.achievementsData || {}).hwOnTime) || 0,
+                duelGames: Number(s.duelGames) || 0,
                 weeklyScore: weeklyScore,
                 weeklyEgePoints: weeklyEgePoints,     // ЕГЭ-баллы за неделю
                 weekStartStr: monStr2,

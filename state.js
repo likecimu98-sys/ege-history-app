@@ -30,6 +30,13 @@ window.state = {
         matchBestMs: 0, matchGames: 0,   // режим «Подбор» (Quizlet Match): рекорд-время и число раундов
         orderBest: 0, orderGames: 0,     // тренировка «Кто раньше»: рекорд очков и число игр
         tetrisBest: 0, tetrisGames: 0,   // тренировка «Датрис»: рекорд очков и число игр
+        // Счётчики «Летописчика» (монеты платит сервер по их приросту, см.
+        // server/api/src/pet/wallet.js). Все только растут и сливаются через max.
+        factsLearned: 0,   // сколько фактов впервые стало «выучено»
+        fipiPoints: 0,     // баллы в отдельных заданиях ФИПИ (exam-mode, тренировка)
+        mockPoints: 0,     // первичные баллы в сданных пробниках
+        mocksDone: 0,      // сколько пробников сдано
+        perfectTables: 0,  // таблиц, решённых целиком без единой ошибки
         vovLearned: {},                  // режим «ВОВ» (задание 8, старый образец): id задания → true (выучено)
         mockExams: { active: null, history: [] }, // пробник 1–12: незавершённая попытка + история
         mockExamMistakes: [],            // долговечная история ошибок в пробниках и цельных заданиях ФИПИ
@@ -417,6 +424,9 @@ function updateFactSRS(fKey, isCorrect, isSure) {
         if (data.points >= 3) {
             data.points = 3; data.level = 1;
             data.nextReview = now + _srsNext(1);
+            // Факт впервые выучен — 10 монет питомцу. Уровень после этого не падает
+            // ниже 1 (см. откат выше), поэтому один факт засчитывается один раз.
+            window.state.stats.factsLearned = (Number(window.state.stats.factsLearned) || 0) + 1;
         }
     } else if (isSure) {
         data.level = Math.min(data.level + 1, SRS_MAX_LEVEL);
@@ -441,6 +451,8 @@ const SAVE_FIELDS = [
     'bestSpeedrunScore', 'dailyStats', 'achievements', 'achievementsData',
     'duelElo', 'duelGames', 'duelWins', 'duelLosses', 'duelDraws',
     'matchBestMs', 'matchGames', 'orderBest', 'orderGames', 'tetrisBest', 'tetrisGames', 'vovLearned', 'mockExams', 'mockExamMistakes',
+    // Счётчики «Летописчика» — монотонные, сервер платит за их прирост.
+    'factsLearned', 'fipiPoints', 'mockPoints', 'mocksDone', 'perfectTables',
     // Круг по банку ФИПИ: id верно решённых заданий (и 'g:<groupId>' для карт 9–12).
     // Без записи здесь ротация обнулялась бы при каждой перезагрузке страницы.
     'examSolved',

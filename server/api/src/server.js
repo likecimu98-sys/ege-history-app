@@ -1116,8 +1116,17 @@ async function start() {
       await petWeekly.snapshot(pool);
       const done = await petWeekly.finalize(pool, tx);
       if (done.length) log('info', 'pet.weekly.finalized', { weeks: done });
+      const month = await petWeekly.finalizeMonth(pool, tx);
+      if (month) log('info', 'pet.month.finalized', month);
+      const duel = await petWeekly.finalizeDuelWeek(pool, tx);
+      if (duel) log('info', 'pet.duel.finalized', duel);
     } catch (error) { log('warn', 'pet.weekly.failed', { message: error.message }); }
   };
+  // Экономика v3: разовый пересчёт уже выданных монет (см. pet/rebalance.js).
+  try {
+    const report = await require('./pet/rebalance').rebalanceV3(pool, tx);
+    if (report) log('info', 'pet.rebalance.v3', { wallets: report.length, total: report.reduce((a, x) => a + x.diff, 0) });
+  } catch (error) { log('warn', 'pet.rebalance.failed', { message: error.message }); }
   weeklyTick();
   setInterval(weeklyTick, 15 * 60 * 1000).unref();
   // «Питомец проголодался» — не чаще раза в двое суток на человека, только днём

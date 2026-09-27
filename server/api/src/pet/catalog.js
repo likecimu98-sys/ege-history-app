@@ -204,6 +204,10 @@ const CONSUMABLES = [
   { id: 'toy_volchok', kind: 'toy', name: 'Волчок', price: 40, fx: { mood: 20 } },
   { id: 'toy_babki', kind: 'toy', name: 'Бабки', price: 60, fx: { mood: 30 } },
   { id: 'toy_lapta', kind: 'toy', name: 'Лапта', price: 90, fx: { mood: 40 } },
+  // Ускоритель: 30 минут ×2 опыта и ×1,5 монет за решение. Окно хранит сервер.
+  { id: 'boost_elixir', kind: 'boost', name: 'Эликсир учёности', price: 250, fx: { minutes: 30, coins: 1.5, xp: 2 } },
+  // Заморозка серии входов: спасает один пропущенный день. В кладовой — не больше одной.
+  { id: 'streak_freeze', kind: 'freeze', name: 'Заморозка серии', price: 300, fx: {} },
 ];
 const TOY_COOLDOWN_MS = 3 * 60 * 60 * 1000;
 
@@ -228,25 +232,78 @@ const NICK_COLORS = {
 };
 const TOP_NICK_COLORS = ['gold', 'silver', 'bronze', 'violet'];
 
-// Экономика. Средний активный ученик — ~100 строк в день ≈ 130 монет в день.
+// Экономика v3 (27.09.2026, решение владельца): монета — за решение, и щедро.
+// Средний активный ученик — ~100 строк в день ≈ 200+ монет, плюс факты, задания
+// дня и колесо. Ачивки — приятный бонус, а не основной доход: в v2 у лидера было
+// 1400 монет с ачивок и 212 за решение, то есть решать было невыгодно.
+// Баллы ЕГЭ за таблицу в обычном тренажёре НЕ платятся — таблица уже оплачена
+// строками (раньше 4 строки № 5 давали 4 + 2 = 6 монет). Платятся только баллы
+// пробников и заданий ФИПИ — отдельными счётчиками из exam-mode.
 const ECONOMY = {
-  perLine: 1,
-  perEgePoint: 1,
-  perDuelWin: 10,
-  dailyEarnCap: 2000,          // потолок монет за решение в московские сутки
-  firstSolveOfDay: 15,
-  streakBonus: { 3: 30, 7: 100, 14: 250, 30: 700 },
+  rates: {
+    solved: 2,        // верная строка тренажёра
+    facts: 10,        // факт впервые перешёл в «выучено»
+    mockPoints: 10,   // первичный балл пробника
+    mocksDone: 50,    // сданный пробник
+    fipiPoints: 8,    // балл задания ФИПИ
+    duelWins: 30,     // победа в дуэли
+    duelGames: 5,     // участие в дуэли
+    hwOnTime: 40,     // домашка вовремя
+  },
+  dailyEarnCap: 5000,           // потолок монет за решение в московские сутки
+  feedPerLine: 0.4,             // питается знаниями: +4 сытости за 10 строк
   hatchMinSolved: 20,           // серверная страховка к клиентскому порогу «10 минут»
   hatchMinSeconds: 600,         // клиентский порог: 10 минут решения
-  welcomeCoins: 300,
+  welcomeCoins: 150,
   veteranBoxPerLines: 500,
   veteranBoxMax: 5,
   starterFood: [['food_shchi', 2]],
+  boostGraceMs: 5 * 60 * 1000,  // строки, решённые под конец ускорителя, сервер видит позже
+};
+
+// Серия входов (первый заход в московские сутки): сундуки на отметках, дальше —
+// «Ларец недели» каждые 30 дней.
+const LOGIN_STREAK = [
+  { day: 3, items: [['box_chest', 1]] },
+  { day: 7, items: [['box_tsar', 1], ['boost_elixir', 1]] },
+  { day: 14, items: [['box_tsar', 2]] },
+  { day: 30, items: [['box_week', 1]], fragment: 'faberge' },
+];
+
+// Колесо удачи: одно вращение в сутки. Сумма весов — 100.
+const WHEEL = [
+  { id: 'c20', w: 26, coins: 20, label: '20' },
+  { id: 'c50', w: 22, coins: 50, label: '50' },
+  { id: 'c100', w: 12, coins: 100, label: '100' },
+  { id: 'c150', w: 5, coins: 150, label: '150' },
+  { id: 'pirog', w: 11, item: 'food_pirog', label: '🥧' },
+  { id: 'otvar', w: 5, item: 'med_otvar', label: '🍵' },
+  { id: 'chest', w: 9, item: 'box_chest', label: '🧰' },
+  { id: 'boost', w: 6, item: 'boost_elixir', label: '⚡' },
+  { id: 'tsar', w: 3, item: 'box_tsar', label: '👑' },
+  { id: 'frag', w: 1, fragment: 'faberge', label: '🥚' },
+];
+
+// Задания дня: одно «строки» всегда, ещё два — из остальных. kind — счётчик
+// профиля, target — сколько добрать за сегодня, reward — монеты.
+const QUESTS = {
+  lines: [{ target: 20, reward: 30 }, { target: 30, reward: 40 }, { target: 50, reward: 70 }],
+  other: [
+    { kind: 'facts', target: 3, reward: 40, text: 'Выучи {n} новых факта' },
+    { kind: 'facts', target: 5, reward: 60, text: 'Выучи {n} новых фактов' },
+    { kind: 'perfect', target: 1, reward: 40, text: 'Реши таблицу без ошибок' },
+    { kind: 'perfect', target: 2, reward: 70, text: 'Реши {n} таблицы без ошибок' },
+    { kind: 'duelGames', target: 1, reward: 40, text: 'Сыграй дуэль' },
+    { kind: 'duelWins', target: 1, reward: 60, text: 'Выиграй дуэль' },
+    { kind: 'fipiPoints', target: 4, reward: 50, text: 'Набери {n} балла в заданиях ФИПИ' },
+    { kind: 'mocksDone', target: 1, reward: 80, text: 'Сдай пробник' },
+  ],
+  allDoneBox: 'box_chest',
 };
 
 // Награда за ачивку ученика: сумма по редкости, редкость — по id ачивки.
 // Неизвестный id не оплачивается вовсе: клиент не должен назначать себе цену.
-const ACHIEVEMENT_REWARD = { common: 50, rare: 150, epic: 400, legendary: 1000 };
+const ACHIEVEMENT_REWARD = { common: 20, rare: 50, epic: 120, legendary: 300 };
 const ACHIEVEMENTS = {
   lines_50: 'common', lines_500: 'rare', lines_2000: 'epic', lines_5000: 'legendary',
   lines_10000: 'legendary',
@@ -272,17 +329,26 @@ const ACHIEVEMENTS = {
 
 // Награды недели. place — место в топе по строкам за неделю (Москва).
 const WEEKLY_PRIZES = [
-  { from: 1, to: 1, coins: 1000, box: 'box_week', nick: 'gold', days: 30, crown: true },
-  { from: 2, to: 2, coins: 500, box: 'box_week', nick: 'silver', days: 30 },
+  { from: 1, to: 1, coins: 1000, box: 'box_week', nick: 'gold', days: 30, crown: true, fragment: 'faberge' },
+  { from: 2, to: 2, coins: 700, box: 'box_week', nick: 'silver', days: 30 },
   { from: 3, to: 3, coins: 500, box: 'box_week', nick: 'bronze', days: 30 },
-  { from: 4, to: 10, coins: 200, box: 'box_tsar', nick: 'violet', days: 7 },
-  { from: 11, to: 50, coins: 50, box: 'box_chest' },
+  { from: 4, to: 10, coins: 300, box: 'box_tsar', nick: 'violet', days: 7 },
+  { from: 11, to: 50, coins: 100, box: 'box_chest' },
+];
+// Топ месяца (строки за календарный месяц по Москве) и топ дуэлей недели
+// (победы за неделю). Считаются по журналу начислений.
+const MONTHLY_PRIZES = [
+  { from: 1, to: 1, coins: 1000, title: true }, { from: 2, to: 2, coins: 700, title: true },
+  { from: 3, to: 3, coins: 500, title: true }, { from: 4, to: 10, coins: 250 },
+];
+const DUEL_PRIZES = [
+  { from: 1, to: 1, coins: 500 }, { from: 2, to: 3, coins: 300 }, { from: 4, to: 10, coins: 100 },
 ];
 
 const BY_ID = new Map([...ITEMS, ...CONSUMABLES, ...BOXES].map(entry => [entry.id, entry]));
 
-function prizeFor(place) {
-  return WEEKLY_PRIZES.find(p => place >= p.from && place <= p.to) || null;
+function prizeFor(place, table = WEEKLY_PRIZES) {
+  return table.find(p => place >= p.from && place <= p.to) || null;
 }
 
 function itemValue(item) {
@@ -301,11 +367,13 @@ function publicCatalog() {
     boxes: BOXES,
     nickPaint: { ...NICK_PAINT, colors: NICK_COLORS },
     economy: {
-      perLine: ECONOMY.perLine, perEgePoint: ECONOMY.perEgePoint, perDuelWin: ECONOMY.perDuelWin,
-      dailyEarnCap: ECONOMY.dailyEarnCap, firstSolveOfDay: ECONOMY.firstSolveOfDay,
-      streakBonus: ECONOMY.streakBonus, hatchMinSeconds: ECONOMY.hatchMinSeconds,
-      hatchMinSolved: ECONOMY.hatchMinSolved,
+      rates: ECONOMY.rates, dailyEarnCap: ECONOMY.dailyEarnCap, feedPerLine: ECONOMY.feedPerLine,
+      hatchMinSeconds: ECONOMY.hatchMinSeconds, hatchMinSolved: ECONOMY.hatchMinSolved,
     },
+    loginStreak: LOGIN_STREAK,
+    wheel: WHEEL.map(({ id, label, coins, item, fragment, w }) => ({ id, label, coins, item, fragment, chance: w })),
+    monthlyPrizes: MONTHLY_PRIZES,
+    duelPrizes: DUEL_PRIZES,
     achievementRewards: ACHIEVEMENT_REWARD,
     achievements: ACHIEVEMENTS,
     weeklyPrizes: WEEKLY_PRIZES,
@@ -314,10 +382,11 @@ function publicCatalog() {
 }
 
 // Меняется вместе с содержимым каталога: клиент кэширует каталог по версии.
-const CATALOG_VERSION = '2026-09-27-1';
+const CATALOG_VERSION = '2026-09-28-1';
 
 module.exports = {
   RARITIES, RARITY_VALUE, DUPLICATE_SHARE, SLOTS, SPECIES, ITEMS, CONSUMABLES, BOXES,
   NICK_PAINT, NICK_COLORS, TOP_NICK_COLORS, ECONOMY, ACHIEVEMENT_REWARD, ACHIEVEMENTS,
-  WEEKLY_PRIZES, TOY_COOLDOWN_MS, CATALOG_VERSION, BY_ID, prizeFor, itemValue, publicCatalog,
+  WEEKLY_PRIZES, MONTHLY_PRIZES, DUEL_PRIZES, LOGIN_STREAK, WHEEL, QUESTS,
+  TOY_COOLDOWN_MS, CATALOG_VERSION, BY_ID, prizeFor, itemValue, publicCatalog,
 };

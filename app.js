@@ -488,6 +488,12 @@ function checkAnswers(isSure, auto) {
     if (newlyCorrect > 0) {
         updateScoreAndStats(newlyCorrect, !window.state.tableHasMistake && allCorrect, 0);
     }
+    // Таблица целиком без единой ошибки — для задания дня «реши без ошибок».
+    // Считаем один раз на таблицу: признак — сам массив строк текущей таблицы.
+    if (allCorrect && filled === total && !window.state.tableHasMistake && window.state._perfectFor !== window.state.currentTargetData) {
+        window.state._perfectFor = window.state.currentTargetData;
+        window.state.stats.perfectTables = (Number(window.state.stats.perfectTables) || 0) + 1;
+    }
     // ── FIX: ЕГЭ-баллы начисляются когда ВСЯ таблица решена, даже если были ошибки ──
     if (allCorrect && filled === total) {
         const egePts = calculateEgePoints(rows, window.state.currentTask || 'task4');

@@ -85,6 +85,7 @@ async function grant(client, userId, week, place, prize, now) {
   const paid = await W.move(client, w, prize.coins, 'weekly', week, { place });
   if (!paid) return; // уже выдано (повторный прогон) — ничего не трогаем
   if (prize.box) await W.addItem(client, userId, prize.box, 1, `weekly:${week}`);
+  if (prize.fragment) W.addFragment(w, prize.fragment, 1);
   if (prize.nick) {
     const current = w.name_style;
     const currentTier = current && Number(current.until) > now ? (STYLE_TIER[current.color] || 0) : 0;
@@ -118,4 +119,65 @@ async function queueNotifications(client, week, results) {
     [`weekly_top_${week}`, JSON.stringify({ type: 'weekly_top', week, recipients, ts: Date.now() })]);
 }
 
-module.exports = { snapshot, finalize, SNAPSHOT_SIZE };
+// ── Топ месяца и топ дуэлей недели ────────────────────────────────────────
+// Считаются по журналу начислений: строки и победы, за которые уже заплачено,
+// с разбивкой в details. Значит, в зачёт идут только ученики с питомцем — и это
+// честно: без питомца нет и кошелька, куда класть награду.
+// Разовость — строка в weekly_awards с ключом 'month:YYYY-MM' / 'duel:<неделя>'.
+const MSK_OFFSET = "interval '3 hours'";
+
+function monthKey(ms) {
+  return new Date(ms + 3 * 3600 * 1000).toISOString().slice(0, 7);
+}
+function prevMonthKey(ms) {
+  const d = new Date(ms + 3 * 3600 * 1000);
+  d.setUTCDate(1); d.setUTCMonth(d.getUTCMonth() - 1);
+  return d.toISOString().slice(0, 7);
+}
+
+async function finalizeByLedger(pool, tx, key, fromSql, toSql, params, field, table, source, extra) {
+  return tx(async client => {
+    const claim = await client.query('INSERT INTO weekly_awards(week) VALUES($1) ON CONFLICT DO NOTHING RETURNING week', [key]);
+    if (!claim.rowCount) return null;
+    const { rows } = await client.query(`SELECT user_id, SUM(COALESCE((details->>'${field}')::int, 0)) AS score
+      FROM pet_ledger WHERE reason = 'solve' AND created_at >= ${fromSql} AND created_at < ${toSql}
+      GROUP BY user_id HAVING SUM(COALESCE((details->>'${field}')::int, 0)) > 0
+      ORDER BY score DESC, user_id LIMIT 10`, params);
+    const results = [];
+    let place = 0;
+    for (const row of rows) {
+      place += 1;
+      const prize = C.prizeFor(place, table);
+      results.push({ place, userId: row.user_id, score: Number(row.score), prize });
+      if (!prize) continue;
+      const w = await W.lockWallet(client, row.user_id);
+      const paid = await W.move(client, w, prize.coins, 'weekly', key, { place, source });
+      if (paid && extra) extra(w, place, prize);
+      await W.saveWallet(client, w);
+    }
+    await client.query('UPDATE weekly_awards SET results=$2 WHERE week=$1', [key, JSON.stringify(results)]);
+    return { key, winners: results.length };
+  });
+}
+
+// Прошлый месяц: подводится в первый тик нового месяца (по Москве).
+async function finalizeMonth(pool, tx, now = Date.now()) {
+  const month = prevMonthKey(now);
+  const from = `(($1 || '-01')::date - ${MSK_OFFSET})`;
+  const to = `((($1 || '-01')::date + interval '1 month') - ${MSK_OFFSET})`;
+  return finalizeByLedger(pool, tx, `month:${month}`, from, to, [month], 'lines', C.MONTHLY_PRIZES, 'month',
+    (w, place, prize) => {
+      if (!prize.title) return;
+      w.awards = { ...(w.awards || {}), monthTitle: { month, place, until: now + 31 * DAY } };
+    });
+}
+
+// Прошлая неделя дуэлей: по победам, за которые заплачено в ту неделю.
+async function finalizeDuelWeek(pool, tx, now = Date.now()) {
+  const week = mondayStr(new Date(now - 7 * DAY));
+  const from = `($1::date - ${MSK_OFFSET})`;
+  const to = `(($1::date + interval '7 days') - ${MSK_OFFSET})`;
+  return finalizeByLedger(pool, tx, `duel:${week}`, from, to, [week], 'duelWins', C.DUEL_PRIZES, 'duel');
+}
+
+module.exports = { snapshot, finalize, finalizeMonth, finalizeDuelWeek, monthKey, prevMonthKey, SNAPSHOT_SIZE };

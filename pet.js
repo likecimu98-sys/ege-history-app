@@ -302,22 +302,38 @@
     S.state = st;
     window._petAwards = st && st.awards || {};
     if (st && Array.isArray(st.events)) { announce(st.events, prev); celebrateLevels(st.events); }
+    if (st && st.hatched) showNoticeOnce(st);
     if (st && st.hatched) syncAchievements();
     renderWidget();
     if (isOpen()) renderModal();
   }
 
-  var REASON = { solve: 'за решение', daily: 'за первый день', streak: 'серия дней', welcome: 'подарок', cap: '' };
+  function itemsText(items) {
+    return (items || []).map(function (x) { var it = S.items[x[0]]; return (x[1] > 1 ? x[1] + ' × ' : '') + (it ? it.name : x[0]); }).join(', ');
+  }
   function announce(events) {
-    var total = 0, streak = null, capped = 0;
-    events.forEach(function (e) { total += Number(e.delta) || 0; if (e.reason === 'streak') streak = e.streak; if (e.reason === 'cap') capped = e.lost; });
+    var total = 0, capped = 0, boosted = false;
+    events.forEach(function (e) {
+      if (e.reason !== 'level') total += Number(e.delta) || 0;
+      if (e.reason === 'cap') capped = e.lost;
+      if (e.boosted) boosted = true;
+    });
     if (total > 0) {
       floatCoins(total);
       var stg = widgetStage || modalStage;
       if (stg) setTimeout(function () { stg.act('dance', 2200); stg.say('+' + fmt(total) + '! ' + pick(SAY.coins), 2400); stg.burst('⭐', [50, 45], 5); }, 400);
-      toast('💰', '+' + fmt(total) + ' монет' + (streak ? ' · серия ' + streak + ' дн.!' : ''), 'gold');
+      toast('💰', '+' + fmt(total) + ' монет' + (boosted ? ' · ⚡×1,5' : ''), 'gold');
     }
-    if (capped) setTimeout(function () { toast('⛔', 'Дневной потолок монет достигнут — завтра снова', 'warn'); }, 2200);
+    var delay = 2200;
+    events.forEach(function (e) {
+      var msg = null;
+      if (e.reason === 'quest') msg = ['🎯', 'Задание дня: ' + e.text + ' · +' + e.delta];
+      if (e.reason === 'quests_all') msg = ['🧰', 'Все задания дня выполнены — сундук в кладовой!'];
+      if (e.reason === 'freeze') msg = ['🧊', 'Заморозка спасла твою серию входов!'];
+      if (e.reason === 'login') msg = ['🔥', 'Серия ' + e.streak + ' дн.! В кладовой: ' + itemsText(e.items) + (e.fragment ? ' + осколок Фаберже' : '')];
+      if (msg) { setTimeout(function () { toast(msg[0], msg[1], 'gold'); }, delay); delay += 2300; }
+    });
+    if (capped) setTimeout(function () { toast('⛔', 'Дневной потолок монет достигнут — завтра снова', 'warn'); }, delay);
   }
 
   function floatCoins(n) {
@@ -420,7 +436,12 @@
     }
     host.firstChild.className = 'petw st-' + p.state;
     $('petw-name').innerHTML = esc(p.name) + '<span class="petw-lv">ур. ' + p.level + '</span>';
-    $('petw-line').textContent = statusLine(st);
+    var extras = [];
+    if (st.boostUntil && st.boostUntil > Date.now()) extras.push('⚡ ускоритель');
+    if (st.daily && st.daily.spinReady) extras.push('🎡 колесо ждёт');
+    var q = st.quests && st.quests.list && st.quests.list.find(function (x) { return !x.done; });
+    if (q) extras.push('🎯 ' + q.progress + '/' + q.target);
+    $('petw-line').textContent = statusLine(st) + (extras.length ? ' · ' + extras.join(' · ') : '');
     $('petw-bars').innerHTML = bar('Сытость', p.sat, 'b-sat') + bar('Настроение', p.mood, 'b-mood') + bar('Здоровье', p.health, 'b-hp');
     $('petw-coins').innerHTML = COIN + ' ' + fmt(st.balance);
     widgetStage.draw(st);
@@ -505,6 +526,7 @@
     var need = needs(st);
     body.innerHTML =
       '<div class="pet-grow">' + (p.nextStage ? 'На ' + p.nextStage.level + '-м уровне ' + esc(p.name) + ' вырастет: станет «' + esc(p.nextStage.name) + '»' : esc(p.name) + ' — мудрец. Выше только звёзды ✨') + '</div>' +
+      dayPanel(st) +
       '<div class="pet-quick">' +
         quickBtn('feed', '🍲', 'Покормить', need.feed) + quickBtn('heal', '💊', 'Лечить', need.heal) +
         quickBtn('play', '🎲', 'Играть', need.play) + quickBtn('tap', '✋', 'Погладить', false) +
@@ -512,10 +534,118 @@
       '<div class="pet-stats">' +
         statRow('🍲', 'Сытость', p.sat, 'b-sat') + statRow('😊', 'Настроение', p.mood, 'b-mood') + statRow('❤️', 'Здоровье', p.health, 'b-hp') +
       '</div>' +
-      '<div class="pet-earn">Сегодня заработано <b>' + fmt(daily.earned) + '</b> из ' + fmt(daily.cap) + ' ' + COIN + (daily.streak > 1 ? ' · серия <b>' + daily.streak + '</b> дн.' : '') +
-      '<br><span>1 решённая строка = 1 монета и 1 опыт · 1 балл ЕГЭ = 1 монета · победа в дуэли = 10 · уход тоже растит питомца</span></div>' +
+      '<div class="pet-earn">Сегодня заработано <b>' + fmt(daily.earned) + '</b> из ' + fmt(daily.cap) + ' ' + COIN +
+      '<br><span>' + ratesText() + '</span></div>' +
       '<div class="pet-tabs">' + TABS.map(function (t) { return '<button type="button" class="' + (S.tab === t[0] ? 'on' : '') + '" onclick="PetUI.tab(\'' + t[0] + '\')">' + t[1] + '</button>'; }).join('') + '</div>' +
       '<div class="pet-pane">' + pane() + '</div>';
+  }
+
+  // Сколько за что — прямо из каталога, чтобы текст не разъезжался со ставками.
+  function ratesText() {
+    var r = (S.catalog.economy || {}).rates || {};
+    return 'Строка — ' + r.solved + ' · выученный факт — ' + r.facts + ' · балл пробника — ' + r.mockPoints +
+      ' (+' + r.mocksDone + ' за пробник) · балл ФИПИ — ' + r.fipiPoints + ' · победа в дуэли — ' + r.duelWins +
+      ' · домашка в срок — ' + r.hwOnTime + ' монет';
+  }
+
+  // «Сегодня»: колесо, серия входов, ускоритель и задания дня — поводы решать сейчас.
+  function dayPanel(st) {
+    var d = st.daily || {}, q = st.quests, now = Date.now();
+    var inv = st.inventory || {};
+    var boost = st.boostUntil && st.boostUntil > now
+      ? '<button type="button" class="pet-day-chip on" disabled>⚡ <span data-boost-until="' + st.boostUntil + '">' + clock(st.boostUntil - now) + '</span></button>'
+      : '<button type="button" class="pet-day-chip" onclick="PetUI.boost(this)">⚡ Ускоритель' + (inv.boost_elixir ? ' ×' + inv.boost_elixir : ' · ' + COIN + ' 250') + '</button>';
+    var streakDots = '';
+    var goal = d.nextChest || 3;
+    var from = Math.max(0, goal - 7);
+    for (var i = from + 1; i <= goal; i++) streakDots += '<i class="' + (i <= d.loginStreak ? 'on' : '') + (i === goal ? ' chest' : '') + '"></i>';
+    var html = '<div class="pet-day">' +
+      '<div class="pet-day-row">' +
+        (d.spinReady ? '<button type="button" class="pet-day-chip hot" onclick="PetUI.openWheel()">🎡 Крутить колесо</button>' : '<button type="button" class="pet-day-chip" disabled>🎡 Завтра снова</button>') +
+        boost +
+      '</div>' +
+      '<div class="pet-streak"><b>🔥 Серия входов: ' + (d.loginStreak || 0) + ' дн.</b><span class="dots">' + streakDots + '</span>' +
+        '<small>' + (goal - (d.loginStreak || 0) > 0 ? 'до сундука ' + (goal - d.loginStreak) + ' дн.' : 'сундук сегодня!') + (inv.streak_freeze ? ' · 🧊 заморозка есть' : '') + '</small></div>';
+    if (q && q.list) {
+      html += '<div class="pet-quests"><b>🎯 Задания дня' + (q.allDone ? ' — все выполнены!' : ' · за все три — сундук') + '</b>' + q.list.map(function (it) {
+        var pct = Math.round(it.progress / Math.max(1, it.target) * 100);
+        return '<div class="pet-quest' + (it.done ? ' done' : '') + '"><span>' + (it.done ? '✅ ' : '') + esc(it.text) + '</span>' +
+          '<span class="petw-bar"><span style="width:' + Math.max(4, pct) + '%"></span></span><em>' + it.progress + '/' + it.target + ' · +' + it.reward + '</em></div>';
+      }).join('') + '</div>';
+    }
+    return html + '</div>';
+  }
+  function clock(ms) { var m = Math.max(0, Math.floor(ms / 60000)), sec = Math.max(0, Math.floor(ms / 1000) % 60); return m + ':' + (sec < 10 ? '0' : '') + sec; }
+  // Таймер ускорителя тикает сам, без перерисовки окна.
+  setInterval(function () {
+    var nodes = document.querySelectorAll('[data-boost-until]');
+    for (var i = 0; i < nodes.length; i++) {
+      var left = Number(nodes[i].getAttribute('data-boost-until')) - Date.now();
+      nodes[i].textContent = clock(left);
+      if (left <= 0) { refresh(true); }
+    }
+  }, 1000);
+
+  function boost(el) {
+    var st = S.state; if (!st) return;
+    var own = (st.inventory || {}).boost_elixir;
+    if (!own && st.balance < 250) { toast('⚡', 'На ускоритель нужно 250 монет', 'warn'); return; }
+    act('/use', { item: 'boost_elixir', buy: !own }, function () {
+      var stg = modalStage; if (stg) { stg.act('dance', 2000); stg.say('⚡ Заряжен! 30 минут ×2 опыта — решаем!', 3200); stg.burst('⚡', [50, 45], 6); }
+      toast('⚡', 'Ускоритель на 30 минут: монеты ×1,5, опыт ×2', 'gold');
+    });
+  }
+
+  // ── Колесо удачи ──────────────────────────────────────────────────────
+  function wheelSvg(rot) {
+    var W = S.catalog.wheel || [], n = W.length, s = '';
+    var colors = ['#f59e0b', '#3b82f6', '#22a35a', '#a855f7', '#ef4444', '#0ea5a4', '#f97316', '#6366f1', '#ec4899', '#eab308'];
+    for (var i = 0; i < n; i++) {
+      var a0 = (i / n) * Math.PI * 2 - Math.PI / 2, a1 = ((i + 1) / n) * Math.PI * 2 - Math.PI / 2;
+      var x0 = 100 + Math.cos(a0) * 92, y0 = 100 + Math.sin(a0) * 92, x1 = 100 + Math.cos(a1) * 92, y1 = 100 + Math.sin(a1) * 92;
+      s += '<path d="M100 100 L' + x0.toFixed(1) + ' ' + y0.toFixed(1) + ' A92 92 0 0 1 ' + x1.toFixed(1) + ' ' + y1.toFixed(1) + 'Z" fill="' + colors[i % colors.length] + '" stroke="#fff" stroke-width="2"/>';
+      var am = (a0 + a1) / 2, tx = 100 + Math.cos(am) * 64, ty = 100 + Math.sin(am) * 64;
+      s += '<text x="' + tx.toFixed(1) + '" y="' + (ty + 5).toFixed(1) + '" text-anchor="middle" font-size="15" font-weight="900" fill="#fff" transform="rotate(' + ((am * 180 / Math.PI) + 90).toFixed(1) + ' ' + tx.toFixed(1) + ' ' + ty.toFixed(1) + ')">' + esc(W[i].label) + '</text>';
+    }
+    return '<svg viewBox="0 0 200 200" class="pet-wheel-svg"><g id="pet-wheel-rot" style="transform-origin:100px 100px;transform:rotate(' + (rot || 0) + 'deg)">' + s + '</g><circle cx="100" cy="100" r="14" fill="#fff" stroke="#1f2330" stroke-width="3"/></svg>';
+  }
+  function openWheel() {
+    sheet('<div class="pet-wheel"><b>🎡 Колесо удачи</b><i>Одно вращение в день. Бывает даже осколок Фаберже!</i>' +
+      '<div class="pet-wheel-box"><div class="pet-wheel-pin"></div>' + wheelSvg(0) + '</div>' +
+      '<div id="pet-wheel-res"></div><button type="button" class="go" id="pet-wheel-go" onclick="PetUI.spin()">Крутить!</button></div>');
+  }
+  function spin() {
+    var btn = $('pet-wheel-go'); if (btn) btn.disabled = true;
+    haptic('medium');
+    act('/spin', {}, function (st) {
+      var r = st.spin; var n = (S.catalog.wheel || []).length || 10;
+      // Сектор i — от угла i/n; стрелка сверху. Докручиваем 5 оборотов и ставим центр сектора под стрелку.
+      var target = 360 * 5 + (360 - (r.index + 0.5) * (360 / n)) + (Math.random() * 10 - 5);
+      var g = $('pet-wheel-rot');
+      if (g) { g.style.transition = 'transform 4.2s cubic-bezier(.12,.7,.1,1)'; requestAnimationFrame(function () { g.style.transform = 'rotate(' + target + 'deg)'; }); }
+      var ticks = 0, tk = setInterval(function () { if (++ticks < 22) haptic('light'); else clearInterval(tk); }, 180);
+      setTimeout(function () {
+        clearInterval(tk); haptic('success');
+        var prize = r.coins ? '+' + fmt(r.coins) + ' монет' : r.fragment ? 'Осколок Фаберже! 🥚' : (S.items[r.item] ? S.items[r.item].name : r.item);
+        var res = $('pet-wheel-res'); if (res) res.innerHTML = '<div class="pet-wheel-prize">' + esc(prize) + '</div>';
+        if (btn) { btn.disabled = false; btn.textContent = 'Забрать'; btn.onclick = function () { closeSheet(); }; }
+        if (r.fragment || r.item === 'box_tsar') confetti();
+      }, 4300);
+    }, function () { if (btn) btn.disabled = false; });
+  }
+
+  // Питомец объясняет пересчёт экономики — один раз.
+  function showNoticeOnce(st) {
+    var n = st && st.counters && st.counters.notice;
+    if (!n || n.kind !== 'rebalance') return;
+    var key = 'pet_notice_' + n.at;
+    try { if (localStorage.getItem(key)) return; localStorage.setItem(key, '1'); } catch (_) { return; }
+    setTimeout(function () {
+      sheet('<div class="pet-hatch"><b>Экономика обновилась!</b>' +
+        '<i>Теперь монеты — за решение, и щедрее: 2 за строку, 10 за выученный факт, 10 за балл пробника, 30 за победу в дуэли. Плюс колесо удачи, серия входов с сундуками и задания дня.</i>' +
+        '<i>Ачивки стали приятным бонусом, а не главным доходом — поэтому монеты пересчитаны' + (n.diff ? ' (' + (n.diff > 0 ? '+' : '') + fmt(n.diff) + ')' : '') + '. Всё купленное остаётся твоим.</i>' +
+        '<button type="button" class="go" onclick="PetUI.closeSheet()">Понятно, решаем!</button></div>');
+    }, 1200);
   }
 
   function quickBtn(kind, ico, label, needNow) {
@@ -555,7 +685,12 @@
     return hint + '<div class="pet-grid">' + S.catalog.consumables.map(function (c) {
       var own = inv[c.id] || 0;
       var btn;
-      if (c.kind === 'toy') {
+      if (c.kind === 'boost') {
+        btn = st.boostUntil > now ? '<button type="button" disabled>действует</button>'
+          : own ? '<button type="button" class="go" onclick="PetUI.boost(this)">Выпить</button>' : buyBtn(c.price, 'PetUI.boost(this)');
+      } else if (c.kind === 'freeze') {
+        btn = own ? '<button type="button" disabled>есть в запасе</button>' : buyBtn(c.price, 'PetUI.buy(\'' + c.id + '\')');
+      } else if (c.kind === 'toy') {
         var last = (st.pet.toys || {})[c.id] || 0;
         var ready = last + 3 * 3600 * 1000;
         if (!own) btn = buyBtn(c.price, 'PetUI.buy(\'' + c.id + '\')');
@@ -566,7 +701,7 @@
           : buyBtn(c.price, 'PetUI.use(\'' + c.id + '\', true, this)');
       }
       return '<div class="pet-card"><div class="pet-ico">' + (PetArt.icons[c.id] || '•') + (own && c.kind !== 'toy' ? '<em>×' + own + '</em>' : '') + '</div>' +
-        '<b>' + esc(c.name) + '</b><i>' + fxText(c.fx) + (c.kind === 'toy' ? ' · раз в 3 часа' : '') + '</i>' + btn + '</div>';
+        '<b>' + esc(c.name) + '</b><i>' + (c.kind === 'boost' ? '30 минут: монеты ×1,5, опыт ×2' : c.kind === 'freeze' ? 'Спасёт серию входов, если пропустишь день' : fxText(c.fx) + (c.kind === 'toy' ? ' · раз в 3 часа' : '')) + '</i>' + btn + '</div>';
     }).join('') + '</div>';
   }
 
@@ -965,7 +1100,7 @@
   var hatchPick = 'kitten';
   function openHatch() {
     loadCatalog().then(function () {
-      sheet('<div class="pet-hatch"><b>Кто вылупится?</b><i>Питомец живёт на твоих решениях: каждая верная строка — монета на еду, лечение и наряды.</i>' +
+      sheet('<div class="pet-hatch"><b>Кто вылупится?</b><i>Питомец живёт на твоих решениях: каждая верная строка — 2 монеты и сытость, выученный факт — 10 монет. На них — еда, лечение, наряды и сундуки.</i>' +
         '<div class="pet-species">' + S.catalog.species.map(function (s) {
           return '<button type="button" class="' + (s.id === hatchPick ? 'on' : '') + '" onclick="PetUI.pickSpecies(\'' + s.id + '\')">' +
             PetArt.render({ species: s.id, stage: 'baby', state: 'happy', items: S.items, equipped: {}, scene: 'day' }) + '<span>' + s.name + '</span></button>';
@@ -1017,7 +1152,7 @@
     open: open, close: close, tab: function (t) { S.tab = t; renderModal(); },
     shopSlot: function (s) { S.shopSlot = s; renderModal(); }, wardSlot: function (s) { S.wardSlot = s; renderModal(); },
     use: use, buy: buy, toggle: toggle, undressAll: undressAll, tryOn: tryOn, buyWear: buyWear, closeSheet: closeSheet,
-    quick: quick, tapPet: tapPet, widgetTap: widgetTap,
+    quick: quick, tapPet: tapPet, widgetTap: widgetTap, boost: boost, openWheel: openWheel, spin: spin,
     rename: rename, paint: paint, openBox: openBox, wearDrop: wearDrop, openHatch: openHatch, pickSpecies: pickSpecies, hatch: hatch,
     onLobby: onLobby, onAchievements: onAchievements, refresh: refresh, nickHtml: nickHtml, miniAvatar: miniAvatar,
     get state() { return S.state; }, get catalog() { return S.catalog; },

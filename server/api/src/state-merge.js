@@ -69,7 +69,9 @@ function mergeStateValues(values) {
     // «Кто раньше»: рекорд очков — больше = лучше, поэтому max, как и число игр.
     'orderBest', 'orderGames',
     // «Датрис»: так же — рекорд очков и число игр.
-    'tetrisBest', 'tetrisGames'
+    'tetrisBest', 'tetrisGames',
+    // Счётчики «Летописчика»: только растут, монеты платятся за их прирост.
+    'factsLearned', 'fipiPoints', 'mockPoints', 'mocksDone', 'perfectTables'
   ];
   for (const key of maxFields) {
     if (states.some(s => s.stats[key] !== undefined)) st[key] = Math.max(...states.map(s => Number(s.stats[key]) || 0));

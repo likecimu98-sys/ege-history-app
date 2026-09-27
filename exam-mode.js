@@ -827,7 +827,12 @@
             markSolved([trainingTask.id]);
         }
         if (typeof window.creditNorm === 'function') window.creditNorm(1, trainingSourceTask);
-        if (window.state?.stats) window.state.stats.egePoints = (Number(window.state.stats.egePoints) || 0) + (trainingScore.points || 0);
+        if (window.state?.stats) {
+            window.state.stats.egePoints = (Number(window.state.stats.egePoints) || 0) + (trainingScore.points || 0);
+            // Отдельный счётчик для монет питомца: баллы ЕГЭ за таблицы тренажёра
+            // монет не дают (таблица уже оплачена строками), баллы ФИПИ — дают.
+            window.state.stats.fipiPoints = (Number(window.state.stats.fipiPoints) || 0) + (trainingScore.points || 0);
+        }
         saveExam();
         if (typeof window.syncNow === 'function') window.syncNow();
         if (typeof window.updateGlobalUI === 'function') window.updateGlobalUI();
@@ -1000,6 +1005,11 @@
         markSolved(solvedNow);
         state.active = null;
         state.history = [...state.history.filter(item => item.id !== record.id), record].slice(-50);
+        // Пробник сдан — счётчики питомца: 10 монет за балл и 50 за сам пробник.
+        if (window.state?.stats) {
+            window.state.stats.mockPoints = (Number(window.state.stats.mockPoints) || 0) + (Number(score.total) || 0);
+            window.state.stats.mocksDone = (Number(window.state.stats.mocksDone) || 0) + 1;
+        }
         saveExam();
         returnToMistakePool = false;
         renderResult(record);

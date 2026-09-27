@@ -607,6 +607,7 @@
   var ICONS = {
     food_suhar: '🍞', food_shchi: '🍲', food_pirog: '🥧', food_pryanik: '🍪', food_pir: '🍗',
     med_otvar: '🍵', med_mikstura: '💊', toy_volchok: '🌀', toy_babki: '🎲', toy_lapta: '🏏',
+    boost_elixir: '⚡', streak_freeze: '🧊',
     box_chest: '🧰', box_tsar: '👑', box_week: '🏆',
   };
 
