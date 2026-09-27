@@ -1878,6 +1878,14 @@ async function enqueueStartNudges({ db = pool, minHours = NUDGE_MIN_HOURS, limit
      WHERE m.status = 'active'
        AND m.joined_at < now() - ($1 || ' hours')::interval
        AND NOT EXISTS (SELECT 1 FROM social_attempt_events e WHERE e.user_id = m.user_id)
+       -- 🔴 Уже поставленных в очередь отсекаем ЗДЕСЬ, а не только через ON
+       -- CONFLICT. LIMIT применяется к результату SELECT, и порядок у него
+       -- постоянный: без этого условия каждый следующий тик выбирал бы те же
+       -- первые $2 строк, все они схлопывались бы конфликтом, и очередь
+       -- переставала бы двигаться навсегда. На проде так и вышло — 30 учеников
+       -- из 58 не получили сообщение НИ РАЗУ и не получили бы никогда.
+       AND NOT EXISTS (SELECT 1 FROM social_notification_jobs j
+                        WHERE j.dedup_key = 'nudge:start:' || m.user_id)
      ORDER BY m.joined_at
      LIMIT $2
      ON CONFLICT (dedup_key) WHERE dedup_key <> '' DO NOTHING
@@ -1928,6 +1936,10 @@ async function enqueueTeacherNudges({ db = pool, minHours = NUDGE_MIN_HOURS, lim
        -- прежние учителя молча не попали бы в выборку ни разу.
        AND COALESCE(p.role_granted_at, p.created_at) < now() - ($1 || ' hours')::interval
        AND NOT EXISTS (SELECT 1 FROM social_assignments a WHERE a.teacher_user_id = p.user_id)
+       -- 🔴 См. тот же комментарий в enqueueStartNudges: без этого условия
+       -- LIMIT намертво запирает очередь на первых $2 кандидатах.
+       AND NOT EXISTS (SELECT 1 FROM social_notification_jobs j
+                        WHERE j.dedup_key = 'nudge:teach:' || p.user_id)
      ORDER BY COALESCE(p.role_granted_at, p.created_at)
      LIMIT $2
      ON CONFLICT (dedup_key) WHERE dedup_key <> '' DO NOTHING
