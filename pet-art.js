@@ -367,6 +367,49 @@
     return s;
   }
 
+  // ── Фирменные эффекты вещей (концепция 27.09.2026) ───────────────────────
+  // Редкость видна не рамкой карточки, а тем, что вещь делает с питомцем:
+  // легенда меняет поведение (своё действие, реплики), миф превращает питомца
+  // целиком (материал, свет, фон) — и это видно всем, даже в мини-аватаре топа.
+  // Ключ — шаблон рисунка вещи (art.t).
+  var SIGNATURES = {
+    chainsaw: { tier: 'legendary', act: 'rev', desc: 'Легенда: питомец газует бензопилой — дым, тряска, опилки',
+      say: ['Вжжжжух!', 'Разберу эту таблицу на щепки', 'Кто тут не выучил даты?', 'Бррр-рррм!'] },
+    monomakh: { tier: 'mythic', form: 'gold', desc: 'Миф: питомец превращается в золотую статую — блик, лучи и золотая пыль',
+      say: ['Тяжела ты, шапка Мономаха…', 'Самодержец всея таблицы', 'Кланяйтесь, холопы ЕГЭ', 'Золото — это я'] },
+  };
+  function signaturesOf(eq, items) {
+    var out = [];
+    Object.keys(eq || {}).forEach(function (slot) {
+      var it = items && items[eq[slot]];
+      var sg = it && it.art && SIGNATURES[it.art.t];
+      if (sg) out.push(Object.assign({ id: it.id, name: it.name, slot: slot }, sg));
+    });
+    return out;
+  }
+  // Миф «золото»: всё тело — в золото, по силуэту бежит блик, за спиной лучи,
+  // вверх поднимается золотая пыль.
+  function goldForm(bodyId) {
+    var f = uid('gold'), clip = uid('gclip'), glow = uid('gglow');
+    var defs = '<defs><filter id="' + f + '" x="-10%" y="-10%" width="120%" height="120%" color-interpolation-filters="sRGB">' +
+      '<feColorMatrix type="matrix" values="0.42 0.78 0.16 0 0.06  0.33 0.62 0.12 0 0.03  0.12 0.24 0.05 0 0  0 0 0 1 0"/>' +
+      '<feComponentTransfer><feFuncR type="gamma" exponent=".8" amplitude="1.15"/><feFuncG type="gamma" exponent=".85" amplitude="1.05"/></feComponentTransfer>' +
+      '<feComponentTransfer><feFuncR type="linear" slope="1.3" intercept="-.1"/><feFuncG type="linear" slope="1.3" intercept="-.1"/><feFuncB type="linear" slope="1.2" intercept="-.06"/></feComponentTransfer></filter>' +
+      '<clipPath id="' + clip + '"><use href="#' + bodyId + '"/></clipPath>' +
+      '<radialGradient id="' + glow + '"><stop offset="0" stop-color="#fff3b0" stop-opacity=".9"/><stop offset="1" stop-color="#ffcf4a" stop-opacity="0"/></radialGradient></defs>';
+    var rays = '<g class="sig-rays sig-live">';
+    for (var i = 0; i < 16; i++) {
+      var a = i / 16 * Math.PI * 2;
+      rays += '<path d="M100 104 L' + (100 + Math.cos(a) * 120).toFixed(1) + ' ' + (104 + Math.sin(a) * 120).toFixed(1) + ' L' + (100 + Math.cos(a + 0.12) * 120).toFixed(1) + ' ' + (104 + Math.sin(a + 0.12) * 120).toFixed(1) + 'Z" fill="#ffd23f" opacity="' + (i % 2 ? 0.18 : 0.3) + '"/>';
+    }
+    rays += '</g><circle cx="100" cy="100" r="70" fill="url(#' + glow + ')" opacity=".55"/>';
+    // Лучи режем по рамке сцены — иначе вылезут на соседние блоки интерфейса.
+    rays = '<svg x="0" y="0" width="200" height="200" viewBox="0 0 200 200" overflow="hidden">' + rays + '</svg>';
+    var dust = '';
+    for (var j = 0; j < 10; j++) dust += '<circle class="sig-dust sig-live" style="animation-delay:' + (j * 0.35).toFixed(2) + 's" cx="' + (46 + (j * 29) % 110) + '" cy="' + (150 + (j * 13) % 36) + '" r="' + (j % 3 ? 1.6 : 2.4) + '" fill="#ffe27a"/>';
+    return { defs: defs, back: rays, filter: 'url(#' + f + ')', front: '<g clip-path="url(#' + clip + ')"><rect class="sig-gleam sig-live" x="-60" y="-20" width="34" height="260" fill="#fff" opacity=".55" transform="rotate(18 100 100)"/></g>' + dust };
+  }
+
   // Икона стиля недели («Кто круче?»): радужное кольцо на неделю.
   function styleAura() {
     var id = uid('sty');
@@ -1321,12 +1364,23 @@
       '<path class="it-wave" d="M148 160 Q160 170 158 184 Q164 176 168 186" fill="none" stroke="' + c0(c, 0, '#f4f1e6') + '" stroke-width="4" stroke-linecap="round"/>' +
       '<circle cx="138" cy="150" r="2" fill="' + c0(c, 1, '#d0342c') + '" opacity=".7"/></g>';
   };
+  // Бензопила — ЛЕГЕНДА с фирменным действием: цепь бежит по полотну, из
+  // выхлопа идёт дымок, мотор мелко дрожит; время от времени питомец газует.
   T.chainsaw = function (c) {
-    var teeth = '';
-    for (var i = 0; i < 9; i++) teeth += '<path d="M' + (158 + i * 3.6) + ' ' + (132 - i * 5.8) + ' l4 -1 -1 4Z" fill="' + OUT + '"/>';
-    return held('<g class="it-shine"><path d="M156 138 L186 84 Q192 80 194 88 L166 142Z" fill="' + c0(c, 1, '#c3cad2') + '" ' + SW + '/>' + teeth +
-      '<rect x="130" y="132" width="36" height="26" rx="6" fill="' + c0(c, 0, '#f08a24') + '" ' + SW + '/><path d="M136 132 Q140 120 152 122" fill="none" stroke="' + OUT + '" stroke-width="4"/>' +
-      '<rect x="136" y="140" width="10" height="10" rx="2" fill="' + OUT + '"/></g>');
+    var body = c0(c, 0, '#f08a24'), steel = c0(c, 1, '#c3cad2');
+    var blade = 'M154 140 L184 86 Q190 78 196 84 Q199 90 194 96 L166 146Z';
+    return held('<g class="cs-saw">' +
+      '<g class="cs-smoke"><circle cx="128" cy="138" r="3" fill="#b9b9c0"/><circle cx="124" cy="132" r="4" fill="#cfcfd6"/><circle cx="119" cy="125" r="5" fill="#e2e2e8"/></g>' +
+      '<path d="' + blade + '" fill="' + steel + '" ' + SW + '/>' +
+      '<path d="M160 138 L186 90" stroke="' + shade(steel, 0.25) + '" stroke-width="3" stroke-linecap="round" opacity=".8"/>' +
+      '<path class="cs-chain" d="' + blade + '" fill="none" stroke="' + OUT + '" stroke-width="2.6" stroke-dasharray="3 3"/>' +
+      '<rect x="128" y="130" width="38" height="28" rx="7" fill="' + body + '" ' + SW + '/>' +
+      '<rect x="128" y="130" width="38" height="8" rx="4" fill="' + shade(body, 0.25) + '"/>' +
+      '<path d="M134 146 h14 M134 150 h14 M134 154 h14" stroke="' + shade(body, -0.35) + '" stroke-width="1.6"/>' +
+      '<rect x="152" y="143" width="11" height="11" rx="2" fill="' + OUT + '"/><circle cx="157.5" cy="148.5" r="2.4" fill="' + steel + '"/>' +
+      '<path d="M133 130 Q138 116 152 118 L154 124 Q142 122 139 132" fill="' + shade(body, -0.2) + '" ' + SW + '/>' +
+      '<path d="M126 140 l-4 -2 M126 146 l-5 0" stroke="' + OUT + '" stroke-width="1.6" stroke-linecap="round"/>' +
+      '<text x="147" y="141" text-anchor="middle" font-size="5.5" font-weight="900" fill="#fff" font-family="Arial">ВЖЖ</text></g>');
   };
   T.bluefire = function (c) {
     return held('<g class="it-mythic"><path class="it-flicker" d="M150 150 Q130 130 146 104 Q150 120 158 118 Q156 100 168 90 Q170 110 178 118 Q186 138 166 152Z" fill="' + c0(c, 0, '#3b82f6') + '" ' + SW + '/>' +
@@ -1627,6 +1681,8 @@
     }
     var best = null;
     Object.keys(eq).forEach(function (slot) { var it = items[eq[slot]]; if (it && (!best || RANK_OF[it.rarity] > RANK_OF[best])) best = it.rarity; });
+    var sigs = signaturesOf(eq, items);
+    var mythSig = sigs.filter(function (x) { return x.tier === 'mythic'; })[0];
     var body, cls3 = '';
     if (sp === 'squid') {
       cls3 = ' v3 human';
@@ -1661,9 +1717,17 @@
     // а у фона — нет, иначе круг «Открытого космоса» вылезал бы на соседей.
     if (bg) bg = '<svg x="0" y="0" width="200" height="200" viewBox="0 0 200 200" overflow="hidden">' + bg + '</svg>';
     var shadow = '<ellipse class="pet-shadow" cx="100" cy="191" rx="' + (46 * (stage === 'baby' ? STAGE_SCALE.baby : 1)).toFixed(1) + '" ry="5" fill="#000" opacity=".13"/>';
-    var cls = 'pet-svg st-' + state + ' stage-' + stage + ' sp-' + sp + cls3 + (best ? ' best-' + best : '') + (opts.anim === false ? ' no-anim' : '') + (opts.mini ? ' mini' : '');
+    var sigBack = '', sigFront = '', sigDefs = '';
+    if (mythSig && mythSig.form === 'gold') {
+      var bodyId = uid('pbody');
+      var gf = goldForm(bodyId);
+      sigDefs = gf.defs; sigBack = gf.back; sigFront = gf.front;
+      body = '<g id="' + bodyId + '" filter="' + gf.filter + '">' + body + '</g>';
+    }
+    var cls = 'pet-svg st-' + state + ' stage-' + stage + ' sp-' + sp + cls3 + (best ? ' best-' + best : '') + (mythSig ? ' sig-mythic sig-' + mythSig.form : '') +
+      sigs.filter(function (x) { return x.act; }).map(function (x) { return ' sig-' + x.act; }).join('') + (opts.anim === false ? ' no-anim' : '') + (opts.mini ? ' mini' : '');
     return '<svg class="' + cls + '" viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="' + escAttr(opts.label || 'Питомец') + '">' +
-      bg + (opts.styleIcon ? styleAura() : '') + rarityAura(best) + layer('pet') + shadow + body + layer('aura') + (opts.mini ? '' : extras(state)) + '</svg>';
+      sigDefs + bg + sigBack + (opts.styleIcon ? styleAura() : '') + (mythSig ? '' : rarityAura(best)) + layer('pet') + shadow + body + sigFront + layer('aura') + (opts.mini ? '' : extras(state)) + '</svg>';
   }
 
   // Одна вещь отдельно — для карточек лавки и гардероба. Для вещей на голову,
@@ -1689,5 +1753,5 @@
     box_chest: '🧰', box_tsar: '👑', box_emperor: '💎', box_week: '🏆',
   };
 
-  window.PetArt = { render: render, renderItem: renderItem, templates: T, species: SPECIES, icons: ICONS, shade: shade, stageScale: STAGE_SCALE };
+  window.PetArt = { signatures: signaturesOf, SIGNATURES: SIGNATURES, render: render, renderItem: renderItem, templates: T, species: SPECIES, icons: ICONS, shade: shade, stageScale: STAGE_SCALE };
 })();

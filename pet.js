@@ -248,6 +248,25 @@
     setTimeout(function () { el.remove(); if (done) done(); }, 640);
   };
 
+  function mySigs() {
+    var st = S.state; if (!st || !st.pet || st.pet.sick || !window.PetArt || !PetArt.signatures) return [];
+    return PetArt.signatures(st.equipped || {}, S.items);
+  }
+  // Фирменное действие: у бензопилы — газануть (тряска, дым, опилки, реплика).
+  Stage.prototype.sigAct = function (sig, big) {
+    if (Math.random() < 0.45) {
+      this.act(sig.act, 1800);
+      if (sig.act === 'rev') {
+        var self = this;
+        for (var i = 0; i < 4; i++) setTimeout(function () { self.fx('💨', [60, 64], { dx: -30 - Math.random() * 20, dy: -30 - Math.random() * 20 }); }, i * 260);
+        setTimeout(function () { self.burst('🪵', [80, 50], 4); }, 500);
+      }
+      if (big || Math.random() < 0.3) this.say(pick(sig.say), 2400);
+    } else {
+      this.act(pick(['wave', 'look', 'tail', 'hop']), 1600);
+    }
+  };
+
   // Что питомец делает сам, пока на него смотрят.
   Stage.prototype.idle = function () {
     var st = S.state; if (!st || !st.pet) return;
@@ -259,6 +278,9 @@
     if (p.state === 'sad') { this.act('sigh', 1900); if (r < (big ? 0.5 : 0.25)) this.say(pick(SAY.sad)); return; }
     var acts = ['wave', 'scratch', 'look', 'tail', 'ears', 'look', 'hop'];
     if (p.state === 'happy') acts.push('dance', 'dance', 'wave');
+    // Легендарная вещь даёт своё движение — и оно частое: это и есть «видно, что круто».
+    var sig = mySigs().filter(function (x) { return x.act; })[0];
+    if (sig) { this.sigAct(sig, big); return; }
     var h = new Date(Date.now() + 3 * 3600e3).getUTCHours();
     if (h >= 21 || h < 9) acts.push('yawn', 'yawn');
     if (Math.random() < 0.08) acts.push('spin');
@@ -516,6 +538,13 @@
       var p = S.state.pet;
       if (p.state === 'sleep') return modalStage.say(pick(SAY.sleep));
       if (p.state === 'hungry' || p.state === 'sick' || p.state === 'sad') return modalStage.say(pick(SAY[p.state]));
+      var myth = mySigs().filter(function (x) { return x.tier === 'mythic'; })[0];
+      if (myth) {
+        var sv = modalStage.svg(); if (sv) { sv.classList.remove('sig-enter'); void sv.getBoundingClientRect(); sv.classList.add('sig-enter'); }
+        modalStage.burst('✨', [50, 40], 8);
+        modalStage.say(myth.say[0], 3000);
+        return;
+      }
       modalStage.act('wave', 1700);
       modalStage.say(pick(['Привет!', 'О, ты пришёл!', 'Я скучал!', 'Привет-привет!']));
     }, 350);
@@ -1168,7 +1197,7 @@
   function itemCard(item, extra, onclick, cls) {
     return '<button type="button" class="pet-item rar-' + item.rarity + ' ' + (cls || '') + '" onclick="' + onclick + '">' +
       '<span class="pet-item-art">' + PetArt.renderItem(item) + '</span>' +
-      '<span class="pet-stars" aria-hidden="true">' + stars(item.rarity) + '</span>' +
+      '<span class="pet-stars" aria-hidden="true">' + stars(item.rarity) + '</span>' + (sigOf(item) ? '<span class="pet-sig-badge">✨ эффект</span>' : '') +
       '<b>' + esc(item.name) + '</b><span class="pet-rarity">' + rarityLabel(item.rarity) + '</span><i>' + esc(item.era) + '</i>' + (extra || '') + '</button>';
   }
 
@@ -1369,6 +1398,8 @@
     if (p.state === 'sleep') { modalStage.act('ears', 700); modalStage.say(pick(SAY.wake)); return; }
     if (taps.length >= 4) {
       taps = [];
+      var lg = mySigs().filter(function (x) { return x.act; })[0];
+      if (lg && Math.random() < 0.5) { modalStage.sigAct(lg, true); return; }
       modalStage.act('spin', 850); modalStage.say(pick(SAY.tickle)); modalStage.burst('😆', [50, 45], 5);
     } else {
       modalStage.act('giggle', 600);
@@ -1428,6 +1459,7 @@
   }
 
   // Примерка: питомец на весь экран в этой вещи + кнопка «Купить».
+  function sigOf(it) { return it && it.art && window.PetArt && PetArt.SIGNATURES ? PetArt.SIGNATURES[it.art.t] : null; }
   function tryOn(id) {
     var it = S.items[id]; var st = S.state;
     var eq = Object.assign({}, st.equipped || {}); eq[it.slot] = id;
@@ -1435,6 +1467,7 @@
     sheet('<div class="pet-try rar-' + it.rarity + '">' +
       '<div class="pet-try-stage">' + PetArt.render({ species: st.pet.species, stage: st.pet.stage, state: 'happy', items: S.items, equipped: eq, scene: 'day' }) + '</div>' +
       '<b>' + esc(it.name) + '</b><i>' + rarityLabel(it.rarity) + ' · ' + slotLabel(it.slot) + ' · ' + esc(it.era) + '</i>' +
+      (sigOf(it) ? '<div class="pet-sig-note rar-' + it.rarity + '">✨ ' + esc(sigOf(it).desc) + '</div>' : '') +
       (it.note ? '<div class="pet-note">📜 ' + esc(it.note) + '</div>' : '') +
       (afford ? '<button type="button" class="go" onclick="PetUI.buyWear(\'' + id + '\')">Купить и надеть · ' + COIN + ' ' + fmt(it.price) + '</button>'
         : '<button type="button" disabled>' + COIN + ' ' + fmt(it.price) + ' · не хватает ' + fmt(it.price - st.balance) + '</button><div class="pet-hint">Это примерно ' + fmt(Math.ceil((it.price - st.balance) / (((S.catalog.economy || {}).rates || {}).solved || 2))) + ' решённых строк — или меньше с ускорителем и заданиями дня</div>') +
@@ -1616,11 +1649,15 @@
   function miniAvatar(avatar) {
     if (!avatar || !avatar.species || !window.PetArt) return '';
     var art = PetArt.render({ species: avatar.species, stage: avatar.stage, state: avatar.sick ? 'sick' : 'ok', items: S.items, equipped: avatar.equipped || {}, mini: true, styleIcon: !!avatar.styleIcon });
+    // Рамка по самой редкой надетой вещи: легенда — золото, миф — живое пламя.
+    var rank = { legendary: 1, mythic: 2 }, top = null;
+    Object.keys(avatar.equipped || {}).forEach(function (k) { var it = S.items[avatar.equipped[k]]; if (it && rank[it.rarity] && (!top || rank[it.rarity] > rank[top])) top = it.rarity; });
+    var frame = top ? ' lb-' + top : '';
     // С публичным id аватар — кнопка: тап открывает профиль питомца с реакциями.
     if (avatar.publicId && /^[a-f0-9]{6,32}$/.test(avatar.publicId)) {
-      return '<button type="button" class="lb-ava tap" title="Профиль питомца" onclick="event.stopPropagation();PetUI.profile(\'' + avatar.publicId + '\')">' + art + '</button>';
+      return '<button type="button" class="lb-ava tap' + frame + '" title="Профиль питомца" onclick="event.stopPropagation();PetUI.profile(\'' + avatar.publicId + '\')">' + art + '</button>';
     }
-    return '<span class="lb-ava">' + art + '</span>';
+    return '<span class="lb-ava' + frame + '">' + art + '</span>';
   }
 
   // Вызывается из updateGlobalUI (лобби показалось) — не чаще раза в 20 секунд.

@@ -548,3 +548,43 @@ button.pet-quest[disabled] { cursor: default; }
 @keyframes pgb-coin { from { opacity: 0; transform: translate(-50%, 6px); } 20% { opacity: 1; } to { opacity: 0; transform: translate(-50%, -30px); } }
 .pgb-say { position: absolute; left: 56px; bottom: 10px; white-space: nowrap; font-size: 12px; font-weight: 800; color: var(--pet-ink, #1f2330);
   background: var(--pet-card, #fff); border-radius: var(--r-md); padding: 5px 9px; box-shadow: var(--e-2); animation: pet-pop-in .35s ease-out; }
+
+/* ── Фирменные эффекты: легенда меняет поведение, миф — превращает ──────── */
+/* Бензопила: цепь бежит, дымок, дрожь мотора; «газануть» — act-rev. */
+.pet-svg .cs-chain { animation: cs-chain .35s linear infinite; }
+@keyframes cs-chain { to { stroke-dashoffset: -12; } }
+.pet-svg .cs-smoke circle { transform-box: fill-box; transform-origin: 50% 50%; animation: cs-smoke 2.4s ease-out infinite; opacity: 0; }
+.pet-svg .cs-smoke circle:nth-child(2) { animation-delay: .8s; }
+.pet-svg .cs-smoke circle:nth-child(3) { animation-delay: 1.6s; }
+@keyframes cs-smoke { 0% { opacity: 0; transform: translate(0, 0) scale(.6); } 20% { opacity: .8; } 100% { opacity: 0; transform: translate(-10px, -18px) scale(1.6); } }
+.pet-svg .cs-saw { transform-box: view-box; animation: cs-idle .12s linear infinite alternate; }
+@keyframes cs-idle { to { transform: translate(.4px, -.4px); } }
+.pet-svg.act-rev .pet-arm-r { animation: cs-raise 1.8s ease-in-out; }
+@keyframes cs-raise { 0%, 100% { transform: rotate(0); } 20%, 80% { transform: rotate(-28deg); } }
+.pet-svg.act-rev .cs-saw { animation: cs-shake .06s linear infinite; }
+@keyframes cs-shake { 0% { transform: translate(-1.2px, .8px); } 50% { transform: translate(1.2px, -1px); } 100% { transform: translate(-.6px, 1px); } }
+.pet-svg.act-rev .cs-chain { animation-duration: .08s; }
+.pet-svg.act-rev .cs-smoke circle { animation-duration: .7s; }
+.pet-svg.act-rev .pet-body { animation: cs-body 1.8s ease-in-out; }
+@keyframes cs-body { 0%, 100% { transform: none; } 20%, 80% { transform: translateY(-2px); } 30%, 50%, 70% { transform: translate(1px, -2px); } 40%, 60% { transform: translate(-1px, -2px); } }
+
+/* Мономах: золотая статуя — лучи, пыль, блик по силуэту, вспышка при встрече. */
+.pet-svg .sig-rays { transform-box: view-box; transform-origin: 100px 104px; animation: it-spin 24s linear infinite; }
+.pet-svg .sig-dust { animation: sig-dust 3.2s ease-out infinite; opacity: 0; }
+@keyframes sig-dust { 0% { opacity: 0; transform: translateY(0); } 25% { opacity: 1; } 100% { opacity: 0; transform: translateY(-70px); } }
+.pet-svg .sig-gleam { animation: sig-gleam 3.6s ease-in-out infinite; }
+@keyframes sig-gleam { 0%, 55% { transform: rotate(18deg) translateX(0); } 100% { transform: rotate(18deg) translateX(300px); } }
+/* В мини-аватаре топа всё статично — кроме мифа: его видно издалека. */
+.pet-svg.mini.sig-mythic .sig-rays { animation: it-spin 24s linear infinite !important; }
+.pet-svg.mini.sig-mythic .sig-gleam { animation: sig-gleam 3.6s ease-in-out infinite !important; }
+.pet-svg.sig-enter { animation: sig-enter 1.1s ease-out; }
+@keyframes sig-enter { 0% { filter: brightness(2.2) drop-shadow(0 0 18px #ffd23f); transform: scale(.94); } 60% { filter: brightness(1.2) drop-shadow(0 0 10px #ffd23f); transform: scale(1.03); } 100% { filter: none; transform: none; } }
+
+/* Рамки в топе: легенда — золото, миф — живое пламя. */
+.lb-ava.lb-legendary { outline: 2px solid var(--r-legendary); outline-offset: 1px; }
+.lb-ava.lb-mythic { outline: 2px solid var(--r-mythic); outline-offset: 1px; animation: lb-myth 1.6s linear infinite; }
+@keyframes lb-myth { 0%, 100% { outline-color: var(--r-mythic); } 50% { outline-color: var(--r-legendary); } }
+
+/* Значок и описание эффекта у вещи. */
+.pet-sig-badge { font-size: 11px; font-weight: 900; color: #fff; background: linear-gradient(90deg, var(--r-legendary), var(--r-mythic)); border-radius: var(--r-full); padding: 1px 7px; }
+.pet-sig-note { font-size: 12.5px; font-weight: 800; line-height: 1.35; padding: 8px 10px; border-radius: var(--r-sm); border: 2px solid var(--rc); background: color-mix(in srgb, var(--rc) 12%, var(--pet-card, #fff)); }
