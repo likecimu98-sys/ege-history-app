@@ -71,6 +71,8 @@ const DUEL_MAX_DURATION_MS = 60000;
 // плюс сеть. Минуты хватает с большим избытком, и при этом она не позволяет
 // «доигрывать» — ровно та жалоба, с которой начался этот замок.
 const DUEL_WRITE_GRACE_MS = 60000;
+// Отсчёт «3-2-1» перед матчем: startTime = начало игры по часам сервера + отсчёт.
+const DUEL_COUNTDOWN_MS = 4000;
 function duelWriteWindowOver(before) {
   const startedAt = Number(before?.playingAt);
   // Матч не начинался или это старая запись без серверной отметки — не мешаем.
@@ -406,6 +408,13 @@ function mergeMatchData(current, next, patch) {
   // переживает любые merge и служит единственной точкой отсчёта для DUEL_MAX_MS.
   if (Number(current.playingAt) > 0) next.playingAt = current.playingAt;
   else if (next.status === 'playing' && current.status !== 'playing') next.playingAt = Date.now();
+  if (next.status === 'playing' && current.status !== 'playing') {
+    // Старт — тоже по часам сервера (4 с на отсчёт, как ставил клиент). 27.09.2026:
+    // у принявшего вызов часы отставали на 2,5 минуты, его startTime был «в
+    // прошлом», и у соперника матч заканчивался сразу же ничьей 0:0. Клиент
+    // переводит это время в свои часы по заголовку Date ответов API.
+    next.startTime = next.playingAt + DUEL_COUNTDOWN_MS;
+  }
   for (const key of ['player1', 'player2']) {
     if (!patch?.[key] || !current[key] || !next[key] || String(current[key].uid || '') !== String(next[key].uid || '')) continue;
     const before = current[key];

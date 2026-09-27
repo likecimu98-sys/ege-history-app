@@ -123,5 +123,18 @@ const stale = started(Date.now() - 10 * 60 * 1000);
     'Просроченный матч нельзя закрыть — он навсегда застрянет в playing');
   assert.strictEqual(await can(started(0), { player1: { uid: 'u1', score: 5 } }), true,
     'Матч без серверной отметки должен приниматься (старые записи)');
+  // 27.09.2026: старт матча — по часам сервера. Принявший вызов с отстающими на
+  // 2,5 минуты часами присылал startTime «в прошлом», и у соперника матч сразу
+  // заканчивался ничьей 0:0.
+  const { mergeMatchData } = require(path.join(root, 'server/api/src/store.js'));
+  const t0 = Date.now();
+  const joined = mergeMatchData({ status: 'waiting', startTime: 0, player1: { uid: 'u1' }, player2: null },
+    { status: 'playing', startTime: t0 - 150000, player1: { uid: 'u1' }, player2: { uid: 'u2' } }, { status: 'playing' });
+  assert.ok(joined.startTime >= t0 + 3000 && joined.startTime <= Date.now() + 5000,
+    'startTime берётся с часов принявшего вызов — со сбитыми часами матч кончается сразу');
+  const later = mergeMatchData(joined, { ...joined, startTime: 1 }, { player2: { uid: 'u2', score: 3 } });
+  assert.strictEqual(later.startTime, joined.startTime, 'startTime переписывается после старта');
+  const cs = fs.readFileSync(path.join(root, 'cloud-sync.js'), 'utf8');
+  assert.match(cs, /_serverClockOffset/, 'Клиент не переводит startTime в свои часы');
   console.log('duel-deadline.selftest: ok');
 })().catch(e => { console.error(e); process.exit(1); });

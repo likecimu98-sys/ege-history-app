@@ -37,6 +37,19 @@ async function apiFetch(path, options = {}) {
   return apiFetchRaw(path, options);
 }
 
+// Насколько часы сервера впереди часов устройства (мс). У школьников часы бывают
+// сбиты на минуты, а время старта дуэли ставит сервер — без поправки матч у
+// такого игрока начинался «в прошлом» и тут же заканчивался. Date точен до
+// секунды: расхождение меньше двух секунд считаем нулём, чтобы не дёргать таймер.
+function noteServerClock(response) {
+  try {
+    const server = Date.parse(response.headers.get('date') || '');
+    if (!Number.isFinite(server)) return;
+    const offset = server + 500 - Date.now();
+    window._serverClockOffset = Math.abs(offset) < 2000 ? 0 : offset;
+  } catch (_) {}
+}
+
 async function apiFetchRaw(path, options = {}) {
   const headers = new Headers(options.headers || {});
   if (options.body && !headers.has('Content-Type')) headers.set('Content-Type', 'application/json');
@@ -45,6 +58,7 @@ async function apiFetchRaw(path, options = {}) {
     if (csrf) headers.set('X-CSRF-Token', csrf);
   }
   const response = await fetch(path, { ...options, headers, credentials: 'same-origin', cache: 'no-store' });
+  noteServerClock(response);
   let payload = null;
   try { payload = await response.json(); } catch (_) {}
   if (!response.ok) {

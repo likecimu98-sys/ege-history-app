@@ -165,6 +165,7 @@ const RAW = [
   ['neck_barmy', 'neck', 'epic', 2400, 'Бармы', 'Московское царство', ['barmy', '#e9c46a', '#b3123a', '#1d8a5a']],
   ['neck_andrey', 'neck', 'epic', 2800, 'Орден Андрея Первозванного', 'Империя', ['order', '#2f63c9', '#e9c46a']],
   ['neck_chain', 'neck', 'legendary', 9000, 'Золотая цепь канцлера', 'Империя', ['chain', '#e9c46a', '#b8912f']],
+  ['neck_stolypin', 'neck', 'legendary', 9500, 'Галстук Столыпина', 'Империя', ['stolypin', '#1b2a4a', '#e9c46a']],
 
   // ── В руке (18) ──────────────────────────────────────────────────────
   ['hand_pero', 'hand', 'common', 60, 'Гусиное перо', 'Русь', ['quill', '#f4f1e6', '#1f1f24']],
@@ -481,7 +482,7 @@ function publicCatalog() {
 }
 
 // Меняется вместе с содержимым каталога: клиент кэширует каталог по версии.
-const CATALOG_VERSION = '2026-09-28-4';
+const CATALOG_VERSION = '2026-09-28-5';
 
 module.exports = {
   RARITIES, RARITY_VALUE, DUPLICATE_SHARE, SLOTS, SPECIES, ITEMS, CONSUMABLES, BOXES,

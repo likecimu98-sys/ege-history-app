@@ -883,7 +883,6 @@
   T.bg_senate = function (c) { return sky(c0(c, 0), '#fff') + '<rect x="0" y="100" width="200" height="70" fill="#f1e2bd"/><g fill="#fff">' + [10, 34, 58, 142, 166, 190].map(function (x) { return '<rect x="' + (x - 4) + '" y="104" width="8" height="60"/>'; }).join('') + '</g><path d="M60 100 L100 70 L140 100Z" fill="#f1e2bd"/><path d="M100 70 V30" stroke="' + c0(c, 1) + '" stroke-width="4"/><path d="M40 170 L50 120 L60 170Z" fill="#6b3f22"/><path d="M44 116 q6 -18 20 -10 q-8 4 -6 14Z" fill="' + c0(c, 1) + '"/>' + ground('#d9e4ec'); };
   T.bg_winter = function (c) { var s = sky(c0(c, 0), '#fff') + '<rect x="0" y="90" width="200" height="84" fill="' + c0(c, 1) + '"/>'; for (var x = 8; x < 200; x += 16) s += '<rect x="' + x + '" y="100" width="7" height="66" fill="#fff"/><rect x="' + (x - 1) + '" y="96" width="9" height="4" fill="#e9c46a"/>'; return s + '<path d="M0 90 H200" stroke="#e9c46a" stroke-width="4"/>' + ground('#eef3f7'); };
   T.bg_baikonur = function (c) { return sky(c0(c, 0), '#fff4e0') + '<path d="M150 170 L150 50 Q160 20 170 50 L170 170Z" fill="' + c0(c, 1) + '" stroke="#999" stroke-width="2"/><path d="M150 150 L138 172 L150 172Z M170 150 L182 172 L170 172Z" fill="#cc2d2d"/><path d="M186 60 L186 170 M190 60 L190 170" stroke="#777" stroke-width="3"/><text x="160" y="110" text-anchor="middle" font-size="7" font-weight="900" fill="#cc2d2d" font-family="Arial" transform="rotate(-90 160 110)">СССР</text>' + ground('#e2c79a'); };
-  T.bg_amber = function (c) { var s = '<rect width="200" height="200" fill="' + c0(c, 0) + '"/>'; for (var i = 0; i < 20; i++) s += '<rect x="' + ((i % 5) * 40 + 4) + '" y="' + (Math.floor(i / 5) * 44 + 4) + '" width="32" height="36" rx="4" fill="' + (i % 2 ? shade(c0(c, 0), 0.2) : shade(c0(c, 0), -0.15)) + '" stroke="' + c0(c, 1) + '" stroke-width="2"/>'; return '<g class="it-shine">' + s + '</g><rect x="0" y="176" width="200" height="24" fill="#6b3f22"/>'; };
   T.bg_space = function (c) {
     var s = '<rect width="200" height="200" fill="' + c0(c, 0) + '"/><circle cx="40" cy="160" r="60" fill="#1b2a6b" opacity=".6"/>';
     var pts = [[20, 20], [60, 40], [100, 16], [150, 30], [180, 60], [30, 90], [170, 110], [120, 70], [80, 110], [186, 180], [10, 140]];
@@ -895,13 +894,10 @@
   // Спутники (левый нижний угол, ≈ 14…56 × 140…190)
   function buddy(inner) { return '<g class="pet-buddy">' + inner + '</g>'; }
   T.c_bird = function (c) { return buddy('<ellipse cx="34" cy="168" rx="16" ry="13" fill="' + c0(c, 0) + '" ' + SW + '/><circle cx="26" cy="160" r="9" fill="' + c0(c, 0) + '" ' + SW + '/><circle cx="23" cy="158" r="2" fill="' + OUT + '"/><path d="M17 161 L10 163 L17 165Z" fill="#f2b705" stroke="' + OUT + '" stroke-width="1.5"/><path d="M38 164 Q48 158 50 170 Q44 172 38 168Z" fill="' + c0(c, 1) + '" ' + SW + '/><path d="M30 181 v6 M38 181 v6" stroke="' + OUT + '" stroke-width="2"/>'); };
-  T.c_mouse = function (c) { return buddy('<ellipse cx="34" cy="174" rx="18" ry="12" fill="' + c0(c, 0) + '" ' + SW + '/><circle cx="20" cy="164" r="7" fill="' + c0(c, 1) + '" ' + SW + '/><circle cx="18" cy="172" r="1.8" fill="' + OUT + '"/><path d="M52 176 Q64 178 60 166" fill="none" stroke="' + OUT + '" stroke-width="2"/><circle cx="12" cy="176" r="2" fill="' + c0(c, 1) + '"/><rect x="30" y="160" width="10" height="8" fill="#e7d3a8" stroke="' + OUT + '" stroke-width="1.5"/>'); };
   T.c_frog = function (c) { return buddy('<ellipse cx="34" cy="174" rx="20" ry="13" fill="' + c0(c, 0) + '" ' + SW + '/><circle cx="24" cy="160" r="6" fill="' + c0(c, 0) + '" ' + SW + '/><circle cx="44" cy="160" r="6" fill="' + c0(c, 0) + '" ' + SW + '/><circle cx="24" cy="160" r="2.5" fill="' + OUT + '"/><circle cx="44" cy="160" r="2.5" fill="' + OUT + '"/><path d="M26 176 Q34 182 42 176" fill="none" stroke="' + OUT + '" stroke-width="2"/><path d="M26 152 l4 -6 4 5 4 -5 4 6Z" fill="' + c0(c, 1) + '" stroke="' + OUT + '" stroke-width="1.5"/>'); };
   T.c_bear = function (c) { return buddy('<circle cx="22" cy="152" r="6" fill="' + c0(c, 0) + '" ' + SW + '/><circle cx="46" cy="152" r="6" fill="' + c0(c, 0) + '" ' + SW + '/><circle cx="34" cy="162" r="14" fill="' + c0(c, 0) + '" ' + SW + '/><ellipse cx="34" cy="184" rx="15" ry="9" fill="' + c0(c, 0) + '" ' + SW + '/><ellipse cx="34" cy="167" rx="6" ry="4.5" fill="' + c0(c, 1) + '"/><circle cx="34" cy="165" r="2" fill="' + OUT + '"/><circle cx="28" cy="158" r="2" fill="' + OUT + '"/><circle cx="40" cy="158" r="2" fill="' + OUT + '"/>'); };
   T.c_dog = function (c) { return buddy('<ellipse cx="36" cy="178" rx="18" ry="11" fill="' + c0(c, 0) + '" ' + SW + '/><circle cx="26" cy="162" r="11" fill="' + c0(c, 0) + '" ' + SW + '/><path d="M18 156 L16 144 L24 152Z M34 156 L36 144 L28 152Z" fill="' + c0(c, 1) + '" ' + SW + '/><circle cx="22" cy="161" r="1.8" fill="' + OUT + '"/><circle cx="30" cy="161" r="1.8" fill="' + OUT + '"/><circle cx="26" cy="167" r="2.2" fill="' + OUT + '"/><path d="M18 172 h16" stroke="#c62828" stroke-width="3"/>'); };
-  T.c_horse = function (c) { return buddy('<ellipse cx="36" cy="172" rx="22" ry="12" fill="' + c0(c, 0) + '" ' + SW + '/><path d="M16 170 Q10 146 20 140 L28 150 Q24 160 28 168Z" fill="' + c0(c, 0) + '" ' + SW + '/><path d="M20 140 Q12 138 10 146 L20 148Z" fill="' + c0(c, 0) + '" ' + SW + '/><path d="M22 140 Q30 142 30 154" fill="none" stroke="' + c0(c, 1) + '" stroke-width="5"/><circle cx="16" cy="145" r="1.8" fill="' + OUT + '"/><path d="M22 182 v8 M32 183 v8 M44 183 v8 M52 181 v8" stroke="' + OUT + '" stroke-width="3"/><path d="M58 166 Q66 170 62 182" fill="none" stroke="' + c0(c, 1) + '" stroke-width="4"/><path class="it-flicker" d="M12 150 q-6 -4 -4 -10" stroke="#ffd23f" stroke-width="2" fill="none"/>'); };
   T.c_cat = function (c) { return buddy('<ellipse cx="34" cy="176" rx="18" ry="12" fill="' + c0(c, 0) + '" ' + SW + '/><circle cx="30" cy="158" r="12" fill="' + c0(c, 0) + '" ' + SW + '/><path d="M20 152 L18 140 L27 148Z M40 152 L42 140 L33 148Z" fill="' + c0(c, 0) + '" ' + SW + '/><path d="M24 158 q3 -3 6 0 M32 158 q3 -3 6 0" stroke="' + OUT + '" stroke-width="1.8" fill="none"/><path d="M20 164 h20" stroke="' + c0(c, 1) + '" stroke-width="3"/><circle cx="30" cy="167" r="2.5" fill="' + c0(c, 1) + '"/><path d="M52 178 Q64 170 58 158" fill="none" stroke="' + OUT + '" stroke-width="3"/>'); };
-  T.c_eagle = function (c) { return buddy('<g class="it-shine"><ellipse cx="34" cy="170" rx="14" ry="16" fill="' + c0(c, 0) + '" ' + SW + '/><path d="M20 164 Q4 150 8 138 Q18 150 24 156Z M48 164 Q64 150 60 138 Q50 150 44 156Z" fill="' + c0(c, 1) + '" ' + SW + '/><circle cx="26" cy="150" r="6" fill="' + c0(c, 0) + '" ' + SW + '/><circle cx="42" cy="150" r="6" fill="' + c0(c, 0) + '" ' + SW + '/><path d="M20 150 L16 152 L20 154Z M48 150 L52 152 L48 154Z" fill="#f2b705"/><path d="M26 142 l2 -4 2 4 M38 142 l2 -4 2 4" stroke="' + c0(c, 1) + '" stroke-width="2" fill="none"/></g>'); };
   T.c_firebird = function (c) { return buddy('<g class="it-mythic it-float"><path d="M40 170 Q70 180 64 150 Q58 164 50 164 Q70 150 60 130 Q52 150 44 156Z" fill="' + c0(c, 0) + '" ' + SW + '/><ellipse cx="32" cy="166" rx="13" ry="10" fill="' + c0(c, 1) + '" ' + SW + '/><circle cx="22" cy="156" r="7" fill="' + c0(c, 1) + '" ' + SW + '/><circle cx="20" cy="155" r="1.8" fill="' + OUT + '"/><path d="M15 157 L9 159 L15 160Z" fill="' + c0(c, 0) + '"/><path class="it-flicker" d="M22 149 q-2 -8 4 -12 q-1 6 2 8" fill="' + c0(c, 0) + '"/></g>'); };
 
   // Сияние (поверх всего, но прозрачное)
@@ -1216,6 +1212,147 @@
   };
 
   // Спецэффекты состояния, которые висят в воздухе (не на голове).
+  // ── Перерисовано 27.09.2026 (отзыв владельца: «максимально кринжево») ────
+  // Янтарная комната: янтарная мозаика в золочёных рамах, зеркальные пилястры со
+  // свечами, лепной карниз и паркет — узнаваемо, а не «вафля из квадратиков».
+  T.bg_amber = function (c) {
+    var a = c0(c, 0, '#f2a93b'), d = c0(c, 1, '#8a4b12'), g = '#e9c46a', gd = '#b8912f';
+    var glow = uid('amb'), mir = uid('mir');
+    var s = '<defs><radialGradient id="' + glow + '" cx="50%" cy="38%" r="70%"><stop offset="0" stop-color="#fff3c4" stop-opacity=".55"/><stop offset="1" stop-color="#fff3c4" stop-opacity="0"/></radialGradient>' +
+      '<linearGradient id="' + mir + '" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#fdfaf0"/><stop offset=".5" stop-color="#cfe3ea"/><stop offset="1" stop-color="#f6f0dc"/></linearGradient></defs>';
+    s += '<rect width="200" height="200" fill="' + shade(a, -0.25) + '"/>';
+    // Три янтарные панели: мозаика из неровных плиток разных оттенков.
+    var panels = [[10, 30, 50, 116], [75, 30, 50, 116], [140, 30, 50, 116]];
+    var seed = 7;
+    function rnd() { seed = (seed * 9301 + 49297) % 233280; return seed / 233280; }
+    panels.forEach(function (p) {
+      s += '<rect x="' + p[0] + '" y="' + p[1] + '" width="' + p[2] + '" height="' + p[3] + '" fill="' + a + '"/>';
+      for (var y = 0; y < 6; y++) for (var x = 0; x < 3; x++) {
+        var px = p[0] + 2 + x * 16 + (y % 2 ? 4 : 0), py = p[1] + 2 + y * 19;
+        if (px + 12 > p[0] + p[2]) continue;
+        var k = rnd() * 0.5 - 0.25;
+        s += '<path d="M' + px + ' ' + (py + 3) + ' L' + (px + 6 + rnd() * 4).toFixed(1) + ' ' + py + ' L' + (px + 13) + ' ' + (py + 4) + ' L' + (px + 12) + ' ' + (py + 15) + ' L' + (px + 4) + ' ' + (py + 17) + ' L' + px + ' ' + (py + 11) + 'Z" fill="' + shade(a, k) + '" stroke="' + shade(d, 0.1) + '" stroke-width=".8" opacity=".95"/>';
+      }
+      // Золочёная рама с уголками-завитками.
+      s += '<rect x="' + (p[0] - 2) + '" y="' + (p[1] - 2) + '" width="' + (p[2] + 4) + '" height="' + (p[3] + 4) + '" fill="none" stroke="' + g + '" stroke-width="3.5"/>' +
+        '<rect x="' + (p[0] - 2) + '" y="' + (p[1] - 2) + '" width="' + (p[2] + 4) + '" height="' + (p[3] + 4) + '" fill="none" stroke="' + gd + '" stroke-width="1" />';
+      [[p[0], p[1]], [p[0] + p[2], p[1]], [p[0], p[1] + p[3]], [p[0] + p[2], p[1] + p[3]]].forEach(function (q) {
+        s += '<circle cx="' + q[0] + '" cy="' + q[1] + '" r="4" fill="' + g + '" stroke="' + gd + '" stroke-width="1"/>';
+      });
+      // Картуш в центре панели.
+      var cx = p[0] + p[2] / 2;
+      s += '<ellipse cx="' + cx + '" cy="' + (p[1] + 58) + '" rx="13" ry="17" fill="' + shade(a, 0.25) + '" stroke="' + g + '" stroke-width="3"/>' +
+        '<ellipse cx="' + cx + '" cy="' + (p[1] + 58) + '" rx="7" ry="10" fill="' + shade(a, -0.1) + '" opacity=".7"/>' +
+        '<path d="M' + (cx - 6) + ' ' + (p[1] + 40) + ' l3 -5 3 4 3 -4 3 5Z" fill="' + g + '" stroke="' + gd + '" stroke-width=".8"/>';
+    });
+    // Зеркальные пилястры со свечами между панелями.
+    [62, 127].forEach(function (x) {
+      s += '<rect x="' + (x + 1) + '" y="30" width="9" height="116" fill="url(#' + mir + ')" stroke="' + g + '" stroke-width="2.5"/>' +
+        '<path d="M' + (x + 3) + ' 40 L' + (x + 8) + ' 60" stroke="#fff" stroke-width="1.5" opacity=".8"/>' +
+        '<path d="M' + (x - 2) + ' 84 Q' + (x + 5.5) + ' 92 ' + (x + 13) + ' 84" fill="none" stroke="' + g + '" stroke-width="2.5"/>' +
+        '<rect x="' + (x - 3) + '" y="74" width="3" height="10" fill="#fffaf0" stroke="' + gd + '" stroke-width=".6"/><rect x="' + (x + 11) + '" y="74" width="3" height="10" fill="#fffaf0" stroke="' + gd + '" stroke-width=".6"/>' +
+        '<path class="it-flicker" d="M' + (x - 1.5) + ' 67 q2 3 0 7 q-2 -3 0 -7Z M' + (x + 12.5) + ' 67 q2 3 0 7 q-2 -3 0 -7Z" fill="#ffcf4a"/>';
+    });
+    // Лепной карниз с арочками.
+    s += '<rect x="0" y="0" width="200" height="22" fill="' + shade(a, -0.3) + '"/><rect x="0" y="18" width="200" height="6" fill="' + g + '" stroke="' + gd + '" stroke-width="1"/>';
+    for (var i = 0; i < 10; i++) s += '<path d="M' + (i * 20 + 2) + ' 18 Q' + (i * 20 + 10) + ' 6 ' + (i * 20 + 18) + ' 18" fill="none" stroke="' + g + '" stroke-width="2"/>';
+    // Паркет «ёлочкой» и плинтус.
+    s += '<rect x="0" y="150" width="200" height="50" fill="' + shade(d, -0.05) + '"/>';
+    for (var j = 0; j < 14; j++) for (var r = 0; r < 3; r++) {
+      var fx = j * 15 - 4, fy = 154 + r * 16;
+      s += '<path d="M' + fx + ' ' + fy + ' l8 6 l0 8 l-8 -6Z" fill="' + shade(d, 0.18) + '" stroke="' + shade(d, -0.3) + '" stroke-width=".6"/><path d="M' + (fx + 8) + ' ' + (fy + 6) + ' l8 -6 l0 8 l-8 6Z" fill="' + shade(d, 0.05) + '" stroke="' + shade(d, -0.3) + '" stroke-width=".6"/>';
+    }
+    s += '<rect x="0" y="148" width="200" height="5" fill="' + g + '" stroke="' + gd + '" stroke-width="1"/>';
+    return '<g class="it-shine">' + s + '</g><rect width="200" height="200" fill="url(#' + glow + ')"/>';
+  };
+
+  // Мышь-архивариус: сидит боком, в круглых очках и со свитком в лапках.
+  T.c_mouse = function (c) {
+    var f = c0(c, 0, '#9aa3ad'), p = c0(c, 1, '#f2b8c6');
+    return buddy('<path d="M16 186 Q2 186 4 172 Q6 162 14 166" fill="none" stroke="' + shade(f, -0.15) + '" stroke-width="2.6" stroke-linecap="round"/>' +
+      '<path d="M22 191 C10 191 8 172 18 164 C26 157 42 156 48 165 C54 174 52 191 42 191Z" fill="' + f + '" ' + SW + '/>' +
+      '<ellipse cx="38" cy="180" rx="8" ry="9" fill="' + shade(f, 0.35) + '"/>' +
+      '<ellipse cx="25" cy="191" rx="6" ry="2.6" fill="' + p + '" ' + SW + '/><ellipse cx="43" cy="191" rx="6" ry="2.6" fill="' + p + '" ' + SW + '/>' +
+      '<circle cx="45" cy="149" r="9" fill="' + f + '" ' + SW + '/><circle cx="45" cy="149" r="5.5" fill="' + p + '"/>' +
+      '<path d="M40 166 C38 152 52 146 62 152 L71 158 C74 160 73 164 69 164 C64 170 54 172 46 170Z" fill="' + f + '" ' + SW + '/>' +
+      '<circle cx="71" cy="161" r="2.4" fill="' + p + '" stroke="' + OUT + '" stroke-width="1"/>' +
+      '<circle cx="57" cy="157" r="2.3" fill="' + OUT + '"/><circle cx="57.8" cy="156.2" r=".8" fill="#fff"/>' +
+      '<circle cx="57" cy="157" r="5" fill="none" stroke="#c9a227" stroke-width="1.4"/><path d="M52 156 L46 154" stroke="#c9a227" stroke-width="1.2"/>' +
+      '<path d="M66 165 L76 163 M66 166 L75 169" stroke="' + OUT + '" stroke-width=".8" opacity=".7"/>' +
+      '<g transform="rotate(-12 58 178)"><rect x="50" y="171" width="16" height="13" rx="1.5" fill="#f3e6c4" stroke="' + OUT + '" stroke-width="1.4"/>' +
+      '<rect x="48" y="170" width="3.5" height="15" rx="1.7" fill="#d9c28e" stroke="' + OUT + '" stroke-width="1.2"/><rect x="64.5" y="170" width="3.5" height="15" rx="1.7" fill="#d9c28e" stroke="' + OUT + '" stroke-width="1.2"/>' +
+      '<path d="M54 175 h8 M54 178 h6 M54 181 h8" stroke="#8a6a44" stroke-width="1"/></g>' +
+      '<circle cx="51" cy="180" r="2.6" fill="' + p + '" ' + SW + '/><circle cx="62" cy="182" r="2.6" fill="' + p + '" ' + SW + '/>');
+  };
+
+  // Сивка-бурка: лошадка в профиль, грива на ветру, дымок из ноздрей, искры.
+  T.c_horse = function (c) {
+    var f = c0(c, 0, '#8a6a44'), m = c0(c, 1, '#3a2a1e');
+    var legs = '';
+    [[17, 0], [25, 1], [45, 0], [53, 1]].forEach(function (l) {
+      legs += '<path d="M' + l[0] + ' 174 L' + (l[0] + (l[1] ? 1 : -1)) + ' 188" stroke="' + (l[1] ? shade(f, -0.2) : f) + '" stroke-width="5" stroke-linecap="round"/>' +
+        '<rect x="' + (l[0] - 3.5 + (l[1] ? 1 : -1)) + '" y="187" width="7" height="4" rx="1.2" fill="' + OUT + '"/>';
+    });
+    return buddy('<path d="M16 166 C4 166 2 180 7 190 C9 182 12 176 17 172Z" fill="' + m + '" ' + SW + '/>' +
+      legs +
+      '<ellipse cx="35" cy="168" rx="21" ry="11" fill="' + f + '" ' + SW + '/>' +
+      '<ellipse cx="33" cy="164" rx="12" ry="4" fill="#fff" opacity=".18"/>' +
+      '<path d="M46 166 C47 154 51 146 57 141 L65 147 C61 153 58 161 57 170Z" fill="' + f + '" ' + SW + '/>' +
+      '<path d="M55 140 C60 133 69 135 73 144 C75 149 73 153 69 153 L63 151 C60 149 57 146 55 143Z" fill="' + f + '" ' + SW + '/>' +
+      '<ellipse cx="70" cy="150" rx="3.6" ry="2.6" fill="' + shade(f, -0.15) + '"/><circle cx="71" cy="149.5" r=".9" fill="' + OUT + '"/>' +
+      '<path d="M58 139 L59 130 L63 137Z" fill="' + f + '" ' + SW + '/>' +
+      '<circle cx="63" cy="142" r="1.8" fill="' + OUT + '"/><circle cx="63.6" cy="141.4" r=".6" fill="#fff"/>' +
+      '<path d="M57 136 C50 138 46 146 44 158 C47 152 49 150 51 149 C49 155 48 160 47 165 C51 158 53 152 57 146 C58 142 59 139 57 136Z" fill="' + m + '" ' + SW + '/>' +
+      '<g class="it-steam"><circle cx="74" cy="154" r="1.6" fill="#d9d9e0"/><circle cx="72" cy="157" r="1.2" fill="#e6e6ec"/></g>' +
+      '<path class="it-twinkle" d="M10 146 l1 3 3 1 -3 1 -1 3 -1 -3 -3 -1 3 -1Z" fill="#ffd23f"/>' +
+      '<path class="it-twinkle" style="animation-delay:.6s" d="M40 144 l.8 2.4 2.4 .8 -2.4 .8 -.8 2.4 -.8 -2.4 -2.4 -.8 2.4 -.8Z" fill="#ffd23f"/>');
+  };
+
+  // Двуглавый орлёнок: пушистый птенец, две головы смотрят в разные стороны,
+  // на каждой коронка, над ними большая корона, на груди — щиток.
+  T.c_eagle = function (c) {
+    var g = c0(c, 0, '#e9c46a'), gd = c0(c, 1, '#b8912f');
+    var wing = function (dir) {
+      var x = 38 + dir * 12;
+      return '<path d="M' + x + ' 168 C' + (x + dir * 14) + ' 166 ' + (x + dir * 22) + ' 156 ' + (x + dir * 22) + ' 144 L' + (x + dir * 17) + ' 150 L' + (x + dir * 18) + ' 142 L' + (x + dir * 12) + ' 150 L' + (x + dir * 11) + ' 144 L' + (x + dir * 6) + ' 156 Z" fill="' + gd + '" ' + SW + '/>';
+    };
+    var head = function (dir) {
+      var hx = 38 + dir * 10;
+      return '<path d="M' + (38 + dir * 4) + ' 164 C' + (38 + dir * 4) + ' 158 ' + hx + ' 156 ' + hx + ' 152" stroke="' + g + '" stroke-width="7" fill="none"/>' +
+        '<circle cx="' + hx + '" cy="150" r="7.5" fill="' + g + '" ' + SW + '/>' +
+        '<path d="M' + (hx + dir * 6) + ' 148 L' + (hx + dir * 13) + ' 151 L' + (hx + dir * 6) + ' 154Z" fill="#f08a24" stroke="' + OUT + '" stroke-width="1.2" stroke-linejoin="round"/>' +
+        '<circle cx="' + (hx + dir * 2.5) + '" cy="148.5" r="1.8" fill="' + OUT + '"/><circle cx="' + (hx + dir * 3) + '" cy="148" r=".6" fill="#fff"/>' +
+        '<path d="M' + (hx - 4) + ' 143 L' + (hx - 4) + ' 138 L' + (hx - 2) + ' 140.5 L' + hx + ' 137 L' + (hx + 2) + ' 140.5 L' + (hx + 4) + ' 138 L' + (hx + 4) + ' 143Z" fill="' + g + '" stroke="' + gd + '" stroke-width="1"/>';
+    };
+    return buddy('<g class="it-shine">' + wing(-1) + wing(1) +
+      '<ellipse cx="38" cy="176" rx="15" ry="14" fill="' + g + '" ' + SW + '/>' +
+      '<path d="M30 170 q2 -3 4 0 q2 -3 4 0 q2 -3 4 0 q2 -3 4 0" fill="none" stroke="' + gd + '" stroke-width="1.2"/>' +
+      '<path d="M32 172 H44 V179 Q44 185 38 187 Q32 185 32 179Z" fill="#c0392b" stroke="' + gd + '" stroke-width="1.6"/>' +
+      '<path d="M38 175 v8 M35 178 h6" stroke="#fff" stroke-width="1.4"/>' +
+      head(-1) + head(1) +
+      '<path d="M31 137 L31 131 L34.5 134 L38 128 L41.5 134 L45 131 L45 137Z" fill="' + g + '" stroke="' + gd + '" stroke-width="1.2"/>' +
+      '<path d="M38 128 V124 M36.5 125.5 H39.5" stroke="' + gd + '" stroke-width="1.2"/>' +
+      '<circle cx="34.5" cy="135" r=".9" fill="#c0392b"/><circle cx="41.5" cy="135" r=".9" fill="#1d8a5a"/>' +
+      '<path d="M32 189 l-3 3 M34 189 l0 4 M36 189 l3 3 M40 189 l-3 3 M42 189 l0 4 M44 189 l3 3" stroke="#f08a24" stroke-width="1.6" stroke-linecap="round"/></g>');
+  };
+
+  // Галстук Столыпина: строгий шёлковый галстук эпохи с золотой булавкой.
+  // Название — отсылка к думской остроте 1907 года («столыпинский галстук»),
+  // но рисуем именно галстук: петли на шее у питомца не будет.
+  T.stolypin = function (c) {
+    var t = c0(c, 0, '#1b2a4a'), g = c0(c, 1, '#e9c46a');
+    var cl = uid('stl');
+    return '<g class="it-shine"><defs><clipPath id="' + cl + '"><path d="M95 133 L88 166 L100 176 L112 166 L105 133Z"/></clipPath></defs>' +
+      '<path d="M84 118 L98 126 L94 132 L82 124Z M116 118 L102 126 L106 132 L118 124Z" fill="#fbfaf5" ' + SW + '/>' +
+      '<path d="M95 133 L88 166 L100 176 L112 166 L105 133Z" fill="' + t + '" ' + SW + '/>' +
+      '<g clip-path="url(#' + cl + ')" stroke="' + g + '" stroke-width="2" opacity=".75">' +
+        '<path d="M80 150 L120 130 M80 160 L120 140 M80 170 L120 150 M80 180 L120 160"/></g>' +
+      '<path d="M93 124 L107 124 L105 134 L95 134Z" fill="' + shade(t, 0.15) + '" ' + SW + '/>' +
+      '<path d="M97 126 L103 126" stroke="#fff" stroke-width="1" opacity=".35"/>' +
+      '<rect x="92" y="147" width="16" height="3" rx="1.5" fill="' + g + '" stroke="' + OUT + '" stroke-width="1"/>' +
+      '<circle cx="100" cy="148.5" r="3.6" fill="' + g + '" stroke="' + OUT + '" stroke-width="1"/><circle cx="100" cy="148.5" r="1.4" fill="#c0392b"/></g>';
+  };
+
   function extras(state) {
     if (state === 'sleep') return '<g class="pet-zzz" font-family="Arial" font-weight="900" fill="#6b7cff"><text x="140" y="56" font-size="16">z</text><text x="152" y="40" font-size="20">z</text><text x="166" y="22" font-size="24">Z</text></g>';
     if (state === 'hungry') return '<g class="pet-bowl" transform="translate(150 178)"><path d="M-15 0 Q0 15 15 0Z" fill="#c9b89a" ' + SW + '/><path d="M-17 0 H17" ' + SW + '/></g>' +

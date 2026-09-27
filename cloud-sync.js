@@ -7,14 +7,14 @@
             signInWithCredential, signOut, initializeFirestore, collection, doc, setDoc, getDoc,
             getDocs, addDoc, updateDoc, deleteDoc, deleteField, onSnapshot, query, where,
             orderBy, limit, runTransaction, arrayUnion, arrayRemove, vpsApiFetch, refreshVpsAuth
-        } from "./vps-sync-compat.js?v=20260927-6";
+        } from "./vps-sync-compat.js?v=20260927-7";
 
         // jsPDF грузился с cdnjs.cloudflare.com без SRI — то есть посторонний скрипт
         // исполнялся с полными правами страницы, а при недоступности CDN (у части
         // нашей аудитории это обычное дело) экспорт PDF просто не работал. Довод тот
         // же, что и для telegram-web-app.js: своя копия с того же origin.
         // Версия совпадает с прежней CDN-ной — 2.5.1, лежит в vendor/.
-        const VENDOR_JSPDF = 'vendor/jspdf.umd.min.js?v=20260927-6';
+        const VENDOR_JSPDF = 'vendor/jspdf.umd.min.js?v=20260927-7';
 
         const cloudConfig = { projectId: 'vps-postgresql' };
         
@@ -1450,8 +1450,15 @@
                     window.state.duel.matchRounds = data.matchRounds || null;
                     window.state.duel.orderDeck = data.orderDeck || null;
                     window.state.duel.tetrisDeck = data.tetrisDeck || null;
-                    window.state.duel.startTime = data.startTime || Date.now();
-                    window.initDuelStart(data.startTime);
+                    // startTime — по часам сервера; переводим в часы устройства. Если
+                    // старт всё равно выходит далеко в прошлом или будущем (часы сбиты,
+                    // поправки ещё нет), считаем от момента, когда увидели начало матча:
+                    // обе стороны узнают о нём почти одновременно.
+                    const now = Date.now();
+                    let start = data.startTime ? Number(data.startTime) - (Number(window._serverClockOffset) || 0) : now + 4000;
+                    if (!Number.isFinite(start) || start < now - 8000 || start > now + 15000) start = now + 4000;
+                    window.state.duel.startTime = start;
+                    window.initDuelStart(start);
                 }
 
                 if (data.status === 'playing' && !window.state.duel.searching) {

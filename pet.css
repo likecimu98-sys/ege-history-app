@@ -153,10 +153,10 @@ html.dark .lb-ava { background: #262626; }
 .pet-stat b { text-align: right; font-variant-numeric: tabular-nums; }
 .pet-earn { font-size: 12.5px; background: var(--pet-card, #fff); border: 1px solid var(--pet-line, #ececf1); border-radius: var(--r-md); padding: 8px 12px; margin-bottom: 10px; }
 .pet-earn span { color: var(--pet-mute, #6b7280); font-size: 11.5px; }
-.pet-tabs { display: flex; gap: 6px; overflow-x: auto; margin: 0 -16px 10px; padding: 0 16px; scrollbar-width: none; }
+.pet-tabs { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 10px; }
 .pet-tabs button, .pet-chips button { flex: 0 0 auto; border: 1px solid var(--pet-line, #e5e5ea); background: var(--pet-card, #fff); color: inherit; border-radius: var(--r-full); padding: 7px 13px; font-weight: 700; font-size: 13px; cursor: pointer; }
 .pet-tabs button.on, .pet-chips button.on { background: var(--pet-ink, #1f2330); color: var(--pet-bg, #fff); border-color: transparent; }
-.pet-chips { display: flex; gap: 6px; overflow-x: auto; margin: 0 -16px 10px; padding: 0 16px; scrollbar-width: none; }
+.pet-chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 10px; }
 .pet-chips button { padding: 5px 11px; font-size: 12px; }
 .pet-chips button span { opacity: .6; }
 .pet-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; }
