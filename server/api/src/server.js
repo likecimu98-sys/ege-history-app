@@ -22,6 +22,9 @@ const { startFirebaseMirror } = require('./firebase-mirror');
 const { mondayStr } = require('./moscow-time');
 const { leaderboardName } = require('./display-name');
 const { handleSocial, PREFIX: SOCIAL_PREFIX } = require('./subjects/social/routes');
+const { handlePet, PREFIX: PET_PREFIX } = require('./pet/routes');
+const petWeekly = require('./pet/weekly');
+const petWallet = require('./pet/wallet');
 
 // Метка выката, которую отдаёт /api/v1/health. Раньше здесь стояла константа
 // '1.0.0', и по ответу нельзя было понять, доехал ли деплой API: у статики версия
@@ -77,13 +80,18 @@ async function leaderboardRows(type, limit) {
   const notMerged = "data->>'_mergedInto' IS NULL";
   let sql;
   let params = [limit];
+  // Цвет ника и мини-аватар — из кошелька «Летописчика». LEFT JOIN: у кого
+  // питомца нет, строка рейтинга остаётся прежней.
+  const petCols = `, w.name_style AS pet_style, w.pet->>'species' AS pet_species,
+    (w.pet->>'sick')::boolean AS pet_sick, w.equipped AS pet_equipped
+    FROM student_profiles LEFT JOIN pet_wallets w ON w.user_id = student_profiles.user_id`;
   if (type === 'duel') {
-    sql = `SELECT data FROM student_profiles
+    sql = `SELECT data${petCols}
            WHERE ${notMerged} AND COALESCE((data->>'duelGames')::numeric, 0) > 0
            ORDER BY COALESCE((data->>'duelRating')::numeric, 0) DESC LIMIT $1`;
   } else if (type === 'weekly') {
     // Прошлонедельный weeklyScore не сбрасывается сам — сверяем с меткой недели.
-    sql = `SELECT data FROM student_profiles
+    sql = `SELECT data${petCols}
            WHERE ${notMerged} AND data->>'weekStartStr' = $2
              AND COALESCE((data->>'weeklyScore')::numeric, 0) > 0
            ORDER BY COALESCE((data->>'weeklyScore')::numeric, 0) DESC LIMIT $1`;
@@ -91,7 +99,7 @@ async function leaderboardRows(type, limit) {
   } else {
     // Выражение сортировки повторяет student_profiles_total_idx дословно —
     // иначе planner индекс не возьмёт.
-    sql = `SELECT data FROM student_profiles
+    sql = `SELECT data${petCols}
            WHERE ${notMerged} AND COALESCE((data->>'totalSolved')::numeric, 0) > 0
            ORDER BY ((data->>'totalSolved')::numeric) DESC LIMIT $1`;
   }
@@ -113,6 +121,10 @@ async function leaderboardRows(type, limit) {
       duelGames: Number(data.duelGames) || 0,
       duelWins: Number(data.duelWins) || 0,
       duelLosses: Number(data.duelLosses) || 0,
+      nameStyle: petWallet.nameStyleView(row.pet_style, Date.now()),
+      // Мини-аватар: вид питомца и надетое. Больной питомец одежду не носит.
+      avatar: row.pet_species ? { species: row.pet_species, sick: !!row.pet_sick,
+        equipped: row.pet_sick ? {} : (row.pet_equipped || {}) } : null,
     };
   });
 }
@@ -753,6 +765,14 @@ async function handle(req, res) {
       return await handleSocial(req, res, url, session, { json, readJson, requireMutationAuth, limiter, scope });
     }
 
+    // «Летописчик» — питомец ученика и монеты. Каталог открыт без входа,
+    // остальное проверяет сессию само (см. pet/routes.js).
+    if (url.pathname === PET_PREFIX || url.pathname.startsWith(`${PET_PREFIX}/`)) {
+      return await handlePet(req, res, url, session, {
+        json, readJson, requireMutationAuth, requireSession, accessContext, limiter, scope,
+      });
+    }
+
     // Телеметрия: ошибки клиента и продуктовые события. Без CSRF — это не
     // мутация пользовательских данных, а запись в свой журнал.
     // 🔴 Стоит ДО requireSession: раньше маршрут жил ниже общей проверки сессии,
@@ -1078,6 +1098,18 @@ async function start() {
        OR (data->>'status'='playing' AND updated_at<now()-interval '1 hour')`).catch(() => {});
   cleanupMatches();
   setInterval(cleanupMatches, 60000).unref();
+  // Итоги недели «Летописчика»: снимок топа каждые 15 минут, подведение прошлой
+  // недели — на первом тике новой (разовость держит weekly_awards). Снимок
+  // обязан идти ДО подведения: иначе последние 15 минут недели терялись бы всегда.
+  const weeklyTick = async () => {
+    try {
+      await petWeekly.snapshot(pool);
+      const done = await petWeekly.finalize(pool, tx);
+      if (done.length) log('info', 'pet.weekly.finalized', { weeks: done });
+    } catch (error) { log('warn', 'pet.weekly.failed', { message: error.message }); }
+  };
+  weeklyTick();
+  setInterval(weeklyTick, 15 * 60 * 1000).unref();
   server.listen(env.port, env.host, () => log('info', 'server.started', { host: env.host, port: env.port }));
 }
 

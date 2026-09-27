@@ -1,0 +1,74 @@
+'use strict';
+
+// Маршруты «Летописчика»: /api/v1/pet/*. Только для учеников тренажёра; у
+// кураторов «Проверочной» ни питомца, ни монет нет (решение владельца 27.09.2026).
+
+const { tx, pool } = require('../db');
+const C = require('./catalog');
+const W = require('./wallet');
+
+const PREFIX = '/api/v1/pet';
+
+// Каталог отдаём с долгим кэшем по версии: клиент просит его с ?v=<версия>,
+// и смена каталога сама сбрасывает кэш.
+let showcaseCache = { at: 0, data: {} };
+async function showcase() {
+  if (Date.now() - showcaseCache.at < 5 * 60 * 1000) return showcaseCache.data;
+  showcaseCache = { at: Date.now(), data: await W.rarityShowcase(pool) };
+  return showcaseCache.data;
+}
+
+async function handlePet(req, res, url, session, deps) {
+  const { json, readJson, requireMutationAuth, requireSession, accessContext, limiter, scope } = deps;
+  const path = url.pathname.slice(PREFIX.length) || '/';
+
+  if (req.method === 'GET' && path === '/catalog') {
+    return json(res, 200, { ...C.publicCatalog(), owners: await showcase() },
+      { 'Cache-Control': 'public, max-age=300' });
+  }
+
+  if (req.method === 'GET' && path === '/') {
+    requireSession(session);
+    const ctx = await accessContext(session);
+    const state = await tx(client => W.getState(client, session.userId, ctx.docIds));
+    return json(res, 200, state);
+  }
+
+  if (req.method !== 'POST') {
+    throw Object.assign(new Error('not_found'), { statusCode: 404 });
+  }
+  requireMutationAuth(req, session);
+  if (!limiter.take(`${scope}:pet`, 120).ok) return json(res, 429, { error: 'rate_limited' });
+  const body = await readJson(req, 8192);
+  const userId = session.userId;
+  const run = fn => tx(client => fn(client));
+
+  switch (path) {
+    case '/hatch': {
+      const ctx = await accessContext(session);
+      return json(res, 200, await run(c => W.hatch(c, userId, ctx.docIds, {
+        species: String(body.species || ''), name: body.name,
+        knownAchievements: Array.isArray(body.knownAchievements) ? body.knownAchievements : [],
+      })));
+    }
+    case '/buy':
+      return json(res, 200, await run(c => W.buy(c, userId, String(body.item || ''), body.qty)));
+    case '/use':
+      return json(res, 200, await run(c => W.use(c, userId, String(body.item || ''), { buyNow: !!body.buy })));
+    case '/equip':
+      return json(res, 200, await run(c => W.equip(c, userId, body.changes && typeof body.changes === 'object' ? body.changes : {})));
+    case '/rename':
+      return json(res, 200, await run(c => W.rename(c, userId, body.name)));
+    case '/open-box':
+      if (!limiter.take(`${scope}:pet-box`, 30).ok) return json(res, 429, { error: 'rate_limited' });
+      return json(res, 200, await run(c => W.openBox(c, userId, String(body.box || ''))));
+    case '/achievements':
+      return json(res, 200, await run(c => W.rewardAchievements(c, userId, Array.isArray(body.ids) ? body.ids : [])));
+    case '/paint-nick':
+      return json(res, 200, await run(c => W.paintNick(c, userId, String(body.color || ''))));
+    default:
+      throw Object.assign(new Error('not_found'), { statusCode: 404 });
+  }
+}
+
+module.exports = { handlePet, PREFIX };

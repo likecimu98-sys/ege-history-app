@@ -1379,6 +1379,18 @@ bot.catch((err) => {
 // ---------- Очередь notifyJobs ----------
 const TASK_LABELS = { task1: '№1 (Хронология)', task3: '№3 (Процессы)', task4: '№4 (География)', task5: '№5 (Личности)', task7: '№7 (Культура)', flash: 'Карточки (зубрёжка)', cram: 'Зубрёжка дат', bundle: 'несколько заданий' };
 const JOB_MAX_AGE_MS = 24 * 3600 * 1000;
+const NICK_WORD = { gold: 'золотой', silver: 'серебряный', bronze: 'бронзовый', violet: 'фиолетовый' };
+const BOX_WORD = { box_week: '«Ларец недели»', box_tsar: '«Царский ларец»', box_chest: '«Сундук летописца»' };
+function weeklyTopText(r) {
+    const place = Number(r.place) || 0;
+    const medal = place === 1 ? '🥇' : place === 2 ? '🥈' : place === 3 ? '🥉' : '🏅';
+    const lines = [`${medal} Итоги недели: ты на ${place}-м месте в топе!`, ''];
+    lines.push(`+${Number(r.coins) || 0} монет`);
+    if (r.box && BOX_WORD[r.box]) lines.push(`${BOX_WORD[r.box]} — открой у своего питомца`);
+    if (r.nick && NICK_WORD[r.nick]) lines.push(`${NICK_WORD[r.nick][0].toUpperCase()}${NICK_WORD[r.nick].slice(1)} ник на ${Number(r.days) || 7} дн. — его видят все в топе`);
+    lines.push('', 'Новая неделя уже идёт — удержишь место? 👇');
+    return lines.join('\n');
+}
 function watchJobs() {
     const isSeen = db.prepare('SELECT 1 FROM seen_assignments WHERE student_id = ? AND assignment_id = ?');
     const markSeen = db.prepare('INSERT OR IGNORE INTO seen_assignments (student_id, assignment_id) VALUES (?, ?)');
@@ -1503,6 +1515,18 @@ function watchJobs() {
                         const sent = await sendSafe(tid, `✅ ${name} (группа «${code}») сдал ДЗ: ${label}, ${j.total || '?'} строк${onTime}`);
                         if (!sent) throw new Error(`notification_send_failed:${tid}`);
                         markRecipientDone.run(jobId, String(tid));
+                        await sleep(50);
+                    }
+                }
+                // Итоги недели «Летописчика»: одно задание на всех призёров, его
+                // кладёт сам API при подведении недели (pet/weekly.js). Отказ
+                // одного получателя (бот заблокирован) не обрывает остальных.
+                if (fresh && j.type === 'weekly_top' && Array.isArray(j.recipients)) {
+                    for (const r of j.recipients.slice(0, 50)) {
+                        const chatId = Number(r.tgId);
+                        if (!Number.isFinite(chatId) || isRecipientDone.get(jobId, String(chatId))) continue;
+                        await sendSafe(chatId, weeklyTopText(r), { reply_markup: appKb() });
+                        markRecipientDone.run(jobId, String(chatId));
                         await sleep(50);
                     }
                 }

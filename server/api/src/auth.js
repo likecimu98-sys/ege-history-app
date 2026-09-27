@@ -45,6 +45,9 @@ async function mergeUsers(client, primaryId, secondaryId) {
   // домашки и свои задания. Весь SQL предмета живёт в одном файле намеренно:
   // перечисляя таблицы здесь, следующую забудут.
   await socialStore().mergeUserData(client, primaryId, secondaryId);
+  // Монеты, вещи и питомец «Летописчика» — туда же: иначе вход через Telegram
+  // после гостевых недель оставил бы кошелёк на отключаемом аккаунте.
+  await require('./pet/wallet').mergeUserData(client, primaryId, secondaryId);
   await client.query('UPDATE user_identities SET user_id=$1 WHERE user_id=$2', [primaryId, secondaryId]);
   await client.query(`UPDATE app_users SET
       display_name=CASE WHEN length(display_name) >= length($2) THEN display_name ELSE $2 END,
