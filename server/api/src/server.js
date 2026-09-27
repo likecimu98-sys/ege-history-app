@@ -1160,6 +1160,11 @@ async function start() {
     const report = await require('./pet/rebalance').rebalanceV3(pool, tx);
     if (report) log('info', 'pet.rebalance.v3', { wallets: report.length, total: report.reduce((a, x) => a + x.diff, 0) });
   } catch (error) { log('warn', 'pet.rebalance.failed', { message: error.message }); }
+  // Лестница крутости: возврат разницы за легенды, ставшие эпиками (разово).
+  try {
+    const items4 = await require('./pet/rebalance').rebalanceItemsV4(pool, tx);
+    if (items4) log('info', 'pet.rebalance.items4', { wallets: items4.length, total: items4.reduce((a, x) => a + x.diff, 0) });
+  } catch (error) { log('warn', 'pet.rebalance.items4_failed', { message: error.message }); }
   weeklyTick();
   setInterval(weeklyTick, 15 * 60 * 1000).unref();
   // «Питомец проголодался» — не чаще раза в двое суток на человека, только днём

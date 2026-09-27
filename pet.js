@@ -252,19 +252,34 @@
     var st = S.state; if (!st || !st.pet || st.pet.sick || !window.PetArt || !PetArt.signatures) return [];
     return PetArt.signatures(st.equipped || {}, S.items);
   }
-  // Фирменное действие: у бензопилы — газануть (тряска, дым, опилки, реплика).
+  // Фирменное действие легенды: своё движение + частицы от самой вещи + реплика.
+  // Частицы — цветные кусочки, а не эмодзи: новые эмодзи на Windows 10 и старых
+  // телефонах рисуются пустыми квадратами (так было с «бревном» у бензопилы).
   Stage.prototype.sigAct = function (sig, big) {
     if (Math.random() < 0.45) {
       this.act(sig.act, 1800);
-      if (sig.act === 'rev') {
-        var self = this;
-        for (var i = 0; i < 4; i++) setTimeout(function () { self.fx('💨', [60, 64], { dx: -30 - Math.random() * 20, dy: -30 - Math.random() * 20 }); }, i * 260);
-        setTimeout(function () { self.burst('🪵', [80, 50], 4); }, 500);
-      }
+      if (sig.fx) this.chips(sig.fx, 10);
       if (big || Math.random() < 0.3) this.say(pick(sig.say), 2400);
     } else {
       this.act(pick(['wave', 'look', 'tail', 'hop']), 1600);
     }
+  };
+  Stage.prototype.chips = function (fx, n) {
+    var self = this;
+    for (var i = 0; i < n; i++) (function (i) {
+      setTimeout(function () {
+        var el = document.createElement('span');
+        el.className = 'pet-chip';
+        el.style.left = fx.at[0] + '%'; el.style.top = fx.at[1] + '%';
+        el.style.background = fx.colors[i % fx.colors.length];
+        var dx = fx.dx[0] + Math.random() * (fx.dx[1] - fx.dx[0]);
+        var dy = fx.dy[0] + Math.random() * (fx.dy[1] - fx.dy[0]);
+        el.style.setProperty('--dx', dx.toFixed(0) + 'px'); el.style.setProperty('--dy', dy.toFixed(0) + 'px');
+        el.style.setProperty('--r', (Math.random() * 360).toFixed(0) + 'deg');
+        self.host.appendChild(el);
+        setTimeout(function () { el.remove(); }, 900);
+      }, i * 60);
+    })(i);
   };
 
   // Что питомец делает сам, пока на него смотрят.
@@ -864,9 +879,20 @@
     }, function () { if (btn) btn.disabled = false; });
   }
 
+  function itemsNotice(n) {
+    var key = 'pet_notice_' + n.at;
+    try { if (localStorage.getItem(key)) return; localStorage.setItem(key, '1'); } catch (_) { return; }
+    setTimeout(function () {
+      sheet('<div class="pet-hatch"><b>Вещи стали круче!</b>' +
+        '<i>Теперь легенда меняет поведение питомца, а миф превращает его целиком — это видно всем, даже в топе.</i>' +
+        '<i>Некоторые легенды стали эпиками, и ты купил такую раньше — возвращаем разницу: <b>+' + fmt(n.diff) + ' монет</b>. Вещь остаётся твоей.</i>' +
+        '<button type="button" class="go" onclick="PetUI.closeSheet()">Отлично!</button></div>');
+    }, 1200);
+  }
   // Питомец объясняет пересчёт экономики — один раз.
   function showNoticeOnce(st) {
     var n = st && st.counters && st.counters.notice;
+    if (n && n.kind === 'items4') return itemsNotice(n);
     if (!n || n.kind !== 'rebalance') return;
     var key = 'pet_notice_' + n.at;
     try { if (localStorage.getItem(key)) return; localStorage.setItem(key, '1'); } catch (_) { return; }

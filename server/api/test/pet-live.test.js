@@ -421,6 +421,20 @@ test('экономика v3, питомец, коробки, итоги, рей�
     assert.ok(job.data.recipients.some(r => r.reason === 'streak' && r.streak === 5));
   }
 
+  // 24. Лестница крутости: купившим легенду, ставшую эпиком, — разница, один раз.
+  {
+    const { rebalanceItemsV4 } = require('../src/pet/rebalance');
+    const uL = await newUser('Лавров');
+    await db.query(`INSERT INTO pet_wallets(user_id, balance, earned_total, spent_total, pet) VALUES($1, 0, 9000, 9000, '{"species":"owl","name":"Сыч"}')`, [uL]);
+    await db.query(`INSERT INTO pet_ledger(user_id, delta, reason, ref, details) VALUES ($1, 9000, 'welcome', NULL, '{}'), ($1, -9000, 'buy', 'hat_laurel', '{}')`, [uL]);
+    const rep = await rebalanceItemsV4(pool, tx);
+    const mine = rep.find(r => r.userId === uL);
+    assert.equal(mine.diff, 9000 - C.TIER_CHANGES_V4.toEpic.hat_laurel);
+    assert.equal(Number((await W.readWallet(db, uL)).balance), mine.diff);
+    assert.equal(await rebalanceItemsV4(pool, tx), null, 'возврат разовый');
+    assert.equal(C.BY_ID.get('hat_laurel').rarity, 'epic');
+  }
+
   // Журнал сходится с балансом у каждого (кроме старичка: его журнал — выдуманный v2).
   const sums = await db.query(`SELECT w.user_id, w.balance::int b, COALESCE(sum(l.delta),0)::int s
     FROM pet_wallets w LEFT JOIN pet_ledger l ON l.user_id=w.user_id GROUP BY w.user_id, w.balance`);

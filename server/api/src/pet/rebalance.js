@@ -67,4 +67,46 @@ async function rebalanceV3(pool, tx) {
   return report;
 }
 
-module.exports = { rebalanceV3, MARK };
+// Разовый возврат за вещи, переведённые из легенды в эпик (концепция «лестница
+// крутости», 27.09.2026). Кто купил такую вещь в лавке по старой цене — получает
+// разницу со старой ценой; вещь остаётся у него. Вещи из сундуков ничего не
+// стоили — за них не возвращаем. Разовость — строка в audit_events.
+const MARK_V4 = 'pet.rebalance.items4';
+async function rebalanceItemsV4(pool, tx) {
+  const done = await pool.query('SELECT 1 FROM audit_events WHERE action=$1 LIMIT 1', [MARK_V4]);
+  if (done.rowCount) return null;
+  const table = C.TIER_CHANGES_V4.toEpic;
+  const ids = Object.keys(table);
+  const { rows } = await pool.query(
+    "SELECT user_id, ref, -delta AS paid FROM pet_ledger WHERE reason='buy' AND delta < 0 AND ref = ANY($1::text[])", [ids]);
+  const byUser = new Map();
+  for (const r of rows) {
+    const refund = Math.max(0, Number(r.paid) - table[r.ref]);
+    if (!refund) continue;
+    const list = byUser.get(r.user_id) || [];
+    list.push({ item: r.ref, paid: Number(r.paid), refund });
+    byUser.set(r.user_id, list);
+  }
+  const report = [];
+  for (const [userId, items] of byUser) {
+    const r = await tx(async client => {
+      const already = await client.query("SELECT 1 FROM pet_ledger WHERE user_id=$1 AND reason='rebalance' AND ref='items4'", [userId]);
+      if (already.rowCount) return null;
+      const w = await W.lockWallet(client, userId);
+      const diff = items.reduce((a, x) => a + x.refund, 0);
+      await client.query("INSERT INTO pet_ledger(user_id, delta, reason, ref, details) VALUES($1,$2,'rebalance','items4',$3)",
+        [userId, diff, JSON.stringify({ items })]);
+      w.balance = Number(w.balance) + diff;
+      w.earned_total = Number(w.earned_total) + diff;
+      w.counters = { ...(w.counters || {}), notice: { kind: 'items4', diff, at: Date.now() } };
+      await W.saveWallet(client, w);
+      return { userId, diff, items: items.length };
+    });
+    if (r) report.push(r);
+  }
+  await pool.query('INSERT INTO audit_events(action, target, details) VALUES($1, $2, $3)',
+    [MARK_V4, 'pet_wallets', JSON.stringify({ wallets: report.length, total: report.reduce((a, x) => a + x.diff, 0) })]);
+  return report;
+}
+
+module.exports = { rebalanceV3, rebalanceItemsV4, MARK, MARK_V4 };

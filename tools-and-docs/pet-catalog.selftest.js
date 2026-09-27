@@ -82,4 +82,13 @@ assert.ok(!read('pet.js').includes('🪙'), 'в pet.js снова эмодзи �
   for (const [, id, r] of rar) assert.strictEqual(C.ACHIEVEMENTS[id], r, `редкость ${id}: в data.js ${r}, на сервере ${C.ACHIEVEMENTS[id]}`);
 }
 
+// Лестница крутости: у каждой легенды и мифа — свой эффект того же уровня
+// (легенда — движение питомца, миф — превращение). Без эффекта вещь не «видна».
+for (const item of C.ITEMS.filter(i => i.rarity === 'legendary' || i.rarity === 'mythic')) {
+  const sig = Art.SIGNATURES[item.art.t];
+  assert.ok(sig, `${item.id}: ${item.rarity} без фирменного эффекта (SIGNATURES в pet-art.js)`);
+  assert.equal(sig.tier, item.rarity, `${item.id}: уровень эффекта не совпадает с редкостью`);
+  if (item.rarity === 'legendary') assert.ok(sig.act, `${item.id}: у легенды нет своего движения`);
+  if (item.rarity === 'mythic') assert.ok(sig.form, `${item.id}: у мифа нет превращения`);
+}
 console.log(`pet-catalog selftest: OK (${C.ITEMS.length} вещей, ${C.SPECIES.length} вида, ${C.BOXES.length} коробки)`);

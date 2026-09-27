@@ -588,3 +588,73 @@ button.pet-quest[disabled] { cursor: default; }
 /* Значок и описание эффекта у вещи. */
 .pet-sig-badge { font-size: 11px; font-weight: 900; color: #fff; background: linear-gradient(90deg, var(--r-legendary), var(--r-mythic)); border-radius: var(--r-full); padding: 1px 7px; }
 .pet-sig-note { font-size: 12.5px; font-weight: 800; line-height: 1.35; padding: 8px 10px; border-radius: var(--r-sm); border: 2px solid var(--rc); background: color-mix(in srgb, var(--rc) 12%, var(--pet-card, #fff)); }
+
+/* ── Фирменные движения легенд ─────────────────────────────────────────── */
+.pet-chip { position: absolute; width: 6px; height: 4px; pointer-events: none; z-index: 3;
+  animation: pet-chip .9s ease-out forwards; }
+@keyframes pet-chip { from { opacity: 1; transform: translate(0, 0) rotate(0); } to { opacity: 0; transform: translate(var(--dx), var(--dy)) rotate(var(--r)); } }
+.pet-svg[class*="act-"] .pet-arm-r, .pet-svg[class*="act-"] .pet-arm-l { transform-box: view-box; }
+/* Кутузов: честь — правая лапа к виску. */
+.pet-svg.act-salute .pet-arm-r { animation: sa-arm 1.8s ease-in-out; }
+@keyframes sa-arm { 0%, 100% { transform: rotate(0); } 25%, 80% { transform: rotate(-135deg); } }
+.pet-svg.act-salute .pet-body { transform-box: view-box; transform-origin: 100px 190px; animation: sa-body 1.8s ease-in-out; }
+@keyframes sa-body { 0%, 100% { transform: none; } 25%, 80% { transform: translateY(-3px) scaleY(1.02); } }
+/* Корона: голова вверх, вспышка. */
+.pet-svg.act-regal .pet-head { transform-box: view-box; transform-origin: 100px 104px; animation: rg-head 1.8s ease-in-out; }
+@keyframes rg-head { 0%, 100% { transform: none; } 30%, 75% { transform: translateY(-5px) rotate(-3deg); } }
+.pet-svg.act-regal .slot-head { animation: flash 1.8s ease-in-out; }
+@keyframes flash { 0%, 100% { filter: none; } 35% { filter: brightness(1.6) drop-shadow(0 0 6px #ffd23f); } }
+/* Мантия: кружится. */
+.pet-svg.act-twirl .pet-body { transform-box: view-box; transform-origin: 100px 190px; animation: tw-body 1.4s ease-in-out; }
+@keyframes tw-body { 0% { transform: scaleX(1); } 25% { transform: scaleX(-1); } 50% { transform: scaleX(1); } 75% { transform: scaleX(-1); } 100% { transform: scaleX(1); } }
+/* Держава: поднять над головой. */
+.pet-svg.act-raise .pet-arm-r { animation: rs-arm 1.8s ease-in-out; }
+@keyframes rs-arm { 0%, 100% { transform: rotate(0); } 30%, 75% { transform: rotate(-110deg); } }
+.pet-svg.act-raise .slot-hand { animation: flash 1.8s ease-in-out; }
+/* Ассамблея: поклон. */
+.pet-svg.act-bow .pet-body { transform-box: view-box; transform-origin: 100px 190px; animation: bw-body 1.8s ease-in-out; }
+@keyframes bw-body { 0%, 100% { transform: none; } 30%, 70% { transform: rotate(14deg); } }
+/* Гигачад: голова в профиль, подбородок вперёд. */
+.pet-svg.act-chad .pet-head { transform-box: view-box; transform-origin: 100px 104px; animation: ch-head 1.8s ease-in-out; }
+@keyframes ch-head { 0%, 100% { transform: none; } 25%, 80% { transform: translateX(3px) rotate(-6deg) skewX(-6deg); } }
+.pet-svg.act-chad .slot-face { animation: flash 1.8s ease-in-out; }
+/* Тапок: замах и удар. */
+.pet-svg.act-swing .pet-arm-r { animation: sw-arm 1.2s ease-in-out; }
+@keyframes sw-arm { 0%, 100% { transform: rotate(0); } 35% { transform: rotate(-150deg); } 55% { transform: rotate(40deg); } 70% { transform: rotate(-20deg); } }
+/* Маска с зубами: голова дёргается, красная вспышка. */
+.pet-svg.act-zxc .pet-head { transform-box: view-box; transform-origin: 100px 104px; animation: zx-head .12s linear 10 alternate; }
+@keyframes zx-head { from { transform: rotate(-3deg); } to { transform: rotate(3deg); } }
+.pet-svg.act-zxc .slot-face { animation: zx-flash 1.2s ease-in-out; }
+@keyframes zx-flash { 0%, 100% { filter: none; } 30%, 60% { filter: drop-shadow(0 0 6px #e0341a) brightness(1.3); } }
+/* Орлёнок: машет крыльями и подпрыгивает. */
+.pet-svg.act-flap .slot-pet { transform-box: fill-box; transform-origin: 50% 100%; animation: fl-pet .3s ease-in-out 6 alternate; }
+@keyframes fl-pet { from { transform: translateY(0) scaleX(1); } to { transform: translateY(-8px) scaleX(1.15); } }
+/* Столыпинский галстук: поправить — лапа к шее, голова набок. */
+.pet-svg.act-tug .pet-arm-r { animation: tg-arm 1.6s ease-in-out; }
+@keyframes tg-arm { 0%, 100% { transform: rotate(0); } 30%, 70% { transform: rotate(-80deg); } 45%, 60% { transform: rotate(-70deg); } }
+.pet-svg.act-tug .pet-head { transform-box: view-box; transform-origin: 100px 104px; animation: tg-head 1.6s ease-in-out; }
+@keyframes tg-head { 0%, 100% { transform: none; } 40% { transform: rotate(6deg); } }
+/* Янтарная комната: любуется — голова по сторонам, свечи ярче. */
+.pet-svg.act-admire .pet-head { transform-box: view-box; transform-origin: 100px 104px; animation: ad-head 1.8s ease-in-out; }
+@keyframes ad-head { 0%, 100% { transform: none; } 25% { transform: rotate(-8deg); } 60% { transform: rotate(8deg); } }
+.pet-svg.act-admire .slot-bg { animation: flash 1.8s ease-in-out; }
+/* Дедлайн: мечется. */
+.pet-svg.act-panic .pet-body { transform-box: view-box; transform-origin: 100px 190px; animation: pn-body .15s linear 12 alternate; }
+@keyframes pn-body { from { transform: translateX(-4px) rotate(-3deg); } to { transform: translateX(4px) rotate(3deg); } }
+/* Звёздные глаза: вспышка. */
+.pet-svg.act-starwink .slot-face { transform-box: fill-box; transform-origin: 50% 50%; animation: st-wink 1.4s ease-in-out; }
+@keyframes st-wink { 0%, 100% { transform: scale(1); filter: none; } 40% { transform: scale(1.25); filter: brightness(1.5) drop-shadow(0 0 6px #ffd23f); } }
+
+/* ── Превращения мифов ─────────────────────────────────────────────────── */
+.pet-svg .sig-pulse { animation: sig-pulse 2.4s ease-in-out infinite; }
+@keyframes sig-pulse { 0%, 100% { opacity: .7; } 50% { opacity: 1; } }
+.pet-svg .sig-float { animation: sig-float 3.2s ease-in-out infinite; }
+@keyframes sig-float { 0%, 100% { transform: translateY(0) rotate(-1deg); } 50% { transform: translateY(-9px) rotate(1deg); } }
+/* Жар-птица: парит рядом с питомцем, покачивается, роняет искры вниз. */
+.pet-svg.sig-orbit .slot-pet { transform-box: view-box; transform-origin: 40px 180px; animation: sig-hover 2.6s ease-in-out infinite; }
+@keyframes sig-hover { 0%, 100% { transform: translate(-3px, -26px) scale(1.15) rotate(-3deg); } 50% { transform: translate(1px, -36px) scale(1.15) rotate(3deg); } }
+.pet-svg.mini.sig-orbit .slot-pet { transform: translate(-3px, -26px) scale(1.15); }
+.pet-svg .sig-drop { animation: sig-drop 2.2s ease-in infinite; opacity: 0; }
+@keyframes sig-drop { 0% { opacity: 0; transform: translateY(-10px); } 20% { opacity: 1; } 100% { opacity: 0; transform: translateY(40px); } }
+.pet-svg.mini.sig-mythic .sig-pulse { animation: sig-pulse 2.4s ease-in-out infinite !important; }
+.pet-svg.mini.sig-mythic .sig-float { animation: sig-float 3.2s ease-in-out infinite !important; }

@@ -132,7 +132,7 @@ const RAW = [
   ['hat_ermak', 'head', 'epic', 2400, 'Шлем Ермака', 'Покорение Сибири', ['helmet', '#b5bcc4', '#e8c35a']],
   ['hat_imperial', 'head', 'legendary', 12000, 'Большая императорская корона', 'Империя', ['crown', '#e9c46a', '#c0c7d0', '#b3123a']],
   ['hat_bicorne', 'head', 'legendary', 7000, 'Двууголка Кутузова', '1812', ['bicorne', '#15151a', '#e8c35a']],
-  ['hat_laurel', 'head', 'legendary', 9000, 'Лавровый венок', 'Античность', ['laurel', '#e9c46a', '#b8912f']],
+  ['hat_laurel', 'head', 'epic', 2600, 'Лавровый венок', 'Античность', ['laurel', '#e9c46a', '#b8912f']],
   ['hat_monomakh', 'head', 'mythic', 50000, 'Шапка Мономаха', 'Московское царство', ['monomakh', '#e9c46a', '#6b3f22', '#1d8a5a']],
 
   // ── Одежда (26) ───────────────────────────────────────────────────────
@@ -160,7 +160,7 @@ const RAW = [
   ['body_skafandr', 'body', 'epic', 3000, 'Скафандр', 'Космос', ['spacesuit', '#f4f4f4', '#cc2d2d']],
   ['body_laty', 'body', 'epic', 2400, 'Латы крестоносца', 'Ледовое побоище', ['plate', '#c3cad2', '#ffffff', '#15151a']],
   ['body_mantle', 'body', 'legendary', 14000, 'Мантия Екатерины', 'Империя', ['mantle', '#e9c46a', '#ffffff', '#15151a']],
-  ['body_marshal', 'body', 'legendary', 9000, 'Маршальский мундир', 'XX век', ['marshal', '#2f4a36', '#e9c46a', '#c62828']],
+  ['body_marshal', 'body', 'epic', 2800, 'Маршальский мундир', 'XX век', ['marshal', '#2f4a36', '#e9c46a', '#c62828']],
   ['body_firecloak', 'body', 'mythic', null, 'Плащ из перьев Жар-птицы', 'Сказка', ['firecloak', '#ff7b00', '#ffd23f', '#e0341a']],
 
   // ── Лицо (14) ────────────────────────────────────────────────────────
@@ -177,7 +177,7 @@ const RAW = [
   ['face_peter', 'face', 'epic', 1800, 'Усы Петра I', 'Петровская эпоха', ['mustache', '#1b1410', 'peter']],
   ['face_goggles', 'face', 'epic', 2000, 'Лётные очки Чкалова', '1930-е', ['goggles', '#6b4a2f', '#7fc8f8']],
   ['face_mask', 'face', 'legendary', 8000, 'Маска с ассамблеи', 'Петровская эпоха', ['mask', '#e9c46a', '#7a1426']],
-  ['face_stareyes', 'face', 'mythic', null, 'Звёздные глаза', 'Сказка', ['stareyes', '#ffd23f', '#ff9f1c']],
+  ['face_stareyes', 'face', 'legendary', null, 'Звёздные глаза', 'Сказка', ['stareyes', '#ffd23f', '#ff9f1c']],
 
   // ── Шея (12) ─────────────────────────────────────────────────────────
   ['neck_pioneer', 'neck', 'common', 70, 'Пионерский галстук', 'СССР', ['tie', '#d0342c']],
@@ -191,7 +191,7 @@ const RAW = [
   ['neck_vdnh', 'neck', 'rare', 300, 'Шарф ВДНХ', 'СССР', ['scarf', '#d0342c', '#ffffff']],
   ['neck_barmy', 'neck', 'epic', 2400, 'Бармы', 'Московское царство', ['barmy', '#e9c46a', '#b3123a', '#1d8a5a']],
   ['neck_andrey', 'neck', 'epic', 2800, 'Орден Андрея Первозванного', 'Империя', ['order', '#2f63c9', '#e9c46a']],
-  ['neck_chain', 'neck', 'legendary', 9000, 'Золотая цепь канцлера', 'Империя', ['chain', '#e9c46a', '#b8912f']],
+  ['neck_chain', 'neck', 'epic', 2500, 'Золотая цепь канцлера', 'Империя', ['chain', '#e9c46a', '#b8912f']],
   ['neck_stolypin', 'neck', 'legendary', 9500, 'Столыпинский галстук', 'Империя', ['stolypin', '#d9c9a0', '#8a6a44']],
 
   // ── В руке (18) ──────────────────────────────────────────────────────
@@ -245,12 +245,12 @@ const RAW = [
   ['pet_firebird', 'pet', 'mythic', null, 'Жар-птица', 'Сказка', ['c_firebird', '#ff7b00', '#ffd23f']],
 
   // ── Сияние (6) ───────────────────────────────────────────────────────
-  ['aura_stars', 'aura', 'legendary', 7000, 'Звездопад', 'Космос', ['a_stars', '#ffffff', '#ffd23f']],
+  ['aura_stars', 'aura', 'epic', 2400, 'Звездопад', 'Космос', ['a_stars', '#ffffff', '#ffd23f']],
   ['aura_snow', 'aura', 'legendary', 6000, 'Снег 1812 года', '1812', ['a_snow', '#ffffff', '#cfe6f7']],
-  ['aura_salute', 'aura', 'legendary', 8000, 'Праздничный салют', 'XX век', ['a_salute', '#ff4d6d', '#ffd23f', '#4dabf7']],
-  ['aura_gold', 'aura', 'mythic', null, 'Золотые искры', 'Империя', ['a_sparks', '#ffd23f', '#e9c46a']],
-  ['aura_fire', 'aura', 'mythic', null, 'Огонь Жар-птицы', 'Сказка', ['a_fire', '#ff7b00', '#ffd23f']],
-  ['aura_vortex', 'aura', 'mythic', null, 'Алый вихрь', 'XX век', ['a_vortex', '#e0341a', '#ff8a8a']],
+  ['aura_salute', 'aura', 'epic', 2600, 'Праздничный салют', 'XX век', ['a_salute', '#ff4d6d', '#ffd23f', '#4dabf7']],
+  ['aura_gold', 'aura', 'legendary', null, 'Золотые искры', 'Империя', ['a_sparks', '#ffd23f', '#e9c46a']],
+  ['aura_fire', 'aura', 'legendary', null, 'Огонь Жар-птицы', 'Сказка', ['a_fire', '#ff7b00', '#ffd23f']],
+  ['aura_vortex', 'aura', 'legendary', null, 'Алый вихрь', 'XX век', ['a_vortex', '#e0341a', '#ff8a8a']],
 
   // ── Мемы (v3, 27.09.2026): чтобы наряжаться было смешно, а не только исторично ──
   ['hat_foil', 'head', 'rare', 400, 'Шапочка из фольги', 'Мемы', ['foilhat', '#cfd6de', '#8a96a3']],
@@ -259,7 +259,7 @@ const RAW = [
   ['hat_halo', 'head', 'epic', 2000, 'Нимб отличника', 'Мемы', ['halo', '#ffd23f', '#b8912f']],
   ['hat_horns', 'head', 'rare', 350, 'Рожки двоечника', 'Мемы', ['horns', '#d0342c']],
   ['hat_paper_crown', 'head', 'common', 70, 'Бумажная корона', 'Мемы', ['papercrown', '#fff4c2', '#e0a458']],
-  ['hat_bucket', 'head', 'legendary', 7000, 'Ведро', 'Мемы', ['bucket', '#b7c0c9']],
+  ['hat_bucket', 'head', 'epic', 2200, 'Ведро', 'Мемы', ['bucket', '#b7c0c9']],
   ['face_thug', 'face', 'epic', 1800, 'Очки «Thug life»', 'Мемы', ['thug']],
   ['face_gigachad', 'face', 'legendary', 9000, 'Челюсть гигачада', 'Мемы', ['gigachad', '#000000', '#3a2a1e']],
   ['face_sigma', 'face', 'rare', 500, 'Сигма-взгляд', 'Мемы', ['sigma', '#15151a']],
@@ -271,7 +271,7 @@ const RAW = [
   ['body_bare_jacket', 'body', 'rare', 450, 'Пиджак на голое тело', 'Мемы', ['barejacket', '#15151a', '#e0341a']],
   ['body_pajama', 'body', 'common', 120, 'Пижама с котиками', 'Мемы', ['pajama', '#9fc5e8', '#ffffff']],
   ['body_sigma_suit', 'body', 'epic', 2800, 'Костюм сигмы', 'Мемы', ['sigmasuit', '#15151a', '#e0341a']],
-  ['neck_chain_100', 'neck', 'legendary', 8000, 'Цепь «ЕГЭ 100»', 'Мемы', ['chain100', '#e9c46a', '#8a5a00']],
+  ['neck_chain_100', 'neck', 'epic', 2700, 'Цепь «ЕГЭ 100»', 'Мемы', ['chain100', '#e9c46a', '#8a5a00']],
   ['neck_freshener', 'neck', 'common', 60, 'Ёлочка-вонючка', 'Мемы', ['freshener', '#2fa84f']],
   ['neck_foil_bow', 'neck', 'common', 90, 'Бабочка из фольги', 'Мемы', ['foilbow', '#cfd6de', '#8a96a3']],
   ['neck_patience', 'neck', 'rare', 500, 'Медаль «За терпение»', 'Мемы', ['medalpatience', '#c0c7d0', '#2f63c9']],
@@ -293,9 +293,9 @@ const RAW = [
   ['pet_dumpling', 'pet', 'common', 130, 'Кот-пельмень', 'Мемы', ['c_dumpling', '#f7f1e3']],
   ['pet_pigeon', 'pet', 'common', 90, 'Голубь-курлык', 'Мемы', ['c_pigeon', '#9aa3ad', '#5bb04a']],
   ['pet_roach', 'pet', 'common', 60, 'Таракан-сосед', 'Мемы', ['c_roach', '#7a4a24']],
-  ['aura_friday', 'aura', 'legendary', 6000, 'Вайб пятницы', 'Мемы', ['a_friday']],
+  ['aura_friday', 'aura', 'epic', 2400, 'Вайб пятницы', 'Мемы', ['a_friday']],
   ['aura_deadline', 'aura', 'legendary', 7000, 'Режим дедлайна', 'Мемы', ['a_deadline']],
-  ['aura_zen', 'aura', 'legendary', 6500, 'Абсолютное спокойствие', 'Мемы', ['a_zen']],
+  ['aura_zen', 'aura', 'epic', 2400, 'Абсолютное спокойствие', 'Мемы', ['a_zen']],
 
   // ── Пак «Дед инсайд» (эстетика аниме-аватарок: белая чёлка, маска, zxc) ──
   ['hat_white_bangs', 'head', 'epic', 2200, 'Белая чёлка', 'Дед инсайд', ['whitebangs', '#f4f4f6', '#c9ccd6']],
@@ -312,6 +312,12 @@ const RAW = [
   ['bg_rain_roof', 'bg', 'epic', 2200, 'Крыша под дождём', 'Дед инсайд', ['bg_rainroof', '#161a2b', '#9fb4c8']],
   ['aura_1000_7', 'aura', 'mythic', null, '«1000-7»', 'Дед инсайд', ['a_thousand']],
 ];
+
+// Лестница крутости (27.09.2026, концепция владельца «крутое видно сразу»):
+// легенда — это вещь со своим движением питомца, миф — превращение. Вещи, у
+// которых такого эффекта нет, переведены ниже; купившим вернули разницу
+// (rebalance.js, rebalanceItemsV4).
+const TIER_CHANGES_V4 = { toEpic: {'hat_laurel': 2600, 'body_marshal': 2800, 'neck_chain': 2500, 'neck_chain_100': 2700, 'hat_bucket': 2200, 'aura_salute': 2600, 'aura_stars': 2400, 'aura_friday': 2400, 'aura_zen': 2400}, toLegendary: ['face_stareyes', 'aura_gold', 'aura_fire', 'aura_vortex'] };
 
 const ITEMS_BASE = RAW.map(([id, slot, rarity, price, name, era, art]) => ({
   id, kind: 'wear', slot, rarity, price, name, era,
@@ -516,11 +522,11 @@ function publicCatalog() {
 }
 
 // Меняется вместе с содержимым каталога: клиент кэширует каталог по версии.
-const CATALOG_VERSION = '2026-09-28-8';
+const CATALOG_VERSION = '2026-09-28-9';
 
 module.exports = {
   RARITIES, RARITY_VALUE, DUPLICATE_SHARE, SLOTS, SPECIES, ITEMS, CONSUMABLES, BOXES,
-  RARE_SPECIES_DROPS, FRAGMENTS, FRAGMENT_DROPS, STABLE_MAX, SOCIAL, DAILY_ROUND,
+  RARE_SPECIES_DROPS, FRAGMENTS, FRAGMENT_DROPS, STABLE_MAX, SOCIAL, DAILY_ROUND, TIER_CHANGES_V4,
   NICK_PAINT, NICK_COLORS, TOP_NICK_COLORS, ECONOMY, ACHIEVEMENT_REWARD, ACHIEVEMENTS,
   WEEKLY_PRIZES, MONTHLY_PRIZES, DUEL_PRIZES, LOGIN_STREAK, WHEEL, QUESTS,
   TOY_COOLDOWN_MS, CATALOG_VERSION, BY_ID, prizeFor, itemValue, publicCatalog,

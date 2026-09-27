@@ -372,11 +372,75 @@
   // легенда меняет поведение (своё действие, реплики), миф превращает питомца
   // целиком (материал, свет, фон) — и это видно всем, даже в мини-аватаре топа.
   // Ключ — шаблон рисунка вещи (art.t).
+  // fx — частицы при фирменном действии: [цвета, точка вылета (% сцены), направление].
   var SIGNATURES = {
+    // ── Легенды: своё движение питомца ──
     chainsaw: { tier: 'legendary', act: 'rev', desc: 'Легенда: питомец газует бензопилой — дым, тряска, опилки',
+      fx: { colors: ['#c9a36b', '#e0c38f', '#8a6a44'], at: [88, 44], dx: [10, 40], dy: [-40, -10] },
       say: ['Вжжжжух!', 'Разберу эту таблицу на щепки', 'Кто тут не выучил даты?', 'Бррр-рррм!'] },
+    bicorne: { tier: 'legendary', act: 'salute', desc: 'Легенда: питомец отдаёт честь, как Кутузов на смотре',
+      fx: { colors: ['#e3b448', '#fff3b0'], at: [58, 26], dx: [-20, 20], dy: [-40, -20] },
+      say: ['Отступаем — чтобы победить!', 'С потерею Москвы не потеряна Россия', 'Терпение и время!'] },
+    crown: { tier: 'legendary', act: 'regal', desc: 'Легенда: питомец царственно поднимает голову, корона вспыхивает',
+      fx: { colors: ['#ffd23f', '#fff3b0', '#e3b448'], at: [50, 18], dx: [-40, 40], dy: [-30, 0] },
+      say: ['Я — империя', 'Корону — не трогать', 'Ну-с, кто сегодня решал?'] },
+    mantle: { tier: 'legendary', act: 'twirl', desc: 'Легенда: питомец кружится в мантии — горностай и блёстки',
+      fx: { colors: ['#ffffff', '#b3262d', '#e3b448'], at: [50, 72], dx: [-50, 50], dy: [-30, 10] },
+      say: ['Просвещённый абсолютизм!', 'Вольтер бы оценил', 'Наказ Уложенной комиссии — выучен'] },
+    orb: { tier: 'legendary', act: 'raise', desc: 'Легенда: питомец поднимает державу, как на коронации',
+      fx: { colors: ['#ffd23f', '#fff3b0'], at: [74, 44], dx: [-20, 20], dy: [-40, -20] },
+      say: ['Держава в надёжных лапах', 'Самодержец всея таблицы', 'Коронация — в 1896-м!'] },
+    mask: { tier: 'legendary', act: 'bow', desc: 'Легенда: питомец отвешивает поклон, как на петровской ассамблее',
+      fx: { colors: ['#ff6b8a', '#4dabf7', '#ffd23f', '#18a058'], at: [50, 40], dx: [-50, 50], dy: [-40, 10] },
+      say: ['Пётр велел веселиться!', 'Ассамблея — с 1718 года', 'Танцуем менуэт!'] },
+    gigachad: { tier: 'legendary', act: 'chad', desc: 'Легенда: питомец поворачивает голову в профиль, как на том самом фото',
+      fx: { colors: ['#ffffff', '#dfe6ee'], at: [56, 50], dx: [-10, 30], dy: [-30, -10] },
+      say: ['Здарова, отличник', 'Даты сами себя не выучат', 'Спокойно. Мы сдадим'] },
+    slipper: { tier: 'legendary', act: 'swing', desc: 'Легенда: питомец замахивается бабушкиным тапком',
+      fx: { colors: ['#ff8fb1', '#ffffff'], at: [80, 40], dx: [10, 50], dy: [-30, 0] },
+      say: ['А ну быстро решать!', 'Уроки сделал?', 'Сейчас кто-то получит'] },
+    ghoulmask: { tier: 'legendary', act: 'zxc', desc: 'Легенда: щёлкают зубы маски, глаз вспыхивает красным',
+      fx: { colors: ['#e0341a', '#15151a'], at: [50, 40], dx: [-30, 30], dy: [-30, 0] },
+      say: ['zxc', '1000-7… 993…', 'Тьма внутри'] },
+    c_eagle: { tier: 'legendary', act: 'flap', desc: 'Легенда: орлёнок машет крыльями и подпрыгивает',
+      fx: { colors: ['#ffd23f', '#e3b448'], at: [18, 78], dx: [-20, 20], dy: [-40, -20] },
+      say: ['Орлёнок, орлёнок, взлети выше солнца!', 'Иван III одобряет', 'Двуглавый — значит вдвое умнее'] },
+    stolypin: { tier: 'legendary', act: 'tug', desc: 'Легенда: питомец нервно поправляет «галстук»',
+      fx: { colors: ['#7fc8f8'], at: [60, 30], dx: [-10, 20], dy: [-20, 10] },
+      say: ['Военно-полевой суд! 1906 год', 'Вам нужны великие потрясения…', 'Нам нужна великая Россия!'] },
+    bg_amber: { tier: 'legendary', act: 'admire', desc: 'Легенда: свечи мерцают, питомец любуется янтарём',
+      fx: { colors: ['#ffd23f', '#f2a93b'], at: [50, 40], dx: [-60, 60], dy: [-30, 10] },
+      say: ['Дар Фридриха Вильгельма I!', 'Воссоздана к 2003 году', 'Красота-то какая'] },
+    a_snow: { tier: 'legendary', act: 'shiver', desc: 'Легенда: питомец мёрзнет, как армия Наполеона в 1812-м',
+      fx: { colors: ['#ffffff', '#cfe8fb'], at: [50, 30], dx: [-50, 50], dy: [-10, 30] },
+      say: ['Брр… генерал Мороз!', 'Березина, 1812…', 'Наполеону тоже было холодно'] },
+    a_deadline: { tier: 'legendary', act: 'panic', desc: 'Легенда: паника дедлайна — питомец мечется',
+      fx: { colors: ['#e0341a', '#ffd23f'], at: [50, 30], dx: [-50, 50], dy: [-30, 10] },
+      say: ['23:59!!!', 'Сдаём! Сдаём!', 'Ещё одну таблицу…'] },
+    stareyes: { tier: 'legendary', act: 'starwink', desc: 'Легенда: глаза вспыхивают звёздами',
+      fx: { colors: ['#ffd23f', '#ff9f1c'], at: [50, 44], dx: [-40, 40], dy: [-30, 0] },
+      say: ['Звезда ЕГЭ — это я', 'Сияю!', 'Автограф? Только после экзамена'] },
+    a_sparks: { tier: 'legendary', act: 'dance', desc: 'Легенда: питомец танцует в золотых искрах',
+      fx: { colors: ['#ffd23f', '#fff3b0'], at: [50, 50], dx: [-50, 50], dy: [-40, 0] }, say: ['Блещу!', 'Золото, а не питомец'] },
+    a_fire: { tier: 'legendary', act: 'dance', desc: 'Легенда: питомец танцует в огне Жар-птицы',
+      fx: { colors: ['#ff7a1a', '#ffd23f'], at: [50, 60], dx: [-50, 50], dy: [-40, -10] }, say: ['Горю желанием учиться!', 'Жарко!'] },
+    a_vortex: { tier: 'legendary', act: 'spin', desc: 'Легенда: питомец крутится в алом вихре',
+      fx: { colors: ['#e0341a', '#ff9f9f'], at: [50, 50], dx: [-50, 50], dy: [-30, 30] }, say: ['Уииии!', 'Голова кругом от дат'] },
+    // ── Мифы: превращение всего питомца ──
     monomakh: { tier: 'mythic', form: 'gold', desc: 'Миф: питомец превращается в золотую статую — блик, лучи и золотая пыль',
       say: ['Тяжела ты, шапка Мономаха…', 'Самодержец всея таблицы', 'Кланяйтесь, холопы ЕГЭ', 'Золото — это я'] },
+    firecloak: { tier: 'mythic', form: 'fire', desc: 'Миф: питомец охвачен огнём Жар-птицы — пламенный контур и искры',
+      say: ['Я — Жар-птица!', 'Перо на счастье — держи', 'Горю и не сгораю'] },
+    bluefire: { tier: 'mythic', form: 'bluefire', desc: 'Миф: питомец горит синим пламенем по контуру',
+      say: ['Синее пламя — чистая сила', 'Не обожгись', 'Холодный огонь знаний'] },
+    a_thousand: { tier: 'mythic', form: 'mono', desc: 'Миф: мир выцветает в чёрно-белый, остаётся только красное',
+      say: ['1000-7…', 'Я гуль', '993… 986… 979…'] },
+    sputnik: { tier: 'mythic', form: 'zerog', desc: 'Миф: невесомость — питомец парит среди звёзд',
+      say: ['Бип-бип! 4 октября 1957-го!', 'Первый в космосе!', 'Поехали!'] },
+    bg_space: { tier: 'mythic', form: 'zerog', desc: 'Миф: открытый космос — питомец парит в невесомости',
+      say: ['12 апреля 1961-го!', 'Земля в иллюминаторе…', 'Поехали!'] },
+    c_firebird: { tier: 'mythic', form: 'orbit', desc: 'Миф: Жар-птица парит рядом, роняет искры и озаряет питомца тёплым светом',
+      say: ['Жар-птица со мной!', 'Сказка Ершова — 1834', 'Перо Жар-птицы — к удаче'] },
   };
   function signaturesOf(eq, items) {
     var out = [];
@@ -408,6 +472,65 @@
     var dust = '';
     for (var j = 0; j < 10; j++) dust += '<circle class="sig-dust sig-live" style="animation-delay:' + (j * 0.35).toFixed(2) + 's" cx="' + (46 + (j * 29) % 110) + '" cy="' + (150 + (j * 13) % 36) + '" r="' + (j % 3 ? 1.6 : 2.4) + '" fill="#ffe27a"/>';
     return { defs: defs, back: rays, filter: 'url(#' + f + ')', front: '<g clip-path="url(#' + clip + ')"><rect class="sig-gleam sig-live" x="-60" y="-20" width="34" height="260" fill="#fff" opacity=".55" transform="rotate(18 100 100)"/></g>' + dust };
+  }
+
+  // Пламя (Плащ Жар-птицы, Синий огонь): вокруг силуэта — рваные языки огня.
+  // Цвета самого питомца не трогаем (раньше подкрашивали — кот становился бурым).
+  // Контур: расширенный силуэт, искажённый шумом (feTurbulence + feDisplacementMap),
+  // снаружи — цвет пламени, у кромки — светлое ядро. В большом окне шум «дышит»
+  // (SMIL), в мини-аватаре — статичный: десятки живых фильтров в топе — лишняя нагрузка.
+  function flameForm(outer, core, mini) {
+    var f = uid('flame'), bg = uid('fbg');
+    var anim = mini ? '' : '<animate attributeName="baseFrequency" dur="1.4s" repeatCount="indefinite" values="0.05 0.11;0.065 0.14;0.05 0.11"/>';
+    var defs = '<defs><filter id="' + f + '" x="-30%" y="-30%" width="160%" height="160%" color-interpolation-filters="sRGB">' +
+      '<feMorphology in="SourceAlpha" operator="dilate" radius="4" result="d"/>' +
+      '<feTurbulence type="fractalNoise" baseFrequency="0.05 0.11" numOctaves="2" seed="7" result="n">' + anim + '</feTurbulence>' +
+      '<feDisplacementMap in="d" in2="n" scale="14" xChannelSelector="R" yChannelSelector="G" result="fl"/>' +
+      '<feGaussianBlur in="fl" stdDeviation="1.6" result="flb"/>' +
+      '<feFlood flood-color="' + outer + '"/><feComposite in2="flb" operator="in" result="o"/>' +
+      '<feMorphology in="SourceAlpha" operator="dilate" radius="1.6" result="d2"/>' +
+      '<feDisplacementMap in="d2" in2="n" scale="6" xChannelSelector="R" yChannelSelector="G" result="fl2"/>' +
+      '<feGaussianBlur in="fl2" stdDeviation="1" result="fl2b"/>' +
+      '<feFlood flood-color="' + core + '"/><feComposite in2="fl2b" operator="in" result="c"/>' +
+      '<feMerge><feMergeNode in="o"/><feMergeNode in="c"/><feMergeNode in="SourceGraphic"/></feMerge></filter>' +
+      '<radialGradient id="' + bg + '"><stop offset="0" stop-color="' + outer + '" stop-opacity=".35"/><stop offset="1" stop-color="' + outer + '" stop-opacity="0"/></radialGradient></defs>';
+    var embers = '';
+    for (var j = 0; j < 12; j++) embers += '<circle class="sig-dust sig-live" style="animation-delay:' + (j * 0.27).toFixed(2) + 's" cx="' + (48 + (j * 23) % 104) + '" cy="' + (130 + (j * 17) % 50) + '" r="' + (j % 3 ? 1.6 : 2.4) + '" fill="' + (j % 2 ? outer : core) + '"/>';
+    return { defs: defs, back: '<svg x="0" y="0" width="200" height="200" viewBox="0 0 200 200" overflow="hidden"><ellipse class="sig-pulse sig-live" cx="100" cy="120" rx="82" ry="88" fill="url(#' + bg + ')"/></svg>',
+      filter: 'url(#' + f + ')', front: embers };
+  }
+  // «1000-7»: чёрно-белый мир, тёмная виньетка, красная пульсация.
+  function monoForm() {
+    var f = uid('mono'), v = uid('vig');
+    var defs = '<defs><filter id="' + f + '" color-interpolation-filters="sRGB"><feColorMatrix type="saturate" values="0"/>' +
+      '<feComponentTransfer><feFuncR type="linear" slope="1.35" intercept="-.12"/><feFuncG type="linear" slope="1.35" intercept="-.12"/><feFuncB type="linear" slope="1.35" intercept="-.12"/></feComponentTransfer></filter>' +
+      '<radialGradient id="' + v + '"><stop offset=".55" stop-color="#000" stop-opacity="0"/><stop offset="1" stop-color="#000" stop-opacity=".55"/></radialGradient></defs>';
+    return { defs: defs, back: '', filter: 'url(#' + f + ')',
+      front: '<svg x="0" y="0" width="200" height="200" viewBox="0 0 200 200" overflow="hidden"><rect width="200" height="200" fill="url(#' + v + ')"/><rect class="sig-pulse sig-live" width="200" height="200" fill="#e0341a" fill-opacity=".14"/></svg>' };
+  }
+  // Невесомость (Спутник, космос): питомец парит, вокруг мерцают звёзды.
+  function zerogForm() {
+    var stars = '';
+    var pts = [[20, 30], [44, 18], [150, 26], [176, 48], [30, 90], [170, 100], [60, 60], [140, 70], [16, 150], [184, 140]];
+    pts.forEach(function (p, i) { stars += '<path class="it-twinkle sig-live" style="animation-delay:' + (i * 0.3).toFixed(1) + 's" d="M' + p[0] + ' ' + (p[1] - 4) + ' l1.2 2.8 2.8 1.2 -2.8 1.2 -1.2 2.8 -1.2 -2.8 -2.8 -1.2 2.8 -1.2Z" fill="#bfe3ff"/>'; });
+    return { defs: '', back: '<svg x="0" y="0" width="200" height="200" viewBox="0 0 200 200" overflow="hidden">' + stars + '</svg>', filter: '', front: '', bodyClass: 'sig-float' };
+  }
+  function phoenixForm() {
+    var bg = uid('phx');
+    var embers = '';
+    for (var j = 0; j < 10; j++) embers += '<circle class="sig-drop sig-live" style="animation-delay:' + (j * 0.32).toFixed(2) + 's" cx="' + (14 + (j * 7) % 34) + '" cy="' + (134 + (j * 5) % 18) + '" r="' + (j % 3 ? 1.5 : 2.2) + '" fill="' + (j % 2 ? '#ff7a1a' : '#ffd23f') + '"/>';
+    return { defs: '<defs><radialGradient id="' + bg + '" cx="25%" cy="70%" r="75%"><stop offset="0" stop-color="#ff9a3c" stop-opacity=".45"/><stop offset="1" stop-color="#ff9a3c" stop-opacity="0"/></radialGradient></defs>',
+      back: '<svg x="0" y="0" width="200" height="200" viewBox="0 0 200 200" overflow="hidden"><rect class="sig-pulse sig-live" width="200" height="200" fill="url(#' + bg + ')"/></svg>',
+      filter: '', front: embers };
+  }
+  function formOf(form, bodyId, mini) {
+    if (form === 'gold') return goldForm(bodyId);
+    if (form === 'fire') return flameForm('#ff6a13', '#ffe27a', mini);
+    if (form === 'bluefire') return flameForm('#2f7bff', '#c9ecff', mini);
+    if (form === 'mono') return monoForm();
+    if (form === 'zerog') return zerogForm();
+    if (form === 'orbit') return phoenixForm();
+    return null;
   }
 
   // Икона стиля недели («Кто круче?»): радужное кольцо на неделю.
@@ -1154,7 +1277,42 @@
   T.c_bear = function (c) { return buddy('<circle cx="22" cy="152" r="6" fill="' + c0(c, 0) + '" ' + SW + '/><circle cx="46" cy="152" r="6" fill="' + c0(c, 0) + '" ' + SW + '/><circle cx="34" cy="162" r="14" fill="' + c0(c, 0) + '" ' + SW + '/><ellipse cx="34" cy="184" rx="15" ry="9" fill="' + c0(c, 0) + '" ' + SW + '/><ellipse cx="34" cy="167" rx="6" ry="4.5" fill="' + c0(c, 1) + '"/><circle cx="34" cy="165" r="2" fill="' + OUT + '"/><circle cx="28" cy="158" r="2" fill="' + OUT + '"/><circle cx="40" cy="158" r="2" fill="' + OUT + '"/>'); };
   T.c_dog = function (c) { return buddy('<ellipse cx="36" cy="178" rx="18" ry="11" fill="' + c0(c, 0) + '" ' + SW + '/><circle cx="26" cy="162" r="11" fill="' + c0(c, 0) + '" ' + SW + '/><path d="M18 156 L16 144 L24 152Z M34 156 L36 144 L28 152Z" fill="' + c0(c, 1) + '" ' + SW + '/><circle cx="22" cy="161" r="1.8" fill="' + OUT + '"/><circle cx="30" cy="161" r="1.8" fill="' + OUT + '"/><circle cx="26" cy="167" r="2.2" fill="' + OUT + '"/><path d="M18 172 h16" stroke="#c62828" stroke-width="3"/>'); };
   T.c_cat = function (c) { return buddy('<ellipse cx="34" cy="176" rx="18" ry="12" fill="' + c0(c, 0) + '" ' + SW + '/><circle cx="30" cy="158" r="12" fill="' + c0(c, 0) + '" ' + SW + '/><path d="M20 152 L18 140 L27 148Z M40 152 L42 140 L33 148Z" fill="' + c0(c, 0) + '" ' + SW + '/><path d="M24 158 q3 -3 6 0 M32 158 q3 -3 6 0" stroke="' + OUT + '" stroke-width="1.8" fill="none"/><path d="M20 164 h20" stroke="' + c0(c, 1) + '" stroke-width="3"/><circle cx="30" cy="167" r="2.5" fill="' + c0(c, 1) + '"/><path d="M52 178 Q64 170 58 158" fill="none" stroke="' + OUT + '" stroke-width="3"/>'); };
-  T.c_firebird = function (c) { return buddy('<g class="it-mythic it-float"><path d="M40 170 Q70 180 64 150 Q58 164 50 164 Q70 150 60 130 Q52 150 44 156Z" fill="' + c0(c, 0) + '" ' + SW + '/><ellipse cx="32" cy="166" rx="13" ry="10" fill="' + c0(c, 1) + '" ' + SW + '/><circle cx="22" cy="156" r="7" fill="' + c0(c, 1) + '" ' + SW + '/><circle cx="20" cy="155" r="1.8" fill="' + OUT + '"/><path d="M15 157 L9 159 L15 160Z" fill="' + c0(c, 0) + '"/><path class="it-flicker" d="M22 149 q-2 -8 4 -12 q-1 6 2 8" fill="' + c0(c, 0) + '"/></g>'); };
+  // Жар-птица (миф): крупная и детальная — золотое тело с чешуйками, изогнутая
+  // шея, крыло из трёх слоёв перьев, длинный огненный хвост с «глазками» и
+  // пламенный хохолок. Смотрит на питомца.
+  T.c_firebird = function (c) {
+    var fire = c0(c, 0, '#ff6a13'), gold = c0(c, 1, '#ffd23f'), deep = '#d9480f', hot = '#fff3b0';
+    var s = '<g class="it-mythic">';
+    // Хвост: три длинных пера-пламени уходят назад-влево, у каждого «глазок».
+    [['M30 170 C18 176 6 172 2 160 C10 166 18 164 24 160Z', [8, 166]],
+     ['M28 166 C14 160 6 146 8 130 C14 144 22 150 30 154Z', [11, 142]],
+     ['M32 174 C24 186 12 192 2 190 C12 186 20 180 24 172Z', [9, 186]]].forEach(function (f) {
+      s += '<path d="' + f[0] + '" fill="' + fire + '" ' + SW + '/>' +
+        '<path d="' + f[0] + '" fill="none" stroke="' + hot + '" stroke-width="1.2" opacity=".55" transform="translate(1 -1)"/>' +
+        '<circle cx="' + f[1][0] + '" cy="' + f[1][1] + '" r="3.6" fill="' + gold + '" stroke="' + OUT + '" stroke-width="1"/><circle cx="' + f[1][0] + '" cy="' + f[1][1] + '" r="1.5" fill="#2f63c9"/>';
+    });
+    // Тело и чешуйки-перья на груди.
+    s += '<ellipse cx="42" cy="166" rx="18" ry="12" fill="' + gold + '" ' + SW + '/>';
+    [[46, 164], [52, 166], [48, 170], [54, 171], [43, 169]].forEach(function (p) {
+      s += '<path d="M' + p[0] + ' ' + p[1] + ' q2 3 4 0" fill="none" stroke="' + deep + '" stroke-width="1" opacity=".7"/>';
+    });
+    // Крыло: три слоя перьев.
+    s += '<path d="M30 164 Q34 142 54 138 Q48 150 50 160Z" fill="' + deep + '" ' + SW + '/>' +
+      '<path d="M32 164 Q38 148 54 146 Q48 154 48 162Z" fill="' + fire + '" stroke="' + OUT + '" stroke-width="1.4"/>' +
+      '<path d="M34 164 Q40 154 52 154 Q46 158 46 164Z" fill="' + gold + '" stroke="' + OUT + '" stroke-width="1.2"/>';
+    // Шея и голова, смотрит вправо — на питомца.
+    s += '<path d="M54 160 C60 154 60 144 58 138 L64 136 C68 144 66 156 58 164Z" fill="' + gold + '" ' + SW + '/>' +
+      '<circle cx="64" cy="132" r="8" fill="' + gold + '" ' + SW + '/>' +
+      '<circle cx="66.5" cy="130.5" r="2" fill="' + OUT + '"/><circle cx="67" cy="130" r=".7" fill="#fff"/>' +
+      '<path d="M71 132 L78 135 L71 136.5Z" fill="#f08a24" stroke="' + OUT + '" stroke-width="1" stroke-linejoin="round"/>' +
+      '<path d="M60 136 q4 3 8 2" fill="none" stroke="' + deep + '" stroke-width="1.2"/>';
+    // Пламенный хохолок.
+    s += '<path class="it-flicker" d="M60 126 q-5 -9 0 -15 q1 6 4 8 q0 -8 6 -11 q-2 8 0 12 q3 -4 7 -4 q-4 5 -6 11Z" fill="' + fire + '" stroke="' + OUT + '" stroke-width="1"/>' +
+      '<path d="M63 124 q0 -5 3 -8" fill="none" stroke="' + hot + '" stroke-width="1.4"/>';
+    // Лапки.
+    s += '<path d="M40 177 l-2 6 M46 177 l1 6 M36 183 l4 0 M45 183 l4 0" stroke="' + OUT + '" stroke-width="1.6" stroke-linecap="round"/>';
+    return buddy(s + '</g>');
+  };
 
   // Сияние (поверх всего, но прозрачное)
   T.a_stars = function (c) { var s = ''; for (var i = 0; i < 10; i++) { var x = 14 + (i * 37) % 176, y = 12 + (i * 53) % 150; s += '<path class="it-fall" style="animation-delay:' + (i * 0.45) + 's" d="M' + x + ' ' + (y - 5) + ' l1.6 3.4 3.4 1.6 -3.4 1.6 -1.6 3.4 -1.6 -3.4 -3.4 -1.6 3.4 -1.6Z" fill="' + (i % 2 ? c0(c, 0) : c0(c, 1)) + '"/>'; } return s; };
@@ -1370,7 +1528,7 @@
     var body = c0(c, 0, '#f08a24'), steel = c0(c, 1, '#c3cad2');
     var blade = 'M154 140 L184 86 Q190 78 196 84 Q199 90 194 96 L166 146Z';
     return held('<g class="cs-saw">' +
-      '<g class="cs-smoke"><circle cx="128" cy="138" r="3" fill="#b9b9c0"/><circle cx="124" cy="132" r="4" fill="#cfcfd6"/><circle cx="119" cy="125" r="5" fill="#e2e2e8"/></g>' +
+      '<g class="cs-smoke"><circle cx="168" cy="152" r="3" fill="#b9b9c0"/><circle cx="170" cy="150" r="4" fill="#cfcfd6"/><circle cx="172" cy="148" r="5" fill="#e2e2e8"/></g>' +
       '<path d="' + blade + '" fill="' + steel + '" ' + SW + '/>' +
       '<path d="M160 138 L186 90" stroke="' + shade(steel, 0.25) + '" stroke-width="3" stroke-linecap="round" opacity=".8"/>' +
       '<path class="cs-chain" d="' + blade + '" fill="none" stroke="' + OUT + '" stroke-width="2.6" stroke-dasharray="3 3"/>' +
@@ -1379,13 +1537,19 @@
       '<path d="M134 146 h14 M134 150 h14 M134 154 h14" stroke="' + shade(body, -0.35) + '" stroke-width="1.6"/>' +
       '<rect x="152" y="143" width="11" height="11" rx="2" fill="' + OUT + '"/><circle cx="157.5" cy="148.5" r="2.4" fill="' + steel + '"/>' +
       '<path d="M133 130 Q138 116 152 118 L154 124 Q142 122 139 132" fill="' + shade(body, -0.2) + '" ' + SW + '/>' +
-      '<path d="M126 140 l-4 -2 M126 146 l-5 0" stroke="' + OUT + '" stroke-width="1.6" stroke-linecap="round"/>' +
+      '<path d="M166 150 l4 -1 M166 154 l5 1" stroke="' + OUT + '" stroke-width="1.6" stroke-linecap="round"/>' +
       '<text x="147" y="141" text-anchor="middle" font-size="5.5" font-weight="900" fill="#fff" font-family="Arial">ВЖЖ</text></g>');
   };
+  // Синий огонь (миф): пламя растёт прямо из ладони — внизу свечение на руке,
+  // выше три языка пламени и светлое ядро.
   T.bluefire = function (c) {
-    return held('<g class="it-mythic"><path class="it-flicker" d="M150 150 Q130 130 146 104 Q150 120 158 118 Q156 100 168 90 Q170 110 178 118 Q186 138 166 152Z" fill="' + c0(c, 0, '#3b82f6') + '" ' + SW + '/>' +
-      '<path class="it-flicker" style="animation-delay:.2s" d="M156 148 Q146 134 156 120 Q160 132 166 130 Q170 140 162 150Z" fill="' + c0(c, 1, '#bfe3ff') + '"/>' +
-      '<circle class="it-twinkle" cx="180" cy="100" r="2" fill="#bfe3ff"/><circle class="it-twinkle" style="animation-delay:.5s" cx="140" cy="110" r="1.6" fill="#bfe3ff"/></g>');
+    var blue = c0(c, 0, '#3b82f6'), core = c0(c, 1, '#bfe3ff');
+    return held('<g class="it-mythic">' +
+      '<ellipse cx="136" cy="154" rx="11" ry="4" fill="' + core + '" opacity=".75"/>' +
+      '<path class="it-flicker" d="M124 152 Q118 132 128 118 Q130 128 134 128 Q132 110 142 98 Q144 116 150 122 Q156 132 150 146 Q146 154 136 155 Q128 155 124 152Z" fill="' + blue + '" ' + SW + '/>' +
+      '<path class="it-flicker" style="animation-delay:.25s" d="M129 151 Q125 138 132 130 Q134 138 138 137 Q138 126 144 118 Q146 132 148 138 Q150 148 142 152 Q134 154 129 151Z" fill="' + core + '"/>' +
+      '<path d="M134 148 Q136 142 140 142" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" opacity=".8"/>' +
+      '<circle class="it-twinkle" cx="150" cy="104" r="2" fill="' + core + '"/><circle class="it-twinkle" style="animation-delay:.5s" cx="122" cy="116" r="1.6" fill="' + core + '"/></g>');
   };
 
   // Место
@@ -1718,16 +1882,18 @@
     if (bg) bg = '<svg x="0" y="0" width="200" height="200" viewBox="0 0 200 200" overflow="hidden">' + bg + '</svg>';
     var shadow = '<ellipse class="pet-shadow" cx="100" cy="191" rx="' + (46 * (stage === 'baby' ? STAGE_SCALE.baby : 1)).toFixed(1) + '" ry="5" fill="#000" opacity=".13"/>';
     var sigBack = '', sigFront = '', sigDefs = '';
-    if (mythSig && mythSig.form === 'gold') {
-      var bodyId = uid('pbody');
-      var gf = goldForm(bodyId);
+    // Жар-птица-миф парит ПЕРЕД питомцем — иначе её прячут крылья и хвосты.
+    var phoenix = !!(mythSig && mythSig.form === 'orbit');
+    var bodyId = mythSig ? uid('pbody') : '';
+    var gf = mythSig ? formOf(mythSig.form, bodyId, !!opts.mini) : null;
+    if (gf) {
       sigDefs = gf.defs; sigBack = gf.back; sigFront = gf.front;
-      body = '<g id="' + bodyId + '" filter="' + gf.filter + '">' + body + '</g>';
+      body = '<g id="' + bodyId + '"' + (gf.filter ? ' filter="' + gf.filter + '"' : '') + (gf.bodyClass ? ' class="' + gf.bodyClass + ' sig-live"' : '') + '>' + body + '</g>';
     }
     var cls = 'pet-svg st-' + state + ' stage-' + stage + ' sp-' + sp + cls3 + (best ? ' best-' + best : '') + (mythSig ? ' sig-mythic sig-' + mythSig.form : '') +
       sigs.filter(function (x) { return x.act; }).map(function (x) { return ' sig-' + x.act; }).join('') + (opts.anim === false ? ' no-anim' : '') + (opts.mini ? ' mini' : '');
     return '<svg class="' + cls + '" viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="' + escAttr(opts.label || 'Питомец') + '">' +
-      sigDefs + bg + sigBack + (opts.styleIcon ? styleAura() : '') + (mythSig ? '' : rarityAura(best)) + layer('pet') + shadow + body + sigFront + layer('aura') + (opts.mini ? '' : extras(state)) + '</svg>';
+      sigDefs + bg + sigBack + (opts.styleIcon ? styleAura() : '') + (mythSig ? '' : rarityAura(best)) + (phoenix ? '' : layer('pet')) + shadow + body + (phoenix ? layer('pet') : '') + sigFront + layer('aura') + (opts.mini ? '' : extras(state)) + '</svg>';
   }
 
   // Одна вещь отдельно — для карточек лавки и гардероба. Для вещей на голову,

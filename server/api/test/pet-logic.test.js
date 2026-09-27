@@ -36,6 +36,8 @@ test('цены держатся в полосах редкости — доро�
       assert.ok(item.price === null || item.price >= 50000, `${item.id}: миф. только из коробки или от 50 000`);
       continue;
     }
+    // Легенда может быть «только из сундуков» (бывшие мифы-сияния, 27.09.2026).
+    if (item.rarity === 'legendary' && item.price === null) continue;
     const [lo, hi] = band[item.rarity];
     assert.ok(item.price >= lo && item.price <= hi, `${item.id}: ${item.price} вне ${lo}–${hi}`);
   }
