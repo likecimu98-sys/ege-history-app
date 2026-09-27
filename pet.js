@@ -58,9 +58,12 @@
     return solvingSeconds() >= need;
   }
 
-  function loadCatalog() {
-    if (S.catalog) return Promise.resolve(S.catalog);
-    return fetch(API + '/catalog', { credentials: 'same-origin' }).then(function (r) { return r.json(); }).then(function (cat) {
+  // version — какой каталог назвал сервер в состоянии кошелька. Если он новее
+  // загруженного, берём свежий мимо HTTP-кэша: иначе после выкладки новых вещей
+  // надетая обнова минут пять не рисовалась бы (каталог кэшируется на 5 минут).
+  function loadCatalog(version) {
+    if (S.catalog && (!version || S.catalog.version === version)) return Promise.resolve(S.catalog);
+    return fetch(API + '/catalog' + (version ? '?v=' + encodeURIComponent(version) : ''), { credentials: 'same-origin' }).then(function (r) { return r.json(); }).then(function (cat) {
       S.catalog = cat; S.items = {};
       (cat.items || []).forEach(function (i) { S.items[i.id] = i; });
       (cat.consumables || []).forEach(function (i) { S.items[i.id] = i; });
@@ -70,6 +73,9 @@
   }
 
   function rarityLabel(r) { var f = (S.catalog.rarities || []).find(function (x) { return x.id === r; }); return f ? f.label : r; }
+  // Звёзды редкости: ★ обычное … ★★★★★ миф — считываются быстрее цвета рамки.
+  var RAR_STARS = { common: 1, rare: 2, epic: 3, legendary: 4, mythic: 5 };
+  function stars(r) { var n = RAR_STARS[r] || 1; return new Array(n + 1).join('★'); }
   function slotLabel(s) { var f = (S.catalog.slots || []).find(function (x) { return x.id === s; }); return f ? f.label : s; }
 
   // ── Живая сцена питомца ──────────────────────────────────────────────────
@@ -288,6 +294,8 @@
     if (!force && Date.now() - S.lastFetch < 20000) return Promise.resolve(S.state);
     S.loading = true;
     return loadCatalog().then(function () { return api('/'); }).then(function (st) {
+      return loadCatalog(st && st.catalogVersion).then(function () { return st; });
+    }).then(function (st) {
       S.lastFetch = Date.now();
       apply(st);
       return st;
@@ -722,7 +730,8 @@
   function itemCard(item, extra, onclick, cls) {
     return '<button type="button" class="pet-item rar-' + item.rarity + ' ' + (cls || '') + '" onclick="' + onclick + '">' +
       '<span class="pet-item-art">' + PetArt.renderItem(item) + '</span>' +
-      '<b>' + esc(item.name) + '</b><i>' + rarityLabel(item.rarity) + ' · ' + esc(item.era) + '</i>' + (extra || '') + '</button>';
+      '<span class="pet-stars" aria-hidden="true">' + stars(item.rarity) + '</span>' +
+      '<b>' + esc(item.name) + '</b><span class="pet-rarity">' + rarityLabel(item.rarity) + '</span><i>' + esc(item.era) + '</i>' + (extra || '') + '</button>';
   }
 
   function paneWardrobe() {

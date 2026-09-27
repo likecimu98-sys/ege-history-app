@@ -166,7 +166,6 @@ html.dark .lb-ava { background: #262626; }
   background: var(--pet-card, #fff); border: 1px solid var(--pet-line, #ececf1); color: inherit; font: inherit; }
 .pet-item { border: 2px solid var(--rc, #ddd); cursor: pointer; position: relative; }
 .pet-item.worn { outline: 3px solid color-mix(in srgb, var(--rc) 35%, transparent); }
-.pet-item.rar-legendary, .pet-item.rar-mythic { background: linear-gradient(180deg, color-mix(in srgb, var(--rc) 12%, var(--pet-card, #fff)), var(--pet-card, #fff)); }
 .pet-card b, .pet-item b { font-size: 12.5px; line-height: 1.2; }
 .pet-card i, .pet-item i { font-style: normal; font-size: 11px; color: var(--pet-mute, #6b7280); line-height: 1.2; }
 .pet-item i { color: var(--rc); font-weight: 700; }
@@ -395,3 +394,32 @@ html.dark .petw-lv { background: #2e2342; color: #c4b5fd; }
 html.dark .pet-wheel-pin { border-top-color: #ececf1; }
 .pet-wheel-prize { font-size: 22px; font-weight: 900; animation: rl-pop .45s cubic-bezier(.3, 1.6, .5, 1); }
 .pet-wheel button { margin-top: 6px; border: 0; border-radius: var(--r-md); padding: 10px 12px; font-weight: 900; font-size: 15px; background: #22a35a; color: #fff; width: 100%; cursor: pointer; }
+
+/* ── Облик v3 (Подросток и старше): суставы в новых координатах ─────────── */
+.pet-svg.v3 .pet-arm-r { transform-origin: 126px 114px; }
+.pet-svg.v3 .pet-arm-l { transform-origin: 74px 114px; }
+.pet-svg.v3.act-sigh .pet-head { transform-origin: 100px 104px; }
+.pet-svg.v3.act-scratch .pet-arm-l { animation-name: pet-arm-scratch-v3; }
+@keyframes pet-arm-scratch-v3 { from { transform: rotate(110deg); } to { transform: rotate(135deg); } }
+.pet-svg .rar-glow { transform-box: fill-box; transform-origin: 50% 50%; animation: rar-glow 2.4s ease-in-out infinite; }
+@keyframes rar-glow { 0%, 100% { opacity: .35; transform: scale(1); } 50% { opacity: .65; transform: scale(1.08); } }
+.pet-svg .it-pulse { transform-box: fill-box; transform-origin: 50% 50%; animation: it-pulse 1.2s ease-in-out infinite; }
+@keyframes it-pulse { 0%, 100% { opacity: .35; transform: scale(.97); } 50% { opacity: 1; transform: scale(1.02); } }
+.pet-svg .it-ripple { transform-box: fill-box; transform-origin: 50% 50%; animation: it-ripple 3.6s ease-out infinite; }
+@keyframes it-ripple { from { transform: scale(.3); opacity: .9; } to { transform: scale(3); opacity: 0; } }
+.pet-svg .it-drop { animation: it-drop 1s cubic-bezier(.3, 1.4, .5, 1); }
+@keyframes it-drop { from { transform: translateY(-40px); opacity: 0; } }
+.pet-svg .it-mythic-lite { animation: it-glow 2.4s ease-in-out infinite; }
+
+/* ── Карточки вещей: редкость видна сразу (звёзды, плашка, блик) ────────── */
+.pet-item { overflow: hidden; }
+.pet-item > * { position: relative; z-index: 1; }
+.pet-item.rar-epic { background: linear-gradient(180deg, color-mix(in srgb, var(--r-epic) 14%, var(--pet-card, #fff)), var(--pet-card, #fff) 60%); }
+.pet-item.rar-legendary { background: linear-gradient(180deg, color-mix(in srgb, var(--r-legendary) 18%, var(--pet-card, #fff)), var(--pet-card, #fff) 60%); box-shadow: var(--e-2); }
+.pet-item.rar-mythic { background: linear-gradient(180deg, color-mix(in srgb, var(--r-mythic) 18%, var(--pet-card, #fff)), var(--pet-card, #fff) 60%); box-shadow: var(--e-2); animation: pet-myth-border 2s linear infinite; }
+@keyframes pet-myth-border { 0%, 100% { border-color: #ef4444; } 50% { border-color: #ffb319; } }
+.pet-item.rar-legendary::after, .pet-item.rar-mythic::after { content: ''; position: absolute; inset: -40%; background: linear-gradient(115deg, transparent 42%, rgba(255, 255, 255, .7) 50%, transparent 58%); animation: pet-sweep 2.8s linear infinite; pointer-events: none; }
+@keyframes pet-sweep { from { transform: translateX(-60%); } to { transform: translateX(60%); } }
+.pet-rarity { display: inline-block; margin-top: 2px; padding: 0 7px; border-radius: var(--r-full); font-size: 11px; font-weight: 900; color: #fff; background: var(--rc); text-transform: uppercase; letter-spacing: .03em; }
+.pet-stars { color: var(--rc); font-size: 11px; letter-spacing: 1px; line-height: 1; }
+.pet-svg.v3 .pet-halo { transform-origin: 100px 72px; }

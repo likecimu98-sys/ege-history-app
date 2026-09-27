@@ -185,6 +185,66 @@ const RAW = [
   ['aura_gold', 'aura', 'mythic', null, 'Золотые искры', 'Империя', ['a_sparks', '#ffd23f', '#e9c46a']],
   ['aura_fire', 'aura', 'mythic', null, 'Огонь Жар-птицы', 'Сказка', ['a_fire', '#ff7b00', '#ffd23f']],
   ['aura_vortex', 'aura', 'mythic', null, 'Алый вихрь', 'XX век', ['a_vortex', '#e0341a', '#ff8a8a']],
+
+  // ── Мемы (v3, 27.09.2026): чтобы наряжаться было смешно, а не только исторично ──
+  ['hat_foil', 'head', 'rare', 400, 'Шапочка из фольги', 'Мемы', ['foilhat', '#cfd6de', '#8a96a3']],
+  ['hat_sidecap', 'head', 'common', 90, 'Кепка набекрень', 'Мемы', ['sidecap', '#15151a', '#e0341a']],
+  ['hat_panama_ege', 'head', 'common', 110, 'Панамка «Я сдам ЕГЭ»', 'Мемы', ['panamaege', '#f4f1e6', '#d9d2bd', '#2f63c9']],
+  ['hat_halo', 'head', 'epic', 2000, 'Нимб отличника', 'Мемы', ['halo', '#ffd23f', '#b8912f']],
+  ['hat_horns', 'head', 'rare', 350, 'Рожки двоечника', 'Мемы', ['horns', '#d0342c']],
+  ['hat_paper_crown', 'head', 'common', 70, 'Бумажная корона', 'Мемы', ['papercrown', '#fff4c2', '#e0a458']],
+  ['hat_bucket', 'head', 'legendary', 7000, 'Ведро', 'Мемы', ['bucket', '#b7c0c9']],
+  ['face_thug', 'face', 'epic', 1800, 'Очки «Thug life»', 'Мемы', ['thug']],
+  ['face_gigachad', 'face', 'legendary', 9000, 'Челюсть гигачада', 'Мемы', ['gigachad', '#000000', '#3a2a1e']],
+  ['face_sigma', 'face', 'rare', 500, 'Сигма-взгляд', 'Мемы', ['sigma', '#15151a']],
+  ['face_bruise', 'face', 'common', 60, 'Синяк после контрольной', 'Мемы', ['bruise', '#7b4bb3', '#b04b8a']],
+  ['face_lashes', 'face', 'common', 80, 'Накладные ресницы', 'Мемы', ['lashes', '#15151a']],
+  ['face_unibrow', 'face', 'common', 70, 'Монобровь', 'Мемы', ['unibrow', '#2a1f18']],
+  ['body_tracksuit', 'body', 'common', 140, 'Треники с лампасами', 'Мемы', ['tracksuit', '#1f3a8a']],
+  ['body_fur_july', 'body', 'rare', 600, 'Шуба в июле', 'Мемы', ['furjuly', '#6b5a48', '#3f342a']],
+  ['body_bare_jacket', 'body', 'rare', 450, 'Пиджак на голое тело', 'Мемы', ['barejacket', '#15151a', '#e0341a']],
+  ['body_pajama', 'body', 'common', 120, 'Пижама с котиками', 'Мемы', ['pajama', '#9fc5e8', '#ffffff']],
+  ['body_sigma_suit', 'body', 'epic', 2800, 'Костюм сигмы', 'Мемы', ['sigmasuit', '#15151a', '#e0341a']],
+  ['neck_chain_100', 'neck', 'legendary', 8000, 'Цепь «ЕГЭ 100»', 'Мемы', ['chain100', '#e9c46a', '#8a5a00']],
+  ['neck_freshener', 'neck', 'common', 60, 'Ёлочка-вонючка', 'Мемы', ['freshener', '#2fa84f']],
+  ['neck_foil_bow', 'neck', 'common', 90, 'Бабочка из фольги', 'Мемы', ['foilbow', '#cfd6de', '#8a96a3']],
+  ['neck_patience', 'neck', 'rare', 500, 'Медаль «За терпение»', 'Мемы', ['medalpatience', '#c0c7d0', '#2f63c9']],
+  ['neck_long_scarf', 'neck', 'common', 100, 'Шарф в три метра', 'Мемы', ['longscarf', '#d0342c', '#ffffff']],
+  ['hand_slipper', 'hand', 'legendary', 7500, 'Бабушкин тапок', 'Мемы', ['slipper', '#ff8fb1', '#ffffff']],
+  ['hand_seeds', 'hand', 'common', 60, 'Семечки', 'Мемы', ['seeds', '#f4f1e6', '#2b2233']],
+  ['hand_bags', 'hand', 'common', 80, 'Пакет с пакетами', 'Мемы', ['bagofbags', '#f4f4f6', '#2f63c9']],
+  ['hand_cheat', 'hand', 'epic', 1500, 'Шпаргалка', 'Мемы', ['cheatsheet', '#fffbe6', '#2f63c9']],
+  ['hand_calc', 'hand', 'rare', 350, 'Калькулятор «Электроника»', 'СССР', ['calculator', '#6b737c', '#b8e0a0']],
+  ['hand_shawarma', 'hand', 'common', 100, 'Шаурма', 'Мемы', ['shawarma', '#e7d3a8', '#5bb04a']],
+  ['hand_mug', 'hand', 'common', 90, 'Кружка «Лучший историк»', 'Мемы', ['mughist', '#ffffff', '#d0342c']],
+  ['bg_carpet', 'bg', 'common', 100, 'Ковёр на стене', 'Мемы', ['bg_carpet', '#9b1c2c', '#e9c46a']],
+  ['bg_panel', 'bg', 'common', 90, 'Хрущёвка', 'СССР', ['bg_panel', '#b8b8b0']],
+  ['bg_minibus', 'bg', 'rare', 450, 'Маршрутка', 'Мемы', ['bg_minibus', '#f2c500']],
+  ['bg_759', 'bg', 'rare', 500, 'Кабинет истории в 7:59', 'Мемы', ['bg_759', '#2f5a3a']],
+  ['bg_gym', 'bg', 'rare', 550, 'Качалка', 'Мемы', ['bg_gym', '#2a2d33', '#e0341a']],
+  ['pet_capybara', 'pet', 'epic', 2200, 'Капибара', 'Мемы', ['c_capybara', '#9c6b3f', '#f59e0b']],
+  ['pet_goose', 'pet', 'rare', 500, 'Гусь-работяга', 'Мемы', ['c_goose', '#f4f4f6', '#f2b705']],
+  ['pet_dumpling', 'pet', 'common', 130, 'Кот-пельмень', 'Мемы', ['c_dumpling', '#f7f1e3']],
+  ['pet_pigeon', 'pet', 'common', 90, 'Голубь-курлык', 'Мемы', ['c_pigeon', '#9aa3ad', '#5bb04a']],
+  ['pet_roach', 'pet', 'common', 60, 'Таракан-сосед', 'Мемы', ['c_roach', '#7a4a24']],
+  ['aura_friday', 'aura', 'legendary', 6000, 'Вайб пятницы', 'Мемы', ['a_friday']],
+  ['aura_deadline', 'aura', 'legendary', 7000, 'Режим дедлайна', 'Мемы', ['a_deadline']],
+  ['aura_zen', 'aura', 'legendary', 6500, 'Абсолютное спокойствие', 'Мемы', ['a_zen']],
+
+  // ── Пак «Дед инсайд» (эстетика аниме-аватарок: белая чёлка, маска, zxc) ──
+  ['hat_white_bangs', 'head', 'epic', 2200, 'Белая чёлка', 'Дед инсайд', ['whitebangs', '#f4f4f6', '#c9ccd6']],
+  ['hat_headphones', 'head', 'rare', 550, 'Наушники zxc', 'Дед инсайд', ['headphones', '#15151a', '#e0341a']],
+  ['face_ghoul_mask', 'face', 'legendary', 10000, 'Маска с зубами', 'Дед инсайд', ['ghoulmask', '#15151a', '#f4f1e6']],
+  ['face_eyepatch', 'face', 'rare', 450, 'Повязка на глаз', 'Дед инсайд', ['eyepatch', '#15151a']],
+  ['face_red_eye', 'face', 'epic', 1600, 'Красный глаз', 'Дед инсайд', ['redeye', '#e0341a', '#0b0b0b']],
+  ['body_black_hoodie', 'body', 'common', 150, 'Чёрный худи оверсайз', 'Дед инсайд', ['blackhoodie', '#1b1b1f']],
+  ['body_scorpion', 'body', 'epic', 2400, 'Куртка со скорпионом', 'Дед инсайд', ['scorpion', '#e8e4da', '#e9c46a']],
+  ['neck_choker', 'neck', 'rare', 400, 'Цепь-чокер', 'Дед инсайд', ['choker', '#15151a', '#c0c7d0']],
+  ['hand_bandage', 'hand', 'rare', 400, 'Бинты', 'Дед инсайд', ['bandage', '#f4f1e6', '#d0342c']],
+  ['hand_chainsaw', 'hand', 'legendary', 8500, 'Бензопила', 'Дед инсайд', ['chainsaw', '#f08a24', '#c3cad2']],
+  ['hand_blue_fire', 'hand', 'mythic', null, 'Синий огонь', 'Дед инсайд', ['bluefire', '#3b82f6', '#bfe3ff']],
+  ['bg_rain_roof', 'bg', 'epic', 2200, 'Крыша под дождём', 'Дед инсайд', ['bg_rainroof', '#161a2b', '#9fb4c8']],
+  ['aura_1000_7', 'aura', 'mythic', null, '«1000-7»', 'Дед инсайд', ['a_thousand']],
 ];
 
 const ITEMS = RAW.map(([id, slot, rarity, price, name, era, art]) => ({
@@ -382,7 +442,7 @@ function publicCatalog() {
 }
 
 // Меняется вместе с содержимым каталога: клиент кэширует каталог по версии.
-const CATALOG_VERSION = '2026-09-28-1';
+const CATALOG_VERSION = '2026-09-28-2';
 
 module.exports = {
   RARITIES, RARITY_VALUE, DUPLICATE_SHARE, SLOTS, SPECIES, ITEMS, CONSUMABLES, BOXES,
