@@ -361,6 +361,7 @@ const CMD_OWNER = [
 const CMD_ADMIN = [
     { command: 'admin', description: '🛠 Админка: рассылки, роли, лимиты' },
     { command: 'premium', description: '💎 Подписка клуба ученику (ID/@user)' },
+    { command: 'coins', description: '🪙 Начислить монеты питомца (ID/@user/класс/всем)' },
     { command: 'premiumgroup', description: '♾ Группа безлимита (в группе / ID)' },
     { command: 'commands', description: '🗂 Все команды всех ролей' },
     { command: 'stats', description: '📈 Статистика' },
@@ -1285,6 +1286,83 @@ bot.callbackQuery(/^adm_tunlim:(\d+)$/, async (ctx) => {
         try { await ctx.editMessageReplyMarkup({ reply_markup: admTeachersKb() }); } catch (e) {}
     } catch (e) { console.error('tunlim:', e.message); await ctx.answerCallbackQuery('Ошибка'); }
 });
+// 🪙 Монеты «Летописчика» из бота (решение владельца 28.09.2026), только ADMIN_ID.
+//   /coins 123456789 500 причина      — одному (или @username)
+//   /coins class КОД 200 причина      — всему классу
+//   /coins all 50 причина             — всем, у кого есть питомец
+// Классу и «всем» — только после подтверждения кнопкой: это массовая операция.
+// Начисление идёт через API (журнал монет), ученику приходит сообщение.
+const COINS_PENDING = new Map();
+async function petGrant(body) {
+    const r = await fetch(`${HISTORY_API_URL.replace(/\/$/, '')}/internal/v1/pet/grant`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', authorization: `Bearer ${INTERNAL_API_TOKEN}` },
+        body: JSON.stringify(body),
+        signal: AbortSignal.timeout(120000),
+    });
+    const p = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(p.error || `http_${r.status}`);
+    return p.results || [];
+}
+async function runCoins(ctx, body) {
+    const results = await petGrant({ ...body, by: String(ctx.from.id) });
+    const ok = results.filter(x => x.ok), bad = results.filter(x => !x.ok);
+    const reason = String(body.reason || '').replace(/[<>]/g, '').slice(0, 200);
+    let sent = 0;
+    for (const x of ok.slice(0, 3000)) {
+        const chatId = Number(x.tgId);
+        if (!Number.isFinite(chatId) || chatId <= 0) continue;
+        await sendSafe(chatId, `🪙 +${body.amount} монет для твоего питомца!` + (reason ? `\n${reason}` : '') +
+            (x.hatched ? '\nПотрать их в лавке или на сундук 👇' : '\nЗаведи питомца — монеты уже ждут 👇'), { reply_markup: appKb() });
+        sent++;
+        await sleep(40);
+    }
+    const lines = [`🪙 Начислено по ${body.amount} монет: ${ok.length} ${ok.length === 1 ? 'ученику' : 'ученикам'}, сообщений отправлено: ${sent}.`];
+    if (ok.length === 1) lines.push(`Баланс теперь: ${ok[0].balance}.`);
+    if (bad.length) lines.push(`Не получилось: ${bad.length} (${[...new Set(bad.map(b => b.error))].join(', ')}).`);
+    return ctx.reply(lines.join('\n'));
+}
+bot.command('coins', async (ctx) => {
+    if (ctx.from.id !== ADMIN_ID) return;
+    const help = 'Формат:\n/coins 123456789 500 причина\n/coins @username 500 причина\n/coins class КОД_КЛАССА 200 причина\n/coins all 50 причина — всем, у кого есть питомец\nСумма — от 1 до 100 000.';
+    const parts = String(ctx.match || '').trim().split(/\s+/);
+    if (!parts[0]) return ctx.reply(help);
+    let target = parts[0], i = 1, body = {};
+    if (target === 'class') { body.classCode = parts[1]; i = 2; }
+    else if (target === 'all') { body.all = true; }
+    else if (/^\d{5,15}$/.test(target)) { body.tgIds = [target]; }
+    else if (/^@?\w{3,32}$/.test(target)) {
+        const u = db.prepare('SELECT * FROM users WHERE lower(username) = lower(?)').get(target.replace(/^@/, ''));
+        if (!u || !u.id) return ctx.reply('Не нашёл такого пользователя (нужен числовой ID или @username из бота).');
+        body.tgIds = [String(u.id)];
+    } else return ctx.reply(help);
+    const amount = Math.round(Number(parts[i]));
+    if (!Number.isFinite(amount) || amount <= 0 || amount > 100000) return ctx.reply(help);
+    body.amount = amount;
+    body.reason = parts.slice(i + 1).join(' ').slice(0, 200);
+    if (body.classCode === undefined && !body.all) {
+        try { return await runCoins(ctx, body); } catch (e) { console.error('coins:', e.message); return ctx.reply('Не вышло: ' + e.message); }
+    }
+    if (body.classCode !== undefined && !/^[\w-]{2,64}$/.test(String(body.classCode || ''))) return ctx.reply(help);
+    const id = Math.random().toString(36).slice(2, 10);
+    COINS_PENDING.set(id, { body, at: Date.now() });
+    const kb = new InlineKeyboard().text('✅ Начислить', `coins_ok:${id}`).text('Отмена', `coins_no:${id}`);
+    return ctx.reply(`Начислить по ${amount} монет ${body.all ? 'ВСЕМ владельцам питомцев' : 'всему классу ' + body.classCode}?` +
+        (body.reason ? `\nПричина: ${body.reason}` : ''), { reply_markup: kb });
+});
+bot.callbackQuery(/^coins_(ok|no):(\w+)$/, async (ctx) => {
+    if (ctx.from.id !== ADMIN_ID) return ctx.answerCallbackQuery('Только для админа');
+    const [, act, id] = ctx.match;
+    const job = COINS_PENDING.get(id); COINS_PENDING.delete(id);
+    try { await ctx.editMessageReplyMarkup({ reply_markup: new InlineKeyboard() }); } catch (e) {}
+    if (act === 'no' || !job || Date.now() - job.at > 15 * 60 * 1000) {
+        await ctx.answerCallbackQuery(act === 'no' ? 'Отменено' : 'Устарело — отправь команду заново');
+        return;
+    }
+    await ctx.answerCallbackQuery('Начисляю…');
+    try { await runCoins(ctx, job.body); } catch (e) { console.error('coins:', e.message); await ctx.reply('Не вышло: ' + e.message); }
+});
+
 // 💎 подписка клуба на конкретного ученика (переключатель)
 bot.command('premium', async (ctx) => {
     if (ctx.from.id !== ADMIN_ID) return;

@@ -435,6 +435,19 @@ test('экономика v3, питомец, коробки, итоги, рей�
     assert.equal(C.BY_ID.get('hat_laurel').rarity, 'epic');
   }
 
+  // 25. Начисление администратором: только плюс, с потолком, строкой журнала.
+  {
+    const uG = await newUser('Подарочный');
+    let r = await tx(c => W.grant(c, uG, 12000, 'За победу в олимпиаде', 'admin'));
+    assert.equal(r.balance, 12000); assert.equal(r.hatched, false, 'кошелёк заводится и без питомца — монеты ждут');
+    r = await tx(c => W.grant(c, uG, 500, '', 'admin'));
+    assert.equal(r.balance, 12500);
+    await assert.rejects(tx(c => W.grant(c, uG, -100, 'минус', 'admin')), /bad_amount/);
+    await assert.rejects(tx(c => W.grant(c, uG, W.GRANT_MAX + 1, 'много', 'admin')), /bad_amount/);
+    const led = await db.query("SELECT count(*)::int n, sum(delta)::int s FROM pet_ledger WHERE user_id=$1 AND reason='grant'", [uG]);
+    assert.equal(led.rows[0].n, 2); assert.equal(led.rows[0].s, 12500);
+  }
+
   // Журнал сходится с балансом у каждого (кроме старичка: его журнал — выдуманный v2).
   const sums = await db.query(`SELECT w.user_id, w.balance::int b, COALESCE(sum(l.delta),0)::int s
     FROM pet_wallets w LEFT JOIN pet_ledger l ON l.user_id=w.user_id GROUP BY w.user_id, w.balance`);

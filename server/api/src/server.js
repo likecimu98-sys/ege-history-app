@@ -406,6 +406,42 @@ async function handleSecondPartClasses(req, res) {
 
 async function handleInternal(req, res, url) {
   if (!internalRequest(req)) throw Object.assign(new Error('forbidden'), { statusCode: 403 });
+  // 🪙 Начисление монет «Летописчика» из бота (/coins, только владелец сервиса).
+  // Адресаты: tgIds, весь класс (classCode) или все владельцы питомцев (all).
+  if (req.method === 'POST' && url.pathname === '/internal/v1/pet/grant') {
+    const body = await readJson(req);
+    let tgIds = Array.isArray(body.tgIds) ? body.tgIds.map(String).filter(x => /^\d{3,20}$/.test(x)) : [];
+    if (body.classCode) {
+      const { rows } = await pool.query(
+        "SELECT doc_id FROM student_profiles WHERE data->>'classCode'=$1 AND data->>'_mergedInto' IS NULL", [String(body.classCode)]);
+      tgIds = tgIds.concat(rows.map(r => String(r.doc_id)));
+    }
+    const byUser = new Map();
+    if (body.all === true) {
+      const { rows } = await pool.query(`SELECT w.user_id,
+          (SELECT i.subject FROM user_identities i WHERE i.user_id = w.user_id AND i.provider = 'telegram' LIMIT 1) AS tg
+        FROM pet_wallets w WHERE w.pet IS NOT NULL`);
+      for (const r of rows) byUser.set(r.user_id, r.tg ? String(r.tg) : null);
+    }
+    for (const tg of [...new Set(tgIds)].slice(0, 5000)) {
+      const { rows } = await pool.query(`SELECT user_id FROM student_profiles WHERE doc_id=$1 AND user_id IS NOT NULL
+        UNION ALL SELECT user_id FROM user_identities WHERE provider='telegram' AND subject=$1 LIMIT 1`, [tg]);
+      if (rows[0]?.user_id) byUser.set(rows[0].user_id, tg);
+      else byUser.set('missing:' + tg, tg);
+    }
+    const results = [];
+    for (const [userId, tg] of byUser) {
+      if (String(userId).startsWith('missing:')) { results.push({ tgId: tg, ok: false, error: 'no_account' }); continue; }
+      try {
+        const r = await tx(client => petWallet.grant(client, userId, body.amount, body.reason, body.by));
+        results.push({ tgId: tg, ok: true, ...r });
+      } catch (error) { results.push({ tgId: tg, ok: false, error: error.message }); }
+    }
+    await pool.query('INSERT INTO audit_events(action, target, details) VALUES($1, $2, $3)',
+      ['pet.grant', body.all ? 'all' : (body.classCode || 'users'), JSON.stringify({ amount: body.amount, reason: body.reason, by: body.by,
+        ok: results.filter(r => r.ok).length, failed: results.filter(r => !r.ok).length })]);
+    return json(res, 200, { results });
+  }
   if (req.method === 'POST' && url.pathname === '/internal/v1/store/get') {
     const body = await readJson(req);
     const doc = await store.get(body.path, null, { internal: true });

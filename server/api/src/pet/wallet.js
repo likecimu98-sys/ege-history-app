@@ -374,6 +374,21 @@ function questsView(w, counters, now) {
     progress: counters ? Math.min(i.target, Math.max(0, (counters[i.kind] || 0) - i.base)) : num(i.progress) })) };
 }
 
+// ── Начисление администратором (решение владельца 28.09.2026) ─────────────
+// Подарок, приз, компенсация — только через журнал: строка 'grant' с причиной и
+// тем, кто начислил, поэтому сумма журнала по-прежнему сходится с балансом.
+// Только плюс и с потолком: это не инструмент правки балансов вручную.
+// Монеты по-прежнему не продаются — начислять их за деньги нельзя.
+const GRANT_MAX = 100000;
+async function grant(db, userId, amount, reason, by, now = Date.now()) {
+  const n = Math.round(Number(amount));
+  if (!Number.isFinite(n) || n <= 0 || n > GRANT_MAX) throw httpError(400, 'bad_amount');
+  const w = await lockWallet(db, userId);
+  await move(db, w, n, 'grant', 'grant:' + now, { reason: String(reason || '').replace(/[\u0000-\u001f<>]/g, ' ').slice(0, 200), by: String(by || '').slice(0, 40) });
+  await saveWallet(db, w);
+  return { balance: Number(w.balance), hatched: !!w.pet };
+}
+
 // ── Ежедневный круг ────────────────────────────────────────────────────────
 // Шаги отмечаются там, где случаются (колесо, задания, голос, реакция), в
 // counters — поэтому круг виден в каждом ответе, без лишних запросов.
@@ -1013,7 +1028,7 @@ async function mergeUserData(client, primaryId, secondaryId) {
 module.exports = {
   spin, dayTick, makeQuests, progressQuests, boostActive, PROFILE_COUNTERS, addFragment,
   tap, levelOf, xpForLevel, stageOf, levelReward, addXp, STAGES, TAP_COOLDOWN_MS,
-  craft, switchPet, speciesOwners, speciesShowcase, stageName, roundView, markRound, claimRound, weekOf, ownerName, addNews, styleIconActive, rewardReferral,
+  craft, switchPet, speciesOwners, speciesShowcase, stageName, roundView, markRound, claimRound, grant, GRANT_MAX, weekOf, ownerName, addNews, styleIconActive, rewardReferral,
   mskDay, prevDay, isNight, decayPet, petMoodState, profileCounters, credit, view, getState, hatch,
   buy, use, equip, rename, openBox, rollRarity, rewardAchievements, paintNick, rarityShowcase,
   mergeUserData, lockWallet, saveWallet, addItem, move, readWallet, inventory, nameStyleView, httpError,
