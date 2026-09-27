@@ -287,6 +287,8 @@ window.creditNorm = function (n, task) {
     s.dailyStats[today].solved += n;
     s.totalSolvedEver = (s.totalSolvedEver || 0) + n;
     if (task && s.solvedByTask) s.solvedByTask[task] = (s.solvedByTask[task] || 0) + n;
+    // Питомец (pet.js) выскакивает в углу и радуется верному ответу.
+    try { window.dispatchEvent(new CustomEvent('pet:solved', { detail: { n } })); } catch (e) {}
 };
 
 function getFilteredPool(period, limit) {
@@ -595,6 +597,7 @@ function updateScoreAndStats(linesCount, isPerfectHw, egePointsToAdd) {
     // Считаем ДО инкремента, иначе событие никогда не сработает.
     if (linesCount > 0 && !s.totalSolvedEver && window.trackEvent) window.trackEvent('first_task_solved', { task: curTask });
     s.totalSolvedEver += linesCount;
+    if (linesCount > 0) { try { window.dispatchEvent(new CustomEvent('pet:solved', { detail: { n: linesCount } })); } catch (e) {} }
     if (!s.solvedByTask) s.solvedByTask = { task1: 0, task3: 0, task4: 0, task5: 0, task7: 0 };
     s.solvedByTask[curTask] = (s.solvedByTask[curTask] || 0) + linesCount;
 

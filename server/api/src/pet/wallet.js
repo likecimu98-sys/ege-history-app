@@ -404,8 +404,10 @@ async function claimRound(db, userId, now = Date.now()) {
   const streak = c.roundLast === prevDay(today) ? num(c.roundStreak) + 1 : 1;
   w.counters = { ...c, roundDay: today, roundLast: today, roundStreak: streak };
   await addItem(db, userId, C.DAILY_ROUND.reward, 1, `round:${today}`);
+  const fragment = streak % C.DAILY_ROUND.fragmentEvery === 0 ? C.DAILY_ROUND.fragment : null;
+  if (fragment) addFragment(w, fragment, 1);
   await saveWallet(db, w);
-  return view(w, await inventory(db, userId), now, { roundReward: { box: C.DAILY_ROUND.reward, streak } });
+  return view(w, await inventory(db, userId), now, { roundReward: { box: C.DAILY_ROUND.reward, streak, fragment } });
 }
 
 // Колесо удачи: одно вращение в московские сутки, бросок на сервере.

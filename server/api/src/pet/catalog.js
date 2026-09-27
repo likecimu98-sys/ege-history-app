@@ -53,8 +53,12 @@ const RARE_SPECIES_DROPS = {
 // Осколки — запасной путь к редкому виду: падают из ларцов, за 1-е место недели,
 // за 30 дней серии входов и изредка с колеса.
 const FRAGMENTS = {
-  faberge: { name: 'Осколок Фаберже', icon: '🥚', species: 'tsar', need: 10 },
-  dark: { name: 'Осколок тьмы', icon: '🖤', species: 'ghoul', need: 6 },
+  faberge: { name: 'Осколок Фаберже', icon: '🥚', species: 'tsar', need: 10,
+    sources: 'колесо (1%), 1-е место недели, 30 дней серии входов, ларцы (3%)' },
+  // Осколки тьмы раньше падали только из ларцов — Гуль по осколкам выходил
+  // труднее Николая, хотя задуман проще. Теперь ещё колесо и 7 кругов подряд.
+  dark: { name: 'Осколок тьмы', icon: '🖤', species: 'ghoul', need: 6,
+    sources: 'колесо (1%), каждые 7 ежедневных кругов подряд, ларцы (3%)' },
 };
 const FRAGMENT_DROPS = {
   box_tsar: { faberge: 3, dark: 3 },
@@ -66,7 +70,7 @@ const STABLE_MAX = 8;
 // 5 голосов в «Кто круче?» и одна реакция чужому питомцу. За весь круг —
 // сундук, раз в московские сутки. Каждый шаг ведёт в свой уголок питомца,
 // поэтому круг заодно знакомит с тем, что иначе лежит глубоко во вкладках.
-const DAILY_ROUND = { votes: 5, reward: 'box_chest' };
+const DAILY_ROUND = { votes: 5, reward: 'box_chest', fragmentEvery: 7, fragment: 'dark' };
 
 // Короткие исторические справки к вещам — видны при примерке. Шутка работает,
 // только если за ней стоит факт из курса.
@@ -387,7 +391,7 @@ const LOGIN_STREAK = [
 
 // Колесо удачи: одно вращение в сутки. Сумма весов — 100.
 const WHEEL = [
-  { id: 'c20', w: 26, coins: 20, label: '20' },
+  { id: 'c20', w: 25, coins: 20, label: '20' },
   { id: 'c50', w: 22, coins: 50, label: '50' },
   { id: 'c100', w: 12, coins: 100, label: '100' },
   { id: 'c150', w: 5, coins: 150, label: '150' },
@@ -397,6 +401,7 @@ const WHEEL = [
   { id: 'boost', w: 6, item: 'boost_elixir', label: '⚡' },
   { id: 'tsar', w: 3, item: 'box_tsar', label: '👑' },
   { id: 'frag', w: 1, fragment: 'faberge', label: '🥚' },
+  { id: 'fragd', w: 1, fragment: 'dark', label: '🖤' },
 ];
 
 // Задания дня: одно «строки» всегда, ещё два — из остальных. kind — счётчик
@@ -498,7 +503,7 @@ function publicCatalog() {
 }
 
 // Меняется вместе с содержимым каталога: клиент кэширует каталог по версии.
-const CATALOG_VERSION = '2026-09-28-6';
+const CATALOG_VERSION = '2026-09-28-7';
 
 module.exports = {
   RARITIES, RARITY_VALUE, DUPLICATE_SHARE, SLOTS, SPECIES, ITEMS, CONSUMABLES, BOXES,

@@ -390,8 +390,13 @@ test('экономика v3, питомец, коробки, итоги, рей�
     const reacted = await tx(c => S.react(c, vera.user_id, gena.public_id, '💯', tNow));
     assert.equal(reacted.round.done, true, JSON.stringify(reacted.round));
     const before = (await W.inventory(db, vera.user_id)).box_chest || 0;
+    await db.query(`UPDATE pet_wallets SET counters = counters || jsonb_build_object('roundLast', $2::text, 'roundStreak', 6) WHERE user_id=$1`,
+      [vera.user_id, W.prevDay(today)]);
     st = await tx(c => W.claimRound(c, vera.user_id, tNow));
     assert.equal(st.inventory.box_chest, before + 1);
+    assert.equal(st.roundReward.streak, 7);
+    assert.equal(st.roundReward.fragment, 'dark', '7-й круг подряд — осколок тьмы');
+    assert.equal(st.fragments.dark, 1);
     assert.equal(st.round.claimed, true);
     await assert.rejects(tx(c => W.claimRound(c, vera.user_id, tNow)), /round_claimed/);
 

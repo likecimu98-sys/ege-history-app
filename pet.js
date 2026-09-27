@@ -547,16 +547,15 @@
     var need = needs(st);
     body.innerHTML =
       '<div class="pet-grow">' + (p.nextStage ? 'На ' + p.nextStage.level + '-м уровне ' + esc(p.name) + ' вырастет: станет «' + esc(p.nextStage.name) + '»' : esc(p.name) + ' — мудрец. Выше только звёзды ✨') + '</div>' +
-      dayPanel(st) +
+      roundCard(st) +
       '<div class="pet-quick">' +
         quickBtn('feed', '🍲', 'Покормить', need.feed) + quickBtn('heal', '💊', 'Лечить', need.heal) +
         quickBtn('play', '🎲', 'Играть', need.play) + quickBtn('tap', '✋', 'Погладить', false) +
       '</div>' +
-      '<div class="pet-stats">' +
+      '<div class="pet-stats mini">' +
         statRow('🍲', 'Сытость', p.sat, 'b-sat') + statRow('😊', 'Настроение', p.mood, 'b-mood') + statRow('❤️', 'Здоровье', p.health, 'b-hp') +
       '</div>' +
-      '<div class="pet-earn">Сегодня заработано <b>' + fmt(daily.earned) + '</b> из ' + fmt(daily.cap) + ' ' + COIN +
-      '<br><span>' + ratesText() + '</span></div>' +
+      todayFold(st, daily) +
       '<div class="pet-tabs">' + TABS.map(function (t) { return '<button type="button" class="' + (S.tab === t[0] ? 'on' : '') + '" onclick="PetUI.tab(\'' + t[0] + '\')">' + t[1] + '</button>'; }).join('') + '</div>' +
       '<div class="pet-pane">' + pane() + '</div>';
   }
@@ -580,7 +579,7 @@
     var goal = d.nextChest || 3;
     var from = Math.max(0, goal - 7);
     for (var i = from + 1; i <= goal; i++) streakDots += '<i class="' + (i <= d.loginStreak ? 'on' : '') + (i === goal ? ' chest' : '') + '"></i>';
-    var html = '<div class="pet-day">' + roundCard(st) +
+    var html = '<div class="pet-day">' +
       '<div class="pet-day-row">' +
         (d.spinReady ? '<button type="button" class="pet-day-chip hot" onclick="PetUI.openWheel()">🎡 Крутить колесо</button>' : '<button type="button" class="pet-day-chip" disabled>🎡 Завтра снова</button>') +
         boost +
@@ -590,18 +589,18 @@
     if (q && q.list) {
       html += '<div class="pet-quests"><b>🎯 Задания дня' + (q.allDone ? ' — все выполнены!' : ' · за все три — сундук') + '</b>' + q.list.map(function (it) {
         var pct = Math.round(it.progress / Math.max(1, it.target) * 100);
-        return '<div class="pet-quest' + (it.done ? ' done' : '') + '"><span>' + (it.done ? '✅ ' : '') + esc(it.text) + '</span>' +
-          '<span class="petw-bar"><span style="width:' + Math.max(4, pct) + '%"></span></span><em>' + it.progress + '/' + it.target + ' · +' + it.reward + '</em></div>';
+        return '<button type="button" class="pet-quest' + (it.done ? ' done' : '') + '"' + (it.done ? ' disabled' : ' onclick="PetUI.questGo(\'' + it.kind + '\')"') + '><span>' + (it.done ? '✅ ' : '') + esc(it.text) + (it.done ? '' : ' ›') + '</span>' +
+          '<span class="petw-bar"><span style="width:' + Math.max(4, pct) + '%"></span></span><em>' + it.progress + '/' + it.target + ' · +' + it.reward + '</em></button>';
       }).join('') + '</div>';
     }
     return html + '</div>';
   }
   // «Ежедневный круг»: четыре шага, каждый — кнопка туда, где его сделать.
   var ROUND_STEPS = {
-    spin: { ico: '🎡', text: 'Покрути колесо', go: 'PetUI.openWheel()' },
-    quests: { ico: '🎯', text: 'Выполни 3 задания дня', go: 'PetUI.close()' },
-    votes: { ico: '⚔️', text: 'Проголосуй в «Кто круче?»', go: 'PetUI.battle()' },
-    react: { ico: '🔥', text: 'Оцени чужого питомца в топе', go: 'PetUI.openTop()' },
+    spin: { ico: '🎡', text: 'Колесо удачи', go: 'PetUI.openWheel()' },
+    quests: { ico: '🎯', text: '3 задания дня', go: 'PetUI.questGo()' },
+    votes: { ico: '⚔️', text: '«Кто круче?»', go: 'PetUI.battle()' },
+    react: { ico: '🔥', text: 'Реакция в топе', go: 'PetUI.openTop()' },
   };
   function roundCard(st) {
     var r = st.round; if (!r || !r.steps) return '';
@@ -616,12 +615,32 @@
         '<span>' + (x.done ? '✅' : m.ico) + '</span>' + esc(label) + (x.done ? '' : '<em>›</em>') + '</button>';
     }).join('');
     return '<div class="pet-round' + (r.done && !r.claimed ? ' ready' : '') + '"><b>' + head + '</b>' +
-      (r.claimed ? '' : steps) +
+      (r.claimed ? '' : '<div class="pet-round-grid">' + steps + '</div>') +
       (r.done && !r.claimed ? '<button type="button" class="go" onclick="PetUI.claimRound()">Забрать сундук 🧰</button>' : '') +
       (r.streak > 1 ? '<small>Кругов подряд: ' + r.streak + '</small>' : '') + '</div>';
   }
   function claimRound() {
-    act('/round', {}, function () { confetti(); toast('🧰', 'Сундук летописца — в кладовой! Открой во вкладке «Сундуки»', 'gold'); });
+    act('/round', {}, function (st) {
+      confetti(); toast('🧰', 'Сундук летописца — в кладовой! Открой во вкладке «Сундуки»', 'gold');
+      var rr = st.roundReward || {};
+      if (rr.fragment) setTimeout(function () { toast('🖤', rr.streak + ' кругов подряд — осколок тьмы! Собери 6 — и у тебя Гуль', 'gold'); }, 1600);
+    });
+  }
+  // Задание дня → прямо в задание. Без kind — первое невыполненное.
+  var QUEST_GO = {
+    duelGames: function () { if (window.startDuelSearch) window.startDuelSearch(); },
+    duelWins: function () { if (window.startDuelSearch) window.startDuelSearch(); },
+    fipiPoints: function () { if (window.openExamMode) window.openExamMode(); },
+    mocksDone: function () { if (window.openExamMode) window.openExamMode(); },
+  };
+  function questGo(kind) {
+    var q = S.state && S.state.quests;
+    if (!kind && q && q.list) { var first = q.list.find(function (x) { return !x.done; }); kind = first ? first.kind : 'solved'; }
+    close();
+    setTimeout(function () {
+      var fn = QUEST_GO[kind];
+      if (fn) fn(); else if (window.mainActionGo) window.mainActionGo();
+    }, 260);
   }
   function openTop() {
     close();
@@ -631,6 +650,54 @@
   function takeRound(r) {
     if (r && r.round && S.state) { S.state.round = r.round; if (isOpen()) renderModal(); }
   }
+
+  // ── Питомец рядом во время решения ─────────────────────────────────────────
+  // Вся идея — «решаю, и моему питомцу хорошо». Раньше это было видно только в
+  // лобби, всплывашкой; теперь на каждый верный ответ питомец выскакивает в
+  // углу экрана задания, радуется и показывает монеты. Тапы проходят сквозь
+  // него — мешать решению он не должен. Цифра монет — оценка по ставке каталога
+  // (сервер начислит по счётчикам профиля при следующем заходе в лобби).
+  var buddy = { el: null, hide: 0, lines: 0 };
+  var BUDDY_SAY = ['Ням! Сытость растёт', 'Так держать!', 'Ещё строчку!', 'Копим на обновку 😎', 'Я расту!', 'Умница!', 'Вкусно решаешь!'];
+  function gameBuddy(n) {
+    var st = S.state;
+    if (!st || !st.hatched || !st.pet || !S.catalog || isOpen() || !window.PetArt) return;
+    if (!buddy.el) {
+      buddy.el = document.createElement('div');
+      buddy.el.className = 'pet-game-buddy';
+      buddy.el.setAttribute('aria-hidden', 'true');
+      document.body.appendChild(buddy.el);
+    }
+    var eq = st.pet.sick ? {} : (st.equipped || {});
+    var sig = [st.pet.species, st.pet.stage, st.pet.sick, JSON.stringify(eq), !!st.styleIcon].join('|');
+    if (buddy.el._sig !== sig) {
+      buddy.el.innerHTML = '<div class="pgb-art">' + PetArt.render({ species: st.pet.species, stage: st.pet.stage, state: 'happy', items: S.items, equipped: eq, mini: true, styleIcon: !!st.styleIcon }) + '</div>';
+      buddy.el._sig = sig;
+    }
+    var rates = (S.catalog.economy || {}).rates || {};
+    var boost = st.boostUntil && st.boostUntil > Date.now() ? 1.5 : 1;
+    var d = st.daily || {};
+    var coins = Math.round(n * (rates.solved || 2) * boost);
+    if (d.cap && d.earned >= d.cap) coins = 0;
+    if (coins) { d.earned = (d.earned || 0) + coins; st.balance = (st.balance || 0) + coins; }
+    st.pet.sat = Math.min(100, (st.pet.sat || 0) + n * 0.4);
+    var el = buddy.el;
+    el.classList.remove('hop'); void el.offsetWidth; el.classList.add('show', 'hop');
+    if (coins) {
+      var f = document.createElement('span'); f.className = 'pgb-coin'; f.innerHTML = '+' + coins + ' ' + COIN;
+      el.appendChild(f); setTimeout(function () { f.remove(); }, 1300);
+    }
+    var before = buddy.lines; buddy.lines += n;
+    var old = el.querySelector('.pgb-say'); if (old) old.remove();
+    if (Math.floor(before / 10) !== Math.floor(buddy.lines / 10) || before === 0) {
+      var b = document.createElement('span'); b.className = 'pgb-say';
+      if (before === 0) b.innerHTML = esc(st.pet.name || '') + ' рядом! +' + (rates.solved || 2) + ' ' + COIN + ' за строку'; else b.textContent = pick(BUDDY_SAY);
+      el.appendChild(b); setTimeout(function () { b.remove(); }, 2600);
+    }
+    clearTimeout(buddy.hide);
+    buddy.hide = setTimeout(function () { el.classList.remove('show'); }, 5000);
+  }
+  window.addEventListener('pet:solved', function (e) { try { gameBuddy(Math.max(1, Number(e.detail && e.detail.n) || 1)); } catch (_) {} });
 
   // ── Микро-гайд: пять карточек, один раз после знакомства и по кнопке «?» ──
   var GUIDE_KEY = 'pet_guide_v3';
@@ -743,7 +810,7 @@
     return '<svg viewBox="0 0 200 200" class="pet-wheel-svg"><g id="pet-wheel-rot" style="transform-origin:100px 100px;transform:rotate(' + (rot || 0) + 'deg)">' + s + '</g><circle cx="100" cy="100" r="14" fill="#fff" stroke="#1f2330" stroke-width="3"/></svg>';
   }
   function openWheel() {
-    sheet('<div class="pet-wheel"><b>🎡 Колесо удачи</b><i>Одно вращение в день. Бывает даже осколок Фаберже!</i>' +
+    sheet('<div class="pet-wheel"><b>🎡 Колесо удачи</b><i>Одно вращение в день. Бывает даже осколок Фаберже или тьмы!</i>' +
       '<div class="pet-wheel-box"><div class="pet-wheel-pin"></div>' + wheelSvg(0) + '</div>' +
       '<div id="pet-wheel-res"></div><button type="button" class="go" id="pet-wheel-go" onclick="PetUI.spin()">Крутить!</button></div>');
   }
@@ -759,7 +826,7 @@
       var ticks = 0, tk = setInterval(function () { if (++ticks < 22) haptic('light'); else clearInterval(tk); }, 180);
       setTimeout(function () {
         clearInterval(tk); haptic('success');
-        var prize = r.coins ? '+' + fmt(r.coins) + ' монет' : r.fragment ? 'Осколок Фаберже! 🥚' : (S.items[r.item] ? S.items[r.item].name : r.item);
+        var prize = r.coins ? '+' + fmt(r.coins) + ' монет' : r.fragment ? (r.fragment === 'dark' ? 'Осколок тьмы! 🖤' : 'Осколок Фаберже! 🥚') : (S.items[r.item] ? S.items[r.item].name : r.item);
         var res = $('pet-wheel-res'); if (res) res.innerHTML = '<div class="pet-wheel-prize">' + esc(prize) + '</div>';
         if (btn) { btn.disabled = false; btn.textContent = 'Забрать'; btn.onclick = function () { closeSheet(); }; }
         if (r.fragment || r.item === 'box_tsar') confetti();
@@ -791,8 +858,23 @@
   }
 
   function statRow(ico, label, v, cls) {
-    return '<div class="pet-stat"><span>' + ico + ' ' + label + '</span><span class="petw-bar big ' + cls + '"><span style="width:' + Math.max(3, v) + '%"></span></span><b>' + v + '</b></div>';
+    return '<div class="pet-stat" title="' + label + '"><span>' + ico + '</span><span class="petw-bar big ' + cls + '"><span style="width:' + Math.max(3, v) + '%"></span></span><b>' + v + '</b></div>';
   }
+  // «Сегодня» — колесо, ускоритель, серия, задания дня, заработок. Свёрнуто в
+  // одну строку-сводку: самое срочное видно и так, остальное — по тапу.
+  function todayFold(st, daily) {
+    var d = st.daily || {}, q = st.quests, bits = [];
+    if (d.spinReady) bits.push('🎡 колесо ждёт');
+    if (st.boostUntil && st.boostUntil > Date.now()) bits.push('⚡ ускоритель');
+    bits.push('🔥 ' + (d.loginStreak || 0) + ' дн.');
+    if (q && q.list) bits.push('🎯 ' + q.list.filter(function (x) { return x.done; }).length + '/' + q.list.length);
+    bits.push(COIN + ' ' + fmt(daily.earned) + ' сегодня');
+    return '<div class="pet-today' + (S.todayOpen ? ' open' : '') + '">' +
+      '<button type="button" class="pet-today-head" onclick="PetUI.toggleToday()"><b>📅 Сегодня</b><span>' + bits.join(' · ') + '</span><em>' + (S.todayOpen ? '▴' : '▾') + '</em></button>' +
+      (S.todayOpen ? dayPanel(st) + '<div class="pet-earn">Сегодня заработано <b>' + fmt(daily.earned) + '</b> из ' + fmt(daily.cap) + ' ' + COIN +
+        '<br><span>' + ratesText() + '</span></div>' : '') + '</div>';
+  }
+  function toggleToday() { S.todayOpen = !S.todayOpen; renderModal(); }
 
   function pane() {
     if (S.tab === 'wardrobe') return paneWardrobe();
@@ -868,6 +950,7 @@
         '<span class="pet-rare-art">' + PetArt.render({ species: sp.id, stage: 'adult', state: 'ok', items: S.items, equipped: {}, mini: true }) + '</span>' +
         '<div><b>' + esc(sp.name) + '</b>' +
         '<i>Не продаётся. Сундук — ' + pctText(chest) + ', Царский ларец — ' + pctText(tsar) + ', или собери ' + f.need + ' ' + f.icon + ' ' + plural(f.need, 'осколок', 'осколка', 'осколков') + '.</i>' +
+        (f.sources ? '<i>' + f.icon + ' Осколки: ' + esc(f.sources) + '</i>' : '') +
         (n2 != null ? '<i>Есть у ' + n2 + ' ' + plural(n2, 'человека', 'человек', 'человек') + '</i>' : '') +
         '<span class="petw-bar"><span style="width:' + Math.min(100, Math.round(n / f.need * 100)) + '%;background:var(--r-mythic)"></span></span>' + btn + '</div></div>';
     }).join('') + '</div>';
@@ -1552,7 +1635,7 @@
     use: use, buy: buy, toggle: toggle, undressAll: undressAll, tryOn: tryOn, buyWear: buyWear, closeSheet: closeSheet,
     quick: quick, tapPet: tapPet, widgetTap: widgetTap, boost: boost, openWheel: openWheel, spin: spin, switchPet: switchPet, craft: craft,
     profile: profile, react: react, battle: battle, vote: vote, share: share, shareSend: shareSend,
-    claimRound: claimRound, openTop: openTop, guide: guide, guideDone: guideDone, guideGo: guideGo, topHint: topHint,
+    claimRound: claimRound, openTop: openTop, questGo: questGo, toggleToday: toggleToday, guide: guide, guideDone: guideDone, guideGo: guideGo, topHint: topHint,
     rename: rename, paint: paint, openBox: openBox, wearDrop: wearDrop, openHatch: openHatch, pickSpecies: pickSpecies, hatch: hatch,
     onLobby: onLobby, onAchievements: onAchievements, refresh: refresh, nickHtml: nickHtml, miniAvatar: miniAvatar,
     get state() { return S.state; }, get catalog() { return S.catalog; },
