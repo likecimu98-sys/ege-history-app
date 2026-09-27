@@ -83,16 +83,39 @@ test('незавершённая домашка считается дальше'
 
 // --------------------------------------------------------- принадлежность --
 
-test('ответ внутри домашки принадлежит только ей', () => {
-  const start = storeSource.indexOf('async function recomputeAssignment(');
-  const block = storeSource.slice(start, storeSource.indexOf('\n// ', start + 1));
-  assert.match(block, /AND \(e\.assignment_id IS NULL OR e\.assignment_id = \$1\)/);
+// 🔴 Правило «что зачтено этой домашке» состоит из трёх частей: ответ дан
+// ПОСЛЕ выдачи, подходит под выборку работы и не принадлежит другой домашке.
+// Оно живёт в countedAttemptSql — одно на всех, кто его спрашивает.
+//
+// Пока части были выписаны по местам, третья попала только в пересчёт: разбор
+// у учителя показывал задания, которых балл не считал. На проде это не
+// теория — 10 639 ответов лежат внутри какой-нибудь домашки, а пар работ,
+// делящих класс, 370.
+test('правило зачёта написано ОДИН раз и содержит все три части', () => {
+  const start = storeSource.indexOf('function countedAttemptSql(');
+  assert.notEqual(start, -1, 'правило вынесено в отдельную функцию');
+  const rule = storeSource.slice(start, storeSource.indexOf('\n}', start));
+  assert.match(rule, /e\.attempted_at >= \$\{issued\}/, 'ответ дан после выдачи');
+  assert.match(rule, /attemptPoolSql\(\{/, 'ответ подходит под выборку работы');
+  assert.match(rule, /e\.assignment_id IS NULL OR e\.assignment_id = \$\{assignment\}/,
+    'ответ не принадлежит другой домашке');
+});
 
-  // Список зачтённого, который уезжает клиенту, обязан отбирать так же — иначе
-  // приложение спрячет задания, которые домашке не зачлись.
-  const student = storeSource.indexOf('async function studentAssignments(');
-  const studentBlock = storeSource.slice(student, storeSource.indexOf('\n// ', student + 1));
-  assert.match(studentBlock, /AND \(e\.assignment_id IS NULL OR e\.assignment_id = a\.id\)/);
+test('все, кто считает зачтённое, зовут общее правило', () => {
+  // Пересчёт задаёт баллы, разбор объясняет их учителю, список зачтённого
+  // уезжает клиенту, а подборка трудных заданий показывает те же ответы
+  // с другой стороны. Разойтись им нельзя ни в одной части.
+  for (const fn of ['recomputeAssignment', 'assignmentStudentDetail',
+    'studentAssignments', 'assignmentResults']) {
+    const start = storeSource.indexOf(`async function ${fn}(`);
+    assert.notEqual(start, -1, `функция ${fn} должна существовать`);
+    const next = storeSource.indexOf('\nasync function ', start + 1);
+    const block = storeSource.slice(start, next === -1 ? storeSource.length : next);
+    assert.match(block, /countedAttemptSql\(\{/, `${fn} обязана звать общее правило, а не писать своё`);
+  }
+  // И ни у кого не должно остаться собственной копии третьей части.
+  const copies = storeSource.split('e.assignment_id IS NULL OR e.assignment_id').length - 1;
+  assert.equal(copies, 1, `условие принадлежности написано ${copies} раз вместо одного`);
 });
 
 test('принадлежность события пишется в базу', () => {

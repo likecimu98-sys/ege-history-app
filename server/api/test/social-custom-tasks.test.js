@@ -116,9 +116,10 @@ test('пересчёт варианта ограничен его собстве
   // не открывал.
   const start = storeSource.indexOf('async function recomputeAssignment(');
   const block = storeSource.slice(start, storeSource.indexOf('\nasync function', start + 1));
-  // Само сравнение живёт в общем attemptPoolSql: пересчёт обязан звать его и
-  // передавать туда СВОЙ список заданий, а не собирать условие заново.
-  assert.match(block, /attemptPoolSql\(\{/);
+  // Само сравнение живёт в общем attemptPoolSql, а зовут его через
+  // countedAttemptSql: пересчёт обязан передавать туда СВОЙ список заданий,
+  // а не собирать условие заново.
+  assert.match(block, /countedAttemptSql\(\{/);
   assert.match(block, /ids: '\$9::text\[\]'/);
   assert.match(block, /assignment\.task_ids \|\| \[\]/);
   const pool = storeSource.slice(storeSource.indexOf('function attemptPoolSql('),

@@ -36,7 +36,9 @@ test('разбор берёт первую попытку по заданию, �
   for (const rule of [
     'DISTINCT ON (e.task_id)',
     'ORDER BY e.task_id, e.attempted_at',
-    'e.attempted_at >= $',
+    // Момент выдачи в само правило зачёта не входит формой, а передаётся в него
+    // параметром: проверять его надо там, где он подставляется.
+    "issued: '$",
   ]) {
     assert.ok(recompute.includes(rule), `пересчёт обязан содержать ${rule}`);
     assert.ok(detail.includes(rule), `разбор обязан содержать ${rule}`);
@@ -48,8 +50,11 @@ test('разбор берёт первую попытку по заданию, �
 // с графиком из собранного учителем варианта, а разбор его показывал.
 test('разбор применяет те же фильтры домашки, что и зачёт', () => {
   const detail = body('assignmentStudentDetail');
-  assert.match(detail, /attemptPoolSql\(\{/, 'разбор зовёт общее правило, а не пишет своё');
+  assert.match(detail, /countedAttemptSql\(\{/, 'разбор зовёт общее правило, а не пишет своё');
   assert.match(detail, /ids: '\$7::text\[\]'/, 'и передаёт в него список заданий варианта');
+  // 🔴 И третью часть правила тоже. Именно её разбор когда-то не получил:
+  // ответ, данный внутри другой домашки, показывался как зачтённый этой.
+  assert.match(detail, /assignment: '\$8'/, 'разбор отбрасывает ответы, отданные другой домашке');
   const source = fs.readFileSync(path.join(__dirname, '..', 'src', 'subjects', 'social', 'store.js'), 'utf8');
   const pool = source.slice(source.indexOf('function attemptPoolSql('), source.indexOf('// Активные ДЗ ученика'));
   for (const filter of [

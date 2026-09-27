@@ -208,6 +208,22 @@ function attemptPoolSql({ types, blocks, topics, images, ids }) {
      AND (cardinality(${list}) = 0 OR e.task_id = ANY(${list}))`;
 }
 
+// 🔴 ОДНО определение «этот ответ идёт в зачёт ЭТОЙ домашке». Правило состоит
+// из трёх частей, и потерять можно любую: ответ дан ПОСЛЕ выдачи, подходит под
+// выборку работы и не принадлежит другой домашке.
+//
+// Третья часть появилась позже остальных (миграция 012) и попала только в
+// пересчёт. Разбор у учителя её не получил и с тех пор показывал задания,
+// которых балл не считал: 10 639 ответов лежат внутри какой-нибудь домашки, а
+// пар работ, делящих класс, — 370. Учитель видел в таблице «12 вопросов», а в
+// разборе тринадцать строк, и оба числа выглядели правдоподобно. Поэтому
+// правило теперь одно на всех, кто спрашивает «что зачтено».
+function countedAttemptSql({ issued, assignment, types, blocks, topics, images, ids }) {
+  return `e.attempted_at >= ${issued}
+         AND ${attemptPoolSql({ types, blocks, topics, images, ids })}
+         AND (e.assignment_id IS NULL OR e.assignment_id = ${assignment})`;
+}
+
 // Активные ДЗ ученика: только его классы, только невыданное задним числом.
 async function activeAssignmentsFor(client, userId) {
   const result = await client.query(
@@ -272,17 +288,11 @@ async function recomputeAssignment(client, assignment, userId) {
        SELECT DISTINCT ON (e.task_id) e.task_id, e.earned, e.possible
        FROM social_attempt_events e
        WHERE e.user_id = $2
-         AND e.attempted_at >= $4
-         AND ${attemptPoolSql({
+         AND ${countedAttemptSql({
+    issued: '$4', assignment: '$1',
     types: '$5::text[]', blocks: '$6::text[]', topics: '$7::text[]',
     images: '$8::boolean', ids: '$9::text[]',
   })}
-         -- 🔴 Ответ, данный ВНУТРИ другой домашки, этой не принадлежит. Без
-         -- условия одна работа закрывала два задания сразу: у ученицы ДЗ с
-         -- целью 20 показывало 36, потому что впитывало и работу по
-         -- следующему ДЗ. Свободная тренировка (assignment_id IS NULL)
-         -- по-прежнему идёт в зачёт любой подходящей домашке.
-         AND (e.assignment_id IS NULL OR e.assignment_id = $1)
        ORDER BY e.task_id, e.attempted_at
      ) d
      ON CONFLICT (assignment_id, user_id) DO UPDATE SET
@@ -666,6 +676,32 @@ async function classStudents(teacherUserId, classId, { db = pool, weekStart = nu
       lastActivityAt: row.last_activity ? new Date(row.last_activity).getTime() : null,
     };
   });
+}
+
+// Убрать ученика из класса. Состав меняется руками учителя ровно здесь: в
+// классе оказываются и прошлогодние выпускники, и случайные люди по утёкшей
+// ссылке, и второй аккаунт того же ребёнка, а списка без них не было вовсе.
+//
+// 🔴 Строка НЕ удаляется, а получает status='removed'. Во-первых, вместе с ней
+// ушло бы joined_at, а по нему считается, какие работы ученику вообще
+// выдавались (ASSIGNMENT_VISIBLE_SQL): вернувшийся получил бы пачку чужих
+// просроченных домашек. Во-вторых, «убрать из списка» и «стереть сделанную
+// работу» — разные вещи: прогресс по уже выданным заданиям остаётся на месте,
+// и если ученика вернут, его результаты будут при нём.
+//
+// Убранный ученик перестаёт получать домашку и пропадает из таблиц: каждый
+// запрос про членство требует status='active'. Код класса при этом прежний —
+// по нему ученик вернётся сам. Это осознанно: ошибочное удаление иначе нечем
+// было бы исправить, а чтобы закрыть дверь совсем, у класса есть смена кода.
+async function removeClassStudent(teacherUserId, classId, studentUserId, { db = pool } = {}) {
+  await ownedClass(teacherUserId, classId, { db });
+  const result = await db.query(
+    `UPDATE social_class_members SET status='removed', updated_at=now()
+     WHERE class_id=$1 AND user_id=$2 AND status='active'
+     RETURNING user_id`,
+    [classId, studentUserId]);
+  if (!result.rowCount) fail('student_not_found', 404);
+  return { classId: String(classId), studentId: String(studentUserId), status: 'removed' };
 }
 
 // Присоединение ученика по коду. Ученик НЕ выбирает класс по идентификатору:
@@ -1136,8 +1172,40 @@ async function assignmentResults(teacherUserId, assignmentId, { db = pool } = {}
      WHERE m.class_id = $1 AND m.status = 'active' AND ${ASSIGNMENT_VISIBLE_SQL}
      ORDER BY COALESCE(pr.questions,0) DESC, p.display_name NULLS LAST`,
     [assignment.class_id, assignmentId]);
+  // Самые трудные задания ЭТОЙ работы — здесь же, а не отдельным запросом:
+  // таблицу результатов кабинет и так открывает при входе в класс, а список
+  // короткий.
+  //
+  // 🔴 Выборка обязана совпадать с колонкой «Баллы» до последнего условия,
+  // поэтому и получатели (ASSIGNMENT_VISIBLE_SQL), и зачтённые ответы
+  // (countedAttemptSql) берутся общими правилами. Свой запрос рядом с чужим
+  // счётом в этом файле уже расходился дважды.
+  const byTask = await db.query(
+    `WITH recipients AS (
+       SELECT m.user_id
+       FROM social_class_members m
+       JOIN social_assignments a ON a.id = $2
+       JOIN social_classes c ON c.id = a.class_id
+       WHERE m.class_id = $1 AND m.status = 'active' AND ${ASSIGNMENT_VISIBLE_SQL}
+     ), first_try AS (
+       SELECT DISTINCT ON (e.user_id, e.task_id) ${FIRST_TRY_COLUMNS}
+       FROM social_attempt_events e
+       JOIN recipients r ON r.user_id = e.user_id
+       WHERE ${countedAttemptSql({
+    issued: '$3', assignment: '$2',
+    types: '$4::text[]', blocks: '$5::text[]', topics: '$6::text[]',
+    images: '$7::boolean', ids: '$8::text[]',
+  })}
+       ORDER BY e.user_id, e.task_id, e.attempted_at
+     )
+     ${HARDEST_GROUPING}`,
+    [assignment.class_id, assignmentId, assignment.issued_at,
+      assignment.types || [], assignment.blocks || [], assignment.topics || [],
+      assignment.include_images, assignment.task_ids || []]);
+
   return {
     assignment: assignmentForClient(assignment),
+    hardest: rankHardest(byTask.rows, { minStudents: HARDEST_MIN_STUDENTS_SCOPED }),
     results: result.rows.map(row => {
       const possible = numeric(row.possible);
       const earned = numeric(row.earned);
@@ -1188,14 +1256,14 @@ async function assignmentStudentDetail(teacherUserId, assignmentId, studentUserI
             e.correct, e.earned, e.possible, e.elapsed_ms, e.attempted_at, e.given_answer
      FROM social_attempt_events e
      WHERE e.user_id = $1
-       AND e.attempted_at >= $2
-       AND ${attemptPoolSql({
+       AND ${countedAttemptSql({
+    issued: '$2', assignment: '$8',
     types: '$3::text[]', blocks: '$4::text[]', topics: '$5::text[]',
     images: '$6::boolean', ids: '$7::text[]',
   })}
      ORDER BY e.task_id, e.attempted_at`,
     [studentUserId, assignment.issued_at, assignment.types || [], assignment.blocks || [],
-      assignment.topics || [], assignment.include_images, assignment.task_ids || []]);
+      assignment.topics || [], assignment.include_images, assignment.task_ids || [], assignmentId]);
   const rows = attempts.rows.map(row => ({
     taskId: row.task_id,
     taskType: row.task_type,
@@ -1381,6 +1449,96 @@ async function studentOverview(teacherUserId, classId, studentUserId, { db = poo
 // учитель читает процент как процент, и подмешивать к нему среднее по банку
 // нельзя. Вместо этого рядом всегда стоит число попыток — оно и говорит,
 // насколько числу верить.
+// ---------------------------------------------------------------------------
+// Самые трудные задания
+// ---------------------------------------------------------------------------
+
+// 🔴 СЧИТАЕМ НЕ БАЛЛЫ, А ЛЮДЕЙ, НЕ ВЗЯВШИХ МАКСИМУМ.
+//
+// Процент по баллам прячет ровно то, ради чего в статистику и заходят. Работа
+// из десяти заданий стоит двадцати баллов, класс набирает восемнадцать — и
+// кажется, что тему знают все. А внутри может лежать задание на два балла, где
+// каждый получил ровно один: по баллам это «50% верных», размазанные в среднем
+// 90%, а по сути — задание, которое не взял никто. Поэтому доля здесь —
+// «сколько учеников НЕ получили максимум», и только она задаёт порядок.
+//
+// В зачёт идёт ПЕРВАЯ попытка ученика по заданию — то же правило, по которому
+// считается домашка. Иначе разбор ошибок и повторение (где то же задание
+// решают второй раз, уже зная ответ) занижали бы трудность: задание, которое
+// с первого раза не взял никто, после проработки выглядело бы простым.
+const HARDEST_LIMIT = 20;
+// 🔴 Сглаживание. Без него список возглавляют задания с пятью учениками и
+// круглыми 100%, а настоящий лидер тонет: на 24.09.2026 задание 22104B видели
+// 55 человек и максимум взяли трое (95%) — оно и есть то, что надо разбирать
+// классом, но десять заданий с «100% из пяти» стояли выше. Доля подтягивается
+// к средней по выборке с весом пяти учеников: 100% у пятерых даёт 0.74, а 95%
+// у пятидесяти пяти — 0.90, и порядок становится осмысленным.
+//
+// ⚠️ Поэтому порядок в списке НЕ совпадает с показанным процентом, и это надо
+// говорить вслух: иначе «100% ниже, чем 95%» читается как ошибка.
+const HARDEST_SMOOTHING = 5;
+// Сколько учеников должно увидеть задание, чтобы о нём вообще было что сказать.
+// Внутри домашки порог ниже: класс бывает из пяти человек, и «не взяли двое из
+// трёх» — уже повод разобрать, а по всей базе двое ни о чём не говорят.
+const HARDEST_MIN_STUDENTS_SCOPED = 2;
+const HARDEST_MIN_STUDENTS_ALL = 5;
+
+function rankHardest(rows, { minStudents, limit = HARDEST_LIMIT, smoothing = HARDEST_SMOOTHING } = {}) {
+  const usable = rows
+    .map(row => ({
+      taskId: row.task_id,
+      taskType: row.task_type || '',
+      examLine: numeric(row.exam_line),
+      students: numeric(row.students),
+      mastered: numeric(row.mastered),
+      earned: numeric(row.earned),
+      possible: numeric(row.possible),
+    }))
+    .filter(row => row.students >= minStudents);
+  // Средняя доля не взявших максимум — по той же выборке, которую показываем.
+  // Брать её по всей базе нельзя: внутри одной домашки «средним» является она
+  // сама, и чужое среднее перетасовало бы её задания между собой.
+  const seen = usable.reduce((sum, row) => sum + row.students, 0);
+  const missed = usable.reduce((sum, row) => sum + (row.students - row.mastered), 0);
+  const mean = seen > 0 ? missed / seen : 0.5;
+  const scored = usable.map(row => ({
+    ...row,
+    // Показываем честную долю, сортируем по сглаженной. Разница видна только
+    // на малых выборках — ровно там, где честная доля и врёт.
+    failPercent: Math.round(((row.students - row.mastered) / row.students) * 100),
+    pointPercent: row.possible > 0 ? Math.round((row.earned / row.possible) * 100) : 0,
+    score: (row.students - row.mastered + smoothing * mean) / (row.students + smoothing),
+  }));
+  scored.sort((left, right) => right.score - left.score
+    || right.students - left.students
+    || String(left.taskId).localeCompare(String(right.taskId)));
+  return {
+    minStudents,
+    // Сколько заданий вообще прошло порог: без этого «20 самых трудных» не
+    // отличить от «всего двадцать и было».
+    considered: usable.length,
+    meanFailPercent: Math.round(mean * 100),
+    tasks: scored.slice(0, limit).map(row => ({
+      taskId: row.taskId,
+      taskType: row.taskType,
+      examLine: row.examLine,
+      students: row.students,
+      mastered: row.mastered,
+      failPercent: row.failPercent,
+      pointPercent: row.pointPercent,
+    })),
+  };
+}
+
+// Первая попытка каждого ученика по каждому заданию в заданной области.
+const FIRST_TRY_COLUMNS = `e.user_id, e.task_id, e.task_type, e.exam_line, e.earned, e.possible`;
+const HARDEST_GROUPING = `SELECT task_id, MIN(task_type) AS task_type, MAX(exam_line) AS exam_line,
+            COUNT(*)::int AS students,
+            COUNT(*) FILTER (WHERE earned >= possible)::int AS mastered,
+            COALESCE(SUM(earned),0)::float8 AS earned,
+            COALESCE(SUM(possible),0)::float8 AS possible
+     FROM first_try GROUP BY task_id`;
+
 const WEAK_MIN_ATTEMPTS = 3;
 
 async function weakSpots({ db = pool, classId = null, minAttempts = WEAK_MIN_ATTEMPTS } = {}) {
@@ -1392,6 +1550,12 @@ async function weakSpots({ db = pool, classId = null, minAttempts = WEAK_MIN_ATT
     ? `JOIN social_class_members m ON m.user_id = e.user_id AND m.class_id = $2 AND m.status = 'active'`
     : '';
   const params = classId ? [floor, classId] : [floor];
+  // У среза по заданиям порога в SQL нет (он применяется в rankHardest), поэтому
+  // класс там занимает $1, а не $2. Лишний параметр PostgreSQL не принимает, а
+  // один общий фрагмент под оба номера не напишешь.
+  const taskScopeJoin = classId
+    ? `JOIN social_class_members m ON m.user_id = e.user_id AND m.class_id = $1 AND m.status = 'active'`
+    : '';
 
   const byLine = await db.query(
     `SELECT e.exam_line AS bucket, COUNT(*)::int AS attempts,
@@ -1424,7 +1588,27 @@ async function weakSpots({ db = pool, classId = null, minAttempts = WEAK_MIN_ATT
     percent: numeric(row.possible) > 0 ? Math.round((numeric(row.earned) / numeric(row.possible)) * 100) : 0,
   })).sort((left, right) => left.percent - right.percent || right.attempts - left.attempts);
 
-  return { minAttempts: floor, lines: shape(byLine.rows), blocks: shape(byBlock.rows) };
+  // Третий срез — ПОИМЁННО ПО ЗАДАНИЯМ, и считается он по другому правилу:
+  // не баллы, а сколько учеников не взяли максимум с первой попытки. Блок и
+  // номер отвечают «какую тему повторить», задание — «что разобрать завтра на
+  // уроке», и второй ответ из первого не выводится.
+  const byTask = await db.query(
+    `WITH first_try AS (
+       SELECT DISTINCT ON (e.user_id, e.task_id) ${FIRST_TRY_COLUMNS}
+       FROM social_attempt_events e ${taskScopeJoin}
+       ORDER BY e.user_id, e.task_id, e.attempted_at
+     )
+     ${HARDEST_GROUPING}`,
+    classId ? [classId] : []);
+
+  return {
+    minAttempts: floor,
+    lines: shape(byLine.rows),
+    blocks: shape(byBlock.rows),
+    hardest: rankHardest(byTask.rows, {
+      minStudents: classId ? HARDEST_MIN_STUDENTS_SCOPED : HARDEST_MIN_STUDENTS_ALL,
+    }),
+  };
 }
 
 // ДЗ глазами ученика: активные и завершённые, с собственным прогрессом. Чужих
@@ -1464,16 +1648,16 @@ async function studentAssignments(userId, { db = pool } = {}) {
      LEFT JOIN LATERAL (
        SELECT array_agg(DISTINCT e.task_id) AS ids
        FROM social_attempt_events e
+       -- Тот же отбор, что и в recomputeAssignment: список зачтённого обязан
+       -- совпадать с тем, что реально засчитано, иначе клиент прячет задания,
+       -- которые домашке не зачлись. Домашка здесь приходит не параметром, а
+       -- столбцом внешнего запроса — правило то же, подставляется a.id.
        WHERE e.user_id = $1
-         AND e.attempted_at >= a.issued_at
-         AND ${attemptPoolSql({
+         AND ${countedAttemptSql({
+    issued: 'a.issued_at', assignment: 'a.id',
     types: 'a.types', blocks: 'a.blocks', topics: 'a.topics',
     images: 'a.include_images', ids: 'own.ids',
   })}
-         -- Тот же отбор, что и в recomputeAssignment: список зачтённого обязан
-         -- совпадать с тем, что реально засчитано, иначе клиент прячет задания,
-         -- которые домашке не зачлись.
-         AND (e.assignment_id IS NULL OR e.assignment_id = a.id)
      ) counted ON true
      WHERE a.status = 'active' AND ${ASSIGNMENT_VISIBLE_SQL}
      ORDER BY a.issued_at DESC LIMIT 100`,
@@ -1622,6 +1806,60 @@ async function enqueueAssignmentNotifications(assignment, { db = pool } = {}) {
      ON CONFLICT (assignment_id, telegram_id) WHERE assignment_id IS NOT NULL AND dedup_key = '' DO NOTHING
      RETURNING id`,
     [assignment.id, JSON.stringify(payload), assignment.classId]);
+  return result.rowCount;
+}
+
+// 🔴 НАПОМИНАНИЕ ТОМУ, КТО ВСТУПИЛ В КЛАСС И НЕ НАЧАЛ.
+//
+// 102 ученика из 319 не ответили ни разу, и это не «не дошли»: у всех есть
+// снимок прогресса, то есть приложение они открывали, а у 63 висела домашка.
+// Между вступлением в класс и первым ответом проходит в среднем восемь часов —
+// половина начинает не в тот день, а часть не начинает никогда.
+//
+// ⚠️ Это сообщение ЖИВОМУ ЧЕЛОВЕКУ, поэтому ограничений четыре, и каждое важно:
+//  1. ОДИН РАЗ НА ВЕСЬ СРОК — ключ повтора `nudge:start:<ученик>`. Не «раз в
+//     неделю» и не «пока не начнёт»: человек, который не захотел, имеет право
+//     больше об этом не слышать.
+//  2. Не раньше чем через сутки после вступления: почти все, кто начинает
+//     сразу, укладываются в этот срок, и напоминать им не о чем.
+//  3. Только тем, у кого НЕТ НИ ОДНОГО ответа. Решил хоть что-то — не трогаем.
+//  4. Только в дневное окно по Москве: окно выбирает вызывающий, потому что
+//     это вопрос не данных, а приличия.
+//
+// Telegram запрещает писать первым тому, кто не начинал диалог с ботом, —
+// такие задания честно упадут в `failed` и повторяться не будут.
+const NUDGE_MIN_HOURS = 24;
+
+async function enqueueStartNudges({ db = pool, minHours = NUDGE_MIN_HOURS, limit = 50 } = {}) {
+  const hours = Math.max(1, Number(minHours) || NUDGE_MIN_HOURS);
+  const size = Math.min(200, Math.max(1, Number(limit) || 50));
+  const result = await db.query(
+    `INSERT INTO social_notification_jobs(user_id, telegram_id, kind, payload, dedup_key)
+     SELECT m.user_id, i.subject, 'start_nudge',
+            jsonb_build_object('classTitle', COALESCE(c.title, ''),
+                               'homework', COALESCE(hw.title, ''),
+                               'questionGoal', COALESCE(hw.question_goal, 0)),
+            'nudge:start:' || m.user_id
+     FROM social_class_members m
+     JOIN social_classes c ON c.id = m.class_id AND c.status = 'active'
+     JOIN user_identities i ON i.user_id = m.user_id AND i.provider = 'telegram'
+     JOIN social_profiles p ON p.user_id = m.user_id AND p.role = 'student'
+     LEFT JOIN LATERAL (
+       SELECT a.title, a.question_goal
+       FROM social_assignments a
+       WHERE a.class_id = m.class_id AND a.status = 'active'
+         AND (a.due_at IS NULL OR a.due_at > now())
+       ORDER BY a.due_at NULLS LAST, a.issued_at DESC
+       LIMIT 1
+     ) hw ON true
+     WHERE m.status = 'active'
+       AND m.joined_at < now() - ($1 || ' hours')::interval
+       AND NOT EXISTS (SELECT 1 FROM social_attempt_events e WHERE e.user_id = m.user_id)
+     ORDER BY m.joined_at
+     LIMIT $2
+     ON CONFLICT (dedup_key) WHERE dedup_key <> '' DO NOTHING
+     RETURNING id`,
+    [String(hours), size]);
   return result.rowCount;
 }
 
@@ -1774,13 +2012,14 @@ async function whoIs(telegramId, { db = pool } = {}) {
 
 module.exports = {
   ensureProfile, patchProfile, roleOf, setRole, whoIs, whoIsByEmail, requestTeacherRole,
-  enqueueAssignmentNotifications, claimNotifications, ackNotification, failNotification,
+  enqueueAssignmentNotifications, enqueueStartNudges, claimNotifications, ackNotification, failNotification,
   getState, putState,
   saveAttempts, insertEvents, recomputeAssignment, enqueueCompletionNotification, notifyCompletionSafely,
   activeAssignmentsFor,
-  taskDifficulty, quotaState, consumeQuota,
+  taskDifficulty, rankHardest, quotaState, consumeQuota,
   weeklyLeaderboard,
-  createClass, listClasses, ownedClass, updateClass, rotateJoinCode, classStudents, joinClass, myClasses,
+  createClass, listClasses, ownedClass, updateClass, rotateJoinCode, classStudents, removeClassStudent,
+  joinClass, myClasses,
   createAssignment, listAssignments, ownedAssignment, updateAssignment, cancelAssignment,
   assignmentResults, assignmentStudentDetail, studentOverview, weakSpots,
   studentAssignments, studentDigest, teacherDigest,

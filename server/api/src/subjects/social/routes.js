@@ -251,9 +251,15 @@ async function handleSocial(req, res, url, session, deps) {
     // он спотыкается. Отдельный маршрут, а не поле в списке учеников: класс на
     // тридцать человек не должен тащить тридцать таких выборок ради одной.
     const overviewMatch = path.match(/^\/teacher\/classes\/([^/]+)\/students\/([^/]+)$/);
-    if (overviewMatch && method === 'GET') {
+    if (overviewMatch && (method === 'GET' || method === 'DELETE')) {
       const classId = uuid(decodeURIComponent(overviewMatch[1]), 'class_not_found');
       const studentId = uuid(decodeURIComponent(overviewMatch[2]), 'student_not_found');
+      // Убрать ученика из класса. Мягко: см. removeClassStudent — строка
+      // остаётся, и вместе с ней результаты по уже выданным работам.
+      if (method === 'DELETE') {
+        requireMutationAuth(req, session);
+        return json(res, 200, await store.removeClassStudent(userId, classId, studentId, {}));
+      }
       return json(res, 200, await store.studentOverview(userId, classId, studentId, {}));
     }
 
