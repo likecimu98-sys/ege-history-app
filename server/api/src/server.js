@@ -463,7 +463,21 @@ async function handleInternal(req, res, url) {
       userId = found.userId;
     }
     if (!userId) throw Object.assign(new Error('user_not_found'), { statusCode: 404 });
-    const updated = await socialStore.setRole(userId, String(body.role || 'teacher'));
+    const role = String(body.role || 'teacher');
+    // Человек берёт роль сам — из бота по ссылке коллеги. Тогда её выдаёт
+    // claimTeacherRole: он один знает про источник и про пригласившего, а
+    // setRole записал бы «выдал администратор» и потерял бы канал.
+    if (role === 'teacher' && (body.source === 'self' || body.source === 'invite')) {
+      const claimed = await socialStore.claimTeacherRole(userId, [], {
+        source: String(body.source),
+        inviteCode: String(body.inviteCode || ''),
+      });
+      if (claimed.status === 'unknown') throw Object.assign(new Error('user_not_found'), { statusCode: 404 });
+      await pool.query('INSERT INTO audit_events(actor_user_id,action,target,details) VALUES(NULL,$1,$2,$3)',
+        ['social.role.claim', userId, JSON.stringify({ status: claimed.status, source: claimed.source || '' })]);
+      return json(res, 200, { userId, role: claimed.role || 'teacher', status: claimed.status, invitedBy: claimed.invitedBy || '' });
+    }
+    const updated = await socialStore.setRole(userId, role);
     await pool.query('INSERT INTO audit_events(actor_user_id,action,target,details) VALUES(NULL,$1,$2,$3)',
       ['social.role.set', userId, JSON.stringify({ role: updated.role })]);
     return json(res, 200, { userId: updated.user_id, role: updated.role });
@@ -501,7 +515,13 @@ async function handleInternal(req, res, url) {
   if (req.method === 'POST' && url.pathname === '/internal/v1/subjects/social/whoami') {
     const body = await readJson(req, 4096);
     const socialStore = require('./subjects/social/store');
-    return json(res, 200, { user: await socialStore.whoIs(String(body.telegramId || '')) });
+    const user = await socialStore.whoIs(String(body.telegramId || ''));
+    // Код приглашения коллеги — учителю, и только по запросу: бот зовёт whoami
+    // на каждое сообщение, а код нужен ему ровно в одном экране.
+    if (user && body.withInvite && (user.role === 'teacher' || user.role === 'admin')) {
+      user.inviteCode = await socialStore.teacherInviteCode(user.userId, {});
+    }
+    return json(res, 200, { user });
   }
   // Классы глазами бота. Бот знает человека только по Telegram ID, поэтому
   // маршрут сам находит аккаунт и сам проверяет роль: у бота нет ни сессии, ни
@@ -551,7 +571,14 @@ async function handleInternal(req, res, url) {
   if (req.method === 'POST' && url.pathname === '/internal/v1/subjects/social/nudges') {
     const body = await readJson(req, 4096).catch(() => ({}));
     const socialStore = require('./subjects/social/store');
-    return json(res, 200, { queued: await socialStore.enqueueStartNudges({ limit: body.limit }) });
+    // Два разных напоминания на одном маршруте: ученику, который не начал, и
+    // учителю, который взял роль и не выдал ни одной домашки. Бот зовёт оба
+    // одним тиком, поэтому и считаем их отдельно — иначе по числу «поставлено
+    // в очередь» не понять, кому именно ушло.
+    const students = await socialStore.enqueueStartNudges({ limit: body.limit });
+    const teachers = body.teachers === false ? 0
+      : await socialStore.enqueueTeacherNudges({ limit: body.limit });
+    return json(res, 200, { queued: students + teachers, students, teachers });
   }
   const socialAck = url.pathname.match(/^\/internal\/v1\/subjects\/social\/notifications\/(\d+)\/(ack|fail)$/);
   if (req.method === 'POST' && socialAck) {

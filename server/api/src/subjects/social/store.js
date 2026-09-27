@@ -54,20 +54,30 @@ async function patchProfile(userId, patch, { db = pool } = {}) {
   return result.rows[0];
 }
 
-// 🔴 Роль читается ТОЛЬКО отсюда и меняется только setRole, у которого нет
-// пользовательского маршрута. Ученик, приславший {"role":"teacher"}, получает
-// 400 ещё в schema.js: в белом перечне полей профиля роли нет.
+// 🔴 Роль читается ТОЛЬКО отсюда, а меняют её ровно две функции: setRole (её
+// зовёт админ) и claimTeacherRole (её зовёт сам человек). Пользовательского
+// маршрута к полю роли по-прежнему нет: ученик, приславший {"role":"teacher"},
+// получает 400 ещё в schema.js — в белом перечне полей профиля роли нет.
 async function roleOf(userId, { db = pool } = {}) {
   const result = await db.query('SELECT role FROM social_profiles WHERE user_id=$1', [userId]);
   return result.rowCount ? String(result.rows[0].role || 'student') : 'student';
 }
 
+// Выдача роли администратором. Источник пишем 'manual' — без него учитель,
+// которому роль выдали руками, был бы неотличим от пришедшего по ссылке, и
+// отчёт о каналах врал бы в нашу пользу.
 async function setRole(userId, role, { db = pool } = {}) {
   if (!['student', 'teacher', 'admin'].includes(role)) fail('role_unknown');
   await ensureProfile(userId, {}, { db });
+  const staff = role === 'teacher' || role === 'admin';
   const result = await db.query(
-    'UPDATE social_profiles SET role=$2, updated_at=now() WHERE user_id=$1 RETURNING user_id, display_name, role',
-    [userId, role]);
+    `UPDATE social_profiles
+     SET role=$2,
+         role_source = CASE WHEN $3 THEN COALESCE(role_source, 'manual') ELSE role_source END,
+         role_granted_at = CASE WHEN $3 THEN COALESCE(role_granted_at, now()) ELSE role_granted_at END,
+         updated_at=now()
+     WHERE user_id=$1 RETURNING user_id, display_name, role`,
+    [userId, role, staff]);
   return result.rows[0];
 }
 
@@ -832,6 +842,19 @@ async function mergeUserData(client, primaryId, secondaryId) {
          WHEN social_profiles.role = 'teacher' OR EXCLUDED.role = 'teacher' THEN 'teacher'
          ELSE social_profiles.role END,
        updated_at = now()`,
+    [primaryId, secondaryId]);
+
+  // 🔴 Код приглашения переезжает вместе с учителем. Он уже разослан по чатам, и
+  // после слияния аккаунтов ссылка обязана продолжать работать. Снимаем его со
+  // второй строки в том же запросе: две строки с одним кодом не дал бы
+  // уникальный индекс, а вторая строка живёт до конца слияния.
+  await client.query(
+    `WITH taken AS (
+       UPDATE social_profiles SET invite_code = NULL, updated_at = now()
+       WHERE user_id = $2 AND invite_code IS NOT NULL
+       RETURNING invite_code)
+     UPDATE social_profiles SET invite_code = (SELECT invite_code FROM taken), updated_at = now()
+     WHERE user_id = $1 AND invite_code IS NULL AND EXISTS (SELECT 1 FROM taken)`,
     [primaryId, secondaryId]);
 
   // Снимок прогресса переносим ТОЛЬКО если у основного аккаунта его нет. Слить
@@ -1863,6 +1886,56 @@ async function enqueueStartNudges({ db = pool, minHours = NUDGE_MIN_HOURS, limit
   return result.rowCount;
 }
 
+// 🔴 Напоминание УЧИТЕЛЮ, который взял роль и остановился. На 27.09.2026 таких
+// 61 из 99: класс завели 59, домашку выдали 38. Роль сама по себе не даёт
+// ничего — работа начинается с первой выданной домашки, и именно до неё
+// человек чаще всего не доходит.
+//
+// Положений два, и путать их нельзя: у одного нет КЛАССА, у другого класс есть,
+// а домашки нет. Совет «выдайте домашнее задание» тому, кому некому её выдать,
+// — это совет сделать невозможное, и читается он как невнимательность.
+// Различает их `stage` в payload, текст выбирает бот.
+//
+// Условия те же, что у ученического: не раньше чем через сутки после выдачи
+// роли, ровно один раз за всё время (`nudge:teach:<user>`), и только тем, у
+// кого есть Telegram — написать больше некуда. Дневное окно проверяет БОТ.
+async function enqueueTeacherNudges({ db = pool, minHours = NUDGE_MIN_HOURS, limit = 50 } = {}) {
+  const hours = Math.max(1, Number(minHours) || NUDGE_MIN_HOURS);
+  const size = Math.min(200, Math.max(1, Number(limit) || 50));
+  const result = await db.query(
+    `INSERT INTO social_notification_jobs(user_id, telegram_id, kind, payload, dedup_key)
+     SELECT p.user_id, i.subject, 'teacher_nudge',
+            jsonb_build_object(
+              'stage', CASE WHEN cls.class_id IS NULL THEN 'no_class' ELSE 'no_homework' END,
+              'classTitle', COALESCE(cls.title, ''),
+              'students', COALESCE(cls.students, 0)),
+            'nudge:teach:' || p.user_id
+     FROM social_profiles p
+     JOIN user_identities i ON i.user_id = p.user_id AND i.provider = 'telegram'
+     JOIN app_users u ON u.id = p.user_id AND u.disabled_at IS NULL
+     LEFT JOIN LATERAL (
+       SELECT c.id AS class_id, c.title,
+              (SELECT COUNT(*)::int FROM social_class_members m
+               WHERE m.class_id = c.id AND m.status = 'active') AS students
+       FROM social_classes c
+       WHERE c.teacher_user_id = p.user_id AND c.status = 'active'
+       ORDER BY c.created_at
+       LIMIT 1
+     ) cls ON true
+     WHERE p.role = 'teacher'
+       -- role_granted_at появился в миграции 015: у выданных раньше ролей он
+       -- пуст, и тогда отсчёт идёт от создания профиля. Без COALESCE все
+       -- прежние учителя молча не попали бы в выборку ни разу.
+       AND COALESCE(p.role_granted_at, p.created_at) < now() - ($1 || ' hours')::interval
+       AND NOT EXISTS (SELECT 1 FROM social_assignments a WHERE a.teacher_user_id = p.user_id)
+     ORDER BY COALESCE(p.role_granted_at, p.created_at)
+     LIMIT $2
+     ON CONFLICT (dedup_key) WHERE dedup_key <> '' DO NOTHING
+     RETURNING id`,
+    [String(hours), size]);
+  return result.rowCount;
+}
+
 // Забор пачки ботом. `FOR UPDATE SKIP LOCKED` — чтобы два экземпляра бота (или
 // перезапуск во время работы) не отправили одно и то же дважды.
 async function claimNotifications(limit, { db = pool, transact = tx } = {}) {
@@ -1943,17 +2016,82 @@ async function whoIsByEmail(email, { db = pool } = {}) {
   return (await lookup(true)) || lookup(false);
 }
 
-// Заявка на роль учителя, поданная С САЙТА. До неё заявку можно было отправить
-// только кнопкой в боте, то есть человеку без Telegram — никак: и заявку не
-// подать, и роль ему не выдать, потому что выдача шла по telegram id.
+// ---------------------------------------------------------------------------
+// Роль учителя
+// ---------------------------------------------------------------------------
+
+const TEACHER_ROLE_SOURCES = Object.freeze(['manual', 'self', 'invite']);
+
+// Код приглашения коллеги — десять символов против восьми у кода класса. Длина
+// разная НАМЕРЕННО: оба кода ходят по одним и тем же учительским чатам, и тот,
+// кто их перепутает, должен упереться в отказ, а не вступить учеником в
+// собственный класс.
+const TEACHER_INVITE_CODE_LENGTH = 10;
+
+function randomInviteCode() {
+  const bytes = crypto.randomBytes(TEACHER_INVITE_CODE_LENGTH);
+  let code = '';
+  for (const byte of bytes) code += JOIN_CODE_ALPHABET[byte % JOIN_CODE_ALPHABET.length];
+  return code;
+}
+
+// Код заводится ЛЕНИВО, при первом показе в кабинете. Раздавать его всем
+// учителям заранее незачем: большинство коллегу не позовёт никогда.
+async function teacherInviteCode(userId, { db = pool } = {}) {
+  const existing = await db.query(
+    'SELECT invite_code, role FROM social_profiles WHERE user_id=$1', [userId]);
+  if (!existing.rowCount) return '';
+  const role = String(existing.rows[0].role || 'student');
+  if (role !== 'teacher' && role !== 'admin') return '';
+  if (existing.rows[0].invite_code) return String(existing.rows[0].invite_code);
+  for (let attempt = 0; attempt < 6; attempt += 1) {
+    try {
+      const result = await db.query(
+        `UPDATE social_profiles SET invite_code=$2, updated_at=now()
+         WHERE user_id=$1 AND invite_code IS NULL RETURNING invite_code`,
+        [userId, randomInviteCode()]);
+      if (result.rowCount) return String(result.rows[0].invite_code);
+      // Код успел появиться между чтением и записью — берём готовый.
+      const again = await db.query('SELECT invite_code FROM social_profiles WHERE user_id=$1', [userId]);
+      return again.rowCount ? String(again.rows[0].invite_code || '') : '';
+    } catch (error) {
+      if (error && error.code === '23505' && attempt < 5) continue;
+      throw error;
+    }
+  }
+  return fail('invite_code_generation_failed', 500);
+}
+
+// Несуществующий код и чужой код отвечают одинаково: приглашение не должно
+// служить способом проверить, есть ли у нас такой учитель.
+async function resolveTeacherInvite(code, { db = pool } = {}) {
+  const clean = String(code || '').trim().toUpperCase();
+  if (!/^[A-Z0-9]{6,16}$/.test(clean)) return null;
+  const result = await db.query(
+    `SELECT p.user_id, COALESCE(p.display_name, u.display_name, '') AS display_name
+     FROM social_profiles p
+     JOIN app_users u ON u.id = p.user_id AND u.disabled_at IS NULL
+     WHERE p.invite_code = $1 AND p.role IN ('teacher', 'admin')`, [clean]);
+  if (!result.rowCount) return null;
+  return { userId: result.rows[0].user_id, displayName: result.rows[0].display_name || '' };
+}
+
+// 🔴 Роль учителя выдаётся САМА, без человека в середине. Раньше заявка уходила
+// админу и ждала, пока тот нажмёт кнопку, то есть третьим шагом воронки стояло
+// «подождите». На 27.09.2026 из 99 учителей класс завели 59, а домашку выдали
+// 38 — и приходит учитель вечером накануне урока, так что к утру он уже задал
+// по-другому.
 //
-// Заявка кладётся в ту же очередь уведомлений — по одному заданию на каждого
-// админа. Своей доставки у API нет, а бот очередь и так разбирает.
+// Что может самозваный учитель: завести СВОЙ класс и видеть результаты тех, кто
+// вступил в него по своей воле, введя код. Чужие классы и чужих учеников ему
+// открывает не роль — их держит проверка владения в каждом запросе. Поэтому
+// выдаём сразу, но записываем КТО и ОТКУДА, кладём админу уведомление (факт, а
+// не вопрос) и оставляем /revoke.
 //
-// user_id у задания — ЗАЯВИТЕЛЬ, а не получатель: получатель здесь админ, и его
-// в app_users может не быть вовсе. Благодаря этому заявка исчезает вместе с
-// удалённым аккаунтом и переезжает при слиянии аккаунтов.
-async function requestTeacherRole(userId, adminTelegramIds, { db = pool } = {}) {
+// source: 'self' — нажал «Стать учителем» сам, 'invite' — пришёл по ссылке
+// коллеги, 'manual' — выдал админ. Это единственный способ узнать, каким
+// каналом приходят учителя: до сих пор мы не знали об этом ничего.
+async function claimTeacherRole(userId, adminTelegramIds, { source = 'self', inviteCode = '', db = pool } = {}) {
   const admins = [...new Set((adminTelegramIds || []).map(String).filter(Boolean))];
   const who = await db.query(
     `SELECT COALESCE(p.display_name, u.display_name, '') AS display_name, COALESCE(u.email, '') AS email,
@@ -1964,20 +2102,38 @@ async function requestTeacherRole(userId, adminTelegramIds, { db = pool } = {}) 
   if (!who.rowCount) return { status: 'unknown' };
   const row = who.rows[0];
   if (row.role === 'teacher' || row.role === 'admin') return { status: 'already', role: row.role };
-  if (!admins.length) return { status: 'no_admins' };
 
-  // Повторное нажатие не должно будить всех админов заново.
-  const pending = await db.query(
-    `SELECT 1 FROM social_notification_jobs
-     WHERE kind = 'teacher_request' AND user_id = $1 AND status IN ('pending', 'processing') LIMIT 1`,
-    [userId]);
-  if (pending.rowCount) return { status: 'pending' };
+  const found = inviteCode ? await resolveTeacherInvite(inviteCode, { db }) : null;
+  // Пригласить самого себя нельзя, но это и не ошибка — просто обычный источник.
+  const inviter = found && String(found.userId) !== String(userId) ? found : null;
+  const roleSource = inviter ? 'invite' : (TEACHER_ROLE_SOURCES.includes(source) ? source : 'self');
+
+  // Профиля может не быть вовсе: у человека, ни разу не сохранявшего настройки,
+  // строки в social_profiles нет, а LEFT JOIN выше это скрыл.
+  await db.query(
+    `INSERT INTO social_profiles(user_id, display_name, role, role_source, role_granted_at, invited_by_user_id)
+     VALUES ($1, $2, 'teacher', $3, now(), $4)
+     ON CONFLICT (user_id) DO UPDATE SET
+       role = 'teacher', role_source = $3, role_granted_at = now(),
+       invited_by_user_id = COALESCE(social_profiles.invited_by_user_id, EXCLUDED.invited_by_user_id),
+       updated_at = now()`,
+    [userId, row.display_name || '', roleSource, inviter ? inviter.userId : null]);
+
+  const granted = {
+    status: 'granted',
+    role: 'teacher',
+    source: roleSource,
+    invitedBy: inviter ? inviter.displayName : '',
+  };
+  if (!admins.length) return granted;
 
   const payload = {
     userId: String(userId),
     displayName: row.display_name || '',
     email: row.email || '',
     hasTelegram: row.has_telegram === true,
+    source: roleSource,
+    invitedBy: inviter ? inviter.displayName : '',
   };
   // 🔴 Плейсхолдеры, а не значения: было `(${index + 3})`, что давало SQL
   // «VALUES (3)» — литеральное число вместо параметра. Postgres видел в запросе
@@ -1985,16 +2141,15 @@ async function requestTeacherRole(userId, adminTelegramIds, { db = pool } = {}) 
   // с 500 ВСЕГДА, с первого дня. Тип задаём явно: у VALUES его вывести не из
   // чего, а telegram_id — текст.
   const recipients = admins.map((_, index) => `($${index + 3}::text)`).join(', ');
-  const inserted = await db.query(
+  await db.query(
     // 🔴 Список админов разворачивается в VALUES, а не в unnest: проверка
     // изоляции читает «FROM unnest» как обращение к таблице и падает. Значения
     // всё равно параметризованы, в текст запроса не подставляется ничего.
     `INSERT INTO social_notification_jobs(assignment_id, user_id, telegram_id, kind, payload)
-     SELECT NULL, $1, list.admin, 'teacher_request', $2::jsonb
-     FROM (VALUES ${recipients}) AS list(admin)
-     RETURNING id`,
+     SELECT NULL, $1, list.admin, 'teacher_granted', $2::jsonb
+     FROM (VALUES ${recipients}) AS list(admin)`,
     [userId, JSON.stringify(payload), ...admins]);
-  return { status: 'sent', delivered: inserted.rowCount };
+  return granted;
 }
 
 async function whoIs(telegramId, { db = pool } = {}) {
@@ -2011,8 +2166,10 @@ async function whoIs(telegramId, { db = pool } = {}) {
 }
 
 module.exports = {
-  ensureProfile, patchProfile, roleOf, setRole, whoIs, whoIsByEmail, requestTeacherRole,
-  enqueueAssignmentNotifications, enqueueStartNudges, claimNotifications, ackNotification, failNotification,
+  ensureProfile, patchProfile, roleOf, setRole, whoIs, whoIsByEmail,
+  claimTeacherRole, teacherInviteCode, resolveTeacherInvite,
+  enqueueAssignmentNotifications, enqueueStartNudges, enqueueTeacherNudges,
+  claimNotifications, ackNotification, failNotification,
   getState, putState,
   saveAttempts, insertEvents, recomputeAssignment, enqueueCompletionNotification, notifyCompletionSafely,
   activeAssignmentsFor,
