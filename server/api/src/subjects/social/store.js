@@ -1886,6 +1886,56 @@ async function enqueueStartNudges({ db = pool, minHours = NUDGE_MIN_HOURS, limit
   return result.rowCount;
 }
 
+// 🔴 Напоминание УЧИТЕЛЮ, который взял роль и остановился. На 27.09.2026 таких
+// 61 из 99: класс завели 59, домашку выдали 38. Роль сама по себе не даёт
+// ничего — работа начинается с первой выданной домашки, и именно до неё
+// человек чаще всего не доходит.
+//
+// Положений два, и путать их нельзя: у одного нет КЛАССА, у другого класс есть,
+// а домашки нет. Совет «выдайте домашнее задание» тому, кому некому её выдать,
+// — это совет сделать невозможное, и читается он как невнимательность.
+// Различает их `stage` в payload, текст выбирает бот.
+//
+// Условия те же, что у ученического: не раньше чем через сутки после выдачи
+// роли, ровно один раз за всё время (`nudge:teach:<user>`), и только тем, у
+// кого есть Telegram — написать больше некуда. Дневное окно проверяет БОТ.
+async function enqueueTeacherNudges({ db = pool, minHours = NUDGE_MIN_HOURS, limit = 50 } = {}) {
+  const hours = Math.max(1, Number(minHours) || NUDGE_MIN_HOURS);
+  const size = Math.min(200, Math.max(1, Number(limit) || 50));
+  const result = await db.query(
+    `INSERT INTO social_notification_jobs(user_id, telegram_id, kind, payload, dedup_key)
+     SELECT p.user_id, i.subject, 'teacher_nudge',
+            jsonb_build_object(
+              'stage', CASE WHEN cls.class_id IS NULL THEN 'no_class' ELSE 'no_homework' END,
+              'classTitle', COALESCE(cls.title, ''),
+              'students', COALESCE(cls.students, 0)),
+            'nudge:teach:' || p.user_id
+     FROM social_profiles p
+     JOIN user_identities i ON i.user_id = p.user_id AND i.provider = 'telegram'
+     JOIN app_users u ON u.id = p.user_id AND u.disabled_at IS NULL
+     LEFT JOIN LATERAL (
+       SELECT c.id AS class_id, c.title,
+              (SELECT COUNT(*)::int FROM social_class_members m
+               WHERE m.class_id = c.id AND m.status = 'active') AS students
+       FROM social_classes c
+       WHERE c.teacher_user_id = p.user_id AND c.status = 'active'
+       ORDER BY c.created_at
+       LIMIT 1
+     ) cls ON true
+     WHERE p.role = 'teacher'
+       -- role_granted_at появился в миграции 015: у выданных раньше ролей он
+       -- пуст, и тогда отсчёт идёт от создания профиля. Без COALESCE все
+       -- прежние учителя молча не попали бы в выборку ни разу.
+       AND COALESCE(p.role_granted_at, p.created_at) < now() - ($1 || ' hours')::interval
+       AND NOT EXISTS (SELECT 1 FROM social_assignments a WHERE a.teacher_user_id = p.user_id)
+     ORDER BY COALESCE(p.role_granted_at, p.created_at)
+     LIMIT $2
+     ON CONFLICT (dedup_key) WHERE dedup_key <> '' DO NOTHING
+     RETURNING id`,
+    [String(hours), size]);
+  return result.rowCount;
+}
+
 // Забор пачки ботом. `FOR UPDATE SKIP LOCKED` — чтобы два экземпляра бота (или
 // перезапуск во время работы) не отправили одно и то же дважды.
 async function claimNotifications(limit, { db = pool, transact = tx } = {}) {
@@ -2118,7 +2168,8 @@ async function whoIs(telegramId, { db = pool } = {}) {
 module.exports = {
   ensureProfile, patchProfile, roleOf, setRole, whoIs, whoIsByEmail,
   claimTeacherRole, teacherInviteCode, resolveTeacherInvite,
-  enqueueAssignmentNotifications, enqueueStartNudges, claimNotifications, ackNotification, failNotification,
+  enqueueAssignmentNotifications, enqueueStartNudges, enqueueTeacherNudges,
+  claimNotifications, ackNotification, failNotification,
   getState, putState,
   saveAttempts, insertEvents, recomputeAssignment, enqueueCompletionNotification, notifyCompletionSafely,
   activeAssignmentsFor,
