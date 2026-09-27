@@ -9,7 +9,8 @@ param(
     # ACL on 2026-09-21 (another agent added an unknown SID) and OpenSSH refuses it.
     # Never fix key ACLs from an agent - see AGENTS.md, SSH section.
     [string]$KeyPath = $(if (Test-Path -LiteralPath (Join-Path $env:USERPROFILE '.ssh\id_ed25519_deploy')) { Join-Path $env:USERPROFILE '.ssh\id_ed25519_deploy' } else { Join-Path $env:USERPROFILE '.ssh\id_ed25519' }),
-    [string]$KnownHostsPath = (Join-Path $env:USERPROFILE '.ssh\known_hosts')
+    [string]$KnownHostsPath = (Join-Path $env:USERPROFILE '.ssh\known_hosts'),
+    [switch]$AllowBehindOrigin
 )
 
 $ErrorActionPreference = 'Stop'
@@ -51,6 +52,22 @@ try {
     $dirty = & git -c $gitTrust -C $repoRoot status --porcelain
     if ($LASTEXITCODE -ne 0) { throw 'git status failed' }
     if ($dirty) { throw 'Commit changes before deploying static.' }
+
+    # Rollback guard (2026-09-27). On 2026-09-26 the API was shipped from a local
+    # master that lacked commits already live and pushed to origin/master, which
+    # silently reverted another agent's deployed work. Two agents deploy from
+    # different trees, so refuse to ship a HEAD that does not contain
+    # origin/master. Merge first; -AllowBehindOrigin exists only for a deliberate
+    # rollback.
+    if (-not $AllowBehindOrigin) {
+        & git -c $gitTrust -C $repoRoot fetch -q origin master
+        if ($LASTEXITCODE -eq 0) {
+            & git -c $gitTrust -C $repoRoot merge-base --is-ancestor origin/master HEAD
+            if ($LASTEXITCODE -ne 0) { throw 'HEAD does not contain origin/master. Run: git merge origin/master (or pass -AllowBehindOrigin for a deliberate rollback).' }
+        } else {
+            Write-Warning 'git fetch origin failed - rollback guard skipped.'
+        }
+    }
 
     Write-Host 'Packing HEAD...'
     Invoke-Native { git -c $gitTrust -C $repoRoot archive --format=tar.gz -o $archive HEAD -- . } 'git archive failed'
