@@ -394,7 +394,7 @@ test('экономика v3, питомец, коробки, итоги, рей�
     let st = await tx(c => W.equip(c, vera.user_id, {}, tNow));
     assert.equal(st.round.steps.find(x => x.id === 'votes').done, true, 'голоса шага 22 засчитаны');
     await assert.rejects(tx(c => W.claimRound(c, vera.user_id, tNow)), /round_not_done/);
-    await tx(c => W.spin(c, vera.user_id, tNow));
+    await tx(c => W.spin(c, vera.user_id, tNow, () => 0)); // детерминированно: без осколка с колеса
     await db.query(`UPDATE pet_wallets SET counters = counters || jsonb_build_object('quests', jsonb_build_object('day', $2::text, 'allDone', true, 'list', '[]'::jsonb)) WHERE user_id=$1`, [vera.user_id, today]);
     const reacted = await tx(c => S.react(c, vera.user_id, gena.public_id, '💯', tNow));
     assert.equal(reacted.round.done, true, JSON.stringify(reacted.round));
