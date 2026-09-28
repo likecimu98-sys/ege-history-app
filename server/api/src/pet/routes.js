@@ -19,6 +19,8 @@ async function showcase() {
   return showcaseCache.data;
 }
 
+const CARE_PATHS = new Set(['/buy', '/use', '/equip', '/spin', '/tap', '/rename', '/open-box', '/react', '/battle', '/round', '/craft', '/switch', '/paint-nick']);
+
 async function handlePet(req, res, url, session, deps) {
   const { json, readJson, requireMutationAuth, requireSession, accessContext, limiter, scope } = deps;
   const path = url.pathname.slice(PREFIX.length) || '/';
@@ -56,7 +58,14 @@ async function handlePet(req, res, url, session, deps) {
   if (!limiter.take(`${scope}:pet`, 120).ok) return json(res, 429, { error: 'rate_limited' });
   const body = await readJson(req, 8192);
   const userId = session.userId;
-  const run = fn => tx(client => fn(client));
+  // Любое действие ученика с питомцем — забота: сбрасывает счёт забытых дней
+  // (смерть от забвения, wallet.js). Отметка ставится ДО действия, чтобы ответ
+  // уже не показывал предупреждение. Синхронизация ачивок — автоматическая,
+  // её клиент шлёт сам, поэтому заботой не считается.
+  const run = fn => tx(async client => {
+    if (CARE_PATHS.has(path)) await W.markCare(client, userId);
+    return fn(client);
+  });
 
   switch (path) {
     case '/hatch': {
@@ -95,6 +104,12 @@ async function handlePet(req, res, url, session, deps) {
       return json(res, 200, await run(c => W.switchPet(c, userId, body.index)));
     case '/achievements':
       return json(res, 200, await run(c => W.rewardAchievements(c, userId, Array.isArray(body.ids) ? body.ids : [])));
+    case '/ack-death':
+      return json(res, 200, await run(c => W.ackDeath(c, userId)));
+    case '/referral': {
+      const ctx = await accessContext(session);
+      return json(res, 200, await run(c => W.claimReferral(c, userId, ctx.docIds, String(body.ref || ''))));
+    }
     case '/paint-nick':
       return json(res, 200, await run(c => W.paintNick(c, userId, String(body.color || ''))));
     default:

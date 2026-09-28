@@ -106,7 +106,9 @@ const SOCIAL = {
   battleDaily: 20,
   battleXp: 2,
   stylePrize: { coins: 500, days: 7, minVotes: 5 },
-  referral: { box: 'box_chest', maxPerInviter: 30, accountMaxAgeDays: 30 },
+  // Сундук обоим — когда приглашённый решил 16 строк (решение владельца 28.09.2026;
+  // раньше — при вылуплении, то есть после 10 минут решения).
+  referral: { box: 'box_chest', maxPerInviter: 30, accountMaxAgeDays: 30, minSolved: 16 },
 };
 
 // [id, слот, редкость, цена|null (только из коробок), название, эпоха, [шаблон, ...цвета]]
@@ -399,6 +401,11 @@ const ECONOMY = {
   dailyEarnCap: 5000,           // потолок монет за решение в московские сутки
   feedPerLine: 0.4,             // питается знаниями: +4 сытости за 10 строк
   hatchMinSolved: 20,           // серверная страховка к клиентскому порогу «10 минут»
+  // Смерть от забвения (решение владельца 28.09.2026): считаются только дни,
+  // когда ученик ОТКРЫВАЛ тренажёр, но ничего не сделал с питомцем. После
+  // neglectWarnDays таких дней подряд — предупреждение; ещё один такой день —
+  // питомец умирает, и раздел питомца пропадает у ученика.
+  neglectWarnDays: 7,
   hatchMinSeconds: 600,         // клиентский порог: 10 минут решения
   welcomeCoins: 150,
   veteranBoxPerLines: 500,
@@ -530,7 +537,7 @@ function publicCatalog() {
 }
 
 // Меняется вместе с содержимым каталога: клиент кэширует каталог по версии.
-const CATALOG_VERSION = '2026-09-28-10';
+const CATALOG_VERSION = '2026-09-28-11';
 
 module.exports = {
   RARITIES, RARITY_VALUE, DUPLICATE_SHARE, SLOTS, SPECIES, ITEMS, CONSUMABLES, BOXES,

@@ -408,6 +408,21 @@ async function handleInternal(req, res, url) {
   if (!internalRequest(req)) throw Object.assign(new Error('forbidden'), { statusCode: 403 });
   // 🪙 Начисление монет «Летописчика» из бота (/coins, только владелец сервиса).
   // Адресаты: tgIds, весь класс (classCode) или все владельцы питомцев (all).
+  // ⚰️ Воскресить питомца, умершего от забвения (/revive в боте, только владелец).
+  if (req.method === 'POST' && url.pathname === '/internal/v1/pet/revive') {
+    const body = await readJson(req);
+    const tg = String(body.tgId || '');
+    if (!/^\d{3,20}$/.test(tg)) return json(res, 400, { error: 'bad_tg' });
+    const { rows } = await pool.query(`SELECT user_id FROM student_profiles WHERE doc_id=$1 AND user_id IS NOT NULL
+      UNION ALL SELECT user_id FROM user_identities WHERE provider='telegram' AND subject=$1 LIMIT 1`, [tg]);
+    if (!rows[0]?.user_id) return json(res, 404, { error: 'no_account' });
+    try {
+      const r = await tx(client => petWallet.revive(client, rows[0].user_id));
+      await pool.query('INSERT INTO audit_events(action, target, details) VALUES($1, $2, $3)',
+        ['pet.revive', tg, JSON.stringify({ by: body.by || null })]);
+      return json(res, 200, r);
+    } catch (error) { return json(res, error.statusCode || 500, { error: error.message }); }
+  }
   if (req.method === 'POST' && url.pathname === '/internal/v1/pet/grant') {
     const body = await readJson(req);
     let tgIds = Array.isArray(body.tgIds) ? body.tgIds.map(String).filter(x => /^\d{3,20}$/.test(x)) : [];

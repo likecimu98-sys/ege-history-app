@@ -213,6 +213,7 @@
     else if (state === 'happy') mouth = '<path d="M91 ' + my + ' Q100 ' + (my + 11) + ' 109 ' + my + 'Z" fill="#7a2233" ' + SW + '/><path d="M95 ' + (my + 5) + ' Q100 ' + (my + 9) + ' 105 ' + (my + 5) + '" fill="#ff8fa3"/>';
     else if (sp !== 'owl') mouth = '<path d="M92 ' + my + ' Q96 ' + (my + 5) + ' 100 ' + (my + 1) + ' Q104 ' + (my + 5) + ' 108 ' + my + '" fill="none" stroke="' + OUT + '" stroke-width="2.5" stroke-linecap="round"/>';
     else mouth = '';
+    if (sp !== 'owl') s += altMouths(my, OUT);
     s += '<g class="pet-mouth">' + mouth + '</g>';
     // Открытый рот для еды и зевка — скрыт, пока не нужен (см. pet.css .eating / .act-yawn).
     s += '<g class="pet-chomp"><ellipse cx="100" cy="' + (my + 3) + '" rx="8" ry="9" fill="#7a2233" ' + SW + '/><ellipse cx="100" cy="' + (my + 8) + '" rx="5" ry="3" fill="#ff8fa3"/></g>';
@@ -363,11 +364,28 @@
     else if (mood === 'cool') mouth = '<path d="M90 ' + (my + 2) + ' Q100 ' + (my + 5) + ' 110 ' + (my - 2) + '" fill="none" stroke="' + ink + '" stroke-width="2.4" stroke-linecap="round"/>';
     else mouth = '<path d="M91 ' + my + ' Q95 ' + (my + 4) + ' 100 ' + (my + 1) + ' Q105 ' + (my + 4) + ' 109 ' + my + '" fill="none" stroke="' + ink + '" stroke-width="2.4" stroke-linecap="round"/>';
     if (sp === 'owl' && mood !== 'hungry' && mood !== 'happy') mouth = '';
+    if (sp !== 'owl') s += altMouths(my, ink);
     s += '<g class="pet-mouth">' + mouth + '</g>';
     s += '<g class="pet-chomp"><ellipse cx="100" cy="' + (my + 3) + '" rx="8" ry="9" fill="#6a1e2c" stroke="' + ink + '" stroke-width="2.2"/><ellipse cx="100" cy="' + (my + 8) + '" rx="5" ry="3" fill="#ff8fa3"/></g>';
     if (sp === 'kitten' && state !== 'sick') s += '<path d="M62 104 L42 100 M62 110 L42 112 M138 104 L158 100 M138 110 L158 112" stroke="' + ink + '" stroke-width="1.5" stroke-linecap="round" opacity=".8"/>';
     if (stage === 'sage' && sp === 'owl') s += '<path d="M86 126 Q100 140 114 126" fill="none" stroke="#f4f4f4" stroke-width="3"/>';
     return s;
+  }
+
+  // ── Сменная мимика (28.09.2026): набор ртов, скрытых по умолчанию. Stage в
+  // pet.js время от времени ставит на svg data-x="smile|grin|o|smirk|flat|tongue|think",
+  // CSS плавно гасит обычный рот и проявляет нужный. Рисуется ПЕРЕД .pet-mouth —
+  // чтобы правило «.pet-mx ~ .pet-mouth» могло прятать обычный рот.
+  function altMouths(my, ink) {
+    var o = 'fill="none" stroke="' + ink + '" stroke-width="2.4" stroke-linecap="round"';
+    return '<g class="pet-mx">' +
+      '<path class="mx-smile" d="M89 ' + my + ' Q100 ' + (my + 10) + ' 111 ' + my + '" ' + o + '/>' +
+      '<g class="mx-grin"><path d="M88 ' + my + ' Q100 ' + (my + 13) + ' 112 ' + my + 'Z" fill="#6a1e2c" stroke="' + ink + '" stroke-width="2.2" stroke-linejoin="round"/><path d="M90.5 ' + (my + 1.2) + ' Q100 ' + (my + 4.5) + ' 109.5 ' + (my + 1.2) + '" stroke="#fff" stroke-width="2.6" fill="none"/></g>' +
+      '<ellipse class="mx-o" cx="100" cy="' + (my + 3) + '" rx="3.6" ry="4.6" fill="#6a1e2c" stroke="' + ink + '" stroke-width="2"/>' +
+      '<path class="mx-smirk" d="M91 ' + (my + 2) + ' Q101 ' + (my + 3.5) + ' 110 ' + (my - 3.5) + '" ' + o + '/>' +
+      '<path class="mx-flat" d="M93 ' + (my + 2) + ' H107" ' + o + '/>' +
+      '<g class="mx-tongue"><path d="M90 ' + my + ' Q100 ' + (my + 8) + ' 110 ' + my + '" ' + o + '/><path d="M99 ' + (my + 3.5) + ' q0 7 5 7 q5 0 5 -7Z" fill="#ff8fa3" stroke="' + ink + '" stroke-width="1.8" stroke-linejoin="round"/></g>' +
+      '</g>';
   }
 
   // ── Фирменные эффекты вещей (концепция 27.09.2026) ───────────────────────
@@ -760,6 +778,7 @@
     else if (mood === 'sleep') mouth = '<ellipse cx="100" cy="' + (my + 2) + '" rx="3" ry="2.5" fill="' + ink + '"/>';
     else if (mood === 'inside') mouth = '<path d="M92 ' + (my + 2) + ' Q102 ' + (my + 3) + ' 110 ' + (my - 2) + '" fill="none" stroke="' + ink + '" stroke-width="2.2" stroke-linecap="round"/>';
     else mouth = '<path d="M91 ' + my + ' Q100 ' + (my + 5) + ' 109 ' + my + '" fill="none" stroke="' + ink + '" stroke-width="2.4" stroke-linecap="round"/>';
+    s += altMouths(my, ink);
     s += '<g class="pet-mouth">' + mouth + '</g>';
     s += '<g class="pet-chomp"><ellipse cx="100" cy="' + (my + 3) + '" rx="8" ry="9" fill="#6a1e2c" stroke="' + ink + '" stroke-width="2.2"/><ellipse cx="100" cy="' + (my + 8) + '" rx="5" ry="3" fill="#ff8fa3"/></g>';
     // Усы — поверх рта: у Наследника тонкие, у Императора пышные.
@@ -1060,6 +1079,7 @@
     else if (mood === 'sleep') mouth = '<ellipse cx="100" cy="' + (my + 2) + '" rx="3" ry="2.5" fill="' + ink + '"/>';
     else if (mood === 'chad') mouth = '<path d="M91 ' + (my + 1) + ' Q101 ' + (my + 3) + ' 110 ' + (my - 2) + '" fill="none" stroke="' + ink + '" stroke-width="2.4" stroke-linecap="round"/>';
     else mouth = '<path d="M92 ' + my + ' Q100 ' + (my + 4) + ' 108 ' + my + '" fill="none" stroke="' + ink + '" stroke-width="2.4" stroke-linecap="round"/>';
+    s += altMouths(my, ink);
     s += '<g class="pet-mouth">' + mouth + '</g>';
     s += '<g class="pet-chomp"><ellipse cx="100" cy="' + (my + 3) + '" rx="8" ry="9" fill="#6a1e2c" stroke="' + ink + '" stroke-width="2.2"/><ellipse cx="100" cy="' + (my + 8) + '" rx="5" ry="3" fill="#ff8fa3"/></g>';
     // Висячие усы ниже челюсти и клинышек бородки. У нукера — только пушок.
@@ -1267,6 +1287,7 @@
     } else {
       mouth = '<path d="M80 ' + (my + 4) + ' Q88 ' + (my - 1) + ' 94 ' + (my + 1) + ' M106 ' + (my + 1) + ' Q112 ' + (my - 1) + ' 120 ' + (my + 4) + '" fill="none" stroke="' + ink + '" stroke-width="2.4" stroke-linecap="round"/>';
     }
+    if (!chad) s += altMouths(my, ink);
     s += '<g class="pet-mouth">' + mouth + '</g>';
     s += '<g class="pet-chomp"><ellipse cx="100" cy="' + (my + 2) + '" rx="8" ry="8" fill="#5a1c28" stroke="' + ink + '" stroke-width="2"/></g>';
     // Нос: у ворчуна — длинный, свисает до рта; у красавчика — прямой и точёный.
@@ -1591,10 +1612,39 @@
   T.monocle = function (c) { return '<circle cx="118" cy="90" r="13" fill="rgba(255,255,255,.3)" stroke="' + c0(c, 0) + '" stroke-width="3.5"/><path d="M130 96 Q146 120 132 146" fill="none" stroke="' + c0(c, 0) + '" stroke-width="1.8"/>'; };
   T.beard = function (c) { return '<path d="M64 106 Q66 150 100 160 Q134 150 136 106 Q120 118 100 116 Q80 118 64 106Z" fill="' + c0(c, 0) + '" ' + SW + '/><path d="M86 130 Q90 142 96 148 M104 148 Q110 142 114 130" fill="none" stroke="' + shade(c0(c, 0), -0.3) + '" stroke-width="2"/><ellipse cx="100" cy="112" rx="6" ry="3" fill="#7a2233"/>'; };
   T.goggles = function (c) { return '<path d="M54 84 L146 84" stroke="' + c0(c, 0) + '" stroke-width="8"/><g fill="' + c0(c, 1) + '" ' + SW + '><circle cx="82" cy="88" r="14"/><circle cx="118" cy="88" r="14"/></g><path d="M74 82 Q78 78 84 80 M110 82 Q114 78 120 80" stroke="#fff" stroke-width="2.5" fill="none"/>'; };
-  T.mask = function (c) { return '<g class="it-shine"><path d="M60 84 Q70 72 86 78 Q100 86 114 78 Q130 72 140 84 Q136 102 118 102 Q106 100 100 94 Q94 100 82 102 Q64 102 60 84Z" fill="' + c0(c, 1) + '" ' + SW + '/><ellipse cx="83" cy="89" rx="8" ry="6" fill="' + OUT + '"/><ellipse cx="117" cy="89" rx="8" ry="6" fill="' + OUT + '"/><path d="M60 84 Q46 60 56 50 M140 84 Q154 60 144 50" fill="none" stroke="' + c0(c, 0) + '" stroke-width="4"/><circle cx="56" cy="48" r="5" fill="' + c0(c, 0) + '"/><circle cx="144" cy="48" r="5" fill="' + c0(c, 0) + '"/></g>'; };
+  // Маска с ассамблеи: к прежней маске — плюмаж из трёх перьев справа,
+  // золотая филигрань по краю и камень во лбу.
+  T.mask = function (c) { return maskPlume(c) + '<g class="it-shine"><path d="M60 84 Q70 72 86 78 Q100 86 114 78 Q130 72 140 84 Q136 102 118 102 Q106 100 100 94 Q94 100 82 102 Q64 102 60 84Z" fill="' + c0(c, 1) + '" ' + SW + '/><ellipse cx="83" cy="89" rx="8" ry="6" fill="' + OUT + '"/><ellipse cx="117" cy="89" rx="8" ry="6" fill="' + OUT + '"/><path d="M60 84 Q46 60 56 50 M140 84 Q154 60 144 50" fill="none" stroke="' + c0(c, 0) + '" stroke-width="4"/><circle cx="56" cy="48" r="5" fill="' + c0(c, 0) + '"/><circle cx="144" cy="48" r="5" fill="' + c0(c, 0) + '"/><path d="M62 86 Q72 76 86 81 Q100 89 114 81 Q128 76 138 86" fill="none" stroke="' + c0(c, 0) + '" stroke-width="1.6" stroke-dasharray="2 2"/><path d="M100 82 l3 4 -3 4 -3 -4Z" fill="#4dabf7" stroke="' + OUT + '" stroke-width="1"/></g>'; };
+  // Звёздные глаза (легенда): крупные золотые звёзды с бликом, за каждой
+  // медленно вращаются лучи, вокруг вспыхивают искорки.
+  function maskPlume(c) {
+    var g = c0(c, 0, '#e9c46a');
+    return '<g class="mk-plume"><path d="M136 80 C150 62 150 40 142 26 C146 44 140 60 132 76Z" fill="#ff6b8a" stroke="' + OUT + '" stroke-width="1.6"/>' +
+      '<path d="M138 82 C158 70 166 50 162 34 C160 52 150 66 134 78Z" fill="#4dabf7" stroke="' + OUT + '" stroke-width="1.6"/>' +
+      '<path d="M134 84 C156 82 172 70 176 56 C166 70 152 76 132 80Z" fill="#18a058" stroke="' + OUT + '" stroke-width="1.6"/>' +
+      '<path d="M140 30 Q142 50 134 74 M158 40 Q154 60 136 78 M170 60 Q156 74 134 80" fill="none" stroke="#fff" stroke-width="1" opacity=".6"/></g>' +
+      '<circle cx="136" cy="80" r="4" fill="' + g + '" stroke="' + OUT + '" stroke-width="1.4"/>';
+  }
   T.stareyes = function (c) {
-    function star(x, y) { return '<path class="it-twinkle" d="M' + x + ' ' + (y - 12) + ' L' + (x + 3.5) + ' ' + (y - 3.5) + ' L' + (x + 12) + ' ' + y + ' L' + (x + 3.5) + ' ' + (y + 3.5) + ' L' + x + ' ' + (y + 12) + ' L' + (x - 3.5) + ' ' + (y + 3.5) + ' L' + (x - 12) + ' ' + y + ' L' + (x - 3.5) + ' ' + (y - 3.5) + 'Z" fill="' + c0(c, 0) + '" stroke="' + c0(c, 1) + '" stroke-width="1.5"/>'; }
-    return '<g class="it-mythic">' + star(82, 90) + star(118, 90) + '</g>';
+    var g = c0(c, 0, '#ffd23f'), o = c0(c, 1, '#ff9f1c'), gid = uid('se');
+    function star(x, y, r) {
+      var d = '';
+      for (var i = 0; i < 10; i++) {
+        var a = -Math.PI / 2 + i * Math.PI / 5, rr = i % 2 ? r * 0.45 : r;
+        d += (i ? ' L' : 'M') + (x + Math.cos(a) * rr).toFixed(1) + ' ' + (y + Math.sin(a) * rr).toFixed(1);
+      }
+      return d + 'Z';
+    }
+    function eye(x, y) {
+      var rays = '';
+      for (var k = 0; k < 8; k++) { var a = k * Math.PI / 4; rays += '<path d="M' + x + ' ' + y + ' L' + (x + Math.cos(a - 0.12) * 20).toFixed(1) + ' ' + (y + Math.sin(a - 0.12) * 20).toFixed(1) + ' L' + (x + Math.cos(a + 0.12) * 20).toFixed(1) + ' ' + (y + Math.sin(a + 0.12) * 20).toFixed(1) + 'Z" fill="' + g + '" opacity=".35"/>'; }
+      return '<g class="se-rays" style="transform-origin:' + x + 'px ' + y + 'px">' + rays + '</g>' +
+        '<path d="' + star(x, y, 13) + '" fill="url(#' + gid + ')" stroke="' + o + '" stroke-width="1.8" stroke-linejoin="round"/>' +
+        '<path d="' + star(x - 2.5, y - 3, 4) + '" fill="#fff" opacity=".9"/>' +
+        '<path class="it-twinkle" d="M' + (x + 12) + ' ' + (y - 16) + ' l1.2 3 3 1.2 -3 1.2 -1.2 3 -1.2 -3 -3 -1.2 3 -1.2Z" fill="#fff"/>';
+    }
+    return '<defs><radialGradient id="' + gid + '" cx="40%" cy="35%" r="70%"><stop offset="0" stop-color="#fffbe0"/><stop offset=".55" stop-color="' + g + '"/><stop offset="1" stop-color="' + o + '"/></radialGradient></defs>' +
+      '<g class="it-mythic">' + eye(82, 90) + eye(118, 90) + '</g>';
   };
 
   // Шея (под подбородком, y≈126…150)
@@ -1888,13 +1938,24 @@
     px(70, 88, 5, 5, '#fff'); px(114, 88, 5, 5, '#fff'); px(76, 94, 5, 4, '#fff'); px(120, 94, 5, 4, '#fff');
     return '<g class="it-drop">' + s + '</g>';
   };
+  // Челюсть гигачада (легенда): квадратный подбородок с ямкой, резкая линия
+  // челюсти с тенью, плотная щетина, скулы и тяжёлые брови.
   T.gigachad = function (c) {
+    var k = c0(c, 0, '#000'), st = c0(c, 1, '#3a2a1e');
     var dots = '';
-    for (var i = 0; i < 16; i++) dots += '<circle cx="' + (76 + (i % 8) * 7) + '" cy="' + (120 + Math.floor(i / 8) * 7 + (i % 2) * 2) + '" r="1.1" fill="' + c0(c, 1, '#3a2a1e') + '" opacity=".7"/>';
-    return '<g class="it-shine"><path d="M60 98 Q60 142 100 148 Q140 142 140 98 L132 100 Q130 134 100 138 Q70 134 68 100Z" fill="' + c0(c, 0, '#000') + '" opacity=".18"/>' +
-      '<path d="M60 98 Q60 142 100 148 Q140 142 140 98" fill="none" stroke="' + OUT + '" stroke-width="3"/>' + dots +
-      '<path d="M100 134 L100 146" stroke="' + OUT + '" stroke-width="2" stroke-linecap="round"/>' +
-      '<path d="M68 76 L92 80 M108 80 L132 76" stroke="' + OUT + '" stroke-width="4.5" stroke-linecap="round"/></g>';
+    for (var i = 0; i < 34; i++) {
+      var col = i % 9, row = Math.floor(i / 9);
+      var x = 72 + col * 7 + (row % 2) * 3.5, y = 118 + row * 6 + (col % 2);
+      if (Math.abs(x - 100) > 30 - row * 3) continue;
+      dots += '<circle cx="' + x.toFixed(1) + '" cy="' + y + '" r="1.05" fill="' + st + '" opacity=".75"/>';
+    }
+    return '<g class="it-shine">' +
+      '<path d="M58 100 L62 126 Q68 144 100 150 Q132 144 138 126 L142 100 Q134 132 100 138 Q66 132 58 100Z" fill="' + k + '" opacity=".22"/>' +
+      '<path d="M60 98 L64 126 Q70 144 100 150 Q130 144 136 126 L140 98" fill="none" stroke="' + OUT + '" stroke-width="3.4" stroke-linejoin="round"/>' +
+      '<path d="M66 108 Q74 116 84 114 M134 108 Q126 116 116 114" fill="none" stroke="' + k + '" stroke-width="2" opacity=".35" stroke-linecap="round"/>' +
+      dots +
+      '<path d="M96 140 Q100 146 104 140" fill="none" stroke="' + OUT + '" stroke-width="2" stroke-linecap="round"/>' +
+      '<path d="M66 78 Q80 72 94 80 M106 80 Q120 72 134 78" fill="none" stroke="' + OUT + '" stroke-width="5" stroke-linecap="round"/></g>';
   };
   T.sigma = function (c) {
     return '<path d="M66 80 L94 84 L94 88 L66 86Z M134 80 L106 84 L106 88 L134 86Z" fill="' + c0(c, 0, '#15151a') + '"/>' +
@@ -2133,9 +2194,28 @@
     for (var i = 0; i < 16; i++) s += '<rect class="it-fall" style="animation-delay:' + (i * 0.27).toFixed(2) + 's" x="' + ((i * 41) % 200) + '" y="' + ((i * 29) % 110) + '" width="5" height="8" rx="1" fill="' + col[i % 5] + '" transform="rotate(' + (i * 37 % 90) + ' ' + ((i * 41) % 200) + ' ' + ((i * 29) % 110) + ')"/>';
     return s + '<circle class="it-twinkle" cx="170" cy="30" r="10" fill="#e9e3ff" opacity=".8"/>';
   };
+  // Режим дедлайна (легенда): сзади — красная тревожная пульсация, спереди —
+  // трясущийся будильник со звоном, красное табло «23:59» с мигающим
+  // двоеточием и листы, которые разлетаются в панике.
+  T.a_deadline_back = function () {
+    var id = uid('dl');
+    return '<defs><radialGradient id="' + id + '"><stop offset=".45" stop-color="#ef4444" stop-opacity="0"/><stop offset="1" stop-color="#ef4444" stop-opacity=".55"/></radialGradient></defs>' +
+      '<svg x="0" y="0" width="200" height="200" viewBox="0 0 200 200" overflow="hidden"><rect class="dl-pulse" width="200" height="200" fill="url(#' + id + ')"/></svg>';
+  };
   T.a_deadline = function () {
-    return '<g class="it-pulse"><circle cx="100" cy="110" r="84" fill="none" stroke="#ef4444" stroke-width="4" opacity=".6"/><circle cx="100" cy="110" r="76" fill="none" stroke="#ef4444" stroke-width="2" opacity=".35"/></g>' +
-      '<g class="it-float"><circle cx="30" cy="40" r="11" fill="#fff" stroke="#ef4444" stroke-width="2.5"/><path d="M30 40 v-7 M30 40 h6" stroke="#ef4444" stroke-width="2"/><text x="170" y="40" text-anchor="middle" font-size="14" font-weight="900" fill="#ef4444" font-family="Arial">23:59</text></g>';
+    var papers = '';
+    [[20, 150, -20, 0], [168, 132, 25, .7], [40, 90, 12, 1.4], [176, 76, -15, 2.1]].forEach(function (q) {
+      papers += '<g class="dl-paper" style="animation-delay:' + q[3] + 's"><g transform="translate(' + q[0] + ' ' + q[1] + ') rotate(' + q[2] + ')"><rect x="-8" y="-10" width="16" height="20" rx="1.5" fill="#fff" stroke="#2b2233" stroke-width="1.4"/>' +
+        '<path d="M-5 -5 h10 M-5 -1 h10 M-5 3 h7" stroke="#9aa3ad" stroke-width="1.2"/></g></g>';
+    });
+    return '<svg x="0" y="0" width="200" height="200" viewBox="0 0 200 200" overflow="hidden">' + papers +
+      '<g class="dl-clock"><path d="M16 22 l-6 -6 M44 22 l6 -6" stroke="#2b2233" stroke-width="3" stroke-linecap="round"/>' +
+      '<circle cx="18" cy="20" r="6" fill="#ef4444" stroke="#2b2233" stroke-width="2"/><circle cx="42" cy="20" r="6" fill="#ef4444" stroke="#2b2233" stroke-width="2"/>' +
+      '<circle cx="30" cy="36" r="15" fill="#fff" stroke="#ef4444" stroke-width="3.5"/><path d="M30 36 v-9 M30 36 h7" stroke="#2b2233" stroke-width="2.4" stroke-linecap="round"/>' +
+      '<path class="dl-ring" d="M6 30 q-4 6 0 12 M54 30 q4 6 0 12" stroke="#ef4444" stroke-width="2.2" fill="none" stroke-linecap="round"/></g>' +
+      '<rect x="138" y="14" width="56" height="24" rx="4" fill="#1b1b1f" stroke="#ef4444" stroke-width="2"/>' +
+      '<text x="166" y="32" text-anchor="middle" font-size="16" font-weight="900" fill="#ff4d4d" font-family="Courier New, monospace">23<tspan class="dl-colon">:</tspan>59</text></svg>' +
+      '<path class="pet-tear" d="M140 70 Q136 78 140 81 Q144 78 140 70Z" fill="#7fc8f8"/>';
   };
   T.a_zen = function () {
     var s = '';

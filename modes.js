@@ -614,8 +614,8 @@ window.endDuel = function() {
     if (window.cancelDuelDb) window.cancelDuelDb();
 
     let emoji = '😐', title = 'НИЧЬЯ', color = 'text-gray-500';
-    if (myS > oppS) { emoji = '🏆'; title = 'ПОБЕДА!'; color = 'text-emerald-500'; haptic('success'); }
-    else if (myS < oppS) { emoji = '💔'; title = 'ПОРАЖЕНИЕ'; color = 'text-rose-500'; haptic('error'); }
+    if (myS > oppS) { emoji = '🏆'; title = 'ПОБЕДА!'; color = 'text-emerald-500'; haptic('success'); if (window.PetSfx) window.PetSfx.play('win'); }
+    else if (myS < oppS) { emoji = '💔'; title = 'ПОРАЖЕНИЕ'; color = 'text-rose-500'; haptic('error'); if (window.PetSfx) window.PetSfx.play('lose'); }
 
     $('modal-emoji').innerText = emoji;
     $('modal-main-title').innerText = title;

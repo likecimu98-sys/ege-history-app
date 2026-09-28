@@ -362,6 +362,7 @@ const CMD_ADMIN = [
     { command: 'admin', description: '🛠 Админка: рассылки, роли, лимиты' },
     { command: 'premium', description: '💎 Подписка клуба ученику (ID/@user)' },
     { command: 'coins', description: '🪙 Начислить монеты питомца (ID/@user/класс/всем)' },
+    { command: 'revive', description: '✨ Вернуть умершего питомца (ID/@user)' },
     { command: 'premiumgroup', description: '♾ Группа безлимита (в группе / ID)' },
     { command: 'commands', description: '🗂 Все команды всех ролей' },
     { command: 'stats', description: '📈 Статистика' },
@@ -1322,6 +1323,30 @@ async function runCoins(ctx, body) {
     if (bad.length) lines.push(`Не получилось: ${bad.length} (${[...new Set(bad.map(b => b.error))].join(', ')}).`);
     return ctx.reply(lines.join('\n'));
 }
+// ⚰️ /revive ID — вернуть питомца, умершего от забвения (решение владельца:
+// смерть настоящая, но владелец может сжалиться). Только ADMIN_ID.
+bot.command('revive', async (ctx) => {
+    if (ctx.from.id !== ADMIN_ID) return;
+    let target = String(ctx.match || '').trim().split(/\s+/)[0] || '';
+    if (/^@?\w{3,32}$/.test(target) && !/^\d+$/.test(target)) {
+        const u = db.prepare('SELECT * FROM users WHERE lower(username) = lower(?)').get(target.replace(/^@/, ''));
+        target = u && u.id ? String(u.id) : '';
+    }
+    if (!/^\d{5,15}$/.test(target)) return ctx.reply('Формат: /revive 123456789 (или @username)');
+    try {
+        const r = await fetch(`${HISTORY_API_URL.replace(/\/$/, '')}/internal/v1/pet/revive`, {
+            method: 'POST',
+            headers: { 'content-type': 'application/json', authorization: `Bearer ${INTERNAL_API_TOKEN}` },
+            body: JSON.stringify({ tgId: target, by: String(ctx.from.id) }),
+            signal: AbortSignal.timeout(30000),
+        });
+        const p = await r.json().catch(() => ({}));
+        if (!r.ok) return ctx.reply('Не вышло: ' + (p.error === 'nothing_to_revive' ? 'у него нет умершего питомца' : p.error || r.status));
+        await sendSafe(Number(target), `✨ ${String(p.name || 'Питомец').replace(/[<>]/g, '')} вернулся! Он голодный и соскучился — загляни к нему 👇`, { reply_markup: appKb() });
+        return ctx.reply(`Готово: ${p.name} снова жив.`);
+    } catch (e) { return ctx.reply('Не вышло: ' + e.message); }
+});
+
 bot.command('coins', async (ctx) => {
     if (ctx.from.id !== ADMIN_ID) return;
     const help = 'Формат:\n/coins 123456789 500 причина\n/coins @username 500 причина\n/coins class КОД_КЛАССА 200 причина\n/coins all 50 причина — всем, у кого есть питомец\nСумма — от 1 до 100 000.';
@@ -1479,6 +1504,7 @@ function petNudgeText(r) {
         sick: [`${e} ${name}: Мне нехорошо 🤒`, 'Кажется, я заболел от голода. Реши немного — купим микстуру?'],
         sad: [`${e} ${name}: Скучаю без тебя…`, 'Заглянешь? Я придумал, во что поиграть 🎲'],
         streak: [`${e} ${name}: Серия ${Number(r.streak) || 0} дн. сгорит в полночь 🔥`, 'Зайди на минутку — колесо и задания дня уже ждут.'],
+        dead: [`🪦 ${name} умер.`, `${Number(r.days) || 8} дней ты заходил в тренажёр, но ни разу к нему не заглянул — ни покормить, ни погладить.`, 'Питомца больше нет. Береги тех, кто рядом 🕯'],
     }[r.reason] || [`${e} ${name}: Я тут!`, 'Загляни ко мне 👇'];
     return lines.join('\n');
 }
@@ -1638,9 +1664,10 @@ function watchJobs() {
                         const chatId = Number(r.tgId);
                         if (!Number.isFinite(chatId) || isRecipientDone.get(jobId, String(chatId))) continue;
                         const u = db.prepare('SELECT notify_pet FROM users WHERE id = ?').get(chatId);
-                        if (u && u.notify_pet === 0) { markRecipientDone.run(jobId, String(chatId)); continue; }
+                        // О смерти сообщаем всегда: это не напоминание, а событие, одно на всю жизнь питомца.
+                        if (u && u.notify_pet === 0 && r.reason !== 'dead') { markRecipientDone.run(jobId, String(chatId)); continue; }
                         const kb = appKb();
-                        try { kb.row().text('🔕 Не напоминать', 'pet_off'); } catch (e) {}
+                        if (r.reason !== 'dead') { try { kb.row().text('🔕 Не напоминать', 'pet_off'); } catch (e) {} }
                         await sendSafe(chatId, petNudgeText(r), { reply_markup: kb });
                         markRecipientDone.run(jobId, String(chatId));
                         await sleep(40);

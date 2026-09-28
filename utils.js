@@ -87,6 +87,8 @@ window.Sfx = (function () {
 
     function play(name, vol) {
         if (isMuted()) return;
+        // Нет файла — синтезированный звук с тем же именем (win, achievement…).
+        if (!FILES[name] && window.PetSfx && window.PetSfx.has(name)) { window.PetSfx.play(name); return; }
         const a = get(name); if (!a) return;
         try {
             a.muted = false;
@@ -132,6 +134,143 @@ window.Sfx = (function () {
         window.addEventListener(ev, unlock, { capture: true, passive: true }));
 
     return { play, loop, stop, unlock, isMuted, setMuted };
+})();
+
+// 🔊 Синтезированные звуки (28.09.2026): WebAudio без файлов — мгновенно, ничего
+// не качается, одинаково в Telegram WebView и браузере. Подчиняются тому же
+// выключателю, что и Sfx (localStorage sfxMuted). Каждый звук — маленькая
+// «партитура» из тонов, шумов и огибающих; мастер-шина идёт через компрессор,
+// чтобы наложения (тиканье рулетки + фанфары) не хрипели.
+window.PetSfx = (function () {
+    let ctx = null, master = null, verb = null;
+    function ac() {
+        if (ctx) { if (ctx.state === 'suspended') ctx.resume().catch(() => {}); return ctx; }
+        const AC = window.AudioContext || window.webkitAudioContext;
+        if (!AC) return null;
+        try { ctx = new AC(); } catch (e) { return null; }
+        const comp = ctx.createDynamicsCompressor();
+        comp.threshold.value = -14; comp.ratio.value = 4; comp.attack.value = 0.003; comp.release.value = 0.2;
+        master = ctx.createGain(); master.gain.value = 0.55;
+        master.connect(comp); comp.connect(ctx.destination);
+        // Простая «комната»: две задержки с обратной связью — хвост у колоколов и фанфар.
+        verb = ctx.createGain(); verb.gain.value = 0.22;
+        [0.083, 0.127].forEach(t => {
+            const d = ctx.createDelay(1); d.delayTime.value = t;
+            const fb = ctx.createGain(); fb.gain.value = 0.38;
+            const lp = ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 3200;
+            verb.connect(d); d.connect(lp); lp.connect(fb); fb.connect(d); lp.connect(master);
+        });
+        return ctx;
+    }
+    function muted() { try { return localStorage.getItem('sfxMuted') === '1'; } catch (e) { return false; } }
+    const N = (n) => 440 * Math.pow(2, (n - 69) / 12); // MIDI → Гц
+
+    // Тон: тип волны, частота (или [от, до]), начало, длительность, громкость.
+    function tone(o) {
+        const c = ctx, t0 = c.currentTime + (o.at || 0), dur = o.dur || 0.2;
+        const osc = c.createOscillator(); osc.type = o.type || 'sine';
+        const f = Array.isArray(o.f) ? o.f : [o.f, o.f];
+        osc.frequency.setValueAtTime(f[0], t0);
+        if (f[1] !== f[0]) osc.frequency.exponentialRampToValueAtTime(Math.max(20, f[1]), t0 + (o.glide || dur));
+        if (o.detune) osc.detune.value = o.detune;
+        const g = c.createGain(), v = o.vol == null ? 0.3 : o.vol, a = o.attack || 0.005;
+        g.gain.setValueAtTime(0.0001, t0);
+        g.gain.exponentialRampToValueAtTime(v, t0 + a);
+        g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+        let node = osc;
+        if (o.lp) { const lp = c.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = o.lp; lp.Q.value = o.q || 0.7; node.connect(lp); node = lp; }
+        if (o.trem) { const lfo = c.createOscillator(), lg = c.createGain(); lfo.frequency.value = o.trem; lg.gain.value = v * 0.6; lfo.connect(lg); lg.connect(g.gain); lfo.start(t0); lfo.stop(t0 + dur + 0.05); }
+        node.connect(g); g.connect(master);
+        if (o.wet) { const w = c.createGain(); w.gain.value = o.wet; g.connect(w); w.connect(verb); }
+        osc.start(t0); osc.stop(t0 + dur + 0.05);
+    }
+    let noiseBuf = null;
+    function noise(o) {
+        const c = ctx, t0 = c.currentTime + (o.at || 0), dur = o.dur || 0.1;
+        if (!noiseBuf) {
+            noiseBuf = c.createBuffer(1, c.sampleRate, c.sampleRate);
+            const d = noiseBuf.getChannelData(0);
+            for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+        }
+        const src = c.createBufferSource(); src.buffer = noiseBuf; src.loop = true;
+        const bp = c.createBiquadFilter(); bp.type = o.filter || 'bandpass'; bp.Q.value = o.q || 1.2;
+        const f = Array.isArray(o.f) ? o.f : [o.f || 1500, o.f || 1500];
+        bp.frequency.setValueAtTime(f[0], t0);
+        if (f[1] !== f[0]) bp.frequency.exponentialRampToValueAtTime(f[1], t0 + dur);
+        const g = c.createGain(), v = o.vol == null ? 0.3 : o.vol;
+        g.gain.setValueAtTime(0.0001, t0);
+        g.gain.exponentialRampToValueAtTime(v, t0 + (o.attack || 0.004));
+        g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+        src.connect(bp); bp.connect(g); g.connect(master);
+        if (o.wet) { const w = c.createGain(); w.gain.value = o.wet; g.connect(w); w.connect(verb); }
+        src.start(t0, Math.random() * 0.5); src.stop(t0 + dur + 0.05);
+    }
+    const bell = (n, at, vol, dur) => { tone({ f: N(n), at, dur: dur || 0.9, vol: vol || 0.22, type: 'sine', wet: 0.5 }); tone({ f: N(n + 12) * 1.004, at, dur: (dur || 0.9) * 0.6, vol: (vol || 0.22) * 0.35, type: 'sine', wet: 0.4 }); tone({ f: N(n + 19), at, dur: (dur || 0.9) * 0.3, vol: (vol || 0.22) * 0.15, type: 'sine' }); };
+    const pluck = (n, at, vol) => tone({ f: N(n), at, dur: 0.28, vol: vol || 0.2, type: 'triangle', wet: 0.3 });
+    const brass = (n, at, dur, vol) => { [0, 7, -5].forEach((d, i) => tone({ f: N(n), detune: d, at, dur: dur || 0.6, vol: (vol || 0.12) * (i ? 0.7 : 1), type: 'sawtooth', lp: 1800, attack: 0.04, wet: 0.35 })); };
+    const sparkle = (at, n0, count, step) => { for (let i = 0; i < (count || 6); i++) tone({ f: N((n0 || 84) + i * (step || 3)), at: at + i * 0.05, dur: 0.25, vol: 0.07, type: 'sine', wet: 0.6 }); };
+
+    const S = {
+        // ── Интерфейс
+        tab: () => { noise({ f: 3200, dur: 0.03, vol: 0.12, q: 3 }); tone({ f: 1400, dur: 0.04, vol: 0.05 }); },
+        pop: () => tone({ f: [520, 1100], dur: 0.12, glide: 0.08, vol: 0.2, type: 'sine' }),
+        open: () => { tone({ f: [300, 700], dur: 0.18, glide: 0.15, vol: 0.12, type: 'triangle' }); sparkle(0.08, 88, 3, 4); },
+        error: () => { tone({ f: 150, dur: 0.18, vol: 0.14, type: 'sawtooth', lp: 700 }); tone({ f: 110, at: 0.12, dur: 0.22, vol: 0.14, type: 'sawtooth', lp: 600 }); },
+        // ── Питомец
+        purr: () => tone({ f: 95, dur: 0.7, vol: 0.22, type: 'sawtooth', lp: 380, trem: 26, attack: 0.08 }),
+        chirp: () => { tone({ f: [900, 1500], dur: 0.1, glide: 0.07, vol: 0.15 }); tone({ f: [1100, 1800], at: 0.11, dur: 0.1, glide: 0.07, vol: 0.13 }); },
+        munch: () => { for (let i = 0; i < 3; i++) { noise({ f: 700, at: i * 0.17, dur: 0.09, vol: 0.28, filter: 'lowpass' }); tone({ f: 180, at: i * 0.17, dur: 0.07, vol: 0.12, type: 'triangle' }); } },
+        heal: () => { [72, 76, 79, 84, 88].forEach((n, i) => tone({ f: N(n), at: i * 0.07, dur: 0.5, vol: 0.1, type: 'triangle', wet: 0.5 })); },
+        play: () => { tone({ f: [400, 900], dur: 0.15, glide: 0.1, vol: 0.14, type: 'square', lp: 2000 }); tone({ f: [500, 1200], at: 0.16, dur: 0.15, glide: 0.1, vol: 0.14, type: 'square', lp: 2000 }); },
+        coin: () => { tone({ f: N(83), dur: 0.08, vol: 0.13, type: 'square', lp: 4000 }); tone({ f: N(88), at: 0.07, dur: 0.35, vol: 0.13, type: 'square', lp: 4000, wet: 0.2 }); },
+        buy: () => { noise({ f: 5000, dur: 0.06, vol: 0.18, q: 2 }); bell(88, 0.03, 0.14, 0.5); bell(93, 0.12, 0.14, 0.7); },
+        equip: () => { noise({ f: [600, 3000], dur: 0.22, vol: 0.14, q: 0.8 }); bell(84, 0.16, 0.12, 0.5); },
+        levelup: () => { [60, 64, 67, 72].forEach((n, i) => pluck(n + 12, i * 0.08, 0.16)); brass(72, 0.34, 0.8, 0.1); sparkle(0.4, 91, 5, 2); },
+        stageup: () => { brass(60, 0, 0.35, 0.12); brass(64, 0.18, 0.35, 0.12); brass(67, 0.36, 0.9, 0.14); tone({ f: N(36), at: 0.36, dur: 1.2, vol: 0.2, type: 'sine' }); sparkle(0.5, 84, 8, 2); },
+        quest: () => { bell(79, 0, 0.14, 0.4); bell(84, 0.1, 0.14, 0.6); },
+        warn: () => { for (let i = 0; i < 3; i++) { tone({ f: N(57), at: i * 0.42, dur: 0.2, vol: 0.14, type: 'square', lp: 1200 }); tone({ f: N(52), at: i * 0.42 + 0.2, dur: 0.2, vol: 0.14, type: 'square', lp: 1200 }); } },
+        death: () => { tone({ f: N(38), dur: 3.2, vol: 0.14, type: 'sine', attack: 0.5 }); [69, 67, 64, 62, 57].forEach((n, i) => bell(n, 0.3 + i * 0.55, 0.16, 1.6)); },
+        streak: () => { noise({ f: [300, 2600], dur: 0.6, vol: 0.2, q: 0.7, attack: 0.25 }); [72, 76, 79, 84].forEach((n, i) => bell(n, 0.45 + i * 0.09, 0.14, 0.8)); sparkle(0.8, 91, 6, 2); },
+        lose: () => { [62, 61, 60].forEach((n, i) => brass(n - 12, i * 0.32, 0.3, 0.1)); brass(59 - 12, 0.96, 0.9, 0.1); tone({ f: N(47), at: 0.96, dur: 0.9, vol: 0.1, type: 'sine', trem: 7 }); },
+        win: () => { brass(67, 0, 0.18, 0.12); brass(67, 0.16, 0.18, 0.12); brass(72, 0.32, 0.7, 0.14); sparkle(0.4, 88, 6, 2); },
+        achievement: () => { bell(76, 0, 0.14, 0.5); bell(83, 0.1, 0.14, 0.5); bell(88, 0.2, 0.16, 0.9); sparkle(0.3, 93, 4, 2); },
+        // ── Рулетка сундука и колесо
+        tick: (o) => { const p = (o && o.pitch) || 1; noise({ f: 2600 * p, dur: 0.025, vol: 0.22, q: 4 }); tone({ f: 1250 * p, dur: 0.03, vol: 0.08, type: 'triangle' }); },
+        peg: (o) => { const p = (o && o.pitch) || 1; noise({ f: 3800 * p, dur: 0.02, vol: 0.2, q: 6 }); tone({ f: 2100 * p, dur: 0.025, vol: 0.06, type: 'square', lp: 5000 }); },
+        spinStart: () => { noise({ f: [200, 2400], dur: 0.5, vol: 0.2, q: 0.8, attack: 0.05 }); for (let i = 0; i < 6; i++) noise({ f: 3000, at: i * 0.04, dur: 0.02, vol: 0.1, q: 5 }); },
+        drum: () => { for (let i = 0; i < 18; i++) noise({ f: 900, at: i * 0.045, dur: 0.05, vol: 0.05 + i * 0.006, filter: 'lowpass' }); },
+        stop: () => { noise({ f: 300, dur: 0.12, vol: 0.3, filter: 'lowpass' }); tone({ f: 90, dur: 0.2, vol: 0.25, type: 'sine' }); },
+        reveal_common: () => bell(79, 0, 0.16, 0.6),
+        reveal_rare: () => { bell(76, 0, 0.16, 0.6); bell(83, 0.1, 0.16, 0.9); },
+        reveal_epic: () => { [72, 76, 79, 84].forEach((n, i) => pluck(n, i * 0.07, 0.18)); bell(88, 0.3, 0.14, 1); sparkle(0.35, 91, 5, 2); },
+        reveal_legendary: () => {
+            tone({ f: N(36), dur: 1.4, vol: 0.22, type: 'sine' });
+            brass(60, 0, 0.25, 0.12); brass(64, 0.12, 0.25, 0.12); brass(67, 0.24, 0.25, 0.12); brass(72, 0.36, 1.2, 0.15);
+            [84, 88, 91, 96].forEach((n, i) => bell(n, 0.45 + i * 0.08, 0.1, 1.1)); sparkle(0.8, 96, 8, 1);
+        },
+        reveal_mythic: () => {
+            noise({ f: [200, 6000], dur: 0.9, vol: 0.25, q: 0.6, attack: 0.8 });          // «обратная тарелка»
+            tone({ f: [110, 40], at: 0.85, dur: 1.6, glide: 0.6, vol: 0.35, type: 'sine' }); // удар-бум
+            noise({ f: 180, at: 0.85, dur: 0.5, vol: 0.35, filter: 'lowpass' });
+            [48, 55, 60, 64, 67].forEach(n => brass(n + 12, 0.9, 1.8, 0.09));
+            [84, 88, 91, 96, 100, 103].forEach((n, i) => bell(n, 1.0 + i * 0.07, 0.1, 1.4));
+            sparkle(1.4, 96, 10, 1);
+        },
+        wheel_small: () => { bell(79, 0, 0.14, 0.5); bell(84, 0.08, 0.14, 0.7); },
+        wheel_big: () => { brass(67, 0, 0.18, 0.12); brass(72, 0.16, 0.9, 0.14); sparkle(0.2, 88, 8, 2); },
+    };
+    function play(name, opts) {
+        if (muted() || !S[name]) return false;
+        if (!ac() || ctx.state === 'closed') return false;
+        try { S[name](opts); } catch (e) { return false; }
+        return true;
+    }
+    function has(name) { return !!S[name]; }
+    // Разблокировка в жесте — иначе iOS и Telegram WebView держат контекст «на паузе».
+    ['pointerdown', 'touchstart', 'keydown'].forEach(ev => window.addEventListener(ev, function once() {
+        ac(); window.removeEventListener(ev, once, true);
+    }, { capture: true, passive: true }));
+    return { play, has };
 })();
 
 function shuffleArray(array) {

@@ -2150,7 +2150,7 @@ window.showStreakCelebration = function (days) {
     box.addEventListener('click', close);
     document.body.appendChild(box);
     try { haptic('success'); } catch (e) {}
-    try { if (window.Sfx && window.Sfx.play) window.Sfx.play('wow'); } catch (e) {}
+    try { if (window.Sfx && window.Sfx.play) (window.PetSfx && window.PetSfx.play('streak')) || window.Sfx.play('wow'); } catch (e) {}
     setTimeout(close, 3400);
 };
 
@@ -3333,7 +3333,7 @@ function _achNext() {
     const close = () => { el.classList.add('out'); setTimeout(() => { el.remove(); _achNext(); }, 250); };
     el.addEventListener('click', close);
     document.body.appendChild(el);
-    try { if (window.Sfx && window.Sfx.play) window.Sfx.play('win'); } catch (e) {}
+    try { if (window.Sfx && window.Sfx.play) window.Sfx.play('achievement'); } catch (e) {}
     try { if (typeof haptic === 'function') haptic('success'); } catch (e) {}
     setTimeout(close, 4200);
 }

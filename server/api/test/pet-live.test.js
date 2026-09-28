@@ -451,6 +451,64 @@ test('экономика v3, питомец, коробки, итоги, рей�
     assert.equal(led.rows[0].n, 2); assert.equal(led.rows[0].s, 12500);
   }
 
+  // 26. Смерть от забвения: 7 заходов без заботы — жив, 8-й — предупреждение,
+  //     9-й — смерть, раздел пропадает; забота сбрасывает счёт; /revive возвращает.
+  {
+    const DAYMS = 24 * 3600e3;
+    const uD = await newUser('Забывчивый');
+    await setProfile('d26', uD, { name: 'Забывчивый', totalSolved: 100 });
+    const t0 = Date.parse('2026-10-01T09:00:00Z');
+    await tx(c => W.hatch(c, uD, ['d26'], { species: 'kitten', name: 'Барсик' }, t0));
+    let s = null;
+    for (let d = 1; d <= 7; d++) {
+      s = await state(uD, 'd26', t0 + d * DAYMS);
+      assert.equal(s.hatched, true, 'день ' + d); assert.equal(s.doom, null, 'без предупреждения, день ' + d);
+    }
+    s = await state(uD, 'd26', t0 + 8 * DAYMS);
+    assert.ok(s.doom && s.doom.neglect === 7, 'на 8-й заход — предупреждение');
+    // Погладил — счёт сброшен, предупреждения нет.
+    await tx(c => W.markCare(c, uD, t0 + 8 * DAYMS));
+    s = await state(uD, 'd26', t0 + 8 * DAYMS + 60000);
+    assert.equal(s.doom, null);
+    for (let d = 9; d <= 16; d++) s = await state(uD, 'd26', t0 + d * DAYMS);
+    assert.ok(s.hatched && s.doom, 'снова 7 забытых заходов — предупреждение');
+    s = await state(uD, 'd26', t0 + 17 * DAYMS);
+    assert.equal(s.hatched, false); assert.equal(s.canHatch, false, 'нового не завести');
+    assert.equal(s.dead.name, 'Барсик'); assert.equal(s.dead.seen, false);
+    const job = (await db.query("SELECT data FROM notification_jobs WHERE doc_id LIKE 'pet_dead_%'")).rows[0];
+    assert.equal(job, undefined, 'у тестового нет Telegram — уведомлению некуда идти');
+    s = await state(uD, 'd26', t0 + 18 * DAYMS);
+    assert.equal(s.hatched, false); assert.ok(s.dead);
+    await tx(c => W.ackDeath(c, uD));
+    s = await state(uD, 'd26', t0 + 18 * DAYMS);
+    assert.equal(s.dead.seen, true);
+    const rv = await tx(c => W.revive(c, uD, t0 + 19 * DAYMS));
+    assert.equal(rv.name, 'Барсик');
+    s = await state(uD, 'd26', t0 + 19 * DAYMS + 1000);
+    assert.equal(s.hatched, true); assert.equal(s.pet.sat, 30); assert.equal(s.doom, null);
+    await assert.rejects(tx(c => W.revive(c, uD)), /nothing_to_revive/);
+  }
+
+  // 27. Приглашение: сундук обоим, когда друг решил 16 строк — без питомца.
+  {
+    const uI = await newUser('Пригласивший');
+    await setProfile('i27', uI, { totalSolved: 100 });
+    await tx(c => W.hatch(c, uI, ['i27'], { species: 'owl' }, Date.now()));
+    const code = (await W.readWallet(db, uI)).public_id;
+    const uF = await newUser('Друг');
+    await setProfile('f27', uF, { totalSolved: 10 });
+    await assert.rejects(tx(c => W.claimReferral(c, uF, ['f27'], code)), /too_early/);
+    await setProfile('f27', uF, { totalSolved: 16 });
+    const before = Number((await db.query("SELECT qty FROM pet_inventory WHERE user_id=$1 AND item_id='box_chest'", [uI])).rows[0]?.qty || 0);
+    let r = await tx(c => W.claimReferral(c, uF, ['f27'], code));
+    assert.equal(r.invited, true);
+    r = await tx(c => W.claimReferral(c, uF, ['f27'], code));
+    assert.equal(r.invited, false, 'один раз');
+    const after = Number((await db.query("SELECT qty FROM pet_inventory WHERE user_id=$1 AND item_id='box_chest'", [uI])).rows[0].qty);
+    assert.equal(after, before + 1);
+    assert.equal(Number((await db.query("SELECT qty FROM pet_inventory WHERE user_id=$1 AND item_id='box_chest'", [uF])).rows[0].qty), 1);
+  }
+
   // Журнал сходится с балансом у каждого (кроме старичка: его журнал — выдуманный v2).
   const sums = await db.query(`SELECT w.user_id, w.balance::int b, COALESCE(sum(l.delta),0)::int s
     FROM pet_wallets w LEFT JOIN pet_ledger l ON l.user_id=w.user_id GROUP BY w.user_id, w.balance`);

@@ -297,6 +297,11 @@ async function dayTick(db, w, counters, now, events) {
   const today = mskDay(now);
   const c = { ...(w.counters || {}) };
   if (c.loginDay === today) return;
+  // Забвение: прошлый день захода без единого действия с питомцем — +1.
+  // Старым кошелькам (до 28.09) без careDay засчитываем заботу в прошлый заход.
+  if (!c.careDay) c.careDay = c.loginDay || today;
+  if (c.careDay === today) c.neglect = 0;
+  else if (c.loginDay) c.neglect = c.careDay === c.loginDay ? 0 : num(c.neglect) + 1;
   const yesterday = prevDay(today);
   let streak = 1;
   if (c.loginDay === yesterday) streak = num(c.loginStreak) + 1;
@@ -491,6 +496,7 @@ function view(w, inv, now, extraIn = {}) {
     round: roundView(w, now),
     stable: stableView(w),
     publicId: w.public_id || null,
+    doom: doomWarning(w, now) ? { neglect: num(w.counters?.neglect) } : null,
     styleIcon: styleIconActive(w, now),
     catalogVersion: C.CATALOG_VERSION,
     now,
@@ -504,6 +510,7 @@ function view(w, inv, now, extraIn = {}) {
 // до него ученик просто не видит питомца, и строку в базе ради этого не пишем.
 async function getState(db, userId, docIds, now = Date.now()) {
   const existing = await readWallet(db, userId);
+  if (existing && !existing.pet && existing.counters?.dead) return deadView(existing, now);
   const counters = await profileCounters(db, userId, docIds);
   if (!existing || !existing.pet) {
     return {
@@ -521,9 +528,77 @@ async function getState(db, userId, docIds, now = Date.now()) {
   w.pet = decayPet(w.pet, now);
   const events = [];
   await dayTick(db, w, counters, now, events);
+  if (doomed(w, now)) {
+    await bury(db, w, now);
+    await saveWallet(db, w);
+    return deadView(w, now);
+  }
   events.push(...(await credit(db, w, counters, now)));
   await saveWallet(db, w);
   return { hatched: true, ...view(w, await inventory(db, userId), now, { events, counters }) };
+}
+
+// ── Смерть от забвения ───────────────────────────────────────────────────
+// Забота — любое действие ученика с питомцем (см. CARE_PATHS в routes.js).
+function markCareCounters(w, now) {
+  w.counters = { ...(w.counters || {}), careDay: mskDay(now), neglect: 0 };
+}
+async function markCare(db, userId, now = Date.now()) {
+  await db.query(`UPDATE pet_wallets SET counters = coalesce(counters, '{}'::jsonb) || jsonb_build_object('careDay', $2::text, 'neglect', 0)
+    WHERE user_id = $1 AND pet IS NOT NULL`, [userId, mskDay(now)]);
+}
+// Сегодня — последний день: уже neglectWarnDays забытых заходов подряд.
+function doomWarning(w, now) {
+  const c = w.counters || {};
+  return !!w.pet && c.careDay !== mskDay(now) && num(c.neglect) >= C.ECONOMY.neglectWarnDays;
+}
+function doomed(w, now) {
+  const c = w.counters || {};
+  return !!w.pet && c.careDay !== mskDay(now) && num(c.neglect) > C.ECONOMY.neglectWarnDays;
+}
+// Питомец (и весь питомник) уходит. Данные не стираем: владелец может
+// вернуть питомца командой /revive в боте.
+async function bury(db, w, now) {
+  const pet = w.pet, c = { ...(w.counters || {}) };
+  const level = levelOf(num(pet.xp));
+  const stage = stageOf(level).id;
+  c.dead = { at: now, name: String(pet.name || 'Летописчик').slice(0, 20), species: pet.species, level,
+    stageName: stageName(pet.species, stage), days: num(c.neglect), seen: false };
+  c.deadPet = { pet, equipped: w.equipped || {}, stable: c.stable || [] };
+  c.stable = [];
+  w.counters = c;
+  w.pet = null;
+  const tg = await db.query("SELECT subject FROM user_identities WHERE user_id=$1 AND provider='telegram' LIMIT 1", [w.user_id]);
+  const tgId = tg.rows[0]?.subject;
+  if (tgId && /^\d+$/.test(String(tgId))) {
+    await db.query(`INSERT INTO notification_jobs(doc_id, data, status) VALUES($1, $2, 'pending') ON CONFLICT (doc_id) DO NOTHING`,
+      [`pet_dead_${w.user_id}_${mskDay(now)}`, JSON.stringify({ type: 'pet_nudge', ts: now,
+        recipients: [{ tgId: String(tgId), name: c.dead.name, species: c.dead.species, reason: 'dead', days: c.dead.days }] })]);
+  }
+}
+function deadView(w, now) {
+  return { hatched: false, canHatch: false, dead: w.counters?.dead || { at: now }, catalogVersion: C.CATALOG_VERSION, now };
+}
+// Ученик увидел прощание — больше не показываем.
+async function ackDeath(db, userId) {
+  await db.query(`UPDATE pet_wallets SET counters = jsonb_set(counters, '{dead,seen}', 'true'::jsonb)
+    WHERE user_id = $1 AND pet IS NULL AND counters ? 'dead'`, [userId]);
+  return { ok: true };
+}
+// Воскрешение — только владелец сервиса (бот /revive). Питомец возвращается
+// голодным и грустным: забвение не проходит бесследно.
+async function revive(db, userId, now = Date.now()) {
+  const w = await lockWallet(db, userId);
+  const c = { ...(w.counters || {}) };
+  if (w.pet || !c.deadPet) throw httpError(409, 'nothing_to_revive');
+  w.pet = { ...c.deadPet.pet, sat: 30, mood: 30, health: 70, sick: false, starvingH: 0, at: now };
+  w.equipped = c.deadPet.equipped || {};
+  c.stable = c.deadPet.stable || [];
+  delete c.dead; delete c.deadPet;
+  c.careDay = mskDay(now); c.neglect = 0;
+  w.counters = c;
+  await saveWallet(db, w);
+  return { revived: true, name: w.pet.name };
 }
 
 function cleanName(raw) {
@@ -546,7 +621,7 @@ async function hatch(db, userId, docIds, { species, name, knownAchievements = []
     at: now, hatchedAt: now, toys: {} };
   w.marks = { ...counters };
   w.daily = { day: mskDay(now), earned: 0 };
-  w.counters = { ...(w.counters || {}), loginDay: mskDay(now), loginStreak: 1, quests: makeQuests(userId, mskDay(now), counters) };
+  w.counters = { ...(w.counters || {}), loginDay: mskDay(now), loginStreak: 1, quests: makeQuests(userId, mskDay(now), counters), careDay: mskDay(now), neglect: 0 };
   await move(db, w, C.ECONOMY.welcomeCoins, 'welcome');
   const boxes = Math.min(C.ECONOMY.veteranBoxMax, Math.floor(counters.solved / C.ECONOMY.veteranBoxPerLines));
   if (boxes) await addItem(db, userId, 'box_chest', boxes, 'veteran');
@@ -580,6 +655,15 @@ async function rewardReferral(db, userId, ref) {
   await addItem(db, userId, R.box, 1, 'referral');
   await addItem(db, inviter, R.box, 1, 'referral');
   return true;
+}
+
+// Приглашение по ссылке: клиент зовёт /referral, как только приглашённый решил
+// minSolved строк (питомца для этого заводить не нужно). Повтор безвреден.
+async function claimReferral(db, userId, docIds, ref) {
+  const R = C.SOCIAL.referral;
+  const counters = await profileCounters(db, userId, docIds);
+  if (counters.solved < R.minSolved) throw httpError(403, 'too_early', { need: R.minSolved });
+  return { invited: await rewardReferral(db, userId, ref) };
 }
 
 async function withPet(db, userId, now) {
@@ -1028,7 +1112,8 @@ async function mergeUserData(client, primaryId, secondaryId) {
 module.exports = {
   spin, dayTick, makeQuests, progressQuests, boostActive, PROFILE_COUNTERS, addFragment,
   tap, levelOf, xpForLevel, stageOf, levelReward, addXp, STAGES, TAP_COOLDOWN_MS,
-  craft, switchPet, speciesOwners, speciesShowcase, stageName, roundView, markRound, claimRound, grant, GRANT_MAX, weekOf, ownerName, addNews, styleIconActive, rewardReferral,
+  craft, switchPet, speciesOwners, speciesShowcase, stageName, roundView, markRound, claimRound, grant, GRANT_MAX,
+  claimReferral, markCare, markCareCounters, doomWarning, doomed, ackDeath, revive, weekOf, ownerName, addNews, styleIconActive, rewardReferral,
   mskDay, prevDay, isNight, decayPet, petMoodState, profileCounters, credit, view, getState, hatch,
   buy, use, equip, rename, openBox, rollRarity, rewardAchievements, paintNick, rarityShowcase,
   mergeUserData, lockWallet, saveWallet, addItem, move, readWallet, inventory, nameStyleView, httpError,
