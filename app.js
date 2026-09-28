@@ -509,7 +509,9 @@ function checkAnswers(isSure, auto) {
         window.state.stats.perfectTables = (Number(window.state.stats.perfectTables) || 0) + 1;
     }
     // ── FIX: ЕГЭ-баллы начисляются когда ВСЯ таблица решена, даже если были ошибки ──
-    if (allCorrect && filled === total) {
+    // «Секретный архив» — не формат ЕГЭ: баллов ЕГЭ за него нет (до 28.09.2026 давал
+    // ~4 за дело по шкале текущего задания — и дело закрывалось за 5 секунд).
+    if (allCorrect && filled === total && window.state.currentMode !== 'detective') {
         let egePts = calculateEgePoints(rows, window.state.currentTask || 'task4');
         // Баллы ЕГЭ — в той доле, в какой таблица состояла из свежих строк.
         const stale = [...rows].filter(tr => tr.dataset.stale === '1').length;
