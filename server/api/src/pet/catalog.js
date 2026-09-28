@@ -36,7 +36,9 @@ const SPECIES = [
   { id: 'dragon', name: 'Дракончик' },
   // Редкие виды (27.09.2026, решение владельца): не вылупляются и не продаются —
   // только выпадают из коробок или собираются из осколков. У каждой стадии своё имя.
-  { id: 'ghoul', name: 'Гуль', rare: true, fragment: 'dark', petName: 'Тень',
+  // Гуль — самый редкий (решение владельца 28.09.2026): в 10 раз реже Николая,
+  // и никаких осколков — только сундук.
+  { id: 'ghoul', name: 'Гуль', rare: true, fragment: null, petName: 'Тень',
     stages: { baby: 'Новичок', teen: 'Гуль', adult: 'Дед инсайд', sage: 'Одноглазый король' } },
   { id: 'tsar', name: 'Николай II', rare: true, fragment: 'faberge', petName: 'Ники',
     stages: { baby: 'Цесаревич', teen: 'Наследник', adult: 'Император', sage: 'Император с державой' } },
@@ -56,31 +58,28 @@ const SPECIES = [
 // Николай — 0,05% из сундука и 2% из ларца; Гуль чуть чаще). Бросок отдельный,
 // поверх обычного, поэтому шансы вещей в коробке не меняются.
 const RARE_SPECIES_DROPS = {
-  box_chest: { tsar: 0.05, burunday: 0.1, squid: 0.15, ghoul: 0.3 },
   // 28.09.2026: в ларцах шансы снижены в ~4 раза — вместе они давали редкий вид
-  // в каждом пятом Императорском и каждом девятом Царском ларце.
-  box_tsar: { tsar: 0.3, burunday: 0.5, squid: 0.7, ghoul: 1 },
-  box_week: { tsar: 0.3, burunday: 0.5, squid: 0.7, ghoul: 1 },
-  box_emperor: { tsar: 0.6, burunday: 1, squid: 1.4, ghoul: 2 },
+  // в каждом пятом Императорском и каждом девятом Царском ларце. Тогда же
+  // (владелец): Гуль — в 10 раз реже Николая, Бурундай — в 5 раз реже.
+  box_chest: { tsar: 0.05, burunday: 0.01, squid: 0.15, ghoul: 0.005 },
+  box_tsar: { tsar: 0.3, burunday: 0.06, squid: 0.7, ghoul: 0.03 },
+  box_week: { tsar: 0.3, burunday: 0.06, squid: 0.7, ghoul: 0.03 },
+  box_emperor: { tsar: 0.6, burunday: 0.12, squid: 1.4, ghoul: 0.06 },
 };
 // Осколки — запасной путь к редкому виду: падают из ларцов, за 1-е место недели,
 // за 30 дней серии входов и изредка с колеса.
 const FRAGMENTS = {
   faberge: { name: 'Осколок Фаберже', icon: '🥚', species: 'tsar', need: 10,
     sources: 'колесо (1%), 1-е место недели, 30 дней серии входов, ларцы (3%)' },
-  // Осколки тьмы раньше падали только из ларцов — Гуль по осколкам выходил
-  // труднее Николая, хотя задуман проще. Теперь ещё колесо и 7 кругов подряд.
-  dark: { name: 'Осколок тьмы', icon: '🖤', species: 'ghoul', need: 6,
-    sources: 'колесо (1%), каждые 7 ежедневных кругов подряд, ларцы (3%)' },
   ink: { name: 'Капля чернил', icon: '🦑', species: 'squid', need: 8,
-    sources: 'Императорский ларец (6%), Царский ларец и Ларец недели (3%), 1-е место в «Кто круче?»' },
+    sources: 'каждые 7 ежедневных кругов подряд, Императорский ларец (6%), Царский ларец и Ларец недели (3%), 1-е место в «Кто круче?»' },
   horse: { name: 'Волос бунчука', icon: '🐎', species: 'burunday', need: 8,
     sources: 'Императорский ларец (5%), Царский ларец и Ларец недели (3%), 1-е место в топе дуэлей недели' },
 };
 const FRAGMENT_DROPS = {
-  box_tsar: { faberge: 3, dark: 3, ink: 3, horse: 3 },
-  box_week: { faberge: 3, dark: 3, ink: 3, horse: 3 },
-  box_emperor: { faberge: 5, dark: 5, ink: 6, horse: 5 },
+  box_tsar: { faberge: 3, ink: 3, horse: 3 },
+  box_week: { faberge: 3, ink: 3, horse: 3 },
+  box_emperor: { faberge: 5, ink: 6, horse: 5 },
 };
 const STABLE_MAX = 8;
 
@@ -88,7 +87,7 @@ const STABLE_MAX = 8;
 // 5 голосов в «Кто круче?» и одна реакция чужому питомцу. За весь круг —
 // сундук, раз в московские сутки. Каждый шаг ведёт в свой уголок питомца,
 // поэтому круг заодно знакомит с тем, что иначе лежит глубоко во вкладках.
-const DAILY_ROUND = { votes: 5, reward: 'box_chest', fragmentEvery: 7, fragment: 'dark' };
+const DAILY_ROUND = { votes: 5, reward: 'box_chest', fragmentEvery: 7, fragment: 'ink' };
 
 // Короткие исторические справки к вещам — видны при примерке. Шутка работает,
 // только если за ней стоит факт из курса.
@@ -421,14 +420,14 @@ const ECONOMY = {
 // «Ларец недели» каждые 30 дней.
 const LOGIN_STREAK = [
   { day: 3, items: [['box_chest', 1]] },
-  { day: 7, items: [['box_chest', 1], ['boost_elixir', 1]] },
+  { day: 7, items: [['box_tsar', 1], ['boost_elixir', 1]] },
   { day: 14, items: [['box_tsar', 1]] },
   { day: 30, items: [['box_week', 1]], fragment: 'faberge' },
 ];
 
 // Колесо удачи: одно вращение в сутки. Сумма весов — 100.
 const WHEEL = [
-  { id: 'c20', w: 25, coins: 20, label: '20' },
+  { id: 'c20', w: 26, coins: 20, label: '20' },
   { id: 'c50', w: 22, coins: 50, label: '50' },
   { id: 'c100', w: 12, coins: 100, label: '100' },
   { id: 'c150', w: 5, coins: 150, label: '150' },
@@ -438,7 +437,6 @@ const WHEEL = [
   { id: 'boost', w: 6, item: 'boost_elixir', label: '⚡' },
   { id: 'tsar', w: 3, item: 'box_tsar', label: '👑' },
   { id: 'frag', w: 1, fragment: 'faberge', label: '🥚' },
-  { id: 'fragd', w: 1, fragment: 'dark', label: '🖤' },
 ];
 
 // Задания дня: одно «строки» всегда, ещё два — из остальных. kind — счётчик
@@ -542,7 +540,7 @@ function publicCatalog() {
 }
 
 // Меняется вместе с содержимым каталога: клиент кэширует каталог по версии.
-const CATALOG_VERSION = '2026-09-28-13';
+const CATALOG_VERSION = '2026-09-28-14';
 
 module.exports = {
   RARITIES, RARITY_VALUE, DUPLICATE_SHARE, SLOTS, SPECIES, ITEMS, CONSUMABLES, BOXES,

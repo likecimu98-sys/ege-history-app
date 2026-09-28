@@ -954,6 +954,7 @@ async function speciesShowcase(db) {
 async function craft(db, userId, species, now = Date.now()) {
   const sp = C.SPECIES.find(x => x.id === species && x.rare);
   if (!sp) throw httpError(400, 'bad_species');
+  if (!sp.fragment || !C.FRAGMENTS[sp.fragment]) throw httpError(409, 'no_fragments'); // Гуль — только из сундука
   const w = await withPet(db, userId, now);
   const frag = C.FRAGMENTS[sp.fragment];
   const have = num(w.counters?.fragments?.[sp.fragment]);

@@ -269,40 +269,42 @@ test('экономика v3, питомец, коробки, итоги, рей�
     assert.equal(await rebalanceV3(pool, tx), null, 'пересчёт разовый');
   }
 
-  // 21. Редкие виды: сборка Гуля из осколков, Николай из сундука «с верхнего края»
-  //     броска, повтор вида не выпадает, осколки из ларца, смена питомца.
+  // 21. Редкие виды: сборка Сквидварда из капель, Гуля из осколков собрать нельзя,
+  //     остальные — из сундука «с верхнего края» броска по порядку редкости,
+  //     повтор вида не выпадает, осколки из ларца, смена питомца.
   {
     const tNow = Date.now();
     const top = n => (n === 1000000 ? 999999 : 0);
     const sly = await newUser('Хитрец');
     await assert.rejects(tx(c => W.hatch(c, sly, [], { species: 'tsar' })), /bad_species/);
-    await db.query(`UPDATE pet_wallets SET counters = jsonb_set(coalesce(counters,'{}'::jsonb), '{fragments}', '{"dark":7}'::jsonb) WHERE user_id=$1`, [u1]);
-    let s = await tx(c => W.craft(c, u1, 'ghoul', tNow));
-    assert.equal(s.crafted.species, 'ghoul');
-    assert.equal(s.fragments.dark, 1);
-    assert.equal(s.stable.at(-1).stageName, 'Новичок');
+    await db.query(`UPDATE pet_wallets SET counters = jsonb_set(coalesce(counters,'{}'::jsonb), '{fragments}', '{"ink":9,"dark":50}'::jsonb) WHERE user_id=$1`, [u1]);
+    await assert.rejects(tx(c => W.craft(c, u1, 'ghoul', tNow)), /no_fragments/, 'Гуль — только из сундука');
+    let s = await tx(c => W.craft(c, u1, 'squid', tNow));
+    assert.equal(s.crafted.species, 'squid');
+    assert.equal(s.fragments.ink, 1);
+    assert.equal(s.stable.at(-1).stageName, 'Малыш Сквидвард');
     await assert.rejects(tx(c => W.craft(c, u1, 'tsar', tNow)), /not_enough_fragments/);
     await tx(c => W.addItem(c, u1, 'box_chest', 4, 'test'));
     await tx(c => W.addItem(c, u1, 'box_tsar', 1, 'test'));
+    // По редкости: Гуль (0,005%), Бурундай (0,01%), Николай (0,05%); Сквидвард уже есть.
     s = await tx(c => W.openBox(c, u1, 'box_chest', tNow, top));
-    assert.equal(s.drop.species, 'tsar', JSON.stringify(s.drop));
-    assert.equal(s.drop.owners, 1);
-    // Следующий по редкости — Бурундай (0,1%), за ним Сквидвард (0,15%).
+    assert.equal(s.drop.species, 'ghoul', JSON.stringify(s.drop));
+    assert.equal(s.stable.find(p => p.species === 'ghoul').stageName, 'Новичок');
     s = await tx(c => W.openBox(c, u1, 'box_chest', tNow, top));
     assert.equal(s.drop.species, 'burunday', JSON.stringify(s.drop));
     assert.equal(s.stable.find(p => p.species === 'burunday').stageName, 'Юный нукер');
     s = await tx(c => W.openBox(c, u1, 'box_chest', tNow, top));
-    assert.equal(s.drop.species, 'squid', JSON.stringify(s.drop));
-    assert.equal(s.stable.find(p => p.species === 'squid').stageName, 'Малыш Сквидвард');
+    assert.equal(s.drop.species, 'tsar', JSON.stringify(s.drop));
+    assert.equal(s.drop.owners, 1);
     s = await tx(c => W.openBox(c, u1, 'box_chest', tNow, top));
     assert.ok(s.drop.id && !s.drop.species, 'все редкие виды уже есть — выпадает вещь');
     s = await tx(c => W.openBox(c, u1, 'box_tsar', tNow, top));
-    assert.deepEqual(s.drop.fragments, { faberge: 1, dark: 1, ink: 1, horse: 1 });
+    assert.deepEqual(s.drop.fragments, { faberge: 1, ink: 1, horse: 1 });
     // Императорский ларец: только эпик и выше.
     await tx(c => W.addItem(c, u1, 'box_emperor', 1, 'test'));
     s = await tx(c => W.openBox(c, u1, 'box_emperor', tNow, () => 0));
     assert.equal(s.drop.rarity, 'epic');
-    assert.equal(s.fragments.dark, 2);
+    assert.equal(s.fragments.ink, 2);
     const main = s.pet.species;
     const tsarAt = s.stable.findIndex(p => p.species === 'tsar');
     s = await tx(c => W.switchPet(c, u1, tsarAt, tNow));
@@ -407,8 +409,8 @@ test('экономика v3, питомец, коробки, итоги, рей�
     st = await tx(c => W.claimRound(c, vera.user_id, tNow));
     assert.equal(st.inventory.box_chest, before + 1);
     assert.equal(st.roundReward.streak, 7);
-    assert.equal(st.roundReward.fragment, 'dark', '7-й круг подряд — осколок тьмы');
-    assert.equal(st.fragments.dark, 1);
+    assert.equal(st.roundReward.fragment, 'ink', '7-й круг подряд — капля чернил');
+    assert.equal(st.fragments.ink, 1);
     assert.equal(st.round.claimed, true);
     await assert.rejects(tx(c => W.claimRound(c, vera.user_id, tNow)), /round_claimed/);
 

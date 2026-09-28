@@ -870,7 +870,7 @@
     act('/round', {}, function (st) {
       confetti(); sfx('quest'); toast('🧰', 'Сундук летописца — в кладовой! Открой в разделе «Сундуки»', 'gold');
       var rr = st.roundReward || {};
-      if (rr.fragment) setTimeout(function () { toast('🖤', rr.streak + ' кругов подряд — осколок тьмы! Собери 6 — и у тебя Гуль', 'gold'); }, 1600);
+      if (rr.fragment) setTimeout(function () { var f = (S.catalog.fragments || {})[rr.fragment] || {}; toast(f.icon || '✨', rr.streak + ' кругов подряд — ' + (f.name || 'осколок').toLowerCase() + '! Собери ' + (f.need || 8) + ' — и у тебя редкий питомец', 'gold'); }, 1600);
     });
   }
   // Задание дня → прямо в задание. Без kind — первое невыполненное.
@@ -1002,7 +1002,7 @@
     if (v && !v.done) out.push({ html: '⚔️ «Кто круче?» — выбери образ, за голос опыт', go: 'PetUI.battle()' });
     var owned = {}; if (st.pet) owned[st.pet.species] = 1; (st.stable || []).forEach(function (x) { owned[x.species] = 1; });
     if (!owned.tsar) out.push({ html: '👑 Николай II живёт в Царском ларце — шанс 2%', go: "PetUI.open('stable')" });
-    if (!owned.ghoul) out.push({ html: '🖤 Гуль «дед инсайд» — 5% в Царском ларце или 6 осколков тьмы', go: "PetUI.open('stable')" });
+    if (!owned.ghoul) out.push({ html: '🖤 Гуль — самый редкий питомец: только из сундуков, без осколков', go: "PetUI.open('boxes')" });
     if (!owned.squid) out.push({ html: '🦑 Сквидвард вырастает в Красавчика — 6% в Императорском ларце', go: "PetUI.open('boxes')" });
     if (!owned.burunday) out.push({ html: '🏹 Легендарный Бурундай на троне — 5% в Императорском ларце или 8 волос бунчука', go: "PetUI.open('stable')" });
     out.push({ html: '👀 Тапни по питомцу в топе — профиль и реакции', go: 'PetUI.openTop()' });
@@ -1078,7 +1078,7 @@
       '<path d="M94 94 Q98 88 104 90" stroke="#fff" stroke-width="2" fill="none" opacity=".8"/></svg>';
   }
   function openWheel() {
-    sheet('<div class="pet-wheel"><b>🎡 Колесо удачи</b><i>Одно вращение в день. Бывает даже осколок Фаберже или тьмы!</i>' +
+    sheet('<div class="pet-wheel"><b>🎡 Колесо удачи</b><i>Одно вращение в день. Бывает даже осколок Фаберже!</i>' +
       '<div class="pet-wheel-box" id="pet-wheel-box"><div class="pet-wheel-pin" id="pet-wheel-pin"></div>' + wheelSvg(wheelRot % 360) + '</div>' +
       '<div id="pet-wheel-res"></div><button type="button" class="go pet-wheel-go" id="pet-wheel-go" onclick="PetUI.spin()">Крутить!</button></div>');
     if (window.PetSfx) PetSfx.play('open');
@@ -1245,7 +1245,15 @@
       }).join('') + '</div>';
     var drops = S.catalog.rareSpeciesDrops || {}, frags = S.catalog.fragments || {}, have = st.fragments || {}, owners = S.catalog.owners || {};
     html += '<div class="pet-rare-list">' + (S.catalog.species || []).filter(function (x) { return x.rare; }).map(function (sp) {
-      var f = frags[sp.fragment] || { need: 10, icon: '•', name: '' };
+      var f = frags[sp.fragment];
+      if (!f) {
+        // Без осколков (Гуль): только сундук — показываем шансы, без полоски сбора.
+        return '<div class="pet-rare rar-mythic' + (owned[sp.id] ? ' got' : '') + '">' +
+          '<span class="pet-rare-art">' + PetArt.render({ species: sp.id, stage: 'adult', state: 'ok', items: S.items, equipped: {}, mini: true }) + '</span>' +
+          '<div><b>' + esc(sp.name) + ' — самый редкий</b><i>Только из сундуков, осколков нет. Императорский ларец — ' + pctText((drops.box_emperor || {})[sp.id]) + ', Царский — ' + pctText((drops.box_tsar || {})[sp.id]) + ', обычный сундук — ' + pctText((drops.box_chest || {})[sp.id]) + '.</i>' +
+          (owners['species:' + sp.id] != null ? '<i>Есть у ' + owners['species:' + sp.id] + ' ' + plural(owners['species:' + sp.id], 'человека', 'человек', 'человек') + '</i>' : '') +
+          (owned[sp.id] ? '<span class="pet-tag">✓ Уже в питомнике</span>' : '') + '</div></div>';
+      }
       var n = have[sp.fragment] || 0;
       var n2 = owners['species:' + sp.id];
       var chest = (drops.box_chest || {})[sp.id], tsar = (drops.box_tsar || {})[sp.id];
@@ -1570,6 +1578,7 @@
     not_enough_coins: 'Не хватает монет — реши ещё несколько строк',
     already_owned: 'Уже есть в гардеробе',
     not_enough_fragments: 'Осколков пока не хватает',
+    no_fragments: 'Этого питомца из осколков не собрать — только из сундука',
     stable_full: 'Питомник полон',
     bad_index: 'Этого питомца уже нет в питомнике',
     not_owned: 'Сначала нужно купить',
