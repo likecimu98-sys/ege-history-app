@@ -21,16 +21,25 @@ const DAY = 24 * 3600 * 1000;
 
 async function snapshot(db, now = Date.now()) {
   const week = mondayStr(new Date(now));
+  // Счёт — за вычетом поправки за накрутку (counters.penalty, см. server.js
+  // scorePenalty): иначе награду получил бы тот, у кого строки сняты.
   const { rowCount } = await db.query(`INSERT INTO weekly_top_snapshots(week, doc_id, user_id, score, updated_at)
-      SELECT $1, doc_id, user_id, COALESCE((data->>'weeklyScore')::numeric, 0)::int, now()
-      FROM student_profiles
-      WHERE data->>'_mergedInto' IS NULL AND data->>'weekStartStr' = $1
-        AND (data->>'weeklyScore') ~ '^[0-9]+([.][0-9]+)?$'
-        AND (data->>'weeklyScore')::numeric > 0
-      ORDER BY (data->>'weeklyScore')::numeric DESC
+      SELECT $1, sp.doc_id, sp.user_id, s.score, now()
+      FROM student_profiles sp
+      LEFT JOIN pet_wallets w ON w.user_id = sp.user_id
+      CROSS JOIN LATERAL (SELECT GREATEST(0, CASE WHEN (sp.data->>'weeklyScore') ~ '^[0-9]+([.][0-9]+)?$' THEN (sp.data->>'weeklyScore')::numeric ELSE 0 END
+        - CASE WHEN w.counters->'penalty'->>'week' = $1
+            THEN COALESCE((w.counters->'penalty'->>'lines')::numeric, 0) ELSE 0 END)::int AS score) s
+      WHERE sp.data->>'_mergedInto' IS NULL AND sp.data->>'weekStartStr' = $1
+        AND (sp.data->>'weeklyScore') ~ '^[0-9]+([.][0-9]+)?$'
+        AND s.score > 0
+      ORDER BY s.score DESC
       LIMIT ${SNAPSHOT_SIZE}
     ON CONFLICT (week, doc_id) DO UPDATE SET
-      score = GREATEST(weekly_top_snapshots.score, EXCLUDED.score),
+      -- Не GREATEST без оглядки: поправка за накрутку должна уметь понизить счёт.
+      score = CASE WHEN EXCLUDED.score < weekly_top_snapshots.score AND EXISTS (
+          SELECT 1 FROM pet_wallets pw WHERE pw.user_id = EXCLUDED.user_id AND pw.counters->'penalty'->>'week' = $1)
+        THEN EXCLUDED.score ELSE GREATEST(weekly_top_snapshots.score, EXCLUDED.score) END,
       user_id = COALESCE(EXCLUDED.user_id, weekly_top_snapshots.user_id),
       updated_at = now()`, [week]);
   return { week, rows: rowCount };

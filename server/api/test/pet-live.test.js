@@ -193,6 +193,10 @@ test('экономика v3, питомец, коробки, итоги, рей�
   const sunday = Date.parse('2026-10-11T20:50:00Z');
   const snap = await WK.snapshot(pool, sunday);
   assert.equal(snap.week, '2026-10-05'); assert.equal(snap.rows, 3);
+  // Поправка за накрутку (counters.penalty) понижает уже снятый счёт — GREATEST её не съедает.
+  await db.query(`UPDATE pet_wallets SET counters = coalesce(counters,'{}'::jsonb) || '{"penalty":{"week":"2026-10-05","lines":100}}'::jsonb WHERE user_id=$1`, [u1]);
+  await WK.snapshot(pool, sunday + 60000);
+  assert.equal((await db.query("SELECT score FROM weekly_top_snapshots WHERE week='2026-10-05' AND doc_id='111'")).rows[0].score, 400);
   await setProfile('222', u2, { weeklyScore: 3, weekStartStr: '2026-10-12' });
   const monday = Date.parse('2026-10-11T21:10:00Z');
   await WK.snapshot(pool, monday);

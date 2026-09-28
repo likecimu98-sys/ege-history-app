@@ -75,6 +75,27 @@ function requireSession(session) {
 // students через store.query — то есть ради двадцати строк таблицы вычитывал реестр
 // целиком, а вместе с ним ФИО, @username и коды классов. Здесь выборку и сортировку
 // делает PostgreSQL, а наружу уходят только пять полей.
+// 🔴 Поправка за накрутку — серверная, клиент её не перебьёт.
+//
+// Строки и баллы считает клиент, а при синхронизации дни сливаются по
+// максимуму: переписать профиль в базе бесполезно — телефон ученика зальёт
+// старые числа обратно. Поэтому снятое за накрутку лежит в кошельке питомца
+// (counters.penalty, пишет только сервер/админ) и вычитается при показе топа и
+// в снимке недели (pet/weekly.js). {week, lines, ege} — за неделю week,
+// {total, totalEge} — навсегда. Первый случай — 28.09.2026: 1326 строк
+// задания 1 по кругу из 17 дат (см. AGENTS.md).
+function scorePenalty(data, pen) {
+  const p = pen && typeof pen === 'object' ? pen : {};
+  const thisWeek = p.week && p.week === data.weekStartStr;
+  const sub = (v, d) => Math.max(0, (Number(v) || 0) - (Number(d) || 0));
+  return {
+    weeklyScore: sub(data.weeklyScore, thisWeek ? p.lines : 0),
+    weeklyEgePoints: sub(data.weeklyEgePoints, thisWeek ? p.ege : 0),
+    totalSolved: sub(data.totalSolved, p.total),
+    egePoints: sub(data.egePoints, p.totalEge),
+  };
+}
+
 async function leaderboardRows(type, limit) {
   // Слитые дубликаты аккаунтов в рейтинге показывать нельзя — это один и тот же человек.
   const notMerged = "data->>'_mergedInto' IS NULL";
@@ -84,7 +105,7 @@ async function leaderboardRows(type, limit) {
   // питомца нет, строка рейтинга остаётся прежней.
   const petCols = `, w.name_style AS pet_style, w.pet->>'species' AS pet_species,
     (w.pet->>'sick')::boolean AS pet_sick, w.equipped AS pet_equipped, w.pet->>'xp' AS pet_xp,
-    w.public_id AS pet_public_id, w.awards AS pet_awards
+    w.public_id AS pet_public_id, w.awards AS pet_awards, w.counters->'penalty' AS pet_penalty
     FROM student_profiles LEFT JOIN pet_wallets w ON w.user_id = student_profiles.user_id`;
   if (type === 'duel') {
     sql = `SELECT data${petCols}
@@ -104,19 +125,23 @@ async function leaderboardRows(type, limit) {
            WHERE ${notMerged} AND COALESCE((data->>'totalSolved')::numeric, 0) > 0
            ORDER BY ((data->>'totalSolved')::numeric) DESC LIMIT $1`;
   }
+  // С запасом: поправка за накрутку (ниже) может опустить строку из видимой части.
+  params[0] = limit + 10;
   const result = await pool.query(sql, params);
-  return result.rows.map((row, index) => {
-    const data = row.data || {};
+  const rows = result.rows.map(row => ({ row, data: row.data || {}, fix: scorePenalty(row.data || {}, row.pet_penalty) }));
+  const key = type === 'duel' ? null : type === 'weekly' ? 'weeklyScore' : 'totalSolved';
+  if (key) rows.sort((a, b) => b.fix[key] - a.fix[key]);
+  return rows.slice(0, limit).map(({ row, data, fix }, index) => {
     return {
       rank: index + 1,
       displayName: leaderboardName(data.name),
-      totalSolved: Number(data.totalSolved) || 0,
-      egePoints: Number(data.egePoints) || 0,
-      weeklyScore: Number(data.weeklyScore) || 0,
+      totalSolved: fix.totalSolved,
+      egePoints: fix.egePoints,
+      weeklyScore: fix.weeklyScore,
       // Баллы ЕГЭ за неделю — вторая строка в карточке недельного топа.
       // Поле уже писалось клиентом, но наружу не отдавалось, и вкладка
       // «Неделя» показывала бы только строки.
-      weeklyEgePoints: Number(data.weeklyEgePoints) || 0,
+      weeklyEgePoints: fix.weeklyEgePoints,
       duelRating: Number(data.duelRating) || Number(data.duelElo) || 0,
       // Счёт побед — не персональные данные, а часть самой таблицы дуэлей.
       duelGames: Number(data.duelGames) || 0,
