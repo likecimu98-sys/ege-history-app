@@ -57,9 +57,11 @@ const SPECIES = [
 // поверх обычного, поэтому шансы вещей в коробке не меняются.
 const RARE_SPECIES_DROPS = {
   box_chest: { tsar: 0.05, burunday: 0.1, squid: 0.15, ghoul: 0.3 },
-  box_tsar: { tsar: 2, burunday: 2.5, squid: 3, ghoul: 5 },
-  box_week: { tsar: 2, burunday: 2.5, squid: 3, ghoul: 5 },
-  box_emperor: { tsar: 4, burunday: 5, squid: 6, ghoul: 8 },
+  // 28.09.2026: в ларцах шансы снижены в ~4 раза — вместе они давали редкий вид
+  // в каждом пятом Императорском и каждом девятом Царском ларце.
+  box_tsar: { tsar: 0.3, burunday: 0.5, squid: 0.7, ghoul: 1 },
+  box_week: { tsar: 0.3, burunday: 0.5, squid: 0.7, ghoul: 1 },
+  box_emperor: { tsar: 0.6, burunday: 1, squid: 1.4, ghoul: 2 },
 };
 // Осколки — запасной путь к редкому виду: падают из ларцов, за 1-е место недели,
 // за 30 дней серии входов и изредка с колеса.
@@ -105,7 +107,8 @@ const SOCIAL = {
   reactions: ['🔥', '👑', '😂', '💯'],
   battleDaily: 20,
   battleXp: 2,
-  stylePrize: { coins: 500, days: 7, minVotes: 5 },
+  // «Икона стиля» — 200 монет и корона на неделю; нужно хотя бы 10 голосов.
+  stylePrize: { coins: 200, days: 7, minVotes: 10 },
   // Сундук обоим — когда приглашённый решил 16 строк (решение владельца 28.09.2026;
   // раньше — при вылуплении, то есть после 10 минут решения).
   referral: { box: 'box_chest', maxPerInviter: 30, accountMaxAgeDays: 30, minSolved: 16 },
@@ -418,8 +421,8 @@ const ECONOMY = {
 // «Ларец недели» каждые 30 дней.
 const LOGIN_STREAK = [
   { day: 3, items: [['box_chest', 1]] },
-  { day: 7, items: [['box_tsar', 1], ['boost_elixir', 1]] },
-  { day: 14, items: [['box_tsar', 2]] },
+  { day: 7, items: [['box_chest', 1], ['boost_elixir', 1]] },
+  { day: 14, items: [['box_tsar', 1]] },
   { day: 30, items: [['box_week', 1]], fragment: 'faberge' },
 ];
 
@@ -482,21 +485,23 @@ const ACHIEVEMENTS = {
 };
 
 // Награды недели. place — место в топе по строкам за неделю (Москва).
+// Пересмотр 28.09.2026 (владелец: «слишком щедро — играет 20 человек, а каждый
+// четвёртый уже выбил самое редкое»): награждается только топ-5, лучший
+// сундук — только первому месту. Раньше ларцы получали 10 человек в неделю.
 const WEEKLY_PRIZES = [
-  { from: 1, to: 1, coins: 1000, box: 'box_week', nick: 'gold', days: 30, crown: true, fragment: 'faberge' },
-  { from: 2, to: 2, coins: 700, box: 'box_week', nick: 'silver', days: 30 },
-  { from: 3, to: 3, coins: 500, box: 'box_week', nick: 'bronze', days: 30 },
-  { from: 4, to: 10, coins: 300, box: 'box_tsar', nick: 'violet', days: 7 },
-  { from: 11, to: 50, coins: 100, box: 'box_chest' },
+  { from: 1, to: 1, coins: 500, box: 'box_week', nick: 'gold', days: 30, crown: true, fragment: 'faberge' },
+  { from: 2, to: 2, coins: 300, box: 'box_tsar', nick: 'silver', days: 14 },
+  { from: 3, to: 3, coins: 200, box: 'box_chest', nick: 'bronze', days: 14 },
+  { from: 4, to: 5, coins: 100, box: 'box_chest' },
 ];
 // Топ месяца (строки за календарный месяц по Москве) и топ дуэлей недели
-// (победы за неделю). Считаются по журналу начислений.
+// (победы за неделю). Считаются по журналу начислений. Только тройка.
 const MONTHLY_PRIZES = [
-  { from: 1, to: 1, coins: 1000, title: true }, { from: 2, to: 2, coins: 700, title: true },
-  { from: 3, to: 3, coins: 500, title: true }, { from: 4, to: 10, coins: 250 },
+  { from: 1, to: 1, coins: 700, box: 'box_tsar', title: true }, { from: 2, to: 2, coins: 400, title: true },
+  { from: 3, to: 3, coins: 250, title: true },
 ];
 const DUEL_PRIZES = [
-  { from: 1, to: 1, coins: 500, fragment: 'horse' }, { from: 2, to: 3, coins: 300 }, { from: 4, to: 10, coins: 100 },
+  { from: 1, to: 1, coins: 200, fragment: 'horse' }, { from: 2, to: 2, coins: 100 }, { from: 3, to: 3, coins: 50 },
 ];
 
 const BY_ID = new Map([...ITEMS, ...CONSUMABLES, ...BOXES].map(entry => [entry.id, entry]));
@@ -537,7 +542,7 @@ function publicCatalog() {
 }
 
 // Меняется вместе с содержимым каталога: клиент кэширует каталог по версии.
-const CATALOG_VERSION = '2026-09-28-12';
+const CATALOG_VERSION = '2026-09-28-13';
 
 module.exports = {
   RARITIES, RARITY_VALUE, DUPLICATE_SHARE, SLOTS, SPECIES, ITEMS, CONSUMABLES, BOXES,

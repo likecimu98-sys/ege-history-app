@@ -159,6 +159,7 @@ async function finalizeByLedger(pool, tx, key, fromSql, toSql, params, field, ta
       // Осколок за место (1-е в дуэлях — «Волос бунчука» к Бурундаю). Только
       // вместе с первой выплатой: повторный прогон недели его не удвоит.
       if (paid && prize.fragment) W.addFragment(w, prize.fragment, 1);
+      if (paid && prize.box) await W.addItem(client, row.user_id, prize.box, 1, `${source}:${key}`);
       if (paid && extra) extra(w, place, prize);
       await W.saveWallet(client, w);
     }

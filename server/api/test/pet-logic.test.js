@@ -84,12 +84,15 @@ test('состояние: ночью спит, голодный — hungry, бо
   assert.equal(W.petMoodState({ sat: 90, mood: 90, sick: true }, noonMsk), 'sick');
 });
 
-test('призы недели: первое место — золото на 30 дней, 11–50 — сундук, дальше ничего', () => {
+test('призы недели: только топ-5, лучший ларец — лишь первому месту', () => {
   assert.equal(C.prizeFor(1).nick, 'gold');
   assert.equal(C.prizeFor(1).days, 30);
-  assert.equal(C.prizeFor(7).nick, 'violet');
-  assert.equal(C.prizeFor(40).box, 'box_chest');
-  assert.equal(C.prizeFor(51), null);
+  assert.equal(C.prizeFor(1).box, 'box_week');
+  assert.equal(C.prizeFor(2).box, 'box_tsar');
+  assert.equal(C.prizeFor(5).box, 'box_chest');
+  assert.equal(C.prizeFor(6), null);
+  const weekBoxes = C.WEEKLY_PRIZES.filter(p => p.box === 'box_week').reduce((n, p) => n + p.to - p.from + 1, 0);
+  assert.equal(weekBoxes, 1, 'Ларец недели — одному человеку');
 });
 
 test('ник за топ не продаётся за монеты', () => {

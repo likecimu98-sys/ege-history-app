@@ -200,7 +200,7 @@ test('экономика v3, питомец, коробки, итоги, рей�
   assert.ok(done.some(x => x.week === '2026-10-05'), JSON.stringify(done));
   assert.equal((await WK.finalize(pool, tx, monday + 1)).length, 0, 'повторно не подводится');
   const wB = await W.readWallet(db, u2);
-  assert.equal(Number(wB.balance), 1000); assert.equal(wB.name_style.color, 'gold'); assert.equal(wB.awards.top1, 1);
+  assert.equal(Number(wB.balance), C.prizeFor(1).coins); assert.equal(wB.name_style.color, 'gold'); assert.equal(wB.awards.top1, 1);
   assert.equal(wB.counters.fragments.faberge, 1, 'осколок Фаберже за 1-е место');
   const wA = await W.readWallet(db, u1);
   assert.equal(wA.name_style.color, 'silver', 'топ-цвет перекрывает купленную краску');
@@ -211,7 +211,7 @@ test('экономика v3, питомец, коробки, итоги, рей�
   assert.ok(month && month.key === 'month:' + WK.monthKey(Date.now()), JSON.stringify(month));
   assert.equal(await WK.finalizeMonth(pool, tx, nextMonth.getTime() + H), null);
   const mres = (await db.query('SELECT results FROM weekly_awards WHERE week=$1', [month.key])).rows[0].results;
-  assert.equal(mres[0].prize.coins, 1000, 'первое место месяца — 1000');
+  assert.equal(mres[0].prize.coins, C.MONTHLY_PRIZES[0].coins, 'первое место месяца');
   // Журнал пишет created_at часами базы — берём неделю, в которую идёт прогон.
   const { mondayStr } = require('../src/moscow-time');
   const thisWeek = mondayStr(new Date());
@@ -232,7 +232,7 @@ test('экономика v3, питомец, коробки, итоги, рей�
   const before1 = Number((await W.readWallet(db, u1)).balance);
   await tx(c => W.mergeUserData(c, u1, u2));
   const merged = await W.readWallet(db, u1);
-  assert.equal(Number(merged.balance), before1 + 1000);
+  assert.equal(Number(merged.balance), before1 + C.prizeFor(1).coins);
   assert.equal(await W.readWallet(db, u2), null);
 
   // 18. Погладить: раз в минуту даёт опыт, чаще — только реакция.
@@ -352,9 +352,9 @@ test('экономика v3, питомец, коробки, итоги, рей�
     assert.equal(b.battle.left, 0); assert.equal(b.battle.a, null);
     await assert.rejects(tx(c => S.vote(c, va, 'a', tNow)), /votes_done|no_pair/);
 
-    // Икона стиля прошлой недели: 6 голосов за Гену.
+    // Икона стиля прошлой недели: голосов за Гену — ровно порог minVotes.
     const lastWeek = mondayStr(new Date(tNow - 7 * D));
-    for (let i = 0; i < 6; i++) {
+    for (let i = 0; i < C.SOCIAL.stylePrize.minVotes; i++) {
       await db.query('INSERT INTO pet_votes(voter, day, week, winner, loser) VALUES($1,$2,$3,$4,$5)', [vc, '2000-01-01', lastWeek, vb, va]);
     }
     await db.query('DELETE FROM weekly_awards WHERE week=$1', ['style:' + lastWeek]);
