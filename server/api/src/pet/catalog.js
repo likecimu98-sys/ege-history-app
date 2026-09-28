@@ -248,7 +248,7 @@ const RAW = [
   ['pet_frog', 'pet', 'common', 110, 'Царевна-лягушка', 'Сказка', ['c_frog', '#5bb04a', '#e9c46a']],
   ['pet_bear', 'pet', 'rare', 600, 'Медвежонок', 'Русь', ['c_bear', '#8a5a2b', '#d9b48a']],
   ['pet_belka', 'pet', 'rare', 650, 'Лайка Белка', 'Космос', ['c_dog', '#f4f4f4', '#d0a060']],
-  ['pet_raven', 'pet', 'rare', 550, 'Ворон-летописец', 'Русь', ['c_bird', '#23232a', '#4a4a58']],
+  ['pet_raven', 'pet', 'rare', 550, 'Ворон-летописец', 'Русь', ['c_raven', '#23232a', '#4a4a58']],
   ['pet_sivka', 'pet', 'epic', 2600, 'Сивка-бурка', 'Сказка', ['c_horse', '#8a6a44', '#3a2a1e']],
   ['pet_bayun', 'pet', 'epic', 2400, 'Кот Баюн', 'Сказка', ['c_cat', '#6b6b7a', '#e9c46a']],
   ['pet_eagle', 'pet', 'legendary', 10000, 'Двуглавый орлёнок', 'Империя', ['c_eagle', '#e9c46a', '#b8912f']],
@@ -537,7 +537,7 @@ function publicCatalog() {
 }
 
 // Меняется вместе с содержимым каталога: клиент кэширует каталог по версии.
-const CATALOG_VERSION = '2026-09-28-11';
+const CATALOG_VERSION = '2026-09-28-12';
 
 module.exports = {
   RARITIES, RARITY_VALUE, DUPLICATE_SHARE, SLOTS, SPECIES, ITEMS, CONSUMABLES, BOXES,

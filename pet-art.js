@@ -240,6 +240,10 @@
   function v3HeadT(stage) { return stage === 'teen' ? V3_HEAD_T : 'translate(100 71) scale(0.75) translate(-100 -88)'; }
   var V3_BODY_T = 'translate(100 101) scale(0.84 0.92) translate(-100 -118)';
   var V3_NECK_T = 'translate(100 104) scale(0.84) translate(-100 -126)';
+  // Одежда взрослого облика садится по силуэту тела: сверху — круглые плечи
+  // «яйца» (иначе куртка выглядела прямоугольником на животе), снизу — место
+  // для длинных пол шинели и мантии.
+  var V3_CLOTH = 'M100 97 C126 97 138 116 138 136 L148 198 L52 198 L62 136 C62 116 74 97 100 97Z';
   // Плащ за спиной: плечи малыша (y 118) → плечи взрослого (102), подол (190) → земля (188).
   var V3_BACK_T = 'translate(100 102) scale(0.9 1.19) translate(-100 -118)';
 
@@ -804,7 +808,7 @@
         // Бескозырка с лентами.
         return '<path d="M134 48 L148 76 L141 78 L128 52Z M138 48 L154 72 L148 75 L132 50Z" fill="#15151a"/>' +
           '<ellipse cx="100" cy="42" rx="44" ry="11" fill="#f8f9fc" ' + hLine(p, 2.4) + '/><rect x="60" y="42" width="80" height="10" rx="3" fill="#15151a" ' + hLine(p, 2) + '/>' +
-          '<text x="100" y="50.5" text-anchor="middle" font-size="6.5" font-weight="900" fill="' + p.gold + '" font-family="Arial">ШТАНДАРТЪ</text>';
+          '<text x="100" y="50.5" text-anchor="middle" font-size="6.5" font-weight="900" fill="' + p.gold + '" font-family="Arial, sans-serif" textLength="44" lengthAdjust="spacingAndGlyphs">ШТАНДАРТЪ</text>';
       }
       // Император — с непокрытой головой, как на портрете; фуражка — у Наследника.
       if (stage === 'sage' || stage === 'adult') return '';
@@ -836,7 +840,7 @@
       '<g transform="' + V3_NECK_T + '">' + layer('neck') + '</g>' +
       '<g class="pet-head"><g transform="' + headT + '">' + humanHead(sp, p, stage, eq) + humanFace(sp, p, state, stage, eq) +
       layer('face') + humanHat(sp, p, stage, eq) + layer('head') + (sick ? sickHead() : '') + '</g></g>' +
-      '<g class="pet-arm-r">' + humanArm(sp, p, stage, 'r') + layer('hand') + '</g></g></g>';
+      '<g class="pet-arm-r">' + layer.hold('human', humanArm(sp, p, stage, 'r'), p.skin, p.ink) + '</g></g></g>';
   }
 
 
@@ -1140,7 +1144,7 @@
       '<g transform="' + V3_NECK_T + '">' + layer('neck') + '</g>' +
       '<g class="pet-head"><g transform="' + headT + '">' + burHead(p, stage, eq) + burFace(p, state, stage) +
       layer('face') + burHat(p, stage, eq) + layer('head') + (sick ? sickHead() : '') + '</g></g>' +
-      '<g class="pet-arm-r">' + burArm(p, stage, 'r') + layer('hand') + '</g></g></g>';
+      '<g class="pet-arm-r">' + layer.hold('bur', burArm(p, stage, 'r'), p.skin, p.ink) + '</g></g></g>';
   }
 
   // ── Сквидвард (по разрешению правообладателя, со слов владельца 27.09.2026) ─
@@ -1314,7 +1318,7 @@
       '<g transform="' + V3_NECK_T + '">' + layer('neck') + '</g>' +
       '<g class="pet-head"><g transform="' + squidHeadT(stage) + '">' + squidHead(p, stage, ids) + squidFace(p, state, stage) +
       layer('face') + layer('head') + (sick ? sickHead() : '') + '</g></g>' +
-      '<g class="pet-arm-r">' + squidArm(p, stage, 'r') + layer('hand') + '</g></g></g>';
+      '<g class="pet-arm-r">' + layer.hold(squidChad(stage) ? 'squidChad' : 'squid', squidArm(p, stage, 'r'), p.skin, p.ink) + '</g></g></g>';
   }
 
   // ── Шаблоны вещей ───────────────────────────────────────────────────────
@@ -1401,23 +1405,58 @@
   T.spacehelm = function (c) {
     return '<circle cx="100" cy="92" r="60" fill="' + c0(c, 2) + '" opacity=".22" ' + SW + '/>' +
       '<path d="M50 70 Q60 40 100 32" fill="none" stroke="#fff" stroke-width="6" stroke-linecap="round" opacity=".7"/>' +
-      '<path d="M46 126 Q100 150 154 126 L150 140 Q100 162 50 140Z" fill="' + c0(c, 0) + '" ' + SW + '/><text x="100" y="146" text-anchor="middle" font-size="11" font-weight="900" fill="' + c0(c, 1) + '" font-family="Arial">СССР</text>';
+      '<path d="M46 126 Q100 150 154 126 L150 140 Q100 162 50 140Z" fill="' + c0(c, 0) + '" ' + SW + '/><text x="100" y="146" text-anchor="middle" font-size="11" font-weight="900" fill="' + c0(c, 1) + '" font-family="Arial, sans-serif" textLength="26" lengthAdjust="spacingAndGlyphs">СССР</text>';
   };
   T.papakha = function (c) {
     var s = '<path d="M56 66 L60 20 Q100 10 140 20 L144 66Z" fill="' + c0(c, 0) + '" ' + SW + '/>';
     for (var i = 0; i < 12; i++) s += '<circle cx="' + (64 + (i % 6) * 14) + '" cy="' + (30 + Math.floor(i / 6) * 18) + '" r="6" fill="' + shade(c0(c, 0), 0.15) + '"/>';
     return s + '<path d="M76 20 Q100 26 124 20 L120 12 Q100 16 80 12Z" fill="' + c0(c, 1) + '" ' + SW + '/>';
   };
+  // Большая императорская корона (легенда): две серебряные полусферы в рядах
+  // жемчуга, между ними — жемчужная арка, на вершине — красная шпинель и
+  // алмазный крест, внизу — обруч с камнями. Камни вспыхивают.
   T.crown = function (c) {
-    return '<path d="M60 64 L60 30 Q80 6 100 20 Q120 6 140 30 L140 64Z" fill="' + c0(c, 2) + '" ' + SW + '/>' +
-      '<path d="M100 20 L100 64" stroke="' + c0(c, 0) + '" stroke-width="6"/><path d="M60 30 Q80 6 100 20 Q120 6 140 30" fill="none" stroke="' + c0(c, 0) + '" stroke-width="5"/>' +
-      '<path d="M100 20 L100 2 M92 8 L108 8" stroke="' + c0(c, 0) + '" stroke-width="4" stroke-linecap="round"/>' +
-      '<path d="M56 58 L144 58 L144 70 L56 70Z" fill="' + c0(c, 0) + '" ' + SW + '/>' +
-      '<g fill="' + c0(c, 1) + '"><circle cx="68" cy="64" r="3"/><circle cx="82" cy="64" r="3"/><circle cx="118" cy="64" r="3"/><circle cx="132" cy="64" r="3"/></g><circle cx="100" cy="64" r="5" fill="' + c0(c, 2) + '" ' + SW + '/>';
+    var g = c0(c, 0, '#e9c46a'), sv = c0(c, 1, '#c0c7d0'), red = c0(c, 2, '#b3123a'), gr = uid('crw'), pearls = '';
+    function pearlArc(d, n) {
+      var out = '';
+      for (var i = 0; i <= n; i++) {
+        var t = i / n, x, y;
+        if (d === 'l') { x = 62 + t * 36; y = 58 - Math.sin(t * Math.PI * 0.95) * 34; }
+        else if (d === 'r') { x = 102 + t * 36; y = 58 - Math.sin((1 - t) * Math.PI * 0.95) * 34; }
+        else { x = 100; y = 58 - t * 38; }
+        out += '<circle cx="' + x.toFixed(1) + '" cy="' + y.toFixed(1) + '" r="2.1" fill="#fbfaf5" stroke="' + OUT + '" stroke-width=".7"/>';
+      }
+      return out;
+    }
+    return '<defs><radialGradient id="' + gr + '" cx="35%" cy="30%" r="75%"><stop offset="0" stop-color="#ffffff"/><stop offset=".55" stop-color="' + sv + '"/><stop offset="1" stop-color="' + shade(sv, -0.35) + '"/></radialGradient></defs>' +
+      '<g class="it-shine"><path d="M60 60 C58 36 76 22 98 24 L98 60Z M102 60 L102 24 C124 22 142 36 140 60Z" fill="url(#' + gr + ')" ' + SW + '/>' +
+      '<path d="M66 50 Q80 42 94 48 M106 48 Q120 42 134 50" stroke="' + shade(sv, -0.3) + '" stroke-width="1.2" fill="none"/>' +
+      pearlArc('l', 9) + pearlArc('r', 9) + pearlArc('c', 8) +
+      '<path d="M92 20 Q100 10 108 20 L104 24 H96Z" fill="' + g + '" ' + SW + '/>' +
+      '<path d="M100 18 L94 10 L100 2 L106 10Z" fill="' + red + '" stroke="' + OUT + '" stroke-width="1.6" stroke-linejoin="round"/><path d="M98 8 l2 -3 1 3" stroke="#ffd6cc" stroke-width="1" fill="none"/>' +
+      '<path d="M100 2 V-10 M95 -5 H105" stroke="' + OUT + '" stroke-width="4.4" stroke-linecap="round"/><path d="M100 2 V-10 M95 -5 H105" stroke="#e8f4ff" stroke-width="2.4" stroke-linecap="round"/>' +
+      '<path d="M56 58 L144 58 L144 70 L56 70Z" fill="' + g + '" ' + SW + '/>' +
+      '<path d="M58 61 H142" stroke="' + shade(g, 0.3) + '" stroke-width="1.2"/>' +
+      '<g><rect x="64" y="60.5" width="7" height="7" rx="1" fill="#1d8a5a" stroke="' + OUT + '" stroke-width="1"/><circle cx="82" cy="64" r="3.2" fill="#fbfaf5" stroke="' + OUT + '" stroke-width=".8"/>' +
+      '<ellipse cx="100" cy="64" rx="6" ry="4.4" fill="' + red + '" stroke="' + OUT + '" stroke-width="1.2"/><circle cx="118" cy="64" r="3.2" fill="#fbfaf5" stroke="' + OUT + '" stroke-width=".8"/><rect x="129" y="60.5" width="7" height="7" rx="1" fill="#2f63c9" stroke="' + OUT + '" stroke-width="1"/></g></g>' +
+      '<path class="it-twinkle" d="M110 6 l1 3 3 1 -3 1 -1 3 -1 -3 -3 -1 3 -1Z" fill="#fff"/><path class="it-twinkle" style="animation-delay:.7s" d="M72 38 l.8 2.4 2.4 .8 -2.4 .8 -.8 2.4 -.8 -2.4 -2.4 -.8 2.4 -.8Z" fill="#fff"/>';
   };
+  // Двууголка Кутузова (легенда): чёрный фетр с золотой каймой по краю,
+  // белый плюмаж из перьев по гребню, кокарда и петлица.
   T.bicorne = function (c) {
-    return '<path d="M30 64 Q60 20 100 26 Q140 20 170 64 Q100 52 30 64Z" fill="' + c0(c, 0) + '" ' + SW + '/>' +
-      '<path d="M36 60 Q100 46 164 60" fill="none" stroke="' + c0(c, 1) + '" stroke-width="3"/><circle cx="100" cy="42" r="7" fill="#fff" ' + SW + '/><circle cx="100" cy="42" r="3" fill="#c62828"/>';
+    var k = c0(c, 0, '#15151a'), g = c0(c, 1, '#e8c35a'), plume = '';
+    for (var i = 0; i < 9; i++) {
+      var x = 52 + i * 12, y = 40 - Math.sin(i / 8 * Math.PI) * 16;
+      plume += '<path d="M' + x.toFixed(1) + ' ' + (y + 8).toFixed(1) + ' q-9 -12 0 -24 q2 -4 5 -2 q5 12 1 26Z" fill="' + (i % 2 ? '#fbfaf5' : '#e9edf2') + '" stroke="' + OUT + '" stroke-width="1.4" stroke-linejoin="round"/>' +
+        '<path d="M' + (x + 1).toFixed(1) + ' ' + (y + 4).toFixed(1) + ' q-3 -8 1 -16" stroke="#c9ced6" stroke-width="1" fill="none"/>';
+    }
+    return '<g class="bc-plume">' + plume + '</g>' +
+      '<path d="M30 64 Q60 20 100 26 Q140 20 170 64 Q100 52 30 64Z" fill="' + k + '" ' + SW + '/>' +
+      '<path d="M34 61 Q62 26 100 31 Q138 26 166 61" fill="none" stroke="' + g + '" stroke-width="2.6"/>' +
+      '<path d="M42 60 Q100 50 158 60" fill="none" stroke="' + g + '" stroke-width="1.6" stroke-dasharray="3 2"/>' +
+      '<path d="M100 30 L96 56 M104 30 L108 56" stroke="' + g + '" stroke-width="1.8"/>' +
+      '<circle cx="100" cy="44" r="8" fill="#fff" ' + SW + '/><circle cx="100" cy="44" r="5" fill="#c62828"/><circle cx="100" cy="44" r="2" fill="#15151a"/>' +
+      '<path d="M60 44 Q80 32 94 36" stroke="#4a4a58" stroke-width="2" fill="none" opacity=".6"/>';
   };
   T.laurel = function (c) {
     var s = '';
@@ -1439,7 +1478,8 @@
   // Одежда (туловище 60…140 × 118…186)
   function torso(fill, extra) { return '<path d="M62 136 Q66 118 100 118 Q134 118 138 136 L140 170 Q100 190 60 170Z" fill="' + fill + '" ' + SW + '/>' + (extra || ''); }
   // Рукава — в тех же «шарнирах», что и лапы: машет лапа — машет и рукав.
-  function sleeves(fill) { return '<g class="pet-arm-l"><ellipse cx="62" cy="150" rx="11" ry="16" transform="rotate(20 62 150)" fill="' + fill + '" ' + SW + '/></g><g class="pet-arm-r"><ellipse cx="138" cy="150" rx="11" ry="16" transform="rotate(-20 138 150)" fill="' + fill + '" ' + SW + '/></g>'; }
+  var SLEEVE = { fill: null };
+  function sleeves(fill) { SLEEVE.fill = fill; return '<g class="pet-arm-l"><ellipse cx="62" cy="150" rx="11" ry="16" transform="rotate(20 62 150)" fill="' + fill + '" ' + SW + '/></g><g class="pet-arm-r"><ellipse cx="138" cy="150" rx="11" ry="16" transform="rotate(-20 138 150)" fill="' + fill + '" ' + SW + '/></g>'; }
   T.shirt = function (c) { return torso(c0(c, 0), '<path d="M100 120 L100 150" stroke="' + c0(c, 1) + '" stroke-width="3"/><path d="M84 120 Q100 128 116 120" fill="none" stroke="' + c0(c, 1) + '" stroke-width="4"/><path d="M60 168 Q100 186 140 168" fill="none" stroke="' + c0(c, 1) + '" stroke-width="4"/>') + sleeves(c0(c, 0)); };
   T.coat = function (c) { return torso(c0(c, 0), '<path d="M100 118 L100 184" stroke="' + OUT + '" stroke-width="2"/><path d="M78 118 Q100 136 122 118" fill="' + c0(c, 1) + '" ' + SW + '/><path d="M62 166 Q100 184 138 166 L140 174 Q100 192 60 174Z" fill="' + c0(c, 1) + '" ' + SW + '/>') + sleeves(c0(c, 0)); };
   T.stripes = function (c) {
@@ -1461,7 +1501,7 @@
     return torso(c0(c, 0), '<path d="M62 142 L138 142 M62 158 L138 158" stroke="' + c0(c, 1) + '" stroke-width="3"/>' + s + '<path d="M82 120 Q100 130 118 120" fill="none" stroke="' + c0(c, 1) + '" stroke-width="5"/>') + sleeves(c0(c, 0));
   };
   T.apron = function (c) { return '<path d="M76 128 L124 128 L128 184 Q100 192 72 184Z" fill="' + c0(c, 1) + '" ' + SW + '/><path d="M76 128 Q70 110 88 112 M124 128 Q130 110 112 112" fill="none" stroke="' + c0(c, 0) + '" stroke-width="4"/><path d="M84 150 h32 v18 h-32Z" fill="' + c0(c, 0) + '" ' + SW + '/>'; };
-  T.hoodie = function (c) { return torso(c0(c, 0), '<path d="M76 120 Q100 142 124 120" fill="' + shade(c0(c, 0), 0.15) + '" ' + SW + '/><path d="M92 128 L90 146 M108 128 L110 146" stroke="#fff" stroke-width="2"/><text x="100" y="170" text-anchor="middle" font-size="10" font-weight="900" fill="' + c0(c, 1) + '" font-family="Arial">ЕГЭ</text>') + sleeves(c0(c, 0)); };
+  T.hoodie = function (c) { return torso(c0(c, 0), '<path d="M76 120 Q100 142 124 120" fill="' + shade(c0(c, 0), 0.15) + '" ' + SW + '/><path d="M92 128 L90 146 M108 128 L110 146" stroke="#fff" stroke-width="2"/><text x="100" y="170" text-anchor="middle" font-size="10" font-weight="900" fill="' + c0(c, 1) + '" font-family="Arial, sans-serif" textLength="20" lengthAdjust="spacingAndGlyphs">ЕГЭ</text>') + sleeves(c0(c, 0)); };
   T.mail = function (c) {
     var s = '';
     for (var y = 126; y < 186; y += 7) for (var x = 62 + (y % 14 ? 3.5 : 0); x < 140; x += 7) s += '<circle cx="' + x + '" cy="' + y + '" r="3" fill="none" stroke="' + c0(c, 1) + '" stroke-width="1.2"/>';
@@ -1610,7 +1650,16 @@
   T.freckles = function (c) { var s = ''; [[66, 100], [72, 104], [68, 108], [134, 100], [128, 104], [132, 108]].forEach(function (p) { s += '<circle cx="' + p[0] + '" cy="' + p[1] + '" r="1.8" fill="' + c0(c, 0) + '"/>'; }); return s; };
   T.pincenez = function (c) { return '<g fill="rgba(255,255,255,.3)" stroke="' + c0(c, 0) + '" stroke-width="2.5"><ellipse cx="84" cy="94" rx="10" ry="8"/><ellipse cx="116" cy="94" rx="10" ry="8"/></g><path d="M94 92 Q100 88 106 92" fill="none" stroke="' + c0(c, 0) + '" stroke-width="2.5"/><path d="M126 96 Q140 116 128 138" fill="none" stroke="' + c0(c, 0) + '" stroke-width="1.5"/>'; };
   T.monocle = function (c) { return '<circle cx="118" cy="90" r="13" fill="rgba(255,255,255,.3)" stroke="' + c0(c, 0) + '" stroke-width="3.5"/><path d="M130 96 Q146 120 132 146" fill="none" stroke="' + c0(c, 0) + '" stroke-width="1.8"/>'; };
-  T.beard = function (c) { return '<path d="M64 106 Q66 150 100 160 Q134 150 136 106 Q120 118 100 116 Q80 118 64 106Z" fill="' + c0(c, 0) + '" ' + SW + '/><path d="M86 130 Q90 142 96 148 M104 148 Q110 142 114 130" fill="none" stroke="' + shade(c0(c, 0), -0.3) + '" stroke-width="2"/><ellipse cx="100" cy="112" rx="6" ry="3" fill="#7a2233"/>'; };
+  // Боярская борода: окладистая, волнистыми прядями до груди, с усами и
+  // светлыми бликами — не плоский треугольник.
+  T.beard = function (c) {
+    var b = c0(c, 0, '#6b4a2a'), d = shade(b, -0.3), l = shade(b, 0.3), st = '';
+    for (var i = 0; i < 7; i++) { var x = 76 + i * 8; st += '<path d="M' + x + ' ' + (122 + Math.abs(3 - i) * 2) + ' q' + (i < 3 ? 3 : i > 3 ? -3 : 0) + ' 14 ' + (i < 3 ? 1 : i > 3 ? -1 : 0) + ' ' + (26 - Math.abs(3 - i) * 5) + '" stroke="' + (i % 2 ? d : l) + '" stroke-width="1.6" fill="none" stroke-linecap="round"/>'; }
+    return '<path d="M62 104 Q60 124 70 138 Q78 154 90 160 Q96 166 100 170 Q104 166 110 160 Q122 154 130 138 Q140 124 138 104 Q126 118 112 116 Q100 112 88 116 Q74 118 62 104Z" fill="' + b + '" ' + SW + '/>' +
+      '<path d="M70 132 q6 10 14 14 M130 132 q-6 10 -14 14 M88 152 q6 6 12 8 M112 152 q-6 6 -12 8" stroke="' + d + '" stroke-width="1.4" fill="none"/>' + st +
+      '<path d="M100 110 C92 104 80 106 72 114 C68 118 64 118 60 116 C64 124 76 124 86 118 C92 115 97 115 100 116 C103 115 108 115 114 118 C124 124 136 124 140 116 C136 118 132 118 128 114 C120 106 108 104 100 110Z" fill="' + shade(b, 0.08) + '" stroke="' + OUT + '" stroke-width="1.8" stroke-linejoin="round"/>' +
+      '<ellipse cx="100" cy="120" rx="5" ry="2.6" fill="#7a2233"/>';
+  };
   T.goggles = function (c) { return '<path d="M54 84 L146 84" stroke="' + c0(c, 0) + '" stroke-width="8"/><g fill="' + c0(c, 1) + '" ' + SW + '><circle cx="82" cy="88" r="14"/><circle cx="118" cy="88" r="14"/></g><path d="M74 82 Q78 78 84 80 M110 82 Q114 78 120 80" stroke="#fff" stroke-width="2.5" fill="none"/>'; };
   // Маска с ассамблеи: к прежней маске — плюмаж из трёх перьев справа,
   // золотая филигрань по краю и камень во лбу.
@@ -1655,78 +1704,54 @@
   };
   T.bowtie = function (c) { return '<path d="M100 132 L82 122 L82 142Z M100 132 L118 122 L118 142Z" fill="' + c0(c, 0) + '" ' + SW + '/><circle cx="100" cy="132" r="5" fill="' + shade(c0(c, 0), 0.2) + '" ' + SW + '/>'; };
   T.beads = function (c) { var s = ''; for (var i = 0; i < 9; i++) { var a = (20 + i * 17.5) * Math.PI / 180; s += '<circle cx="' + (100 - Math.cos(a) * 30).toFixed(1) + '" cy="' + (124 + Math.sin(a) * 16).toFixed(1) + '" r="4.5" fill="' + (i % 2 ? '#f2c14e' : c0(c, 0)) + '" ' + SW + '/>'; } return s; };
-  T.badge = function (c) { return '<path d="M112 138 L118 128 L124 138Z" fill="' + c0(c, 1) + '" ' + SW + '/><circle cx="118" cy="146" r="9" fill="' + c0(c, 0) + '" ' + SW + '/><text x="118" y="149.5" text-anchor="middle" font-size="7" font-weight="900" fill="' + OUT + '" font-family="Arial">ГТО</text>'; };
+  T.badge = function (c) {
+    var g = c0(c, 0, '#e9c46a'), r = c0(c, 1, '#c0392b');
+    return '<path d="M113 136 L118 127 L123 136Z" fill="' + r + '" ' + SW + '/>' +
+      '<path d="M118 135 l3.5 2.6 4.3 -.2 1.3 4.1 3.5 2.6 -1.4 4.1 1.4 4.1 -3.5 2.6 -1.3 4.1 -4.3 -.2 -3.5 2.6 -3.5 -2.6 -4.3 .2 -1.3 -4.1 -3.5 -2.6 1.4 -4.1 -1.4 -4.1 3.5 -2.6 1.3 -4.1 4.3 .2Z" fill="' + g + '" stroke="' + OUT + '" stroke-width="1.8" stroke-linejoin="round"/>' +
+      '<circle cx="118" cy="150" r="8" fill="#fff6d6" stroke="' + OUT + '" stroke-width="1.2"/>' +
+      '<text x="118" y="152.6" text-anchor="middle" font-size="7" font-weight="900" fill="' + r + '" font-family="Arial, sans-serif" textLength="12" lengthAdjust="spacingAndGlyphs">ГТО</text>';
+  };
   T.jabot = function (c) { var s = ''; for (var i = 0; i < 4; i++) s += '<path d="M' + (88 - i * 2) + ' ' + (126 + i * 9) + ' Q100 ' + (136 + i * 9) + ' ' + (112 + i * 2) + ' ' + (126 + i * 9) + ' Q100 ' + (144 + i * 9) + ' ' + (88 - i * 2) + ' ' + (126 + i * 9) + 'Z" fill="' + c0(c, 0) + '" ' + SW + '/>'; return s; };
   T.sash = function (c) { return '<path d="M70 124 L80 120 L136 178 L126 184Z" fill="' + c0(c, 0) + '" ' + SW + '/><path d="M126 176 l6 8 -2 10 -6 -6 -6 6 -2 -10Z" fill="' + c0(c, 0) + '" ' + SW + '/><path d="M118 158 l4 8 9 1 -7 6 2 9 -8-5 -8 5 2-9 -7-6 9-1Z" fill="' + c0(c, 1) + '" ' + SW + '/>'; };
-  T.fur = function (c) { var s = ''; for (var i = 0; i < 10; i++) { var a = (15 + i * 16.7) * Math.PI / 180; s += '<circle cx="' + (100 - Math.cos(a) * 36).toFixed(1) + '" cy="' + (126 + Math.sin(a) * 14).toFixed(1) + '" r="8" fill="' + (i % 2 ? c0(c, 1) : c0(c, 0)) + '" ' + SW + '/>'; } return s; };
+  // Горжетка: пушистая лисья накидка вокруг шеи — мех клочками с прожилками,
+  // на одном конце — мордочка с носиком, на другом — хвост.
+  T.fur = function (c) {
+    var f = c0(c, 0, '#e8dcc8'), d = c0(c, 1, '#c9b89a'), s = '';
+    for (var i = 0; i < 11; i++) {
+      var a = (12 + i * 15.6) * Math.PI / 180, x = 100 - Math.cos(a) * 38, y = 124 + Math.sin(a) * 15;
+      s += '<path d="M' + (x - 8).toFixed(1) + ' ' + (y + 2).toFixed(1) + ' q1 -9 8 -9 q7 0 8 9 q-2 6 -8 6 q-6 0 -8 -6Z" fill="' + (i % 2 ? d : f) + '" stroke="' + OUT + '" stroke-width="1.8" stroke-linejoin="round"/>' +
+        '<path d="M' + (x - 3).toFixed(1) + ' ' + (y - 3).toFixed(1) + ' q3 -2 6 0 M' + (x - 4).toFixed(1) + ' ' + (y + 1).toFixed(1) + ' q4 -2 8 0" stroke="' + shade(f, -0.25) + '" stroke-width="1" fill="none"/>';
+    }
+    return '<path d="M142 128 Q156 138 150 152 Q146 144 138 140Z" fill="' + d + '" stroke="' + OUT + '" stroke-width="1.8" stroke-linejoin="round"/><path d="M150 152 q-2 -4 -6 -5" stroke="#fff" stroke-width="2" fill="none"/>' + s +
+      '<path d="M56 130 L48 126 L52 120 L60 124Z" fill="' + d + '" stroke="' + OUT + '" stroke-width="1.6" stroke-linejoin="round"/>' +
+      '<path d="M60 128 Q50 132 46 138 Q56 140 62 134Z" fill="' + f + '" stroke="' + OUT + '" stroke-width="1.6" stroke-linejoin="round"/><circle cx="46" cy="138" r="1.8" fill="' + OUT + '"/><circle cx="55" cy="131" r="1.2" fill="' + OUT + '"/>';
+  };
+  // Бармы — царское оплечье: широкий золотой воротник на плечах, по кругу
+  // пять медальонов-дробниц в жемчужной обводке, между ними узор.
   T.barmy = function (c) {
-    var s = '<path d="M64 124 Q100 168 136 124 Q134 140 100 156 Q66 140 64 124Z" fill="' + c0(c, 0) + '" ' + SW + '/>';
-    [[78, 138], [100, 148], [122, 138]].forEach(function (p, i) { s += '<circle cx="' + p[0] + '" cy="' + p[1] + '" r="6" fill="' + (i === 1 ? c0(c, 1) : c0(c, 2)) + '" ' + SW + '/>'; });
+    var g = c0(c, 0, '#e9c46a'), r = c0(c, 1, '#b3123a'), gr = c0(c, 2, '#1d8a5a');
+    var s = '<path d="M56 122 Q100 104 144 122 Q148 136 140 146 Q100 172 60 146 Q52 136 56 122Z" fill="' + g + '" ' + SW + '/>' +
+      '<path d="M72 124 Q100 114 128 124 Q126 132 100 138 Q74 132 72 124Z" fill="' + shade(g, -0.35) + '" stroke="' + OUT + '" stroke-width="1.4"/>' +
+      '<path d="M60 140 Q100 162 140 140" fill="none" stroke="' + shade(g, 0.35) + '" stroke-width="1.4" stroke-dasharray="2 3"/>';
+    [[66, 136, gr], [82, 148, r], [100, 152, gr], [118, 148, r], [134, 136, gr]].forEach(function (q) {
+      var pearls = '';
+      for (var k = 0; k < 8; k++) { var a = k * Math.PI / 4; pearls += '<circle cx="' + (q[0] + Math.cos(a) * 6.4).toFixed(1) + '" cy="' + (q[1] + Math.sin(a) * 6.4).toFixed(1) + '" r="1.3" fill="#fbfaf5"/>'; }
+      s += '<circle cx="' + q[0] + '" cy="' + q[1] + '" r="7.6" fill="' + shade(g, -0.15) + '" stroke="' + OUT + '" stroke-width="1.4"/>' + pearls +
+        '<circle cx="' + q[0] + '" cy="' + q[1] + '" r="4" fill="' + q[2] + '" stroke="' + OUT + '" stroke-width="1"/><circle cx="' + (q[0] - 1.3) + '" cy="' + (q[1] - 1.3) + '" r="1.2" fill="#fff" opacity=".7"/>';
+    });
     return '<g class="it-shine">' + s + '</g>';
   };
   T.order = function (c) { return '<path d="M76 122 L100 140 L124 122" fill="none" stroke="' + c0(c, 0) + '" stroke-width="6"/><path d="M100 136 L110 146 L100 168 L90 146Z" fill="' + c0(c, 0) + '" ' + SW + '/><path d="M88 150 L112 150 M100 138 L100 164" stroke="' + c0(c, 1) + '" stroke-width="4"/><circle cx="100" cy="150" r="5" fill="' + c0(c, 1) + '" ' + SW + '/>'; };
   T.chain = function (c) { var s = ''; for (var i = 0; i < 11; i++) { var a = (15 + i * 15) * Math.PI / 180; s += '<ellipse cx="' + (100 - Math.cos(a) * 34).toFixed(1) + '" cy="' + (124 + Math.sin(a) * 24).toFixed(1) + '" rx="5" ry="3.5" fill="none" stroke="' + c0(c, 0) + '" stroke-width="3"/>'; } return '<g class="it-shine">' + s + '<circle cx="100" cy="154" r="9" fill="' + c0(c, 0) + '" ' + SW + '/><circle cx="100" cy="154" r="4" fill="' + c0(c, 1) + '"/></g>'; };
 
   // В руке (правая лапа ≈ 140,152; предмет поднимается вверх-вправо)
-  function held(inner) { return '<g class="pet-held">' + inner + '</g>'; }
-  T.quill = function (c) { return held('<path d="M142 160 Q150 118 176 96 Q170 130 146 162Z" fill="' + c0(c, 0) + '" ' + SW + '/><path d="M142 162 L176 96" stroke="' + OUT + '" stroke-width="1.5"/><path d="M140 166 L143 158" stroke="' + c0(c, 1) + '" stroke-width="3"/>'); };
-  T.scroll = function (c) { return held('<rect x="134" y="130" width="34" height="40" rx="3" fill="' + c0(c, 0) + '" ' + SW + '/><path d="M140 140 h22 M140 148 h18 M140 156 h22" stroke="' + c0(c, 1) + '" stroke-width="2"/><circle cx="134" cy="130" r="5" fill="' + shade(c0(c, 0), -0.2) + '" ' + SW + '/><circle cx="134" cy="170" r="5" fill="' + shade(c0(c, 0), -0.2) + '" ' + SW + '/>'); };
-  T.book = function (c) { return held('<path d="M132 132 L166 126 L170 168 L136 174Z" fill="' + c0(c, 0) + '" ' + SW + '/><path d="M138 134 L138 172" stroke="' + shade(c0(c, 0), -0.3) + '" stroke-width="3"/><text x="153" y="154" text-anchor="middle" font-size="9" font-weight="900" fill="' + c0(c, 1) + '" font-family="Arial" transform="rotate(-9 153 154)">ЕГЭ</text>'); };
-  T.abacus = function (c) { var s = '<rect x="132" y="128" width="40" height="36" rx="3" fill="' + c0(c, 1) + '" ' + SW + '/>'; for (var r = 0; r < 4; r++) { s += '<path d="M134 ' + (136 + r * 8) + ' h36" stroke="' + OUT + '" stroke-width="1.2"/>'; for (var i = 0; i < 4; i++) s += '<circle cx="' + (140 + i * 6 + (r % 2) * 10) + '" cy="' + (136 + r * 8) + '" r="2.8" fill="' + c0(c, 0) + '"/>'; } return held(s); };
-  T.balalaika = function (c) { return held('<path d="M136 176 L178 160 L160 136Z" fill="' + c0(c, 0) + '" ' + SW + '/><circle cx="160" cy="158" r="4" fill="' + OUT + '"/><path d="M160 136 L178 92" stroke="' + c0(c, 1) + '" stroke-width="5" stroke-linecap="round"/><path d="M172 92 L184 96 L180 86Z" fill="' + c0(c, 1) + '" ' + SW + '/>'); };
-  T.cup = function (c) { return held('<path d="M134 142 L162 142 L158 168 Q148 174 138 168Z" fill="' + c0(c, 0) + '" ' + SW + '/><path d="M162 148 Q172 150 168 158 Q164 162 159 160" fill="none" ' + SW + '/><path d="M138 152 h20" stroke="' + c0(c, 1) + '" stroke-width="3"/><path class="it-steam" d="M142 136 q-4 -8 2 -14 M152 136 q-4 -8 2 -14" fill="none" stroke="#bbb" stroke-width="2" stroke-linecap="round"/>'); };
-  T.flag = function (c) { return held('<path d="M146 168 L152 90" stroke="' + c0(c, 1) + '" stroke-width="4" stroke-linecap="round"/><path class="it-wave" d="M152 92 Q168 86 184 94 L182 118 Q166 112 150 118Z" fill="' + c0(c, 0) + '" ' + SW + '/>'); };
-  T.saber = function (c) { return held('<path d="M144 160 Q170 120 176 74 Q162 116 138 154Z" fill="' + c0(c, 0) + '" ' + SW + '/><path d="M134 150 L152 162" stroke="' + c0(c, 1) + '" stroke-width="5" stroke-linecap="round"/><path d="M142 158 L136 172" stroke="' + OUT + '" stroke-width="6" stroke-linecap="round"/>'); };
-  T.bow = function (c) { return held('<path d="M152 88 Q184 130 152 176" fill="none" stroke="' + c0(c, 0) + '" stroke-width="6" stroke-linecap="round"/><path d="M152 88 L152 176" stroke="' + c0(c, 1) + '" stroke-width="1.5"/>'); };
-  T.clock = function (c) { return held('<circle cx="154" cy="146" r="16" fill="' + c0(c, 0) + '" ' + SW + '/><circle cx="154" cy="146" r="11" fill="' + c0(c, 1) + '"/><path d="M154 146 L154 138 M154 146 L160 148" stroke="' + OUT + '" stroke-width="2" stroke-linecap="round"/><circle cx="142" cy="130" r="5" fill="' + c0(c, 0) + '" ' + SW + '/><circle cx="166" cy="130" r="5" fill="' + c0(c, 0) + '" ' + SW + '/>'); };
-  T.guitar = function (c) { return held('<ellipse cx="146" cy="164" rx="14" ry="12" fill="' + c0(c, 0) + '" ' + SW + '/><ellipse cx="154" cy="146" rx="10" ry="9" fill="' + c0(c, 0) + '" ' + SW + '/><circle cx="149" cy="158" r="4" fill="' + OUT + '"/><path d="M156 144 L180 96" stroke="' + c0(c, 1) + '" stroke-width="5" stroke-linecap="round"/>'); };
-  T.spyglass = function (c) { return held('<path d="M138 164 L178 118" stroke="' + c0(c, 1) + '" stroke-width="9" stroke-linecap="round"/><path d="M158 140 L182 112" stroke="' + c0(c, 0) + '" stroke-width="12" stroke-linecap="round"/><circle cx="184" cy="110" r="5" fill="#7fc8f8" ' + SW + '/>'); };
-  T.gusli = function (c) { var s = '<path d="M130 172 L176 150 L168 124 L136 140Z" fill="' + c0(c, 0) + '" ' + SW + '/>'; for (var i = 0; i < 5; i++) s += '<path d="M' + (138 + i * 7) + ' ' + (166 - i * 3) + ' L' + (140 + i * 6) + ' ' + (140 - i * 2) + '" stroke="#f4f1e6" stroke-width="1.2"/>'; return held(s + '<circle cx="152" cy="152" r="4" fill="' + c0(c, 1) + '"/>'); };
-  T.sword = function (c) { return held('<g class="it-shine"><path d="M146 150 L174 70 L180 74 L152 152Z" fill="' + c0(c, 0) + '" ' + SW + '/><path d="M136 146 L164 160" stroke="' + c0(c, 1) + '" stroke-width="6" stroke-linecap="round"/><path d="M148 156 L142 172" stroke="' + OUT + '" stroke-width="6" stroke-linecap="round"/><circle cx="141" cy="174" r="4" fill="' + c0(c, 1) + '" ' + SW + '/><path d="M166 96 L172 80" stroke="' + c0(c, 2) + '" stroke-width="2.5"/></g>'); };
-  T.scepter = function (c) { return held('<g class="it-shine"><path d="M146 168 L166 90" stroke="' + c0(c, 0) + '" stroke-width="6" stroke-linecap="round"/><circle cx="167" cy="84" r="9" fill="' + c0(c, 1) + '" ' + SW + '/><path d="M167 72 L167 64 M162 68 L172 68" stroke="' + c0(c, 0) + '" stroke-width="3" stroke-linecap="round"/><path d="M150 132 h12" stroke="' + c0(c, 0) + '" stroke-width="8" stroke-linecap="round"/></g>'); };
-  T.torch = function (c) { return held('<path d="M142 168 L154 118 L166 122 L150 170Z" fill="' + c0(c, 0) + '" ' + SW + '/><path class="it-flicker" d="M160 118 Q146 100 160 80 Q162 94 170 96 Q176 110 160 118Z" fill="' + c0(c, 1) + '" ' + SW + '/><path d="M160 114 Q154 104 161 96 Q164 106 160 114Z" fill="#ffe066"/>'); };
-  // Держава (легенда): золотой шар с поясом из самоцветов, полуобручем и
-  // крестом; у основания креста — крупный сапфир. Бликует и сияет.
-  T.orb = function (c) {
-    var g = c0(c, 0, '#e9c46a'), gem = c0(c, 1, '#2f63c9'), gr = uid('orb');
-    var gems = '';
-    [[137, 148, '#c0392b'], [144, 151, '#1d8a5a'], [152, 152, gem], [160, 151, '#c0392b'], [167, 148, '#1d8a5a']].forEach(function (q) {
-      gems += '<circle cx="' + q[0] + '" cy="' + q[1] + '" r="2.1" fill="' + q[2] + '" stroke="' + OUT + '" stroke-width=".8"/>';
-    });
-    return held('<defs><radialGradient id="' + gr + '" cx="35%" cy="30%" r="75%"><stop offset="0" stop-color="#fff6cf"/><stop offset=".45" stop-color="' + g + '"/><stop offset="1" stop-color="' + shade(g, -0.4) + '"/></radialGradient></defs>' +
-      '<circle class="or-glow" cx="152" cy="146" r="27" fill="' + g + '" opacity=".25"/>' +
-      '<g class="it-shine"><circle cx="152" cy="146" r="19" fill="url(#' + gr + ')" ' + SW + '/>' +
-      '<path d="M133.5 146 Q152 156 170.5 146" fill="none" stroke="' + shade(g, -0.35) + '" stroke-width="5"/><path d="M133.5 146 Q152 156 170.5 146" fill="none" stroke="' + g + '" stroke-width="3"/>' + gems +
-      '<path d="M152 127 Q162 136 152 150" fill="none" stroke="' + shade(g, -0.3) + '" stroke-width="3"/>' +
-      '<path d="M152 127 V110 M145 116 H159" stroke="' + OUT + '" stroke-width="6.5" stroke-linecap="round"/><path d="M152 127 V110 M145 116 H159" stroke="' + g + '" stroke-width="4" stroke-linecap="round"/>' +
-      '<ellipse cx="152" cy="127" rx="5" ry="4" fill="' + gem + '" stroke="' + OUT + '" stroke-width="1.4"/><circle cx="150.5" cy="125.8" r="1.3" fill="#dbe8ff"/>' +
-      '<path d="M140 138 Q143 132 149 130" fill="none" stroke="#fff" stroke-width="2.6" stroke-linecap="round" opacity=".85"/></g>' +
-      '<path class="it-twinkle" d="M166 128 l1.2 3.4 3.4 1.2 -3.4 1.2 -1.2 3.4 -1.2 -3.4 -3.4 -1.2 3.4 -1.2Z" fill="#fff"/>' +
-      '<path class="it-twinkle" style="animation-delay:.9s" d="M138 158 l.9 2.6 2.6 .9 -2.6 .9 -.9 2.6 -.9 -2.6 -2.6 -.9 2.6 -.9Z" fill="#fff"/>');
-  };
-  // Спутник-1 (миф): полированный шар со швом, четыре длинные антенны,
-  // от него расходятся радиоволны «бип-бип».
-  T.sputnik = function (c) {
-    var m = c0(c, 0, '#dfe6ee'), a = c0(c, 1, '#9aa3ad'), gr = uid('spk');
-    var waves = '';
-    for (var i = 0; i < 3; i++) waves += '<path class="sp-beep" style="animation-delay:' + (i * 0.5) + 's" d="M' + (170 + i * 6) + ' ' + (98 - i * 6) + ' q' + (8 + i * 3) + ' ' + (8 + i * 3) + ' 0 ' + (20 + i * 10) + '" fill="none" stroke="#7fc8f8" stroke-width="2" stroke-linecap="round" transform="rotate(-40 160 112)"/>';
-    return held('<defs><radialGradient id="' + gr + '" cx="35%" cy="30%" r="75%"><stop offset="0" stop-color="#ffffff"/><stop offset=".5" stop-color="' + m + '"/><stop offset="1" stop-color="' + shade(m, -0.45) + '"/></radialGradient></defs>' +
-      '<g class="it-float">' + waves +
-      '<path d="M150 118 L120 170 M154 122 L138 178 M166 122 L170 180 M170 116 L194 164" stroke="' + OUT + '" stroke-width="3" stroke-linecap="round"/>' +
-      '<path d="M150 118 L120 170 M154 122 L138 178 M166 122 L170 180 M170 116 L194 164" stroke="' + a + '" stroke-width="1.6" stroke-linecap="round"/>' +
-      '<circle cx="160" cy="110" r="15" fill="url(#' + gr + ')" ' + SW + '/>' +
-      '<path d="M145.5 112 Q160 118 174.5 112" fill="none" stroke="' + shade(m, -0.4) + '" stroke-width="1.6"/>' +
-      '<circle cx="150" cy="118" r="2" fill="' + a + '" stroke="' + OUT + '" stroke-width="1"/><circle cx="170" cy="116" r="2" fill="' + a + '" stroke="' + OUT + '" stroke-width="1"/>' +
-      '<path d="M152 102 Q156 98 163 98" stroke="#fff" stroke-width="2.6" fill="none" stroke-linecap="round"/>' +
-      '<path class="it-twinkle" d="M184 84 l1 3 3 1 -3 1 -1 3 -1 -3 -3 -1 3 -1Z" fill="#fff"/></g>');
-  };
 
   // Место (фон целиком, 200×200; земля у y≈188)
   function sky(top, bottom) { var id = uid('sky'); return '<defs><linearGradient id="' + id + '" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="' + top + '"/><stop offset="1" stop-color="' + bottom + '"/></linearGradient></defs><rect width="200" height="200" fill="url(#' + id + ')"/>'; }
   function ground(col) { return '<path d="M0 176 Q100 166 200 176 L200 200 L0 200Z" fill="' + col + '"/>'; }
   T.bg_izba = function (c) { return sky(c0(c, 0), '#fff8ea') + '<path d="M18 120 L60 88 L102 120Z" fill="#6b3f22"/><rect x="24" y="118" width="72" height="56" fill="' + c0(c, 1) + '"/><g stroke="#6b3f22" stroke-width="2">' + [128, 140, 152, 164].map(function (y) { return '<path d="M24 ' + y + ' H96"/>'; }).join('') + '</g><rect x="48" y="132" width="22" height="18" fill="#bfe3ff" stroke="#6b3f22" stroke-width="3"/>' + ground('#8fc26a'); };
   T.bg_field = function (c) { var s = sky(c0(c, 0), '#f4fbff') + '<circle cx="160" cy="36" r="16" fill="#ffd23f"/>' + ground(c0(c, 1)); for (var i = 0; i < 26; i++) s += '<path d="M' + (i * 8) + ' 190 q2 -18 0 -30" stroke="#b8912f" stroke-width="2" fill="none"/>'; return s; };
-  T.bg_class = function (c) { return '<rect width="200" height="200" fill="' + c0(c, 0) + '"/><rect x="20" y="24" width="160" height="80" rx="4" fill="' + c0(c, 1) + '" stroke="#8a5a2b" stroke-width="5"/><text x="100" y="58" text-anchor="middle" font-size="13" fill="#fff" font-family="Comic Sans MS, Arial">1242 — Ледовое</text><text x="100" y="78" text-anchor="middle" font-size="13" fill="#fff" font-family="Comic Sans MS, Arial">побоище</text><rect x="0" y="170" width="200" height="30" fill="#c9a877"/>'; };
+  T.bg_class = function (c) { return '<rect width="200" height="200" fill="' + c0(c, 0) + '"/><rect x="20" y="24" width="160" height="80" rx="4" fill="' + c0(c, 1) + '" stroke="#8a5a2b" stroke-width="5"/><text x="100" y="58" text-anchor="middle" font-size="13" fill="#fff" font-family="Comic Sans MS, Arial" textLength="104" lengthAdjust="spacingAndGlyphs">1242 — Ледовое</text><text x="100" y="78" text-anchor="middle" font-size="13" fill="#fff" font-family="Comic Sans MS, Arial" textLength="56" lengthAdjust="spacingAndGlyphs">побоище</text><rect x="0" y="170" width="200" height="30" fill="#c9a877"/>'; };
   T.bg_birch = function (c) { var s = '<rect width="200" height="200" fill="' + c0(c, 0) + '"/>'; [20, 58, 150, 184].forEach(function (x, i) { s += '<rect x="' + x + '" y="0" width="12" height="190" fill="' + c0(c, 1) + '" stroke="#ccc"/><path d="M' + x + ' ' + (40 + i * 10) + ' h6 M' + (x + 6) + ' ' + (90 + i * 7) + ' h6 M' + x + ' ' + (130 + i * 5) + ' h7" stroke="#333" stroke-width="3"/>'; }); return s + ground('#9fd08a'); };
   T.bg_river = function (c) { return sky(c0(c, 0), '#eaf6ff') + '<path d="M0 132 Q60 124 120 134 T200 130 L200 200 L0 200Z" fill="' + c0(c, 1) + '"/><path class="it-wave" d="M20 150 q10 -4 20 0 M90 160 q10 -4 20 0 M150 146 q10 -4 20 0" stroke="#fff" stroke-width="2" fill="none"/><path d="M0 178 Q100 168 200 178 L200 200 L0 200Z" fill="#e3c98f"/>'; };
   T.bg_room = function (c) { var s = '<rect width="200" height="200" fill="' + c0(c, 0) + '"/>'; for (var x = 0; x < 200; x += 20) s += '<path d="M' + x + ' 0 V170" stroke="' + shade(c0(c, 0), -0.08) + '" stroke-width="8"/>'; return s + '<rect x="120" y="30" width="56" height="70" fill="' + c0(c, 1) + '" stroke="#6b3f22" stroke-width="4"/><path d="M130 40 h36 v50 h-36Z" fill="none" stroke="#e9c46a" stroke-width="2"/><rect x="0" y="170" width="200" height="30" fill="#8a5a2b"/>'; };
@@ -1737,7 +1762,7 @@
   T.bg_metro = function (c) { var s = '<rect width="200" height="200" fill="' + c0(c, 0) + '"/>'; for (var x = 10; x < 200; x += 60) s += '<path d="M' + x + ' 170 V60 Q' + (x + 20) + ' 30 ' + (x + 40) + ' 60 V170" fill="none" stroke="#c9b58a" stroke-width="10"/>'; return s + '<circle cx="100" cy="26" r="12" fill="' + c0(c, 1) + '"/><text x="100" y="31" text-anchor="middle" font-size="14" font-weight="900" fill="#fff" font-family="Arial">М</text><rect x="0" y="170" width="200" height="30" fill="#8e8e8e"/>'; };
   T.bg_senate = function (c) { return sky(c0(c, 0), '#fff') + '<rect x="0" y="100" width="200" height="70" fill="#f1e2bd"/><g fill="#fff">' + [10, 34, 58, 142, 166, 190].map(function (x) { return '<rect x="' + (x - 4) + '" y="104" width="8" height="60"/>'; }).join('') + '</g><path d="M60 100 L100 70 L140 100Z" fill="#f1e2bd"/><path d="M100 70 V30" stroke="' + c0(c, 1) + '" stroke-width="4"/><path d="M40 170 L50 120 L60 170Z" fill="#6b3f22"/><path d="M44 116 q6 -18 20 -10 q-8 4 -6 14Z" fill="' + c0(c, 1) + '"/>' + ground('#d9e4ec'); };
   T.bg_winter = function (c) { var s = sky(c0(c, 0), '#fff') + '<rect x="0" y="90" width="200" height="84" fill="' + c0(c, 1) + '"/>'; for (var x = 8; x < 200; x += 16) s += '<rect x="' + x + '" y="100" width="7" height="66" fill="#fff"/><rect x="' + (x - 1) + '" y="96" width="9" height="4" fill="#e9c46a"/>'; return s + '<path d="M0 90 H200" stroke="#e9c46a" stroke-width="4"/>' + ground('#eef3f7'); };
-  T.bg_baikonur = function (c) { return sky(c0(c, 0), '#fff4e0') + '<path d="M150 170 L150 50 Q160 20 170 50 L170 170Z" fill="' + c0(c, 1) + '" stroke="#999" stroke-width="2"/><path d="M150 150 L138 172 L150 172Z M170 150 L182 172 L170 172Z" fill="#cc2d2d"/><path d="M186 60 L186 170 M190 60 L190 170" stroke="#777" stroke-width="3"/><text x="160" y="110" text-anchor="middle" font-size="7" font-weight="900" fill="#cc2d2d" font-family="Arial" transform="rotate(-90 160 110)">СССР</text>' + ground('#e2c79a'); };
+  T.bg_baikonur = function (c) { return sky(c0(c, 0), '#fff4e0') + '<path d="M150 170 L150 50 Q160 20 170 50 L170 170Z" fill="' + c0(c, 1) + '" stroke="#999" stroke-width="2"/><path d="M150 150 L138 172 L150 172Z M170 150 L182 172 L170 172Z" fill="#cc2d2d"/><path d="M186 60 L186 170 M190 60 L190 170" stroke="#777" stroke-width="3"/><text x="160" y="110" text-anchor="middle" font-size="7" font-weight="900" fill="#cc2d2d" font-family="Arial, sans-serif" textLength="18" lengthAdjust="spacingAndGlyphs" transform="rotate(-90 160 110)">СССР</text>' + ground('#e2c79a'); };
   T.bg_space = function (c) {
     var s = '<rect width="200" height="200" fill="' + c0(c, 0) + '"/><circle cx="40" cy="160" r="60" fill="#1b2a6b" opacity=".6"/>';
     var pts = [[20, 20], [60, 40], [100, 16], [150, 30], [180, 60], [30, 90], [170, 110], [120, 70], [80, 110], [186, 180], [10, 140]];
@@ -1748,11 +1773,6 @@
 
   // Спутники (левый нижний угол, ≈ 14…56 × 140…190)
   function buddy(inner) { return '<g class="pet-buddy">' + inner + '</g>'; }
-  T.c_bird = function (c) { return buddy('<ellipse cx="34" cy="168" rx="16" ry="13" fill="' + c0(c, 0) + '" ' + SW + '/><circle cx="26" cy="160" r="9" fill="' + c0(c, 0) + '" ' + SW + '/><circle cx="23" cy="158" r="2" fill="' + OUT + '"/><path d="M17 161 L10 163 L17 165Z" fill="#f2b705" stroke="' + OUT + '" stroke-width="1.5"/><path d="M38 164 Q48 158 50 170 Q44 172 38 168Z" fill="' + c0(c, 1) + '" ' + SW + '/><path d="M30 181 v6 M38 181 v6" stroke="' + OUT + '" stroke-width="2"/>'); };
-  T.c_frog = function (c) { return buddy('<ellipse cx="34" cy="174" rx="20" ry="13" fill="' + c0(c, 0) + '" ' + SW + '/><circle cx="24" cy="160" r="6" fill="' + c0(c, 0) + '" ' + SW + '/><circle cx="44" cy="160" r="6" fill="' + c0(c, 0) + '" ' + SW + '/><circle cx="24" cy="160" r="2.5" fill="' + OUT + '"/><circle cx="44" cy="160" r="2.5" fill="' + OUT + '"/><path d="M26 176 Q34 182 42 176" fill="none" stroke="' + OUT + '" stroke-width="2"/><path d="M26 152 l4 -6 4 5 4 -5 4 6Z" fill="' + c0(c, 1) + '" stroke="' + OUT + '" stroke-width="1.5"/>'); };
-  T.c_bear = function (c) { return buddy('<circle cx="22" cy="152" r="6" fill="' + c0(c, 0) + '" ' + SW + '/><circle cx="46" cy="152" r="6" fill="' + c0(c, 0) + '" ' + SW + '/><circle cx="34" cy="162" r="14" fill="' + c0(c, 0) + '" ' + SW + '/><ellipse cx="34" cy="184" rx="15" ry="9" fill="' + c0(c, 0) + '" ' + SW + '/><ellipse cx="34" cy="167" rx="6" ry="4.5" fill="' + c0(c, 1) + '"/><circle cx="34" cy="165" r="2" fill="' + OUT + '"/><circle cx="28" cy="158" r="2" fill="' + OUT + '"/><circle cx="40" cy="158" r="2" fill="' + OUT + '"/>'); };
-  T.c_dog = function (c) { return buddy('<ellipse cx="36" cy="178" rx="18" ry="11" fill="' + c0(c, 0) + '" ' + SW + '/><circle cx="26" cy="162" r="11" fill="' + c0(c, 0) + '" ' + SW + '/><path d="M18 156 L16 144 L24 152Z M34 156 L36 144 L28 152Z" fill="' + c0(c, 1) + '" ' + SW + '/><circle cx="22" cy="161" r="1.8" fill="' + OUT + '"/><circle cx="30" cy="161" r="1.8" fill="' + OUT + '"/><circle cx="26" cy="167" r="2.2" fill="' + OUT + '"/><path d="M18 172 h16" stroke="#c62828" stroke-width="3"/>'); };
-  T.c_cat = function (c) { return buddy('<ellipse cx="34" cy="176" rx="18" ry="12" fill="' + c0(c, 0) + '" ' + SW + '/><circle cx="30" cy="158" r="12" fill="' + c0(c, 0) + '" ' + SW + '/><path d="M20 152 L18 140 L27 148Z M40 152 L42 140 L33 148Z" fill="' + c0(c, 0) + '" ' + SW + '/><path d="M24 158 q3 -3 6 0 M32 158 q3 -3 6 0" stroke="' + OUT + '" stroke-width="1.8" fill="none"/><path d="M20 164 h20" stroke="' + c0(c, 1) + '" stroke-width="3"/><circle cx="30" cy="167" r="2.5" fill="' + c0(c, 1) + '"/><path d="M52 178 Q64 170 58 158" fill="none" stroke="' + OUT + '" stroke-width="3"/>'); };
   // Жар-птица (миф): крупная и детальная — золотое тело с чешуйками, изогнутая
   // шея, крыло из трёх слоёв перьев, длинный огненный хвост с «глазками» и
   // пламенный хохолок. Смотрит на питомца.
@@ -1791,7 +1811,25 @@
   };
 
   // Сияние (поверх всего, но прозрачное)
-  T.a_stars = function (c) { var s = ''; for (var i = 0; i < 10; i++) { var x = 14 + (i * 37) % 176, y = 12 + (i * 53) % 150; s += '<path class="it-fall" style="animation-delay:' + (i * 0.45) + 's" d="M' + x + ' ' + (y - 5) + ' l1.6 3.4 3.4 1.6 -3.4 1.6 -1.6 3.4 -1.6 -3.4 -3.4 -1.6 3.4 -1.6Z" fill="' + (i % 2 ? c0(c, 0) : c0(c, 1)) + '"/>'; } return s; };
+  // Звездопад (эпик): сзади — сумеречное небо, по нему наискось летят
+  // звёзды со светящимися хвостами; спереди мерцают крупные звёздочки.
+  T.a_stars_back = function (c) {
+    var id = uid('stb'), s = '';
+    for (var i = 0; i < 6; i++) {
+      var x = 30 + (i * 43) % 170, y = 10 + (i * 29) % 70;
+      s += '<g class="st-shoot" style="animation-delay:' + (i * 0.7).toFixed(1) + 's"><path d="M' + x + ' ' + y + ' l-34 -14" stroke="url(#' + id + ')" stroke-width="3" stroke-linecap="round"/><circle cx="' + x + '" cy="' + y + '" r="2.6" fill="#fff"/></g>';
+    }
+    return '<defs><linearGradient id="' + id + '" x1="1" y1="0" x2="0" y2="0"><stop offset="0" stop-color="' + c0(c, 0, '#ffd23f') + '"/><stop offset="1" stop-color="' + c0(c, 0, '#ffd23f') + '" stop-opacity="0"/></linearGradient></defs>' +
+      '<svg x="0" y="0" width="200" height="200" viewBox="0 0 200 200" overflow="hidden"><rect width="200" height="200" fill="#2b2f6b" opacity=".35"/>' + s + '</svg>';
+  };
+  T.a_stars = function (c) {
+    var s = '';
+    [[22, 60, 6], [176, 42, 5], [160, 120, 4], [30, 128, 4.5], [104, 14, 3.5]].forEach(function (q, i) {
+      var x = q[0], y = q[1], r = q[2];
+      s += '<path class="it-twinkle" style="animation-delay:' + (i * 0.35) + 's" d="M' + x + ' ' + (y - r * 2) + ' Q' + (x + r * 0.3) + ' ' + (y - r * 0.3) + ' ' + (x + r * 2) + ' ' + y + ' Q' + (x + r * 0.3) + ' ' + (y + r * 0.3) + ' ' + x + ' ' + (y + r * 2) + ' Q' + (x - r * 0.3) + ' ' + (y + r * 0.3) + ' ' + (x - r * 2) + ' ' + y + ' Q' + (x - r * 0.3) + ' ' + (y - r * 0.3) + ' ' + x + ' ' + (y - r * 2) + 'Z" fill="' + (i % 2 ? c0(c, 1, '#fff3b0') : c0(c, 0, '#ffd23f')) + '"/>';
+    });
+    return s;
+  };
   // Снег 1812 года (легенда): крупные шестилучевые снежинки кружатся и падают,
   // сзади — морозная дымка, у ног — сугробы.
   function flake(x, y, r, col) {
@@ -1813,7 +1851,26 @@
     return '<svg x="0" y="0" width="200" height="200" viewBox="0 0 200 200" overflow="hidden">' + s +
       '<path d="M0 194 Q20 184 42 192 Q56 186 70 194 L70 200 L0 200Z M130 196 Q150 184 170 192 Q186 186 200 192 L200 200 L130 200Z" fill="#fff" stroke="#cfe6f7" stroke-width="1.5"/></svg>';
   };
-  T.a_salute = function (c) { var s = ''; [[40, 40], [160, 30], [110, 20]].forEach(function (p, j) { for (var i = 0; i < 10; i++) { var a = i / 10 * Math.PI * 2; s += '<path class="it-burst" style="animation-delay:' + (j * 0.6) + 's" d="M' + p[0] + ' ' + p[1] + ' L' + (p[0] + Math.cos(a) * 16).toFixed(1) + ' ' + (p[1] + Math.sin(a) * 16).toFixed(1) + '" stroke="' + c0(c, j % 3) + '" stroke-width="2.5" stroke-linecap="round"/>'; } }); return s; };
+  // Праздничный салют (эпик): сзади в небе раскрываются крупные шары-вспышки
+  // с искрами на концах лучей и дымными следами ракет.
+  T.a_salute_back = function (c) {
+    var s = '';
+    [[42, 44, 26], [158, 34, 24], [106, 18, 18]].forEach(function (p, j) {
+      var col = c0(c, j % 3, ['#ef4444', '#3b82f6', '#ffd23f'][j]), rays = '';
+      for (var i = 0; i < 14; i++) {
+        var a = i / 14 * Math.PI * 2, x2 = p[0] + Math.cos(a) * p[2], y2 = p[1] + Math.sin(a) * p[2];
+        rays += '<path d="M' + (p[0] + Math.cos(a) * 5).toFixed(1) + ' ' + (p[1] + Math.sin(a) * 5).toFixed(1) + ' L' + x2.toFixed(1) + ' ' + y2.toFixed(1) + '" stroke="' + col + '" stroke-width="2.2" stroke-linecap="round"/><circle cx="' + x2.toFixed(1) + '" cy="' + y2.toFixed(1) + '" r="2" fill="#fff6c2"/>';
+      }
+      s += '<path d="M' + p[0] + ' 196 Q' + (p[0] + 6) + ' ' + (p[1] + 70) + ' ' + p[0] + ' ' + (p[1] + 8) + '" stroke="#c9ced6" stroke-width="1.6" fill="none" stroke-dasharray="2 4" opacity=".6"/>' +
+        '<g class="sl-boom" style="animation-delay:' + (j * 0.7) + 's;transform-origin:' + p[0] + 'px ' + p[1] + 'px">' + rays + '<circle cx="' + p[0] + '" cy="' + p[1] + '" r="4" fill="#fff"/></g>';
+    });
+    return '<svg x="0" y="0" width="200" height="200" viewBox="0 0 200 200" overflow="hidden">' + s + '</svg>';
+  };
+  T.a_salute = function (c) {
+    var s = '';
+    for (var i = 0; i < 8; i++) s += '<circle class="it-fall" style="animation-delay:' + (i * 0.4).toFixed(1) + 's" cx="' + (20 + i * 22) + '" cy="' + (30 + (i * 17) % 40) + '" r="1.8" fill="' + ['#ffd23f', '#ef4444', '#3b82f6', '#fff6c2'][i % 4] + '"/>';
+    return s;
+  };
   // Золотые искры (легенда): золотое свечение сзади, вокруг — звёздочки
   // разного размера мерцают и медленно всплывают, сверху сыплется блёстка.
   function spark4(x, y, r, fill, delay, cls) {
@@ -1896,8 +1953,8 @@
       '<path d="M136 58 L178 62 Q182 68 174 70 L134 66Z" fill="' + c0(c, 1) + '" ' + SW + '/></g>';
   };
   T.panamaege = function (c) {
-    return T.panama(c) + '<path d="M66 58 Q100 50 134 58 L134 63 Q100 55 66 63Z" fill="' + c0(c, 2, '#2f63c9') + '"/>' +
-      '<text x="100" y="61" text-anchor="middle" font-size="7" font-weight="900" fill="#fff" font-family="Arial">Я СДАМ ЕГЭ</text>';
+    return T.panama(c) + '<path d="M65 56 Q100 47 135 56 L135 64 Q100 55 65 64Z" fill="' + c0(c, 2, '#2f63c9') + '" stroke="' + OUT + '" stroke-width="1.4"/>' +
+      '<text x="100" y="61.6" text-anchor="middle" font-size="7.4" font-weight="900" fill="#fff" font-family="Arial, sans-serif" textLength="52" lengthAdjust="spacingAndGlyphs">Я СДАМ ЕГЭ</text>';
   };
   T.halo = function (c) {
     return '<g class="it-float"><ellipse cx="100" cy="30" rx="36" ry="9" fill="none" stroke="' + c0(c, 1, '#b8912f') + '" stroke-width="8"/>' +
@@ -1909,9 +1966,15 @@
       '<path d="M70 24 Q72 34 80 42" stroke="#fff" stroke-width="2" opacity=".5" fill="none"/>';
   };
   T.papercrown = function (c) {
-    return '<path d="M62 64 L62 36 L76 50 L88 28 L100 48 L112 28 L124 50 L138 36 L138 64Z" fill="' + c0(c, 0, '#fff4c2') + '" ' + SW + '/>' +
-      '<path d="M66 58 L134 58" stroke="' + c0(c, 1, '#e0a458') + '" stroke-width="2" stroke-dasharray="4 3"/>' +
-      '<text x="100" y="56" text-anchor="middle" font-size="12" font-weight="900" fill="' + c0(c, 1, '#e0a458') + '" font-family="Arial">5?</text>';
+    var p = c0(c, 0, '#fff4c2'), ink = '#d0342c', grid = '';
+    for (var i = 0; i < 9; i++) grid += '<path d="M' + (64 + i * 9) + ' 34 V63" stroke="#9fc5e8" stroke-width=".6"/>';
+    for (var j = 0; j < 3; j++) grid += '<path d="M62 ' + (44 + j * 9) + ' H138" stroke="#9fc5e8" stroke-width=".6"/>';
+    var id = uid('pcr');
+    return '<defs><clipPath id="' + id + '"><path d="M62 64 L62 36 L76 50 L88 28 L100 48 L112 28 L124 50 L138 36 L138 64Z"/></clipPath></defs>' +
+      '<path d="M62 64 L62 36 L76 50 L88 28 L100 48 L112 28 L124 50 L138 36 L138 64Z" fill="' + p + '" ' + SW + '/>' +
+      '<g clip-path="url(#' + id + ')">' + grid + '</g>' +
+      '<text x="100" y="62" text-anchor="middle" font-size="15" font-weight="900" fill="' + ink + '" font-family="Arial, sans-serif" textLength="16" lengthAdjust="spacingAndGlyphs" transform="rotate(-6 100 56)">5?</text>' +
+      '<path d="M114 60 q6 -1 10 -5" stroke="' + ink + '" stroke-width="1.4" fill="none"/>';
   };
   T.bucket = function (c) {
     return '<g class="it-shine"><path d="M60 68 L70 12 L130 12 L140 68Z" fill="' + c0(c, 0, '#b7c0c9') + '" ' + SW + '/>' +
@@ -1925,10 +1988,12 @@
       '<path d="M84 44 Q80 60 82 74 M104 42 Q104 56 106 66 M122 48 Q126 58 128 66" fill="none" stroke="' + c0(c, 1, '#c9ccd6') + '" stroke-width="2" stroke-linecap="round"/>';
   };
   T.headphones = function (c) {
-    return '<path d="M54 90 Q52 34 100 32 Q148 34 146 90" fill="none" stroke="' + c0(c, 0, '#15151a') + '" stroke-width="8"/>' +
-      '<rect x="40" y="76" width="18" height="32" rx="8" fill="' + c0(c, 0, '#15151a') + '" ' + SW + '/><rect x="142" y="76" width="18" height="32" rx="8" fill="' + c0(c, 0, '#15151a') + '" ' + SW + '/>' +
-      '<rect x="44" y="82" width="4" height="20" rx="2" fill="' + c0(c, 1, '#e0341a') + '"/><rect x="152" y="82" width="4" height="20" rx="2" fill="' + c0(c, 1, '#e0341a') + '"/>' +
-      '<text x="100" y="30" text-anchor="middle" font-size="9" font-weight="900" fill="' + c0(c, 1, '#e0341a') + '" font-family="Arial">zxc</text>';
+    var k = c0(c, 0, '#15151a'), r = c0(c, 1, '#e0341a');
+    return '<path d="M54 90 Q52 34 100 32 Q148 34 146 90" fill="none" stroke="' + OUT + '" stroke-width="10"/><path d="M54 90 Q52 34 100 32 Q148 34 146 90" fill="none" stroke="' + k + '" stroke-width="7"/>' +
+      '<path d="M70 44 Q100 30 130 44" fill="none" stroke="' + r + '" stroke-width="2"/>' +
+      '<rect x="38" y="74" width="20" height="36" rx="9" fill="' + k + '" ' + SW + '/><rect x="142" y="74" width="20" height="36" rx="9" fill="' + k + '" ' + SW + '/>' +
+      '<rect x="43" y="80" width="5" height="24" rx="2.5" fill="' + r + '"/><rect x="152" y="80" width="5" height="24" rx="2.5" fill="' + r + '"/>' +
+      '<text x="152" y="95" text-anchor="middle" font-size="6" font-weight="900" fill="#fff" font-family="Arial, sans-serif" textLength="11" lengthAdjust="spacingAndGlyphs" transform="rotate(-90 152 92)">zxc</text>';
   };
 
   // Лицо
@@ -1969,10 +2034,17 @@
   };
   T.unibrow = function (c) { return '<path d="M66 78 Q84 70 100 76 Q116 70 134 78 Q116 76 100 81 Q84 76 66 78Z" fill="' + c0(c, 0, '#2a1f18') + '" ' + SW + '/>'; };
   T.ghoulmask = function (c) {
-    var teeth = '';
-    for (var i = 0; i < 9; i++) teeth += '<rect x="' + (72 + i * 6.5) + '" y="108" width="5.5" height="11" rx="1.5" fill="' + c0(c, 1, '#f4f1e6') + '" stroke="#000" stroke-width="1"/>';
-    return '<g class="it-shine"><path d="M58 100 Q60 136 100 140 Q140 136 142 100 Q122 96 100 98 Q78 96 58 100Z" fill="' + c0(c, 0, '#15151a') + '" ' + SW + '/>' + teeth +
-      '<path d="M70 114 L130 114" stroke="#000" stroke-width="1.5"/><path d="M58 100 L46 96 M142 100 L154 96" stroke="' + c0(c, 0, '#15151a') + '" stroke-width="4" stroke-linecap="round"/></g>';
+    var k = c0(c, 0, '#15151a'), t = c0(c, 1, '#f4f1e6'), teeth = '';
+    for (var i = 0; i < 9; i++) {
+      var x = 72.5 + i * 6.4, h = 12 - Math.abs(i - 4) * 0.8;
+      teeth += '<path d="M' + x + ' ' + (114 - h / 2) + ' h5.2 v' + h + ' q-2.6 2 -5.2 0Z" fill="' + t + '" stroke="#000" stroke-width="1"/><path d="M' + (x + 1.2) + ' ' + (115 - h / 2) + ' v' + (h - 3) + '" stroke="#fff" stroke-width="1" opacity=".8"/>';
+    }
+    return '<g class="it-shine"><path d="M58 100 Q60 136 100 140 Q140 136 142 100 Q122 96 100 98 Q78 96 58 100Z" fill="' + k + '" ' + SW + '/>' +
+      '<path d="M64 104 Q70 128 100 134" stroke="#4a4a58" stroke-width="2" fill="none" opacity=".7"/>' +
+      '<path d="M66 108 Q100 100 134 108 L134 120 Q100 128 66 120Z" fill="#6b1420" stroke="#000" stroke-width="1.2"/>' + teeth +
+      '<path d="M58 100 L42 94 M142 100 L158 94" stroke="' + OUT + '" stroke-width="6" stroke-linecap="round"/><path d="M58 100 L42 94 M142 100 L158 94" stroke="' + k + '" stroke-width="3.6" stroke-linecap="round"/>' +
+      '<circle cx="62" cy="104" r="2.2" fill="#9aa3ad" stroke="#000" stroke-width=".8"/><circle cx="138" cy="104" r="2.2" fill="#9aa3ad" stroke="#000" stroke-width=".8"/>' +
+      '<path d="M76 130 l4 3 M86 134 l3 3 M114 134 l-3 3 M124 130 l-4 3" stroke="#4a4a58" stroke-width="1.4"/></g>';
   };
   T.eyepatch = function (c) {
     return '<path d="M52 72 L148 104" stroke="' + c0(c, 0, '#15151a') + '" stroke-width="3"/><ellipse cx="82" cy="90" rx="13" ry="11" fill="' + c0(c, 0, '#15151a') + '" ' + SW + '/>' +
@@ -2027,15 +2099,19 @@
   T.chain100 = function (c) {
     var s = '';
     for (var i = 0; i < 13; i++) { var a = (15 + i * 12.5) * Math.PI / 180; s += '<ellipse cx="' + (100 - Math.cos(a) * 36).toFixed(1) + '" cy="' + (124 + Math.sin(a) * 26).toFixed(1) + '" rx="5.5" ry="4" fill="none" stroke="' + c0(c, 0, '#e9c46a') + '" stroke-width="3.5"/>'; }
-    return '<g class="it-shine">' + s + '<circle cx="100" cy="162" r="14" fill="' + c0(c, 0, '#e9c46a') + '" ' + SW + '/><text x="100" y="167" text-anchor="middle" font-size="12" font-weight="900" fill="' + c0(c, 1, '#8a5a00') + '" font-family="Arial">100</text></g>';
+    return '<g class="it-shine">' + s + '<circle cx="100" cy="162" r="14" fill="' + c0(c, 0, '#e9c46a') + '" ' + SW + '/><text x="100" y="167" text-anchor="middle" font-size="12" font-weight="900" fill="' + c0(c, 1, '#8a5a00') + '" font-family="Arial, sans-serif" textLength="18" lengthAdjust="spacingAndGlyphs">100</text></g>';
   };
   T.freshener = function (c) {
     return '<path d="M100 128 L100 140" stroke="#fff" stroke-width="1.5"/><path d="M100 140 L88 156 L94 156 L84 170 L92 170 L80 184 L120 184 L108 170 L116 170 L106 156 L112 156Z" fill="' + c0(c, 0, '#2fa84f') + '" ' + SW + '/><path d="M96 180 v6" stroke="' + OUT + '" stroke-width="3"/>';
   };
   T.foilbow = function (c) { return '<g>' + T.bowtie([c0(c, 0, '#cfd6de')]) + '<path d="M86 126 L94 134 M114 126 L106 134 M88 136 L92 132" stroke="' + c0(c, 1, '#8a96a3') + '" stroke-width="1.4"/></g>'; };
   T.medalpatience = function (c) {
-    return '<path d="M92 124 L100 150 L108 124" fill="' + c0(c, 1, '#2f63c9') + '" ' + SW + '/><circle cx="100" cy="158" r="11" fill="' + c0(c, 0, '#c0c7d0') + '" ' + SW + '/>' +
-      '<text x="100" y="161" text-anchor="middle" font-size="5.5" font-weight="900" fill="' + OUT + '" font-family="Arial">ТЕРПЕНИЕ</text>';
+    var m = c0(c, 0, '#c0c7d0'), rb = c0(c, 1, '#2f63c9');
+    return '<path d="M91 122 L100 148 L109 122" fill="' + rb + '" ' + SW + '/><path d="M96 124 L100 138 L104 124" stroke="#fff" stroke-width="1.4" fill="none" opacity=".6"/>' +
+      '<circle cx="100" cy="159" r="13" fill="' + m + '" ' + SW + '/><circle cx="100" cy="159" r="10" fill="none" stroke="' + shade(m, -0.25) + '" stroke-width="1"/>' +
+      '<text x="100" y="156.5" text-anchor="middle" font-size="5" font-weight="900" fill="' + OUT + '" font-family="Arial, sans-serif" textLength="7" lengthAdjust="spacingAndGlyphs">ЗА</text>' +
+      '<text x="100" y="163.5" text-anchor="middle" font-size="5" font-weight="900" fill="' + OUT + '" font-family="Arial, sans-serif" textLength="17" lengthAdjust="spacingAndGlyphs">ТЕРПЕНИЕ</text>' +
+      '<path d="M92 152 q3 -4 7 -5" stroke="#fff" stroke-width="1.6" fill="none" opacity=".7"/>';
   };
   T.choker = function (c) {
     var sp = '';
@@ -2048,76 +2124,6 @@
     return s;
   };
 
-  // В руке
-  T.slipper = function (c) {
-    return held('<g class="it-shine"><path d="M140 160 Q144 110 166 92 Q184 96 180 118 Q170 148 150 166Z" fill="' + c0(c, 0, '#ff8fb1') + '" ' + SW + '/>' +
-      '<path d="M162 100 Q178 104 176 118 Q166 116 160 108Z" fill="' + shade(c0(c, 0, '#ff8fb1'), -0.2) + '" ' + SW + '/><circle cx="170" cy="106" r="7" fill="' + c0(c, 1, '#fff') + '" ' + SW + '/>' +
-      '<path d="M178 80 l4 -8 M186 90 l8 -2 M184 84 l6 -6" stroke="' + OUT + '" stroke-width="2.5" stroke-linecap="round"/></g>');
-  };
-  T.seeds = function (c) {
-    var s = '<path d="M134 136 L170 136 L152 176Z" fill="' + c0(c, 0, '#f4f1e6') + '" ' + SW + '/>';
-    [[142, 132], [150, 128], [158, 132], [154, 124], [146, 126]].forEach(function (p) { s += '<ellipse cx="' + p[0] + '" cy="' + p[1] + '" rx="3" ry="5" fill="' + c0(c, 1, '#2b2233') + '" transform="rotate(' + (p[0] - 150) * 4 + ' ' + p[0] + ' ' + p[1] + ')"/>'; });
-    return held(s);
-  };
-  T.bagofbags = function (c) {
-    return held('<path d="M132 138 Q130 176 154 178 Q180 176 176 138Z" fill="' + c0(c, 0, '#f4f4f6') + '" ' + SW + '/><path d="M140 138 Q142 122 150 138 M160 138 Q164 122 170 138" fill="none" ' + SW + '/>' +
-      '<path d="M144 138 Q150 130 156 140 Q162 128 168 140" fill="' + c0(c, 1, '#2f63c9') + '" ' + SW + '/><path d="M140 150 Q154 160 170 150" fill="none" stroke="#c9ccd6" stroke-width="1.5"/>');
-  };
-  T.cheatsheet = function (c) {
-    return held('<g transform="rotate(-12 156 142)"><rect x="140" y="124" width="34" height="42" rx="2" fill="' + c0(c, 0, '#fffbe6') + '" ' + SW + '/>' +
-      '<path d="M144 132 h26 M144 138 h22 M144 144 h26 M144 150 h18 M144 156 h24" stroke="' + c0(c, 1, '#2f63c9') + '" stroke-width="1.3"/><text x="157" y="130" text-anchor="middle" font-size="5" font-weight="900" fill="#d0342c" font-family="Arial">1242 1380 1480</text></g>');
-  };
-  T.calculator = function (c) {
-    var keys = '';
-    for (var i = 0; i < 12; i++) keys += '<rect x="' + (140 + (i % 3) * 9) + '" y="' + (142 + Math.floor(i / 3) * 7) + '" width="7" height="5" rx="1" fill="' + (i % 3 === 2 ? '#e0a458' : '#dfe3ea') + '"/>';
-    return held('<rect x="136" y="122" width="34" height="50" rx="4" fill="' + c0(c, 0, '#6b737c') + '" ' + SW + '/><rect x="140" y="127" width="26" height="11" fill="' + c0(c, 1, '#b8e0a0') + '"/>' +
-      '<text x="164" y="136" text-anchor="end" font-size="8" font-family="monospace" fill="#1f3a1f">1242</text>' + keys);
-  };
-  T.shawarma = function (c) {
-    return held('<g transform="rotate(-20 156 140)"><path d="M144 118 L168 118 L166 168 Q156 174 146 168Z" fill="' + c0(c, 0, '#e7d3a8') + '" ' + SW + '/>' +
-      '<path d="M144 118 Q150 108 156 116 Q162 106 168 118" fill="' + c0(c, 1, '#5bb04a') + '" ' + SW + '/><path d="M146 140 L166 138 L166 168 Q156 174 146 168Z" fill="#dfe6ee" ' + SW + '/>' +
-      '<path d="M148 126 h16 M148 132 h14" stroke="#b8743a" stroke-width="2"/></g>');
-  };
-  T.mughist = function (c) {
-    return held('<path d="M136 132 L166 132 L163 170 Q151 176 139 170Z" fill="' + c0(c, 0, '#ffffff') + '" ' + SW + '/><path d="M166 140 Q178 142 175 154 Q172 160 164 158" fill="none" ' + SW + '/>' +
-      '<text x="151" y="148" text-anchor="middle" font-size="5" font-weight="900" fill="' + c0(c, 1, '#d0342c') + '" font-family="Arial">ЛУЧШИЙ</text><text x="151" y="155" text-anchor="middle" font-size="5" font-weight="900" fill="' + c0(c, 1, '#d0342c') + '" font-family="Arial">ИСТОРИК</text>' +
-      '<path class="it-steam" d="M144 126 q-4 -8 2 -14 M154 126 q-4 -8 2 -14" fill="none" stroke="#bbb" stroke-width="2" stroke-linecap="round"/>');
-  };
-  T.bandage = function (c) {
-    return '<g><path d="M128 138 L148 136 M128 146 L150 144 M128 154 L148 152 M130 162 L146 160" stroke="' + c0(c, 0, '#f4f1e6') + '" stroke-width="5" stroke-linecap="round"/>' +
-      '<path d="M128 138 L148 136 M128 146 L150 144 M128 154 L148 152 M130 162 L146 160" stroke="' + OUT + '" stroke-width="1" stroke-linecap="round" opacity=".35"/>' +
-      '<path class="it-wave" d="M148 160 Q160 170 158 184 Q164 176 168 186" fill="none" stroke="' + c0(c, 0, '#f4f1e6') + '" stroke-width="4" stroke-linecap="round"/>' +
-      '<circle cx="138" cy="150" r="2" fill="' + c0(c, 1, '#d0342c') + '" opacity=".7"/></g>';
-  };
-  // Бензопила — ЛЕГЕНДА с фирменным действием: цепь бежит по полотну, из
-  // выхлопа идёт дымок, мотор мелко дрожит; время от времени питомец газует.
-  T.chainsaw = function (c) {
-    var body = c0(c, 0, '#f08a24'), steel = c0(c, 1, '#c3cad2');
-    var blade = 'M154 140 L184 86 Q190 78 196 84 Q199 90 194 96 L166 146Z';
-    return held('<g class="cs-saw">' +
-      '<g class="cs-smoke"><circle cx="168" cy="152" r="3" fill="#b9b9c0"/><circle cx="170" cy="150" r="4" fill="#cfcfd6"/><circle cx="172" cy="148" r="5" fill="#e2e2e8"/></g>' +
-      '<path d="' + blade + '" fill="' + steel + '" ' + SW + '/>' +
-      '<path d="M160 138 L186 90" stroke="' + shade(steel, 0.25) + '" stroke-width="3" stroke-linecap="round" opacity=".8"/>' +
-      '<path class="cs-chain" d="' + blade + '" fill="none" stroke="' + OUT + '" stroke-width="2.6" stroke-dasharray="3 3"/>' +
-      '<rect x="128" y="130" width="38" height="28" rx="7" fill="' + body + '" ' + SW + '/>' +
-      '<rect x="128" y="130" width="38" height="8" rx="4" fill="' + shade(body, 0.25) + '"/>' +
-      '<path d="M134 146 h14 M134 150 h14 M134 154 h14" stroke="' + shade(body, -0.35) + '" stroke-width="1.6"/>' +
-      '<rect x="152" y="143" width="11" height="11" rx="2" fill="' + OUT + '"/><circle cx="157.5" cy="148.5" r="2.4" fill="' + steel + '"/>' +
-      '<path d="M133 130 Q138 116 152 118 L154 124 Q142 122 139 132" fill="' + shade(body, -0.2) + '" ' + SW + '/>' +
-      '<path d="M166 150 l4 -1 M166 154 l5 1" stroke="' + OUT + '" stroke-width="1.6" stroke-linecap="round"/>' +
-      '<text x="147" y="141" text-anchor="middle" font-size="5.5" font-weight="900" fill="#fff" font-family="Arial">ВЖЖ</text></g>');
-  };
-  // Синий огонь (миф): пламя растёт прямо из ладони — внизу свечение на руке,
-  // выше три языка пламени и светлое ядро.
-  T.bluefire = function (c) {
-    var blue = c0(c, 0, '#3b82f6'), core = c0(c, 1, '#bfe3ff');
-    return held('<g class="it-mythic">' +
-      '<ellipse cx="136" cy="154" rx="11" ry="4" fill="' + core + '" opacity=".75"/>' +
-      '<path class="it-flicker" d="M124 152 Q118 132 128 118 Q130 128 134 128 Q132 110 142 98 Q144 116 150 122 Q156 132 150 146 Q146 154 136 155 Q128 155 124 152Z" fill="' + blue + '" ' + SW + '/>' +
-      '<path class="it-flicker" style="animation-delay:.25s" d="M129 151 Q125 138 132 130 Q134 138 138 137 Q138 126 144 118 Q146 132 148 138 Q150 148 142 152 Q134 154 129 151Z" fill="' + core + '"/>' +
-      '<path d="M134 148 Q136 142 140 142" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" opacity=".8"/>' +
-      '<circle class="it-twinkle" cx="150" cy="104" r="2" fill="' + core + '"/><circle class="it-twinkle" style="animation-delay:.5s" cx="122" cy="116" r="1.6" fill="' + core + '"/></g>');
-  };
 
   // Место
   T.bg_carpet = function (c) {
@@ -2138,19 +2144,19 @@
     return '<defs></defs><rect width="200" height="200" fill="#dcefff"/><path d="M0 150 L200 150 L200 200 L0 200Z" fill="#7a7a72"/><path d="M0 172 h24 M40 172 h24 M80 172 h24 M120 172 h24 M160 172 h24" stroke="#fff" stroke-width="3"/>' +
       '<rect x="14" y="70" width="172" height="76" rx="12" fill="' + c0(c, 0, '#f2c500') + '" stroke="#2b2233" stroke-width="3"/>' +
       '<rect x="26" y="80" width="30" height="26" rx="3" fill="#bfe3ff" stroke="#2b2233" stroke-width="2"/><rect x="62" y="80" width="30" height="26" rx="3" fill="#bfe3ff" stroke="#2b2233" stroke-width="2"/><rect x="98" y="80" width="30" height="26" rx="3" fill="#bfe3ff" stroke="#2b2233" stroke-width="2"/><rect x="134" y="80" width="40" height="26" rx="3" fill="#bfe3ff" stroke="#2b2233" stroke-width="2"/>' +
-      '<rect x="140" y="112" width="30" height="12" fill="#fff" stroke="#2b2233" stroke-width="1.5"/><text x="155" y="121" text-anchor="middle" font-size="9" font-weight="900" font-family="Arial">№ 1242</text>' +
+      '<rect x="140" y="112" width="30" height="12" fill="#fff" stroke="#2b2233" stroke-width="1.5"/><text x="155" y="121" text-anchor="middle" font-size="9" font-weight="900" font-family="Arial, sans-serif" textLength="30" lengthAdjust="spacingAndGlyphs">№ 1242</text>' +
       '<circle cx="50" cy="148" r="13" fill="#2b2233"/><circle cx="150" cy="148" r="13" fill="#2b2233"/><circle cx="50" cy="148" r="5" fill="#aaa"/><circle cx="150" cy="148" r="5" fill="#aaa"/>';
   };
   T.bg_759 = function (c) {
     return '<rect width="200" height="200" fill="#e9efe6"/><rect x="16" y="30" width="120" height="70" rx="3" fill="' + c0(c, 0, '#2f5a3a') + '" stroke="#8a5a2b" stroke-width="4"/>' +
-      '<text x="76" y="62" text-anchor="middle" font-size="13" fill="#fff" font-family="Comic Sans MS, Arial">Контрольная</text><text x="76" y="82" text-anchor="middle" font-size="10" fill="#fff" font-family="Comic Sans MS, Arial">по датам</text>' +
+      '<text x="76" y="62" text-anchor="middle" font-size="13" fill="#fff" font-family="Comic Sans MS, Arial" textLength="78" lengthAdjust="spacingAndGlyphs">Контрольная</text><text x="76" y="82" text-anchor="middle" font-size="10" fill="#fff" font-family="Comic Sans MS, Arial" textLength="46" lengthAdjust="spacingAndGlyphs">по датам</text>' +
       '<circle cx="164" cy="50" r="22" fill="#fff" stroke="#2b2233" stroke-width="3"/><path d="M164 50 L164 34 M164 50 L176 50" stroke="#2b2233" stroke-width="3" stroke-linecap="round"/><path d="M164 50 L164 35" stroke="#d0342c" stroke-width="1.5" transform="rotate(354 164 50)"/>' +
-      '<text x="164" y="86" text-anchor="middle" font-size="10" font-weight="900" font-family="Arial" fill="#d0342c">7:59</text><rect x="0" y="172" width="200" height="28" fill="#c9a877"/>';
+      '<text x="164" y="86" text-anchor="middle" font-size="10" font-weight="900" font-family="Arial, sans-serif" fill="#d0342c" textLength="22" lengthAdjust="spacingAndGlyphs">7:59</text><rect x="0" y="172" width="200" height="28" fill="#c9a877"/>';
   };
   T.bg_gym = function (c) {
     return '<rect width="200" height="200" fill="' + c0(c, 0, '#2a2d33') + '"/><rect x="120" y="20" width="66" height="120" fill="#9fb4c8" opacity=".35" stroke="#555" stroke-width="3"/>' +
       '<rect x="0" y="170" width="200" height="30" fill="#1b1d21"/><path d="M14 158 L96 158" stroke="#c3cad2" stroke-width="5"/><rect x="10" y="140" width="10" height="36" rx="3" fill="#111"/><rect x="90" y="140" width="10" height="36" rx="3" fill="#111"/>' +
-      '<text x="153" y="84" text-anchor="middle" font-size="11" font-weight="900" fill="' + c0(c, 1, '#e0341a') + '" font-family="Arial">NO PAIN</text><text x="153" y="98" text-anchor="middle" font-size="11" font-weight="900" fill="' + c0(c, 1, '#e0341a') + '" font-family="Arial">NO ЕГЭ</text>';
+      '<text x="153" y="84" text-anchor="middle" font-size="11" font-weight="900" fill="' + c0(c, 1, '#e0341a') + '" font-family="Arial, sans-serif" textLength="42" lengthAdjust="spacingAndGlyphs">NO PAIN</text><text x="153" y="98" text-anchor="middle" font-size="11" font-weight="900" fill="' + c0(c, 1, '#e0341a') + '" font-family="Arial, sans-serif" textLength="38" lengthAdjust="spacingAndGlyphs">NO ЕГЭ</text>';
   };
   T.bg_rainroof = function (c) {
     var s = '<rect width="200" height="200" fill="' + c0(c, 0, '#161a2b') + '"/>';
@@ -2162,31 +2168,6 @@
     return s + '<path d="M0 160 L200 160 L200 200 L0 200Z" fill="#0e1120"/><path d="M0 160 L200 160" stroke="#39406a" stroke-width="3"/>';
   };
 
-  // Спутники
-  T.c_capybara = function (c) {
-    return buddy('<ellipse cx="34" cy="172" rx="24" ry="14" fill="' + c0(c, 0, '#9c6b3f') + '" ' + SW + '/><path d="M14 168 Q10 150 26 148 Q36 150 34 162Z" fill="' + c0(c, 0, '#9c6b3f') + '" ' + SW + '/>' +
-      '<circle cx="20" cy="152" r="1.8" fill="' + OUT + '"/><ellipse cx="12" cy="158" rx="4" ry="3" fill="' + shade(c0(c, 0, '#9c6b3f'), -0.3) + '"/><path d="M28 146 l2 -4 3 3" fill="' + c0(c, 0, '#9c6b3f') + '" ' + SW + '/>' +
-      '<circle cx="24" cy="140" r="6" fill="' + c0(c, 1, '#f59e0b') + '" ' + SW + '/><path d="M24 134 l2 -3" stroke="#3f9a3a" stroke-width="2"/><path d="M22 184 v6 M44 184 v6" stroke="' + OUT + '" stroke-width="3"/>');
-  };
-  T.c_goose = function (c) {
-    return buddy('<ellipse cx="38" cy="174" rx="18" ry="12" fill="' + c0(c, 0, '#f4f4f6') + '" ' + SW + '/><path d="M26 170 Q18 150 24 138" fill="none" stroke="' + OUT + '" stroke-width="10" stroke-linecap="round"/><path d="M26 170 Q18 150 24 138" fill="none" stroke="' + c0(c, 0, '#f4f4f6') + '" stroke-width="6" stroke-linecap="round"/>' +
-      '<path d="M22 136 L12 139 L22 142Z" fill="#f08a24" ' + SW + '/><circle cx="25" cy="136" r="1.6" fill="' + OUT + '"/>' +
-      '<path d="M18 130 Q24 120 32 130Z" fill="' + c0(c, 1, '#f2b705') + '" ' + SW + '/><path d="M34 186 v6 M44 186 v6" stroke="#f08a24" stroke-width="3"/>');
-  };
-  T.c_dumpling = function (c) {
-    return buddy('<path d="M14 182 Q14 154 36 154 Q58 154 58 182Z" fill="' + c0(c, 0, '#f7f1e3') + '" ' + SW + '/><path d="M20 160 q4 -4 8 0 q4 -4 8 0 q4 -4 8 0 q4 -4 8 0" fill="none" stroke="' + shade(c0(c, 0, '#f7f1e3'), -0.2) + '" stroke-width="2"/>' +
-      '<path d="M22 158 L20 148 L28 154 M50 158 L52 148 L44 154" fill="' + c0(c, 0, '#f7f1e3') + '" ' + SW + '/><circle cx="30" cy="170" r="1.8" fill="' + OUT + '"/><circle cx="42" cy="170" r="1.8" fill="' + OUT + '"/><path d="M33 175 q3 2 6 0" stroke="' + OUT + '" stroke-width="1.5" fill="none"/>');
-  };
-  T.c_pigeon = function (c) {
-    return buddy('<ellipse cx="36" cy="172" rx="17" ry="12" fill="' + c0(c, 0, '#9aa3ad') + '" ' + SW + '/><circle cx="24" cy="158" r="8" fill="' + c0(c, 0, '#9aa3ad') + '" ' + SW + '/>' +
-      '<path d="M18 164 Q24 170 32 164" fill="none" stroke="' + c0(c, 1, '#5bb04a') + '" stroke-width="4"/><path d="M17 158 L11 160 L17 162Z" fill="#e0a458"/><circle cx="23" cy="156" r="1.6" fill="#e0341a"/>' +
-      '<path d="M44 168 Q56 164 54 176Z" fill="' + shade(c0(c, 0, '#9aa3ad'), -0.2) + '" ' + SW + '/><path d="M30 184 v6 M40 184 v6" stroke="#e07a6a" stroke-width="2.5"/>');
-  };
-  T.c_roach = function (c) {
-    return buddy('<ellipse cx="36" cy="178" rx="16" ry="9" fill="' + c0(c, 0, '#7a4a24') + '" ' + SW + '/><path d="M36 170 L36 186" stroke="' + shade(c0(c, 0, '#7a4a24'), -0.3) + '" stroke-width="1.5"/>' +
-      '<circle cx="20" cy="176" r="6" fill="' + c0(c, 0, '#7a4a24') + '" ' + SW + '/><path d="M16 172 Q6 160 12 152 M18 171 Q14 158 22 150" fill="none" stroke="' + OUT + '" stroke-width="1.5"/>' +
-      '<circle cx="18" cy="175" r="1.5" fill="#fff"/><path d="M26 184 l-4 6 M36 186 l0 6 M46 184 l4 6" stroke="' + OUT + '" stroke-width="1.5"/>');
-  };
 
   // Сияние
   T.a_friday = function () {
@@ -2217,10 +2198,21 @@
       '<text x="166" y="32" text-anchor="middle" font-size="16" font-weight="900" fill="#ff4d4d" font-family="Courier New, monospace">23<tspan class="dl-colon">:</tspan>59</text></svg>' +
       '<path class="pet-tear" d="M140 70 Q136 78 140 81 Q144 78 140 70Z" fill="#7fc8f8"/>';
   };
+  // Абсолютное спокойствие (эпик): бирюзовое сияние, по земле расходятся
+  // круги, под питомцем — лотос, сверху парит нарисованный инь-ян.
+  T.a_zen_back = function () {
+    var id = uid('zen');
+    return '<defs><radialGradient id="' + id + '"><stop offset="0" stop-color="#7bd3c3" stop-opacity=".55"/><stop offset="1" stop-color="#7bd3c3" stop-opacity="0"/></radialGradient></defs>' +
+      '<ellipse class="sig-pulse" cx="100" cy="116" rx="86" ry="84" fill="url(#' + id + ')"/>';
+  };
   T.a_zen = function () {
     var s = '';
-    for (var i = 0; i < 3; i++) s += '<circle class="it-ripple" style="animation-delay:' + (i * 1.2) + 's" cx="100" cy="186" r="30" fill="none" stroke="#7bd3c3" stroke-width="2"/>';
-    return s + '<text class="it-float" x="100" y="24" text-anchor="middle" font-size="16" fill="#7bd3c3" font-family="serif">☯</text>';
+    for (var i = 0; i < 3; i++) s += '<ellipse class="it-ripple" style="animation-delay:' + (i * 1.2) + 's" cx="100" cy="190" rx="40" ry="8" fill="none" stroke="#5bbfae" stroke-width="2"/>';
+    var petals = '';
+    [-50, -25, 0, 25, 50].forEach(function (a) { petals += '<path d="M100 192 Q92 180 100 170 Q108 180 100 192Z" fill="#f7c6d9" stroke="' + OUT + '" stroke-width="1.2" transform="rotate(' + a + ' 100 192)"/>'; });
+    var yy = '<g class="it-float" transform="translate(100 22)"><circle r="10" fill="#fff" stroke="' + OUT + '" stroke-width="1.6"/>' +
+      '<path d="M0 -10 A10 10 0 0 1 0 10 A5 5 0 0 1 0 0 A5 5 0 0 0 0 -10Z" fill="#1f2330"/><circle cy="-5" r="1.6" fill="#1f2330"/><circle cy="5" r="1.6" fill="#fff"/></g>';
+    return s + petals + yy;
   };
   T.a_thousand = function () {
     var nums = ['1000-7', '993', '986', '979', '972', '965', '958', '951'], s = '';
@@ -2376,6 +2368,514 @@
       coils;
   };
 
+  // ── Вещи в руке v2 (28.09.2026): питомец их ДЕРЖИТ ─────────────────────
+  // Раньше вещь рисовалась в координатах сцены и висела рядом с лапой. Теперь
+  // каждая рисуется вокруг своей рукояти — точка (0,0), вверх — минус y. Рендер
+  // ставит рукоять в лапу нужного вида, поворачивает руку в позу вещи (поднять
+  // меч, держать книгу перед грудью, нести пакет) и рисует поверх рукояти
+  // пальцы — или ладонь ПОД вещью, если её держат на ладони (чашка, держава,
+  // огонь). HOLD — поза, наклон вещи, масштаб и рамка значка в лавке.
+  var POSE = { side: 0, out: -16, up: -34, raise: -58, front: 30 };
+  var HOLD = {
+    quill: { pose: 'up', tilt: 22 }, scroll: { pose: 'front', tilt: -6 }, book: { pose: 'front', tilt: -8 },
+    abacus: { pose: 'front', tilt: -4 }, balalaika: { pose: 'out', tilt: -28, box: '-30 -60 60 116' }, cup: { pose: 'front', palm: true, box: '-22 -52 44 54' },
+    flag: { pose: 'raise', tilt: 6, box: '-12 -80 66 106' }, saber: { pose: 'up', tilt: 12 }, bow: { pose: 'out', tilt: 0, box: '-24 -64 70 128' },
+    clock: { pose: 'front', palm: true }, guitar: { pose: 'out', tilt: -36, box: '-26 -60 52 116' }, spyglass: { pose: 'up', tilt: 58 },
+    gusli: { pose: 'front', tilt: -10 }, sword: { pose: 'up', tilt: 8 }, scepter: { pose: 'raise', tilt: 4 },
+    torch: { pose: 'raise', tilt: 4 }, orb: { pose: 'front', palm: true, box: '-28 -60 56 66' }, sputnik: { pose: 'out', palm: true },
+    slipper: { pose: 'up', tilt: -76, box: '-14 -64 96 76' }, seeds: { pose: 'front', tilt: 8 }, bagofbags: { pose: 'side', tilt: 0, box: '-24 -18 48 64' },
+    cheatsheet: { pose: 'front', tilt: -6 }, calculator: { pose: 'front', tilt: -6 }, shawarma: { pose: 'front', tilt: -14 },
+    mughist: { pose: 'front', tilt: 0, box: '-40 -48 54 74' }, bandage: { pose: 'side', over: true, box: '-14 -22 52 36' }, chainsaw: { pose: 'out', tilt: -8, box: '-26 -40 96 56' },
+    bluefire: { pose: 'front', palm: true },
+  };
+  // Плечо (ось поворота руки) и лапа в координатах каждой анатомии.
+  var ANAT = {
+    baby: { sh: [130, 140], paw: [142, 163], sleeve: [138, 150, 11, 16, -20] }, babyOwl: { sh: [134, 134], paw: [143, 171], wing: true, sleeve: [138, 150, 11, 16, -20] },
+    v3: { sh: [126, 114], paw: [135, 152], sleeve: [132, 130, 9.2, 14.7, -20] }, v3Owl: { sh: [126, 112], paw: [140, 158], wing: true, sleeve: [132, 130, 9.2, 14.7, -20] },
+    human: { sh: [126, 108], paw: [134.5, 156], skin: true, sleeve: [132, 130, 9.2, 14.7, -20] }, bur: { sh: [128, 108], paw: [134.5, 156], skin: true, maxUp: -30, sleeve: [132, 130, 9.2, 14.7, -20] },
+    squid: { sh: [124, 106], paw: [126, 152], sleeve: [128, 128, 8, 13, -10] }, squidChad: { sh: [140, 122], paw: [146, 176], skin: true, sleeve: [146, 140, 10, 16, -10] },
+  };
+  // Пальцы поверх рукояти / ладонь под вещью.
+  function paw(A, fill, ink, palm) {
+    var x = A.paw[0], y = A.paw[1], o = 'stroke="' + ink + '" stroke-width="2.2" stroke-linejoin="round"';
+    if (palm) return '<g class="pet-paw"><ellipse cx="' + x + '" cy="' + (y + 1) + '" rx="10" ry="5" fill="' + fill + '" ' + o + '/>' +
+      '<path d="M' + (x - 6) + ' ' + (y - 2) + ' q2 -3 4 0 M' + (x - 1) + ' ' + (y - 3) + ' q2 -3 4 0 M' + (x + 4) + ' ' + (y - 2) + ' q2 -3 4 0" fill="' + fill + '" ' + o + '/></g>';
+    if (A.wing) return '<g class="pet-paw"><path d="M' + (x - 8) + ' ' + (y - 6) + ' Q' + (x + 4) + ' ' + (y - 10) + ' ' + (x + 8) + ' ' + (y - 2) + ' Q' + (x + 6) + ' ' + (y + 6) + ' ' + (x - 2) + ' ' + (y + 6) + ' Q' + (x - 9) + ' ' + (y + 2) + ' ' + (x - 8) + ' ' + (y - 6) + 'Z" fill="' + fill + '" ' + o + '/>' +
+      '<path d="M' + (x - 3) + ' ' + (y - 4) + ' q4 3 7 6 M' + (x - 5) + ' ' + y + ' q4 2 6 5" fill="none" stroke="' + ink + '" stroke-width="1.3" opacity=".7"/></g>';
+    return '<g class="pet-paw"><ellipse cx="' + x + '" cy="' + y + '" rx="' + (A.skin ? 7 : 7.8) + '" ry="' + (A.skin ? 6.5 : 7) + '" fill="' + fill + '" ' + o + '/>' +
+      '<path d="M' + (x - 5) + ' ' + (y - 2) + ' q2.5 2 5 0 M' + (x - 5) + ' ' + (y + 2) + ' q2.5 2 5 0" fill="none" stroke="' + ink + '" stroke-width="1.3" opacity=".75"/></g>';
+  }
+  // Рука + вещь в позе. arm — рисунок руки вида, fill/ink — цвет лапы и контура.
+  function holding(anat, arm, fill, ink, eq, items) {
+    var id = eq.hand, it = id && items[id], fn = it && T[it.art.t];
+    if (!fn) return arm;
+    var A0 = ANAT[anat] || ANAT.v3;
+    if (SLEEVE.fill && A0.sleeve) {
+      var q = A0.sleeve;
+      arm += '<ellipse cx="' + q[0] + '" cy="' + q[1] + '" rx="' + q[2] + '" ry="' + q[3] + '" transform="rotate(' + q[4] + ' ' + q[0] + ' ' + q[1] + ')" fill="' + SLEEVE.fill + '" ' + SW + '/>';
+    }
+    var H = HOLD[it.art.t] || { pose: 'side' }, A = ANAT[anat] || ANAT.v3;
+    var ang = POSE[H.pose] || 0;
+    if (A.maxUp != null && ang < A.maxUp) ang = A.maxUp; // сидящему Бурундаю руку выше не задрать — уйдёт за кадр
+    var obj = '<g class="slot-hand r-' + it.rarity + '"><g transform="translate(' + A.paw[0] + ' ' + A.paw[1] + ') rotate(' + (-ang + (H.tilt || 0)) + ')' + (H.scale ? ' scale(' + H.scale + ')' : '') + '">' + fn(it.art.c || []) + '</g></g>';
+    var pw = paw(A, fill, ink, H.palm);
+    return '<g transform="rotate(' + ang + ' ' + A.sh[0] + ' ' + A.sh[1] + ')">' + arm + (H.palm || H.over ? pw + obj : obj + pw) + '</g>';
+  }
+  function hold(inner) { return '<g class="pet-held">' + inner + '</g>'; }
+  var HS = 'stroke="' + OUT + '" stroke-width="2.2" stroke-linejoin="round" stroke-linecap="round"';
+
+  // Гусиное перо: опахало с бородками, стержень, очинённый кончик в чернилах.
+  T.quill = function (c) {
+    var f = c0(c, 0, '#f4f1e6'), ink = c0(c, 1, '#1d2a55'), s = '';
+    for (var i = 0; i < 9; i++) { var y = -14 - i * 5.5; s += '<path d="M0 ' + y + ' q' + (7 - i * 0.3) + ' -3 ' + (11 - i * 0.6) + ' -8 M0 ' + (y + 2) + ' q-5 -3 -8 -7" stroke="' + shade(f, -0.18) + '" stroke-width="1" fill="none"/>'; }
+    return hold('<path d="M0 -8 C14 -24 16 -48 6 -66 C2 -52 -10 -40 -10 -22 C-10 -16 -6 -10 0 -8Z" fill="' + f + '" ' + HS + '/>' + s +
+      '<path d="M0 10 L0 -8 Q2 -40 6 -66" fill="none" stroke="' + OUT + '" stroke-width="1.6"/>' +
+      '<path d="M-2 6 L0 14 L2 6Z" fill="' + ink + '" stroke="' + OUT + '" stroke-width="1"/><circle cx="0" cy="15" r="1.3" fill="' + ink + '"/>');
+  };
+  // Берестяная грамота: светлая береста с тёмными чечевичками, края рваные,
+  // процарапанные строки, верх чуть скручен.
+  T.scroll = function (c) {
+    var b = c0(c, 0, '#efe2c2'), t = c0(c, 1, '#6b4a2a');
+    var lines = '';
+    for (var i = 0; i < 4; i++) lines += '<path d="M6 ' + (-32 + i * 7) + ' q4 -2 7 0 t7 0 t7 0" stroke="' + t + '" stroke-width="1.3" fill="none"/>';
+    return hold('<path d="M-2 -2 L2 -40 Q16 -44 34 -40 L32 -2 Q16 2 -2 -2Z" fill="' + b + '" ' + HS + '/>' +
+      '<path d="M2 -40 Q16 -48 34 -40 Q30 -36 18 -38 Q8 -38 2 -40Z" fill="' + shade(b, -0.12) + '" ' + HS + '/>' +
+      '<path d="M8 -12 h5 M22 -20 h4 M14 -6 h3 M26 -8 h4" stroke="#3a2a1e" stroke-width="1.4" stroke-linecap="round" opacity=".55"/>' + lines);
+  };
+  // Книга «ЕГЭ»: твёрдый переплёт с корешком и закладкой, надпись по центру обложки.
+  T.book = function (c) {
+    var k = c0(c, 0, '#2f63c9'), t = c0(c, 1, '#ffd23f');
+    return hold('<path d="M-4 -44 L30 -46 L32 2 L-2 4Z" fill="#f4f1e6" ' + HS + '/>' +
+      '<path d="M-6 -46 L28 -48 L30 0 L-4 2Z" fill="' + k + '" ' + HS + '/>' +
+      '<path d="M-6 -46 L-4 2" stroke="' + shade(k, -0.35) + '" stroke-width="4"/>' +
+      '<rect x="3" y="-34" width="21" height="14" rx="2" fill="' + shade(k, -0.2) + '" transform="rotate(-2 13 -27)"/>' +
+      '<text x="13.5" y="-23" text-anchor="middle" font-size="9.5" font-weight="900" fill="' + t + '" font-family="Arial Black, Arial, sans-serif" textLength="17" lengthAdjust="spacingAndGlyphs" transform="rotate(-2 13 -27)">ЕГЭ</text>' +
+      '<path d="M22 0 L22 8 L25 5 L28 8 L28 0" fill="#ef4444" stroke="' + OUT + '" stroke-width="1"/>' +
+      '<path d="M2 -42 L24 -43" stroke="#fff" stroke-width="1.6" opacity=".45"/>');
+  };
+  // Счёты: деревянная рама, спицы, по десять косточек, пара «отложена» вправо.
+  T.abacus = function (c) {
+    var b = c0(c, 0, '#8a5a32'), f = c0(c, 1, '#c79a5b'), s = '';
+    for (var r = 0; r < 5; r++) {
+      var y = -34 + r * 7.5;
+      s += '<path d="M2 ' + y + ' H36" stroke="#5b4636" stroke-width="1.2"/>';
+      var shift = [2, 4, 0, 6, 3][r];
+      for (var i = 0; i < 6; i++) { var x = 6 + i * 3.6 + (i >= 6 - shift ? 8 : 0); s += '<ellipse cx="' + x.toFixed(1) + '" cy="' + y + '" rx="1.9" ry="2.8" fill="' + (r === 2 ? '#f4f1e6' : b) + '" stroke="' + OUT + '" stroke-width=".7"/>'; }
+    }
+    return hold('<rect x="-2" y="-42" width="42" height="40" rx="3" fill="' + f + '" ' + HS + '/><rect x="2" y="-38" width="34" height="32" rx="1.5" fill="#f3e6c4" stroke="' + OUT + '" stroke-width="1.2"/>' + s);
+  };
+  // Балалайка: треугольный корпус с розеткой и подставкой, лады на грифе, головка с колками.
+  T.balalaika = function (c) {
+    var b = c0(c, 0, '#e0a458'), d = c0(c, 1, '#8a5a32');
+    var frets = ''; for (var i = 0; i < 5; i++) frets += '<path d="M-2.4 ' + (-6 - i * 6) + ' h4.8" stroke="#d9d9d9" stroke-width="1"/>';
+    return hold('<path d="M0 10 L-24 48 Q0 54 24 48Z" fill="' + b + '" ' + HS + '/>' +
+      '<path d="M0 14 L-18 45 Q0 49 18 45Z" fill="' + shade(b, 0.18) + '" opacity=".5"/>' +
+      '<circle cx="0" cy="34" r="4.4" fill="#3a2418" stroke="' + OUT + '" stroke-width="1.2"/><path d="M-6 43 h12" stroke="' + d + '" stroke-width="2.2"/>' +
+      '<rect x="-3" y="-42" width="6" height="54" rx="1.5" fill="' + d + '" ' + HS + '/>' + frets +
+      '<path d="M-5 -42 L-4 -56 L4 -56 L5 -42Z" fill="' + d + '" ' + HS + '/><circle cx="-6" cy="-52" r="1.6" fill="#f4f1e6"/><circle cx="6" cy="-49" r="1.6" fill="#f4f1e6"/><circle cx="-6" cy="-46" r="1.6" fill="#f4f1e6"/>' +
+      '<path d="M-1 -42 L-1 44 M1 -42 L1 44" stroke="#f4f1e6" stroke-width=".5" opacity=".9"/>');
+  };
+  // Чашка чая на блюдце: пар колечками, долька лимона.
+  T.cup = function (c) {
+    var k = c0(c, 0, '#ffffff'), o = c0(c, 1, '#2f63c9');
+    return hold('<ellipse cx="0" cy="-5" rx="17" ry="4" fill="' + k + '" ' + HS + '/>' +
+      '<path d="M-11 -24 L-9 -8 Q0 -4 9 -8 L11 -24Z" fill="' + k + '" ' + HS + '/>' +
+      '<path d="M11 -20 q8 0 7 6 q-1 5 -8 4" fill="none" stroke="' + OUT + '" stroke-width="2.2"/>' +
+      '<ellipse cx="0" cy="-24" rx="11" ry="3" fill="#b5651d" stroke="' + OUT + '" stroke-width="1.6"/>' +
+      '<path d="M-9 -16 h18" stroke="' + o + '" stroke-width="2.4"/><path d="M-4 -12 l2 -3 2 3 2 -3 2 3" stroke="' + o + '" stroke-width="1" fill="none"/>' +
+      '<path d="M3 -26 a4 4 0 0 1 7 1Z" fill="#ffe066" stroke="' + OUT + '" stroke-width="1"/>' +
+      '<g class="it-steam"><path d="M-4 -30 q-3 -5 0 -9 q3 -4 0 -8 M4 -31 q-3 -5 0 -9" fill="none" stroke="#c9ced6" stroke-width="2" stroke-linecap="round"/></g>');
+  };
+  // Флажок: древко с набалдашником, полотнище развевается.
+  T.flag = function (c) {
+    var f = c0(c, 0, '#e0341a');
+    return hold('<path d="M0 22 V-72" stroke="' + OUT + '" stroke-width="5" stroke-linecap="round"/><path d="M0 22 V-72" stroke="#c79a5b" stroke-width="3" stroke-linecap="round"/>' +
+      '<circle cx="0" cy="-74" r="3.6" fill="#ffd23f" stroke="' + OUT + '" stroke-width="1.6"/>' +
+      '<g class="it-wave"><path d="M2 -70 Q16 -76 28 -70 Q40 -64 50 -70 L50 -44 Q40 -38 28 -44 Q16 -50 2 -44Z" fill="' + f + '" ' + HS + '/>' +
+      '<path d="M6 -64 Q18 -70 28 -64" stroke="#fff" stroke-width="1.6" fill="none" opacity=".45"/></g>');
+  };
+  // Сабля: изогнутый клинок с долом, гарда-дужка, рукоять с обмоткой.
+  T.saber = function (c) {
+    var bl = c0(c, 0, '#dfe6ee'), g = c0(c, 1, '#e9c46a');
+    return hold('<path d="M-2 -10 C-4 -34 0 -56 14 -74 C8 -54 6 -34 4 -10Z" fill="' + bl + '" ' + HS + '/>' +
+      '<path d="M1 -14 C0 -34 3 -52 12 -68" stroke="#9aa3ad" stroke-width="1.2" fill="none"/>' +
+      '<path d="M-8 -10 H10 Q12 -8 10 -6 H-8Z" fill="' + g + '" ' + HS + '/>' +
+      '<path d="M8 -8 Q18 0 8 12" fill="none" stroke="' + g + '" stroke-width="2.6"/>' +
+      '<rect x="-3" y="-6" width="6" height="16" rx="2" fill="#3a2418" stroke="' + OUT + '" stroke-width="1.6"/>' +
+      '<path d="M-3 -2 h6 M-3 2 h6 M-3 6 h6" stroke="' + g + '" stroke-width="1"/><circle cx="0" cy="12" r="3" fill="' + g + '" stroke="' + OUT + '" stroke-width="1.4"/>');
+  };
+  // Лук: деревянные плечи с роговыми накладками, тетива и стрела на полке.
+  T.bow = function (c) {
+    var w = c0(c, 0, '#8a5a32');
+    return hold('<path d="M0 -4 C-14 -20 -14 -46 4 -60 C-6 -44 -6 -22 4 -4Z M0 4 C-14 20 -14 46 4 60 C-6 44 -6 22 4 4Z" fill="' + w + '" ' + HS + '/>' +
+      '<path d="M4 -60 L6 60" stroke="#f4f1e6" stroke-width="1.2"/>' +
+      '<path d="M-8 0 H40" stroke="' + OUT + '" stroke-width="2.6" stroke-linecap="round"/><path d="M-8 0 H40" stroke="#c79a5b" stroke-width="1.4"/>' +
+      '<path d="M40 0 l-7 -4 v8Z" fill="#9aa3ad" stroke="' + OUT + '" stroke-width="1.2"/><path d="M-8 0 l-5 -4 M-8 0 l-5 4" stroke="#ef4444" stroke-width="2.4" stroke-linecap="round"/>' +
+      '<rect x="-4" y="-6" width="6" height="12" rx="2" fill="#3a2418" stroke="' + OUT + '" stroke-width="1.2"/>');
+  };
+  // Будильник «Слава»: две чашки звонка с молоточком, циферблат с делениями и ножки.
+  T.clock = function (c) {
+    var r = c0(c, 0, '#ef4444'), f = c0(c, 1, '#ffffff'), ticks = '';
+    for (var i = 0; i < 12; i++) { var a = i * Math.PI / 6; ticks += '<path d="M' + (Math.cos(a) * 11).toFixed(1) + ' ' + (-22 + Math.sin(a) * 11).toFixed(1) + ' L' + (Math.cos(a) * (i % 3 ? 12.5 : 13.5)).toFixed(1) + ' ' + (-22 + Math.sin(a) * (i % 3 ? 12.5 : 13.5)).toFixed(1) + '" stroke="' + OUT + '" stroke-width="' + (i % 3 ? 1 : 1.8) + '"/>'; }
+    return hold('<path d="M-10 -4 l-4 5 M10 -4 l4 5" stroke="' + OUT + '" stroke-width="2.6" stroke-linecap="round"/>' +
+      '<circle cx="-12" cy="-37" r="6.5" fill="' + r + '" ' + HS + '/><circle cx="12" cy="-37" r="6.5" fill="' + r + '" ' + HS + '/><path d="M0 -40 V-44 M-3 -44 h6" stroke="' + OUT + '" stroke-width="2"/>' +
+      '<circle cx="0" cy="-22" r="17" fill="' + r + '" ' + HS + '/><circle cx="0" cy="-22" r="13.5" fill="' + f + '" stroke="' + OUT + '" stroke-width="1.4"/>' + ticks +
+      '<path d="M0 -22 V-31 M0 -22 L6 -19" stroke="' + OUT + '" stroke-width="2" stroke-linecap="round"/><circle cx="0" cy="-22" r="1.6" fill="' + r + '"/>' +
+      '<path d="M-8 -34 q3 -3 7 -3" stroke="#fff" stroke-width="1.8" fill="none" opacity=".6"/>');
+  };
+  // Гитара: «восьмёрка» с розеткой, подставкой, лады и головка с колками.
+  T.guitar = function (c) {
+    var b = c0(c, 0, '#b3262d'), n = c0(c, 1, '#3a2418');
+    var frets = ''; for (var i = 0; i < 6; i++) frets += '<path d="M-2.6 ' + (-4 - i * 6) + ' h5.2" stroke="#d9d9d9" stroke-width="1"/>';
+    return hold('<path d="M0 8 C-14 8 -16 18 -10 24 C-20 30 -20 50 0 52 C20 50 20 30 10 24 C16 18 14 8 0 8Z" fill="' + b + '" ' + HS + '/>' +
+      '<circle cx="0" cy="26" r="5" fill="#1b1b1f" stroke="#e9c46a" stroke-width="1.4"/><path d="M-7 42 h14" stroke="#1b1b1f" stroke-width="3" stroke-linecap="round"/>' +
+      '<rect x="-3.2" y="-40" width="6.4" height="50" rx="1.5" fill="' + n + '" ' + HS + '/>' + frets +
+      '<path d="M-5 -40 L-4 -56 L4 -56 L5 -40Z" fill="' + n + '" ' + HS + '/><path d="M-7 -52 h3 M-7 -46 h3 M4 -52 h3 M4 -46 h3" stroke="#e9c46a" stroke-width="2" stroke-linecap="round"/>' +
+      '<path d="M-1.2 -40 V42 M1.2 -40 V42" stroke="#f4f1e6" stroke-width=".5"/>' +
+      '<path d="M-10 14 Q-12 20 -8 24" stroke="#fff" stroke-width="1.6" fill="none" opacity=".4"/>');
+  };
+  // Подзорная труба: три латунных колена, кожаная обмотка, блик на линзе.
+  T.spyglass = function (c) {
+    var br = c0(c, 0, '#e9c46a'), l = c0(c, 1, '#6b3f22');
+    return hold('<rect x="-5" y="-6" width="10" height="22" rx="2" fill="' + l + '" ' + HS + '/>' +
+      '<rect x="-6" y="-26" width="12" height="20" rx="2" fill="' + br + '" ' + HS + '/><rect x="-7.5" y="-48" width="15" height="22" rx="2" fill="' + br + '" ' + HS + '/>' +
+      '<rect x="-9" y="-54" width="18" height="7" rx="2" fill="' + shade(br, -0.2) + '" ' + HS + '/><ellipse cx="0" cy="-54" rx="7" ry="2.4" fill="#9fd3f7" stroke="' + OUT + '" stroke-width="1.2"/>' +
+      '<path d="M-4 -44 V-30 M-3 -22 V-10" stroke="#fff" stroke-width="1.6" opacity=".55"/><path d="M-5 0 h10 M-5 6 h10" stroke="' + shade(l, -0.3) + '" stroke-width="1.2"/>');
+  };
+  // Гусли крыловидные: резной корпус, струны веером, голосник-звёздочка.
+  T.gusli = function (c) {
+    var w = c0(c, 0, '#c79a5b'), d = c0(c, 1, '#8a5a32'), s = '';
+    for (var i = 0; i < 7; i++) s += '<path d="M' + (6 + i * 3) + ' ' + (-4 - i * 0.5) + ' L' + (8 + i * 4.4) + ' ' + (-38 + i * 3.4) + '" stroke="#f4f1e6" stroke-width=".8"/>';
+    return hold('<path d="M0 0 L4 -42 Q24 -44 42 -16 Q40 -2 30 0Z" fill="' + w + '" ' + HS + '/>' +
+      '<path d="M4 -42 Q24 -44 42 -16" fill="none" stroke="' + d + '" stroke-width="3"/>' + s +
+      '<path d="M16 -18 l2 4 4 0 -3 3 1 4 -4 -2 -4 2 1 -4 -3 -3 4 0Z" fill="' + d + '"/>' +
+      '<path d="M3 -36 Q4 -20 2 -4 M10 -34 q2 2 0 4 M18 -32 q2 2 0 4 M26 -28 q2 2 0 4" stroke="' + d + '" stroke-width="1.2" fill="none"/>');
+  };
+  // Меч: прямой клинок с долом, широкая крестовина, рукоять и навершие-яблоко.
+  T.sword = function (c) {
+    var bl = c0(c, 0, '#dfe6ee'), g = c0(c, 1, '#e9c46a');
+    return hold('<path d="M-4.5 -10 L-4 -64 L0 -74 L4 -64 L4.5 -10Z" fill="' + bl + '" ' + HS + '/>' +
+      '<path d="M0 -14 V-64" stroke="#9aa3ad" stroke-width="1.6"/><path d="M-2.5 -60 L-2.8 -16" stroke="#fff" stroke-width="1.1" opacity=".7"/>' +
+      '<path d="M-15 -10 Q0 -14 15 -10 L15 -6 Q0 -9 -15 -6Z" fill="' + g + '" ' + HS + '/>' +
+      '<rect x="-3" y="-6" width="6" height="15" rx="2" fill="#6b3f22" stroke="' + OUT + '" stroke-width="1.6"/><path d="M-3 -2 l6 3 M-3 3 l6 3" stroke="' + g + '" stroke-width="1"/>' +
+      '<circle cx="0" cy="12" r="3.6" fill="' + g + '" stroke="' + OUT + '" stroke-width="1.4"/>');
+  };
+  // Скипетр: золотой жезл с перехватами, держава и двуглавый орёл сверху, камни.
+  T.scepter = function (c) {
+    var g = c0(c, 0, '#e9c46a'), gem = c0(c, 1, '#b3123a');
+    return hold('<path d="M0 18 V-54" stroke="' + OUT + '" stroke-width="7" stroke-linecap="round"/><path d="M0 18 V-54" stroke="' + g + '" stroke-width="4.4" stroke-linecap="round"/>' +
+      '<path d="M-4 -14 h8 M-4 -30 h8 M-4 4 h8" stroke="' + shade(g, -0.35) + '" stroke-width="2.2"/><circle cx="0" cy="-22" r="2.4" fill="' + gem + '" stroke="' + OUT + '" stroke-width="1"/>' +
+      '<circle cx="0" cy="-60" r="7" fill="' + g + '" ' + HS + '/><path d="M-7 -60 h14" stroke="' + shade(g, -0.35) + '" stroke-width="1.4"/>' +
+      '<path d="M0 -67 l-3 -3 -6 -1 2 -4 -5 -2 5 -3 3 2 1 -4 3 3 3 -3 1 4 3 -2 5 3 -5 2 2 4 -6 1Z" fill="' + g + '" stroke="' + OUT + '" stroke-width="1.2" stroke-linejoin="round"/>' +
+      '<path d="M0 -82 v-5 M-2 -85 h4" stroke="' + g + '" stroke-width="1.8"/><circle cx="-2" cy="-62" r="1.8" fill="#fff" opacity=".7"/>');
+  };
+  // Олимпийский факел (1980): серебряная чаша-конус с золотым ободом и
+  // рифлёной рукоятью, над ней живое пламя из трёх языков, искры.
+  T.torch = function (c) {
+    var m = c0(c, 0, '#c3cad2'), fl = c0(c, 1, '#ff8c1a'), gr = uid('trc');
+    var ribs = ''; for (var i = 0; i < 4; i++) ribs += '<path d="M' + (-3 + i * 2) + ' 14 L' + (-5 + i * 3.3) + ' -30" stroke="' + shade(m, -0.25) + '" stroke-width=".9"/>';
+    return hold('<defs><linearGradient id="' + gr + '" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="' + shade(m, -0.25) + '"/><stop offset=".45" stop-color="#ffffff"/><stop offset="1" stop-color="' + shade(m, -0.3) + '"/></linearGradient></defs>' +
+      '<path d="M-3 16 L-8 -30 L8 -30 L3 16Z" fill="url(#' + gr + ')" ' + HS + '/>' + ribs +
+      '<path d="M-13 -30 L13 -30 L11 -40 L-11 -40Z" fill="url(#' + gr + ')" ' + HS + '/>' +
+      '<path d="M-13 -30 H13" stroke="#e9c46a" stroke-width="3"/><path d="M-11 -40 H11" stroke="#e9c46a" stroke-width="2.4"/>' +
+      '<g class="it-flicker"><path d="M0 -40 C-16 -48 -12 -66 -3 -80 C-2 -68 3 -66 6 -60 C8 -68 13 -74 13 -74 C18 -58 13 -46 0 -40Z" fill="' + fl + '" stroke="' + OUT + '" stroke-width="1.6" stroke-linejoin="round"/>' +
+      '<path d="M0 -42 C-7 -48 -5 -60 0 -66 C2 -58 6 -56 6 -52 C6 -47 4 -44 0 -42Z" fill="#ffe066"/></g>' +
+      '<circle class="sig-dust" cx="8" cy="-80" r="1.4" fill="#ffd23f"/><circle class="sig-dust" style="animation-delay:.8s" cx="-7" cy="-74" r="1.2" fill="' + fl + '"/>');
+  };
+  // Держава на ладони: золотой шар с поясом самоцветов, полуобруч, крест и сапфир.
+  T.orb = function (c) {
+    var g = c0(c, 0, '#e9c46a'), gem = c0(c, 1, '#2f63c9'), gr = uid('orb'), gems = '';
+    [[-13, -16, '#c0392b'], [-7, -13, '#1d8a5a'], [0, -12, gem], [7, -13, '#c0392b'], [13, -16, '#1d8a5a']].forEach(function (q) { gems += '<circle cx="' + q[0] + '" cy="' + q[1] + '" r="2" fill="' + q[2] + '" stroke="' + OUT + '" stroke-width=".8"/>'; });
+    return hold('<defs><radialGradient id="' + gr + '" cx="35%" cy="30%" r="75%"><stop offset="0" stop-color="#fff6cf"/><stop offset=".45" stop-color="' + g + '"/><stop offset="1" stop-color="' + shade(g, -0.4) + '"/></radialGradient></defs>' +
+      '<circle class="or-glow" cx="0" cy="-20" r="26" fill="' + g + '" opacity=".25"/>' +
+      '<g class="it-shine"><circle cx="0" cy="-20" r="17" fill="url(#' + gr + ')" ' + HS + '/>' +
+      '<path d="M-17 -18 Q0 -8 17 -18" fill="none" stroke="' + shade(g, -0.35) + '" stroke-width="4.6"/><path d="M-17 -18 Q0 -8 17 -18" fill="none" stroke="' + g + '" stroke-width="2.8"/>' + gems +
+      '<path d="M0 -37 Q9 -28 0 -16" fill="none" stroke="' + shade(g, -0.3) + '" stroke-width="2.6"/>' +
+      '<path d="M0 -37 V-52 M-6 -46 H6" stroke="' + OUT + '" stroke-width="6" stroke-linecap="round"/><path d="M0 -37 V-52 M-6 -46 H6" stroke="' + g + '" stroke-width="3.6" stroke-linecap="round"/>' +
+      '<ellipse cx="0" cy="-37" rx="4.6" ry="3.6" fill="' + gem + '" stroke="' + OUT + '" stroke-width="1.3"/>' +
+      '<path d="M-11 -27 Q-8 -33 -2 -35" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round" opacity=".85"/></g>' +
+      '<path class="it-twinkle" d="M14 -40 l1.2 3.4 3.4 1.2 -3.4 1.2 -1.2 3.4 -1.2 -3.4 -3.4 -1.2 3.4 -1.2Z" fill="#fff"/>');
+  };
+  // Спутник-1 парит над ладонью: полированный шар, четыре антенны, радиоволны.
+  T.sputnik = function (c) {
+    var m = c0(c, 0, '#dfe6ee'), a = c0(c, 1, '#9aa3ad'), gr = uid('spk'), waves = '';
+    for (var i = 0; i < 3; i++) waves += '<path class="sp-beep" style="animation-delay:' + (i * 0.5) + 's" d="M' + (14 + i * 6) + ' ' + (-44 - i * 5) + ' q' + (7 + i * 3) + ' ' + (7 + i * 3) + ' 0 ' + (16 + i * 9) + '" fill="none" stroke="#7fc8f8" stroke-width="2" stroke-linecap="round" transform="rotate(-40 0 -30)"/>';
+    return hold('<defs><radialGradient id="' + gr + '" cx="35%" cy="30%" r="75%"><stop offset="0" stop-color="#ffffff"/><stop offset=".5" stop-color="' + m + '"/><stop offset="1" stop-color="' + shade(m, -0.45) + '"/></radialGradient></defs>' +
+      '<g class="it-float">' + waves +
+      '<path d="M-10 -24 L-34 12 M-6 -20 L-18 18 M6 -20 L10 20 M10 -26 L30 8" stroke="' + OUT + '" stroke-width="2.6" stroke-linecap="round"/>' +
+      '<path d="M-10 -24 L-34 12 M-6 -20 L-18 18 M6 -20 L10 20 M10 -26 L30 8" stroke="' + a + '" stroke-width="1.3" stroke-linecap="round"/>' +
+      '<circle cx="0" cy="-32" r="13" fill="url(#' + gr + ')" ' + HS + '/><path d="M-12.6 -30 Q0 -25 12.6 -30" fill="none" stroke="' + shade(m, -0.4) + '" stroke-width="1.4"/>' +
+      '<path d="M-7 -40 Q-4 -44 2 -44" stroke="#fff" stroke-width="2.4" fill="none" stroke-linecap="round"/></g>');
+  };
+  // Бабушкин тапок (легенда) — в профиль: плоская подошва, пушистый розовый
+  // верх над носком, белый помпон, открытая пятка. Держат за пятку, носок
+  // смотрит вверх — вот-вот прилетит. Линии замаха у носка.
+  T.slipper = function (c) {
+    var p = c0(c, 0, '#ff8fb1'), w = c0(c, 1, '#ffffff'), fur = '';
+    for (var i = 0; i < 6; i++) fur += '<path d="M' + (26 + i * 6) + ' ' + (-6 - Math.sin(i / 5 * Math.PI) * 10).toFixed(1) + ' q2 -3 4 0" fill="none" stroke="' + shade(p, 0.3) + '" stroke-width="1.4"/>';
+    return hold('<path d="M-6 2 Q-8 -4 -2 -5 L52 -8 Q66 -8 66 0 Q66 8 52 8 L-2 8 Q-8 8 -6 2Z" fill="#d9b48c" ' + HS + '/>' +
+      '<path d="M-2 3 L56 1" stroke="' + shade('#d9b48c', -0.25) + '" stroke-width="1.2" stroke-dasharray="3 2"/>' +
+      '<path d="M-4 -2 Q4 -8 20 -6 Q24 -22 44 -24 Q64 -22 64 -4 Q40 -2 -4 -2Z" fill="' + p + '" ' + HS + '/>' +
+      '<path d="M22 -6 Q26 -18 44 -20 Q58 -18 60 -6" fill="none" stroke="' + w + '" stroke-width="3.2" stroke-linecap="round" opacity=".9"/>' + fur +
+      '<circle cx="46" cy="-24" r="7" fill="' + w + '" stroke="' + OUT + '" stroke-width="1.8"/><path d="M42 -26 q4 -3 8 1 M42 -22 q4 3 8 -1" stroke="#e6e6ec" stroke-width="1.1" fill="none"/>' +
+      '<g class="it-twinkle"><path d="M70 -16 l7 -4 M72 -6 l8 0 M70 4 l7 4" stroke="' + OUT + '" stroke-width="2" stroke-linecap="round"/></g>');
+  };
+  // Семечки в бумажном кульке: газетный кулёк, сверху горка семечек, пара летит.
+  T.seeds = function (c) {
+    var b = c0(c, 0, '#e8dcc0'), s = '';
+    [[-6, -34], [0, -37], [6, -34], [-3, -31], [3, -31], [-9, -30], [9, -30]].forEach(function (q, i) {
+      s += '<ellipse cx="' + q[0] + '" cy="' + q[1] + '" rx="2" ry="3.4" transform="rotate(' + (i * 37 % 60 - 30) + ' ' + q[0] + ' ' + q[1] + ')" fill="#2b2233"/><path d="M' + (q[0] - 0.4) + ' ' + (q[1] - 2) + ' v3" stroke="#f4f1e6" stroke-width=".6"/>';
+    });
+    return hold('<path d="M-13 -30 L0 6 L13 -30Z" fill="' + b + '" ' + HS + '/>' +
+      '<path d="M-8 -24 h14 M-6 -18 h11 M-4 -12 h8" stroke="#9aa3ad" stroke-width="1.1"/><path d="M-10 -28 h8" stroke="#2b2233" stroke-width="2"/>' + s +
+      '<ellipse class="it-float" cx="16" cy="-44" rx="1.8" ry="3" fill="#2b2233" transform="rotate(30 16 -44)"/>');
+  };
+  // Пакет с пакетами: белый полупрозрачный пакет-майка, внутри скомканные пакеты,
+  // из горловины торчат уголки, на боку — полосы. Висит, ручки — в лапе.
+  T.bagofbags = function (c) {
+    var bag = c0(c, 0, '#f4f4f8'), st = c0(c, 1, '#ef4444');
+    return hold('<path d="M-9 0 C-12 -6 -12 -12 -7 -12 C-3 -12 -3 -6 -5 0 M9 0 C12 -6 12 -12 7 -12 C3 -12 3 -6 5 0" fill="none" stroke="' + OUT + '" stroke-width="3.6" stroke-linecap="round"/>' +
+      '<path d="M-9 0 C-12 -6 -12 -12 -7 -12 C-3 -12 -3 -6 -5 0 M9 0 C12 -6 12 -12 7 -12 C3 -12 3 -6 5 0" fill="none" stroke="' + bag + '" stroke-width="2" stroke-linecap="round"/>' +
+      '<path d="M-12 2 Q-16 22 -14 40 Q0 46 14 40 Q16 22 12 2 Q0 6 -12 2Z" fill="' + bag + '" ' + HS + ' opacity=".96"/>' +
+      '<path d="M-6 4 L-2 -4 L2 3 M3 3 L7 -5 L9 4" fill="#fff6d6" stroke="' + OUT + '" stroke-width="1.4" stroke-linejoin="round"/>' +
+      '<path d="M-10 14 Q0 18 10 14 M-11 20 Q0 24 11 20" stroke="' + st + '" stroke-width="2.2" fill="none"/>' +
+      '<path d="M-6 28 q4 -4 8 0 q4 4 6 -1 M-8 34 q5 -3 9 1" stroke="#c9ced6" stroke-width="1.4" fill="none"/>' +
+      '<path d="M-10 8 Q-12 24 -10 36" stroke="#fff" stroke-width="2" opacity=".8" fill="none"/>');
+  };
+  // Шпаргалка: бумажная гармошка, крохотные строчки, край торчит из рукава.
+  T.cheatsheet = function (c) {
+    var p = c0(c, 0, '#ffffff'), t = c0(c, 1, '#3b82f6'), s = '';
+    for (var i = 0; i < 5; i++) {
+      var y = -8 - i * 8, x = i % 2 ? 2 : -2;
+      s += '<path d="M' + (x - 11) + ' ' + y + ' L' + (x + 11) + ' ' + y + ' L' + (-x + 11) + ' ' + (y - 8) + ' L' + (-x - 11) + ' ' + (y - 8) + 'Z" fill="' + (i % 2 ? p : shade(p, -0.08)) + '" stroke="' + OUT + '" stroke-width="1.4" stroke-linejoin="round"/>' +
+        '<path d="M' + (x - 8) + ' ' + (y - 3) + ' h7 M' + (x + 1) + ' ' + (y - 3) + ' h6 M' + (x - 8) + ' ' + (y - 5.5) + ' h12" stroke="' + t + '" stroke-width=".9"/>';
+    }
+    return hold(s + '<path d="M-12 -2 Q0 4 12 -2 L10 6 Q0 10 -10 6Z" fill="#2f63c9" stroke="' + OUT + '" stroke-width="1.6"/>');
+  };
+  // Калькулятор «Электроника»: серый корпус, зелёный ЖК-экран, ряды клавиш.
+  T.calculator = function (c) {
+    var body = c0(c, 0, '#4b5563'), key = c0(c, 1, '#f4f1e6'), keys = '';
+    for (var r = 0; r < 4; r++) for (var i = 0; i < 4; i++) keys += '<rect x="' + (-12 + i * 6.4) + '" y="' + (-24 + r * 6) + '" width="4.8" height="4.2" rx="1" fill="' + (i === 3 ? '#f97316' : key) + '" stroke="' + OUT + '" stroke-width=".6"/>';
+    return hold('<rect x="-15" y="-50" width="30" height="52" rx="4" fill="' + body + '" ' + HS + '/>' +
+      '<rect x="-12" y="-46" width="24" height="12" rx="1.5" fill="#9bbf8a" stroke="' + OUT + '" stroke-width="1.2"/>' +
+      '<text x="10" y="-37" text-anchor="end" font-size="8" font-weight="700" fill="#1f3a1a" font-family="Courier New, monospace" textLength="19" lengthAdjust="spacingAndGlyphs">1945</text>' +
+      '<text x="0" y="-27.6" text-anchor="middle" font-size="3.6" font-weight="700" fill="#c9ced6" font-family="Arial, sans-serif" textLength="22" lengthAdjust="spacingAndGlyphs">ЭЛЕКТРОНИКА</text>' + keys);
+  };
+  // Шаурма: лаваш в фольге, сверху видна начинка — капуста, томат, мясо, соус.
+  T.shawarma = function (c) {
+    var lav = c0(c, 0, '#e8c48a'), foil = c0(c, 1, '#c9ced6');
+    return hold('<path d="M-10 -40 C-12 -46 12 -48 12 -40 L10 6 Q0 10 -10 6Z" fill="' + lav + '" ' + HS + '/>' +
+      '<path d="M-9 -44 q4 -6 8 -2 q4 -6 8 0 q3 -2 4 2" fill="#7fc36b" stroke="' + OUT + '" stroke-width="1.4"/>' +
+      '<circle cx="-3" cy="-42" r="2.6" fill="#e0341a" stroke="' + OUT + '" stroke-width="1"/><path d="M2 -44 l6 1 -2 3Z" fill="#8a4b12" stroke="' + OUT + '" stroke-width="1"/>' +
+      '<path d="M-6 -40 q6 3 12 -1" stroke="#fff6e0" stroke-width="2.4" fill="none"/>' +
+      '<path d="M-11 -18 L11 -22 L10 6 Q0 10 -10 6Z" fill="' + foil + '" ' + HS + '/>' +
+      '<path d="M-8 -14 l6 3 M0 -16 l6 4 M-6 -4 l8 2" stroke="#fff" stroke-width="1.2"/><path d="M-6 -30 q3 2 6 0" stroke="#c9a07a" stroke-width="1.2" fill="none"/>');
+  };
+  // Кружка «Лучший историк»: держат за ручку (она в лапе), надпись в две
+  // строки подогнана по ширине кружки — не вылезает ни в одном шрифте.
+  T.mughist = function (c) {
+    var m = c0(c, 0, '#ffffff'), t = c0(c, 1, '#b3262d');
+    return hold('<path d="M-6 -10 q12 0 12 10 q0 10 -12 10" fill="none" stroke="' + OUT + '" stroke-width="6.4"/><path d="M-6 -10 q12 0 12 10 q0 10 -12 10" fill="none" stroke="' + m + '" stroke-width="3.2"/>' +
+      '<path d="M-32 -20 L-31 18 Q-19 23 -7 18 L-6 -20Z" fill="' + m + '" ' + HS + '/>' +
+      '<ellipse cx="-19" cy="-20" rx="13" ry="3.4" fill="#6b3f22" stroke="' + OUT + '" stroke-width="1.6"/>' +
+      '<text x="-19" y="-4" text-anchor="middle" font-size="6" font-weight="900" fill="' + t + '" font-family="Arial, sans-serif" textLength="20" lengthAdjust="spacingAndGlyphs">ЛУЧШИЙ</text>' +
+      '<text x="-19" y="5" text-anchor="middle" font-size="6" font-weight="900" fill="' + t + '" font-family="Arial, sans-serif" textLength="21" lengthAdjust="spacingAndGlyphs">ИСТОРИК</text>' +
+      '<path d="M-24 10 l5 4 5 -4" stroke="' + t + '" stroke-width="1.4" fill="none"/>' +
+      '<path d="M-28 -14 V12" stroke="#fff" stroke-width="2" opacity=".6"/>' +
+      '<g class="it-steam"><path d="M-23 -26 q-3 -5 0 -9 q3 -4 0 -8 M-14 -27 q-3 -5 0 -9" fill="none" stroke="#c9ced6" stroke-width="2" stroke-linecap="round"/></g>');
+  };
+  // Бинты: намотаны на кисть и запястье, свободный конец развевается.
+  T.bandage = function (c) {
+    var b = c0(c, 0, '#f4f1e6');
+    return hold('<path d="M-9 -12 Q0 -16 9 -12 L9 -8 Q0 -12 -9 -8Z M-9 -4 Q0 -8 9 -4 L9 0 Q0 -4 -9 0Z M-8 4 Q0 0 8 4 L7 8 Q0 4 -7 8Z" fill="' + b + '" stroke="' + OUT + '" stroke-width="1.4" stroke-linejoin="round"/>' +
+      '<g class="it-wave"><path d="M8 -10 Q20 -8 24 -2 Q28 4 34 4 L33 8 Q26 8 22 2 Q18 -4 8 -6Z" fill="' + b + '" stroke="' + OUT + '" stroke-width="1.4" stroke-linejoin="round"/></g>' +
+      '<path d="M-6 -10 l2 2 M2 -2 l2 2 M-3 6 l2 1" stroke="#c9b28a" stroke-width="1"/>');
+  };
+  // Бензопила: корпус с рукоятью (она в лапе), шина с цепью вперёд-вверх,
+  // выхлоп дымит; во время «газа» (act-rev) всё трясётся.
+  T.chainsaw = function (c) {
+    var o = c0(c, 0, '#f08a24'), m = c0(c, 1, '#c3cad2'), teeth = '';
+    for (var i = 0; i < 9; i++) teeth += '<path d="M' + (16 + i * 5) + ' -17 l2 -3 2 3" fill="none" stroke="' + OUT + '" stroke-width="1"/>';
+    return hold('<g class="cs-saw">' +
+      '<g class="cs-smoke"><circle cx="-16" cy="-22" r="3" fill="#b8bec6" opacity=".7"/><circle cx="-20" cy="-28" r="2.2" fill="#c9ced6" opacity=".6"/></g>' +
+      '<path d="M-4 -6 Q-8 4 0 8 Q8 6 6 -4" fill="none" stroke="' + OUT + '" stroke-width="5"/><path d="M-4 -6 Q-8 4 0 8 Q8 6 6 -4" fill="none" stroke="#2b2233" stroke-width="2.6"/>' +
+      '<path d="M-12 -26 L14 -26 L16 -8 L-10 -6 Q-16 -14 -12 -26Z" fill="' + o + '" ' + HS + '/>' +
+      '<rect x="-8" y="-22" width="14" height="6" rx="1.5" fill="#1b1b1f"/><text x="-1" y="-17.6" text-anchor="middle" font-size="4" font-weight="900" fill="' + o + '" font-family="Arial, sans-serif" textLength="11" lengthAdjust="spacingAndGlyphs">ЗВЕРЬ</text>' +
+      '<path d="M14 -24 L62 -30 Q68 -24 62 -18 L14 -12Z" fill="' + m + '" ' + HS + '/>' +
+      '<g class="cs-chain">' + teeth + '</g><path d="M18 -18 L58 -24" stroke="#9aa3ad" stroke-width="1.2"/>' +
+      '<path d="M-10 -28 Q-2 -34 10 -28" fill="none" stroke="#2b2233" stroke-width="3" stroke-linecap="round"/></g>');
+  };
+  // Синий огонь (миф) — прямо на ладони: свечение, три языка пламени, ядро, искры.
+  T.bluefire = function (c) {
+    var blue = c0(c, 0, '#3b82f6'), core = c0(c, 1, '#bfe3ff');
+    return hold('<g class="it-mythic"><ellipse cx="0" cy="-2" rx="14" ry="4" fill="' + core + '" opacity=".75"/>' +
+      '<path class="it-flicker" d="M-12 -2 Q-18 -22 -8 -36 Q-6 -26 -2 -26 Q-4 -44 6 -56 Q8 -38 14 -32 Q20 -22 14 -8 Q10 0 0 0 Q-8 0 -12 -2Z" fill="' + blue + '" ' + HS + '/>' +
+      '<path class="it-flicker" style="animation-delay:.25s" d="M-7 -3 Q-11 -16 -4 -24 Q-2 -16 2 -17 Q2 -28 8 -36 Q10 -22 12 -16 Q14 -6 6 -2 Q-2 0 -7 -3Z" fill="' + core + '"/>' +
+      '<path d="M-2 -6 Q0 -12 4 -12" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" opacity=".8"/>' +
+      '<circle class="it-twinkle" cx="14" cy="-50" r="2" fill="' + core + '"/><circle class="it-twinkle" style="animation-delay:.5s" cx="-14" cy="-38" r="1.6" fill="' + core + '"/></g>');
+  };
+
+  // ── Спутники v2 (28.09.2026): крупнее, с характером, узнаваемые силуэты ──
+  // Стоят слева от питомца и смотрят на него (вправо), земля — y 190.
+  function bEye(x, y, r) {
+    return '<circle cx="' + x + '" cy="' + y + '" r="' + r + '" fill="' + OUT + '"/><circle cx="' + (x + r * 0.35).toFixed(1) + '" cy="' + (y - r * 0.4).toFixed(1) + '" r="' + (r * 0.38).toFixed(1) + '" fill="#fff"/><circle cx="' + (x - r * 0.35).toFixed(1) + '" cy="' + (y + r * 0.35).toFixed(1) + '" r="' + (r * 0.16).toFixed(1) + '" fill="#fff" opacity=".8"/>';
+  }
+  var BS = 'stroke="' + OUT + '" stroke-width="2.2" stroke-linejoin="round" stroke-linecap="round"';
+  // Воробей: пухлый комок, спинка в полоску, серая шапочка, чёрная манишка.
+  T.c_bird = function (c) {
+    var b = c0(c, 0, '#8a6a44'), l = c0(c, 1, '#d9c6a5');
+    return buddy('<path d="M14 170 L2 160 L6 172Z" fill="' + shade(b, -0.2) + '" ' + BS + '/>' +
+      '<path d="M26 188 l-2 4 M26 188 l2 4 M36 188 l-2 4 M36 188 l2 4" stroke="#c98a4a" stroke-width="1.8"/>' +
+      '<ellipse cx="32" cy="174" rx="20" ry="16" fill="' + l + '" ' + BS + '/>' +
+      '<path d="M12 172 Q18 156 34 156 Q44 158 44 168 Q32 164 20 176Z" fill="' + b + '" ' + BS + '/>' +
+      '<path d="M18 168 l6 -3 M22 172 l6 -3 M28 164 l5 -2" stroke="' + shade(b, -0.35) + '" stroke-width="1.6" stroke-linecap="round"/>' +
+      '<circle cx="46" cy="160" r="12" fill="' + l + '" ' + BS + '/><path d="M36 154 Q44 146 54 152 Q50 150 46 154 Q40 152 36 154Z" fill="#8f949c" ' + BS + '/>' +
+      '<path d="M44 168 Q48 174 54 168 Q52 176 46 176Z" fill="' + OUT + '"/>' + bEye(50, 158, 2.4) +
+      '<path d="M57 159 L64 161 L57 164Z" fill="#6b5a3a" stroke="' + OUT + '" stroke-width="1.2" stroke-linejoin="round"/>' +
+      '<ellipse cx="40" cy="162" rx="3.4" ry="2" fill="#f4a6a0" opacity=".45"/>');
+  };
+  // Ворон-летописец: крупный, с сине-фиолетовым отливом, круглые очки на
+  // клюве и свиток под крылом.
+  T.c_raven = function (c) {
+    var b = c0(c, 0, '#23232a'), sh = c0(c, 1, '#4a4a58');
+    return buddy('<path d="M10 172 L-2 186 L14 182 L20 186Z" fill="' + b + '" ' + BS + '/>' +
+      '<path d="M30 186 l-3 5 M30 186 l1 5 M40 186 l-2 5 M40 186 l2 5" stroke="#4a4a58" stroke-width="2"/>' +
+      '<path d="M12 170 Q14 146 38 144 Q54 146 54 166 Q52 186 34 188 Q16 186 12 170Z" fill="' + b + '" ' + BS + '/>' +
+      '<path d="M18 160 Q28 150 40 152" stroke="#6d5cff" stroke-width="2.4" fill="none" opacity=".45"/>' +
+      '<g transform="rotate(-18 28 176)"><rect x="16" y="170" width="24" height="10" rx="4" fill="#f3e6c4" stroke="' + OUT + '" stroke-width="1.6"/><path d="M20 175 h12" stroke="#8a6a44" stroke-width="1"/><circle cx="16" cy="175" r="4.4" fill="#d9c28e" stroke="' + OUT + '" stroke-width="1.4"/></g>' +
+      '<path d="M16 168 Q28 176 42 170 Q34 182 20 180Z" fill="' + sh + '" ' + BS + '/>' +
+      '<circle cx="46" cy="140" r="14" fill="' + b + '" ' + BS + '/>' +
+      '<path d="M56 136 L72 142 L56 148 Q54 142 56 136Z" fill="#2b2b33" stroke="' + OUT + '" stroke-width="1.6" stroke-linejoin="round"/><path d="M58 140 L68 142" stroke="#6b6b7a" stroke-width="1"/>' +
+      bEye(50, 137, 2.6) + '<circle cx="50" cy="137" r="5.6" fill="none" stroke="#e9c46a" stroke-width="1.6"/><path d="M55.6 137 h3" stroke="#e9c46a" stroke-width="1.4"/>' +
+      '<path d="M36 128 q4 -6 10 -4" stroke="#6d5cff" stroke-width="2" fill="none" opacity=".4"/>');
+  };
+  // Царевна-лягушка: сидит, большие глаза, золотая корона и стрела во рту.
+  T.c_frog = function (c) {
+    var g = c0(c, 0, '#5bb04a'), gold = c0(c, 1, '#e9c46a');
+    return buddy('<path d="M10 188 Q4 176 14 170 Q22 180 24 190Z M58 188 Q66 178 58 170 Q50 180 48 190Z" fill="' + shade(g, -0.12) + '" ' + BS + '/>' +
+      '<ellipse cx="36" cy="176" rx="24" ry="15" fill="' + g + '" ' + BS + '/>' +
+      '<ellipse cx="36" cy="182" rx="15" ry="8" fill="#e8f3c4"/>' +
+      '<circle cx="24" cy="176" r="2.4" fill="' + shade(g, -0.3) + '"/><circle cx="46" cy="172" r="2" fill="' + shade(g, -0.3) + '"/><circle cx="30" cy="170" r="1.6" fill="' + shade(g, -0.3) + '"/>' +
+      '<circle cx="24" cy="160" r="9" fill="' + g + '" ' + BS + '/><circle cx="48" cy="160" r="9" fill="' + g + '" ' + BS + '/>' +
+      '<circle cx="24" cy="160" r="6" fill="#fff"/><circle cx="48" cy="160" r="6" fill="#fff"/>' + bEye(25.5, 160.5, 3.4) + bEye(49.5, 160.5, 3.4) +
+      '<path d="M28 150 L30 142 L33 147 L36 140 L39 147 L42 142 L44 150Z" fill="' + gold + '" stroke="' + OUT + '" stroke-width="1.4" stroke-linejoin="round"/><circle cx="36" cy="146" r="1.4" fill="#c0392b"/>' +
+      '<path d="M26 174 Q36 180 46 174" fill="none" stroke="' + OUT + '" stroke-width="2" stroke-linecap="round"/>' +
+      '<path d="M4 172 L72 170" stroke="' + OUT + '" stroke-width="3" stroke-linecap="round"/><path d="M4 172 L72 170" stroke="#c79a5b" stroke-width="1.6"/>' +
+      '<path d="M72 170 l-6 -4 v8Z" fill="#9aa3ad" stroke="' + OUT + '" stroke-width="1.2"/><path d="M4 172 l-4 -4 M4 172 l-4 4" stroke="#ef4444" stroke-width="2.2" stroke-linecap="round"/>' +
+      '<ellipse cx="18" cy="166" rx="3" ry="1.8" fill="#ff8fa3" opacity=".5"/><ellipse cx="54" cy="166" rx="3" ry="1.8" fill="#ff8fa3" opacity=".5"/>');
+  };
+  // Медвежонок: сидит, светлая мордочка и животик, лапы держат горшок мёда.
+  T.c_bear = function (c) {
+    var f = c0(c, 0, '#8a5a2b'), l = c0(c, 1, '#d9b48a');
+    return buddy('<ellipse cx="18" cy="184" rx="9" ry="7" fill="' + f + '" ' + BS + '/><ellipse cx="52" cy="184" rx="9" ry="7" fill="' + f + '" ' + BS + '/>' +
+      '<ellipse cx="18" cy="186" rx="5" ry="3.6" fill="' + l + '"/><ellipse cx="52" cy="186" rx="5" ry="3.6" fill="' + l + '"/>' +
+      '<ellipse cx="35" cy="170" rx="20" ry="18" fill="' + f + '" ' + BS + '/><ellipse cx="35" cy="174" rx="12" ry="12" fill="' + l + '"/>' +
+      '<path d="M26 174 Q26 186 35 188 Q44 186 44 174Z" fill="#e0a458" ' + BS + '/><path d="M26 174 H44" stroke="' + OUT + '" stroke-width="2"/><path d="M28 174 q6 -6 12 0" fill="#ffd23f" stroke="' + OUT + '" stroke-width="1.4"/>' +
+      '<path d="M40 176 q2 6 0 9" stroke="#ffd23f" stroke-width="2.4" stroke-linecap="round"/>' +
+      '<ellipse cx="22" cy="176" rx="6" ry="8" fill="' + f + '" ' + BS + ' transform="rotate(30 22 176)"/><ellipse cx="48" cy="176" rx="6" ry="8" fill="' + f + '" ' + BS + ' transform="rotate(-30 48 176)"/>' +
+      '<circle cx="22" cy="138" r="6" fill="' + f + '" ' + BS + '/><circle cx="48" cy="138" r="6" fill="' + f + '" ' + BS + '/><circle cx="22" cy="138" r="3" fill="' + l + '"/><circle cx="48" cy="138" r="3" fill="' + l + '"/>' +
+      '<circle cx="35" cy="148" r="15" fill="' + f + '" ' + BS + '/><ellipse cx="37" cy="154" rx="8" ry="6" fill="' + l + '" ' + BS + '/>' +
+      '<ellipse cx="37" cy="151" rx="3" ry="2.2" fill="' + OUT + '"/><path d="M37 153 v3 M34 157 q3 2 6 0" stroke="' + OUT + '" stroke-width="1.4" fill="none"/>' +
+      bEye(29, 145, 2.2) + bEye(43, 145, 2.2) + '<ellipse cx="25" cy="151" rx="3" ry="1.8" fill="#ff8fa3" opacity=".4"/>');
+  };
+  // Лайка Белка (1960): белая пушистая с тёмными ушками, в красном скафандре
+  // и прозрачном шлеме с бликом.
+  T.c_dog = function (c) {
+    var w = c0(c, 0, '#f4f4f4'), t = c0(c, 1, '#d0a060');
+    return buddy('<path d="M10 176 Q2 170 6 160 Q12 168 16 170Z" fill="' + w + '" ' + BS + '/>' +
+      '<path d="M22 186 v4 M30 186 v4 M42 186 v4 M50 186 v4" stroke="' + OUT + '" stroke-width="5" stroke-linecap="round"/><path d="M22 186 v4 M30 186 v4 M42 186 v4 M50 186 v4" stroke="' + w + '" stroke-width="3" stroke-linecap="round"/>' +
+      '<ellipse cx="36" cy="176" rx="22" ry="12" fill="#e0341a" ' + BS + '/>' +
+      '<path d="M22 170 h28 M20 178 h32" stroke="#fff" stroke-width="1.6" opacity=".7"/><rect x="32" y="170" width="8" height="8" rx="1.5" fill="#dfe6ee" stroke="' + OUT + '" stroke-width="1.2"/><text x="36" y="176.6" text-anchor="middle" font-size="5" font-weight="900" fill="#e0341a" font-family="Arial, sans-serif" textLength="7" lengthAdjust="spacingAndGlyphs">СССР</text>' +
+      '<circle cx="54" cy="156" r="14" fill="' + w + '" ' + BS + '/>' +
+      '<path d="M44 148 L42 134 L52 144Z M58 144 L64 132 L66 148Z" fill="' + t + '" ' + BS + '/>' +
+      '<ellipse cx="62" cy="160" rx="7" ry="5" fill="' + w + '" ' + BS + '/><ellipse cx="68" cy="158" rx="2.6" ry="2" fill="' + OUT + '"/><path d="M62 164 q3 2 6 0" stroke="' + OUT + '" stroke-width="1.4" fill="none"/>' +
+      '<ellipse cx="52" cy="152" rx="5" ry="4" fill="' + t + '" opacity=".35"/>' + bEye(54, 152, 2.4) +
+      '<circle cx="55" cy="154" r="19" fill="#bfe3ff" fill-opacity=".22" stroke="#dfe6ee" stroke-width="2.2"/><path d="M44 142 Q50 136 58 137" stroke="#fff" stroke-width="2.6" fill="none" stroke-linecap="round" opacity=".85"/>' +
+      '<path d="M40 168 Q55 176 70 166" fill="none" stroke="#dfe6ee" stroke-width="4" stroke-linecap="round"/>');
+  };
+  // Кот Баюн: большой дымчатый, пушистый, прищур сказочника, на шее — златая
+  // цепь, над головой нота (поёт-сказывает).
+  T.c_cat = function (c) {
+    var f = c0(c, 0, '#6b6b7a'), g = c0(c, 1, '#e9c46a'), links = '';
+    for (var i = 0; i < 7; i++) links += '<ellipse cx="' + (24 + i * 4.6).toFixed(1) + '" cy="' + (160 + Math.sin(i / 6 * Math.PI) * 5).toFixed(1) + '" rx="2.6" ry="1.8" fill="none" stroke="' + g + '" stroke-width="1.6"/>';
+    return buddy('<path d="M14 182 Q-4 178 2 156 Q6 146 12 152 Q8 166 20 176Z" fill="' + f + '" ' + BS + '/>' +
+      '<ellipse cx="38" cy="174" rx="22" ry="16" fill="' + f + '" ' + BS + '/>' +
+      '<path d="M22 188 q4 -6 8 0 M44 188 q4 -6 8 0" fill="' + shade(f, 0.2) + '" ' + BS + '/>' +
+      '<path d="M26 168 l6 4 M26 176 l6 2 M50 168 l-6 4" stroke="' + shade(f, -0.3) + '" stroke-width="2" stroke-linecap="round"/>' +
+      '<circle cx="40" cy="146" r="16" fill="' + f + '" ' + BS + '/>' +
+      '<path d="M26 138 L24 120 L36 132Z M44 132 L56 120 L54 138Z" fill="' + f + '" ' + BS + '/><path d="M28 134 L27 125 L33 131Z M47 131 L53 125 L52 134Z" fill="#f4a6a0"/>' +
+      '<ellipse cx="42" cy="152" rx="9" ry="6" fill="' + shade(f, 0.35) + '"/>' +
+      '<path d="M30 146 q4 -3 8 0 M44 146 q4 -3 8 0" stroke="' + OUT + '" stroke-width="2.2" fill="none" stroke-linecap="round"/>' +
+      '<path d="M40 150 l2 2 2 -2Z" fill="#f28ca0" stroke="' + OUT + '" stroke-width="1"/><path d="M42 152 q-2 3 -5 2 M42 152 q2 3 5 2" stroke="' + OUT + '" stroke-width="1.2" fill="none"/>' +
+      '<path d="M30 152 l-10 -2 M30 155 l-10 2 M54 152 l10 -2 M54 155 l10 2" stroke="' + OUT + '" stroke-width="1" opacity=".7"/>' +
+      links + '<circle cx="38" cy="166" r="3" fill="' + g + '" stroke="' + OUT + '" stroke-width="1"/>' +
+      '<g class="it-float"><path d="M58 122 v-10 l8 -2 v10" stroke="' + OUT + '" stroke-width="1.8" fill="none"/><ellipse cx="56" cy="122" rx="3" ry="2.2" fill="' + OUT + '"/><ellipse cx="64" cy="120" rx="3" ry="2.2" fill="' + OUT + '"/></g>');
+  };
+  // Капибара (мем): спокойное «кирпичное» тело, сонная улыбка, мандаринка
+  // с листиком на макушке — невозмутимость.
+  T.c_capybara = function (c) {
+    var f = c0(c, 0, '#9c6b3f'), o = c0(c, 1, '#f59e0b');
+    return buddy('<path d="M16 186 v4 M24 186 v4 M46 186 v4 M54 186 v4" stroke="' + OUT + '" stroke-width="6" stroke-linecap="round"/><path d="M16 186 v4 M24 186 v4 M46 186 v4 M54 186 v4" stroke="' + shade(f, -0.2) + '" stroke-width="3.6" stroke-linecap="round"/>' +
+      '<path d="M8 170 Q8 154 30 154 L52 152 Q70 152 70 168 Q70 186 50 188 L22 188 Q8 186 8 170Z" fill="' + f + '" ' + BS + '/>' +
+      '<path d="M14 166 q4 -3 8 0 M20 176 q4 -3 8 0 M30 162 q4 -3 8 0" stroke="' + shade(f, -0.22) + '" stroke-width="1.4" fill="none"/>' +
+      '<path d="M46 154 Q48 136 60 136 Q74 138 74 152 L74 162 Q70 166 64 164 L50 164Z" fill="' + f + '" ' + BS + '/>' +
+      '<ellipse cx="52" cy="138" rx="3.4" ry="2.6" fill="' + shade(f, -0.2) + '" ' + BS + '/>' +
+      '<path d="M58 146 q3 2 6 0" stroke="' + OUT + '" stroke-width="2" fill="none" stroke-linecap="round"/>' +
+      '<ellipse cx="72" cy="152" rx="2" ry="1.6" fill="' + OUT + '"/><path d="M66 160 q4 2 8 0" stroke="' + OUT + '" stroke-width="1.4" fill="none"/>' +
+      '<ellipse cx="64" cy="152" rx="3" ry="1.8" fill="#ff8fa3" opacity=".35"/>' +
+      '<circle cx="60" cy="128" r="7" fill="' + o + '" ' + BS + '/><path d="M60 121 q4 -5 8 -3 q-3 4 -8 3Z" fill="#5bb04a" stroke="' + OUT + '" stroke-width="1.2"/><circle cx="57" cy="126" r="1.6" fill="#fff" opacity=".6"/>');
+  };
+  // Гусь-работяга: белый, оранжевый клюв и лапы, жёлтая каска, гаечный ключ под крылом.
+  T.c_goose = function (c) {
+    var w = c0(c, 0, '#f4f4f6'), h = c0(c, 1, '#f2b705');
+    return buddy('<path d="M28 184 l-6 6 h10Z M40 184 l-4 6 h10Z" fill="#f08a24" stroke="' + OUT + '" stroke-width="1.6" stroke-linejoin="round"/>' +
+      '<path d="M6 170 L0 162 L12 166Z" fill="' + w + '" ' + BS + '/>' +
+      '<path d="M8 170 Q10 156 30 156 Q50 158 52 172 Q50 186 32 186 Q12 186 8 170Z" fill="' + w + '" ' + BS + '/>' +
+      '<path d="M16 168 Q28 162 42 170 Q30 178 18 176Z" fill="' + shade(w, -0.1) + '" ' + BS + '/>' +
+      '<g transform="rotate(-30 30 176)"><path d="M16 176 H40" stroke="' + OUT + '" stroke-width="5" stroke-linecap="round"/><path d="M16 176 H40" stroke="#9aa3ad" stroke-width="3" stroke-linecap="round"/><path d="M40 170 a5 5 0 1 1 0 12 l-2 -3 v-6Z" fill="#9aa3ad" stroke="' + OUT + '" stroke-width="1.4"/></g>' +
+      '<path d="M44 162 Q46 146 44 136 Q44 124 54 124 Q64 126 62 136 Q58 146 56 164Z" fill="' + w + '" ' + BS + '/>' +
+      '<path d="M62 132 L74 136 L62 140Z" fill="#f08a24" stroke="' + OUT + '" stroke-width="1.4" stroke-linejoin="round"/>' + bEye(57, 130, 2.2) +
+      '<path d="M44 124 Q54 110 64 124Z" fill="' + h + '" ' + BS + '/><path d="M40 124 H68" stroke="' + OUT + '" stroke-width="4" stroke-linecap="round"/><path d="M40 124 H68" stroke="' + h + '" stroke-width="2.2" stroke-linecap="round"/><path d="M54 112 V124" stroke="' + shade(h, -0.25) + '" stroke-width="1.6"/>');
+  };
+  // Кот-пельмень (мем): белый «пельмень» с защипом по спинке, ушки, круглые
+  // глазки, ротик-«w», пар над ним — только что сварили.
+  T.c_dumpling = function (c) {
+    var d = c0(c, 0, '#f7f1e3'), pinch = '';
+    for (var i = 0; i < 8; i++) { var a = Math.PI + i / 7 * Math.PI, x = 36 + Math.cos(a) * 28, y = 184 + Math.sin(a) * 26; pinch += '<path d="M' + x.toFixed(1) + ' ' + y.toFixed(1) + ' l' + (Math.cos(a) * 4).toFixed(1) + ' ' + (Math.sin(a) * 4).toFixed(1) + '" stroke="' + shade(d, -0.2) + '" stroke-width="2" stroke-linecap="round"/>'; }
+    return buddy('<path d="M6 188 Q4 156 36 156 Q68 156 66 188Z" fill="' + d + '" ' + BS + '/>' + pinch +
+      '<path d="M14 162 L14 148 L24 158Z M58 162 L58 148 L48 158Z" fill="' + d + '" ' + BS + '/><path d="M16 158 L16 152 L20 156Z M56 158 L56 152 L52 156Z" fill="#f4a6a0"/>' +
+      '<path d="M12 180 Q36 186 60 180" stroke="' + shade(d, -0.12) + '" stroke-width="2" fill="none"/>' +
+      bEye(28, 172, 2.6) + bEye(44, 172, 2.6) +
+      '<path d="M32 178 q2 3 4 0 q2 3 4 0" stroke="' + OUT + '" stroke-width="1.6" fill="none" stroke-linecap="round"/>' +
+      '<ellipse cx="22" cy="178" rx="3" ry="1.8" fill="#ff8fa3" opacity=".5"/><ellipse cx="50" cy="178" rx="3" ry="1.8" fill="#ff8fa3" opacity=".5"/>' +
+      '<g class="it-steam"><path d="M28 150 q-3 -5 0 -9 q3 -4 0 -8 M40 148 q-3 -5 0 -9" fill="none" stroke="#c9ced6" stroke-width="2" stroke-linecap="round"/></g>');
+  };
+  // Голубь-курлык: серый, радужная шейка, оранжевый глаз, красные лапки, грудь колесом.
+  T.c_pigeon = function (c) {
+    var g = c0(c, 0, '#9aa3ad'), n = c0(c, 1, '#5bb04a');
+    return buddy('<path d="M28 184 l-3 6 M28 184 l3 6 M38 184 l-3 6 M38 184 l3 6" stroke="#e05a5a" stroke-width="2" stroke-linecap="round"/>' +
+      '<path d="M4 168 L-2 162 L0 174Z" fill="' + shade(g, -0.25) + '" ' + BS + '/>' +
+      '<path d="M6 168 Q10 154 30 154 Q54 154 56 170 Q52 186 32 186 Q12 186 6 168Z" fill="' + g + '" ' + BS + '/>' +
+      '<path d="M14 166 Q28 158 40 166 Q30 176 16 174Z" fill="' + shade(g, -0.15) + '" ' + BS + '/><path d="M20 166 h10 M20 170 h12" stroke="' + OUT + '" stroke-width="1.6" stroke-linecap="round"/>' +
+      '<path d="M40 162 Q42 146 50 142 Q58 146 58 160Z" fill="' + n + '" ' + BS + '/><path d="M44 154 Q50 150 56 156" stroke="#a855f7" stroke-width="3" fill="none" opacity=".7"/>' +
+      '<circle cx="50" cy="138" r="10" fill="' + g + '" ' + BS + '/>' +
+      '<circle cx="53" cy="136" r="3" fill="#f59e0b" stroke="' + OUT + '" stroke-width="1"/><circle cx="53.4" cy="136" r="1.5" fill="' + OUT + '"/>' +
+      '<path d="M59 138 L66 140 L59 142Z" fill="#6b6b7a" stroke="' + OUT + '" stroke-width="1.2" stroke-linejoin="round"/><circle cx="58.6" cy="137.6" r="1.6" fill="#fff" stroke="' + OUT + '" stroke-width=".8"/>');
+  };
+  // Таракан-сосед: блестящий рыжий, длинные усы-антенны шевелятся, шесть
+  // лапок, глаза навыкате и маленькая кружка чая — зашёл по-соседски.
+  T.c_roach = function (c) {
+    var b = c0(c, 0, '#7a4a24');
+    return buddy('<path d="M18 180 l-8 8 M26 182 l-4 8 M40 182 l4 8 M48 180 l8 8 M22 174 l-10 2 M44 174 l10 2" stroke="' + OUT + '" stroke-width="2" stroke-linecap="round"/>' +
+      '<ellipse cx="33" cy="174" rx="20" ry="11" fill="' + b + '" ' + BS + '/>' +
+      '<path d="M33 164 V184" stroke="' + shade(b, -0.35) + '" stroke-width="1.6"/><path d="M20 168 Q26 164 30 166" stroke="#fff" stroke-width="2" fill="none" opacity=".45"/>' +
+      '<ellipse cx="55" cy="170" rx="9" ry="8" fill="' + shade(b, -0.1) + '" ' + BS + '/>' +
+      '<circle cx="57" cy="166" r="3.4" fill="#fff" stroke="' + OUT + '" stroke-width="1.2"/><circle cx="58" cy="166" r="1.8" fill="' + OUT + '"/>' +
+      '<path d="M60 174 q3 1 5 -1" stroke="' + OUT + '" stroke-width="1.4" fill="none"/>' +
+      '<g class="rc-ant"><path d="M58 162 Q64 140 76 134 M54 162 Q54 142 62 132" stroke="' + OUT + '" stroke-width="1.6" fill="none" stroke-linecap="round"/></g>' +
+      '<path d="M62 176 h7 v6 q-3.5 3 -7 0Z" fill="#fff" stroke="' + OUT + '" stroke-width="1.4" stroke-linejoin="round"/><path d="M69 177 q3 1 0 4" stroke="' + OUT + '" stroke-width="1.2" fill="none"/>');
+  };
+
   function extras(state) {
     if (state === 'sleep') return '<g class="pet-zzz" font-family="Arial" font-weight="900" fill="#6b7cff"><text x="140" y="56" font-size="16">z</text><text x="152" y="40" font-size="20">z</text><text x="166" y="22" font-size="24">Z</text></g>';
     if (state === 'hungry') return '<g class="pet-bowl" transform="translate(150 178)"><path d="M-15 0 Q0 15 15 0Z" fill="#c9b89a" ' + SW + '/><path d="M-17 0 H17" ' + SW + '/></g>' +
@@ -2441,6 +2941,8 @@
       return t ? '<g transform="' + t + '">' + g + '</g>' : g;
     }
     layer.back = back;
+    layer.hold = function (anat, arm, fill, ink) { return holding(anat, arm, fill, ink, eq, items); };
+    SLEEVE.fill = null;
     var best = null;
     Object.keys(eq).forEach(function (slot) { var it = items[eq[slot]]; if (it && (!best || RANK_OF[it.rarity] > RANK_OF[best])) best = it.rarity; });
     var sigs = signaturesOf(eq, items);
@@ -2461,7 +2963,7 @@
         back('body') + speciesBack(sp, p, stage) + speciesBody(sp, p, stage) + layer('body') + armL(sp, p) +
         '<g class="pet-head">' + speciesHead(sp, p, stage) + face(sp, p, state, stage) + layer('face') + layer('head') +
         (state === 'sick' ? sickHead() : '') + '</g>' +
-        layer('neck') + '<g class="pet-arm-r">' + armR(sp, p) + layer('hand') + '</g></g></g>';
+        layer('neck') + '<g class="pet-arm-r">' + holding(sp === 'owl' ? 'babyOwl' : 'baby', armR(sp, p), sp === 'owl' ? shade(p.fur, -0.15) : p.fur, OUT, eq, items) + '</g></g></g>';
     } else {
       // Подросток и старше — взрослый облик v3; вещи садятся через привязки слотов.
       cls3 = ' v3';
@@ -2469,11 +2971,12 @@
       var k3 = stage === 'teen' ? 0.92 : 1;
       body = v3Defs(q, ids) + '<g transform="translate(100 190) scale(' + k3 + ') translate(-100 -190)"><g class="pet-body">' +
         back('body', V3_BACK_T) + v3Back(sp, q, ids, stage) + v3Body(sp, q, ids, stage) +
-        '<g transform="' + V3_BODY_T + '">' + layer('body') + '</g>' + v3ArmL(sp, q, ids) +
+        (eq.body ? '<defs><clipPath id="' + ids.fur + '-cl"><path d="' + V3_CLOTH + '"/><ellipse cx="68" cy="130" rx="13" ry="18"/><ellipse cx="132" cy="130" rx="13" ry="18"/></clipPath></defs>' +
+          '<g clip-path="url(#' + ids.fur + '-cl)"><g transform="' + V3_BODY_T + '">' + layer('body') + '</g></g>' : '') + v3ArmL(sp, q, ids) +
         '<g transform="' + V3_NECK_T + '">' + layer('neck') + '</g>' +
         '<g class="pet-head"><g transform="' + v3HeadT(stage) + '">' + v3Head(sp, q, ids, stage) + v3Face(sp, q, state, stage) + layer('face') + layer('head') +
         (state === 'sick' ? sickHead() : '') + '</g></g>' +
-        '<g class="pet-arm-r">' + v3ArmR(sp, q, ids) + layer('hand') + '</g></g></g>';
+        '<g class="pet-arm-r">' + holding(sp === 'owl' ? 'v3Owl' : 'v3', v3ArmR(sp, q, ids), sp === 'owl' ? shade(q.fur, -0.18) : 'url(#' + ids.fur + ')', q.ink, eq, items) + '</g></g></g>';
     }
     var bg = '';
     if (eq.bg) bg = layer('bg');
@@ -2492,7 +2995,7 @@
       body = '<g id="' + bodyId + '"' + (gf.filter ? ' filter="' + gf.filter + '"' : '') + (gf.bodyClass ? ' class="' + gf.bodyClass + ' sig-live"' : '') + '>' + body + '</g>';
     }
     var cls = 'pet-svg st-' + state + ' stage-' + stage + ' sp-' + sp + cls3 + (best ? ' best-' + best : '') + (mythSig ? ' sig-mythic sig-' + mythSig.form : '') +
-      sigs.filter(function (x) { return x.act; }).map(function (x) { return ' sig-' + x.act; }).join('') + (opts.anim === false ? ' no-anim' : '') + (opts.mini ? ' mini' : '');
+      sigs.filter(function (x) { return x.act; }).map(function (x) { return ' sig-' + x.act; }).join('') + (opts.anim === false ? ' no-anim' : '') + (opts.mini ? ' mini' : '') + (eq.hand && items[eq.hand] ? ' holding' : '');
     return '<svg class="' + cls + '" viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="' + escAttr(opts.label || 'Питомец') + '">' +
       sigDefs + bg + sigBack + (opts.styleIcon ? styleAura() : '') + (mythSig ? '' : rarityAura(best)) + back('aura') + (phoenix ? '' : layer('pet')) + shadow + body + (phoenix ? layer('pet') : '') + sigFront + layer('aura') + (opts.mini ? '' : extras(state)) + '</svg>';
   }
@@ -2508,8 +3011,10 @@
     if (slot === 'head' || slot === 'face' || slot === 'neck' || slot === 'body') {
       ghost = '<g opacity=".1"><circle cx="100" cy="88" r="46" fill="#8a8aa0"/><ellipse cx="100" cy="152" rx="40" ry="34" fill="#8a8aa0"/></g>';
     }
-    var vb = { head: '30 -14 140 140', face: '44 44 112 112', neck: '50 100 100 100', hand: '100 60 100 130', pet: '0 124 76 76', body: '28 100 144 100' }[slot] || '0 0 200 200';
-    return '<svg class="item-svg r-' + item.rarity + '" viewBox="' + vb + '" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">' + ghost + fn(art.c || []) + '</svg>';
+    var vb = { head: '30 -14 140 140', face: '44 44 112 112', neck: '50 100 100 100', pet: '-4 104 84 90', body: '28 100 144 100' }[slot] || '0 0 200 200';
+    if (slot === 'hand') vb = (HOLD[art.t] && HOLD[art.t].box) || '-46 -82 92 104';
+    var bk = T[art.t + '_back'] ? T[art.t + '_back'](art.c || []) : '';
+    return '<svg class="item-svg r-' + item.rarity + '" viewBox="' + vb + '" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">' + bk + ghost + fn(art.c || []) + '</svg>';
   }
 
   // Еда, лекарства, игрушки и коробки — простые значки.

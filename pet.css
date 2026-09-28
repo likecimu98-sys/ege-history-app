@@ -905,3 +905,15 @@ html.dark .pet-wheel-prize.big { background: linear-gradient(135deg, #4a3a10, va
 .pet-svg .dl-paper { animation: dl-paper 3s ease-in-out infinite; }
 @keyframes dl-paper { 0% { transform: translate(0, 0) rotate(0); opacity: 0; } 15% { opacity: 1; } 100% { transform: translate(-30px, -70px) rotate(-40deg); opacity: 0; } }
 .pet-svg .mk-plume { transform-box: fill-box; transform-origin: 0 100%; animation: pet-sway 2.6s ease-in-out infinite; }
+
+/* Вещь в руке: прежний рукав одежды прячем — рукав рисуется на повёрнутой руке. */
+.pet-svg.holding .slot-body .pet-arm-r { display: none; }
+
+.pet-svg .rc-ant { transform-box: fill-box; transform-origin: 0 100%; animation: pet-sway 1.2s ease-in-out infinite; }
+
+.pet-svg .bc-plume { transform-box: fill-box; transform-origin: 50% 100%; animation: it-wave 2.6s ease-in-out infinite; }
+
+.pet-svg .st-shoot { animation: st-shoot 3.4s ease-in infinite; }
+@keyframes st-shoot { 0% { transform: translate(0, 0); opacity: 0; } 10% { opacity: 1; } 60% { opacity: 1; } 100% { transform: translate(60px, 26px); opacity: 0; } }
+.pet-svg .sl-boom { transform-box: view-box; animation: sl-boom 2.4s ease-out infinite; }
+@keyframes sl-boom { 0% { transform: scale(.1); opacity: 0; } 15% { opacity: 1; } 70% { transform: scale(1); opacity: 1; } 100% { transform: scale(1.1); opacity: 0; } }

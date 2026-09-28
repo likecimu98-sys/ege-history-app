@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Летописчик — обзор вещей</title>
+<!-- Инструмент разработки: каждая вещь слота на питомце и карточкой лавки.
+     ?slot=hand&sp=kitten&stage=adult&size=130&cols=3&from=0&n=12
+     На прод не попадает (tools-and-docs/ — export-ignore). -->
+<script>document.write('<link rel="stylesheet" href="../pet.css?t=' + Date.now() + '">');</script>
+<style>
+  body { font: 11px/1.2 system-ui, sans-serif; margin: 0; padding: 2px; background: #f5f3ef; color: #222; }
+  .grid { display: grid; gap: 3px; }
+  .c { background: #fff; text-align: center; }
+  .c .p svg { width: 100%; height: 100%; display: block; }
+  .c .i { height: 44px; } .c .i svg { height: 100%; }
+  .c b { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+</style>
+</head>
+<body>
+<div class="grid" id="g"></div>
+<script>var module = { exports: {} };</script>
+<script>document.write('<script src="../server/api/src/pet/catalog.js?t=' + Date.now() + '"><\/script><script src="../pet-art.js?t=' + Date.now() + '"><\/script>');</script>
+<script>
+  var CAT = module.exports.publicCatalog();
+  var items = {}; CAT.items.forEach(function (i) { items[i.id] = i; });
+  var q = new URLSearchParams(location.search);
+  var slot = q.get('slot') || 'hand', sp = q.get('sp') || 'kitten', stage = q.get('stage') || 'adult';
+  var size = +(q.get('size') || 130), cols = +(q.get('cols') || 3), from = +(q.get('from') || 0), n = +(q.get('n') || 99);
+  var list = CAT.items.filter(function (i) { return slot === 'all' || i.slot === slot || i.id === slot; }).slice(from, from + n);
+  var g = document.getElementById('g');
+  g.style.gridTemplateColumns = 'repeat(' + cols + ',' + size + 'px)';
+  g.innerHTML = list.map(function (i) {
+    var eq = {}; eq[i.slot] = i.id;
+    return '<div class="c"><div class="p" style="height:' + size + 'px">' + PetArt.render({ species: sp, stage: stage, state: 'ok', items: items, equipped: eq, scene: 'day', anim: false }) + '</div>' +
+      (q.get('icons') ? '<div class="i">' + PetArt.renderItem(i) + '</div>' : '') + '<b>' + i.name + '</b></div>';
+  }).join('');
+</script>
+</body>
+</html>
