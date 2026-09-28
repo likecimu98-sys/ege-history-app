@@ -148,9 +148,11 @@ async function vote(db, userId, pick, now = Date.now()) {
 // «Новости двора»: не больше пяти за последние сутки.
 async function news(db, now = Date.now()) {
   const { rows } = await db.query(
-    `SELECT kind, params, created_at FROM pet_news WHERE created_at > to_timestamp($1 / 1000.0) - interval '24 hours'
-     ORDER BY created_at DESC LIMIT 5`, [now]);
-  return { news: rows.map(r => ({ kind: r.kind, ...(r.params || {}), at: new Date(r.created_at).getTime() })) };
+    `SELECT n.kind, n.params, n.created_at, w.public_id FROM pet_news n LEFT JOIN pet_wallets w ON w.user_id = n.user_id AND w.pet IS NOT NULL
+     WHERE n.created_at > to_timestamp($1 / 1000.0) - interval '24 hours'
+     ORDER BY n.created_at DESC LIMIT 5`, [now]);
+  // publicId — чтобы тап по новости открывал профиль героя (наружу только публичный id).
+  return { news: rows.map(r => ({ kind: r.kind, ...(r.params || {}), at: new Date(r.created_at).getTime(), publicId: r.public_id || null })) };
 }
 
 module.exports = { profile, react, battle, vote, news, publicPet };

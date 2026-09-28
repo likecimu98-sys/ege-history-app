@@ -924,3 +924,15 @@ html.dark .pet-wheel-prize.big { background: linear-gradient(135deg, #4a3a10, va
 .pet-boxonly { display: grid; gap: 4px; width: 100%; padding: 10px 12px; border-radius: var(--r-md); border: 2px dashed var(--rc); background: color-mix(in srgb, var(--rc) 10%, var(--pet-card, #fff)); font-size: 13px; text-align: left; }
 .pet-boxonly > b { font-size: 13px; }
 .pet-boxonly span b { color: var(--rc); }
+
+/* Новости двора — карточками (28.09.2026). */
+.pn-card { display: flex; align-items: center; gap: 10px; width: 100%; text-align: left; padding: 8px 10px; border-radius: var(--r-md); color: inherit; cursor: pointer;
+  border: 1px solid color-mix(in srgb, var(--rc) 45%, var(--pet-line, #ececf1)); background: linear-gradient(90deg, color-mix(in srgb, var(--rc) 14%, var(--pet-card, #fff)), var(--pet-card, #fff) 70%); }
+div.pn-card { cursor: default; }
+.pn-art { flex: 0 0 auto; width: 48px; height: 48px; border-radius: var(--r-sm); overflow: hidden; background: var(--pet-soft, #f1ede6); display: flex; align-items: center; justify-content: center; }
+.pn-art svg { width: 100%; height: 100%; }
+.pn-emoji { font-size: 30px; line-height: 1; }
+.pn-txt { flex: 1; min-width: 0; font-size: 13px; line-height: 1.35; overflow-wrap: anywhere; }
+.pn-txt .pn-hl { display: block; color: var(--rc); font-size: 14px; font-weight: 900; }
+.pn-txt i { display: block; font-style: normal; font-size: 11px; color: var(--pet-mute, #6b7280); }
+.pn-card em { font-style: normal; font-size: 20px; color: var(--pet-mute, #9ca3af); }

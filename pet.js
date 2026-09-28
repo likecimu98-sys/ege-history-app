@@ -1318,16 +1318,46 @@
   }
   function newsText(n) {
     var who = esc(n.who || 'Кто-то'), pet = esc(n.pet || '');
-    if (n.kind === 'species') return '🥚 ' + who + ': новый редкий питомец — ' + esc(speciesOf(n.species).name) + (n.crafted ? ' (собран из осколков)' : '') + '!';
+    if (n.kind === 'species') return '🎉 ' + who + ': новый редкий питомец — ' + esc(speciesOf(n.species).name) + (n.crafted ? ' (собран из осколков)' : '') + '!';
     if (n.kind === 'mythic') { var it = S.items[n.item]; return '🔥 ' + who + ': мифическая вещь «' + esc(it ? it.name : n.item) + '»!'; }
     if (n.kind === 'sage') { var sp = speciesOf(n.species); return '✨ ' + who + ': ' + pet + ' — теперь «' + esc((sp.stages || {}).sage || 'Мудрец') + '»'; }
     if (n.kind === 'style') return '👑 Икона стиля недели — ' + pet + ' (' + who + ')';
     return '';
   }
+  // «Новости двора» во Дворе — карточками: картинка героя события, имя,
+  // что случилось, когда; тап — профиль. В бегущей строке остаётся текст.
+  function agoText(at) {
+    var m = Math.max(1, Math.round((Date.now() - (Number(at) || Date.now())) / 60000));
+    if (m < 60) return m + ' мин назад';
+    var h = Math.round(m / 60);
+    return h + ' ' + plural(h, 'час', 'часа', 'часов') + ' назад';
+  }
+  function newsCard(n) {
+    var who = esc(n.who || 'Кто-то'), pet = esc(n.pet || ''), art = '', what = '', rar = 'mythic';
+    if (n.kind === 'species') {
+      var sp = speciesOf(n.species);
+      art = PetArt.render({ species: n.species, stage: 'adult', state: 'happy', items: S.items, equipped: {}, mini: true });
+      what = (n.crafted ? 'собрал из осколков' : 'выбил') + ' редкого питомца<b class="pn-hl">' + esc(sp.name) + '</b>';
+    } else if (n.kind === 'mythic') {
+      var it = S.items[n.item]; if (!it) return '';
+      art = PetArt.renderItem(it); rar = it.rarity;
+      what = 'выбил мифическую вещь<b class="pn-hl">' + esc(it.name) + '</b>';
+    } else if (n.kind === 'sage') {
+      var s2 = speciesOf(n.species);
+      art = PetArt.render({ species: n.species, stage: 'sage', state: 'happy', items: S.items, equipped: {}, mini: true }); rar = 'legendary';
+      what = 'вырастил ' + pet + ' до стадии<b class="pn-hl">' + esc((s2.stages || {}).sage || 'Мудрец') + '</b>';
+    } else if (n.kind === 'style') {
+      art = '<span class="pn-emoji">👑</span>'; rar = 'legendary';
+      what = 'стал иконой стиля недели<b class="pn-hl">' + pet + '</b>';
+    } else return '';
+    var tag = n.publicId ? 'button type="button" onclick="PetUI.profile(\'' + esc(n.publicId) + '\')"' : 'div';
+    return '<' + tag + ' class="pn-card rar-' + rar + '"><span class="pn-art">' + art + '</span>' +
+      '<span class="pn-txt"><b>' + who + '</b> ' + what + '<i>' + agoText(n.at) + '</i></span>' + (n.publicId ? '<em>›</em>' : '') + '</' + tag.split(' ')[0] + '>';
+  }
   function newsList() {
-    var list = (S.news || []).map(newsText).filter(Boolean);
+    var list = (S.news || []).map(newsCard).filter(Boolean);
     if (!list.length) return '<i>Пока тихо. Выбей мифическую вещь или вырасти Мудреца — и про тебя узнает весь двор.</i>';
-    return list.map(function (t) { return '<div>' + t + '</div>'; }).join('');
+    return list.join('');
   }
   function loadNews(rerender) {
     S.newsAt = Date.now();

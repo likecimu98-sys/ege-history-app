@@ -62,9 +62,11 @@ const RARE_SPECIES_DROPS = {
   // в каждом пятом Императорском и каждом девятом Царском ларце. Тогда же
   // (владелец): Гуль — в 10 раз реже Николая, Бурундай — в 5 раз реже.
   box_chest: { tsar: 0.05, burunday: 0.01, squid: 0.15, ghoul: 0.005 },
-  box_tsar: { tsar: 0.3, burunday: 0.06, squid: 0.7, ghoul: 0.03 },
-  box_week: { tsar: 0.3, burunday: 0.06, squid: 0.7, ghoul: 0.03 },
-  box_emperor: { tsar: 0.6, burunday: 0.12, squid: 1.4, ghoul: 0.06 },
+  // Позже в тот же день (владелец): Николай — 1% в Царском и 2% в Императорском,
+  // остальные — в той же пропорции к нему. Ларец недели — как Царский.
+  box_tsar: { tsar: 1, burunday: 0.2, squid: 2.33, ghoul: 0.1 },
+  box_week: { tsar: 1, burunday: 0.2, squid: 2.33, ghoul: 0.1 },
+  box_emperor: { tsar: 2, burunday: 0.4, squid: 4.67, ghoul: 0.2 },
 };
 // Осколки — запасной путь к редкому виду: падают из ларцов, за 1-е место недели,
 // за 30 дней серии входов и изредка с колеса.
@@ -540,7 +542,7 @@ function publicCatalog() {
 }
 
 // Меняется вместе с содержимым каталога: клиент кэширует каталог по версии.
-const CATALOG_VERSION = '2026-09-28-14';
+const CATALOG_VERSION = '2026-09-28-15';
 
 module.exports = {
   RARITIES, RARITY_VALUE, DUPLICATE_SHARE, SLOTS, SPECIES, ITEMS, CONSUMABLES, BOXES,
