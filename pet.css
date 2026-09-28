@@ -917,3 +917,10 @@ html.dark .pet-wheel-prize.big { background: linear-gradient(135deg, #4a3a10, va
 @keyframes st-shoot { 0% { transform: translate(0, 0); opacity: 0; } 10% { opacity: 1; } 60% { opacity: 1; } 100% { transform: translate(60px, 26px); opacity: 0; } }
 .pet-svg .sl-boom { transform-box: view-box; animation: sl-boom 2.4s ease-out infinite; }
 @keyframes sl-boom { 0% { transform: scale(.1); opacity: 0; } 15% { opacity: 1; } 70% { transform: scale(1); opacity: 1; } 100% { transform: scale(1.1); opacity: 0; } }
+
+/* Вещи «только из сундуков» в лавке. */
+.pet-price.box { display: inline-block; font-size: 11px; padding: 2px 7px; border-radius: var(--r-full); background: color-mix(in srgb, var(--rc) 18%, var(--pet-card, #fff)); color: var(--rc); }
+.pet-item.box-only { border-style: dashed; }
+.pet-boxonly { display: grid; gap: 4px; width: 100%; padding: 10px 12px; border-radius: var(--r-md); border: 2px dashed var(--rc); background: color-mix(in srgb, var(--rc) 10%, var(--pet-card, #fff)); font-size: 13px; text-align: left; }
+.pet-boxonly > b { font-size: 13px; }
+.pet-boxonly span b { color: var(--rc); }

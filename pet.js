@@ -1499,17 +1499,33 @@
 
   function paneShop() {
     var st = S.state, inv = st.inventory || {};
-    var list = S.catalog.items.filter(function (i) { return i.price && !inv[i.id] && (S.shopSlot === 'all' || i.slot === S.shopSlot); })
-      .sort(function (a, b) { return a.price - b.price; });
+    // Показываем ВСЁ, что ещё не твоё, — и вещи «только из сундуков» тоже
+    // (владелец 28.09: иначе ученики про них не знают). Они в конце, с плашкой.
+    var list = S.catalog.items.filter(function (i) { return !inv[i.id] && (S.shopSlot === 'all' || i.slot === S.shopSlot); })
+      .sort(function (a, b) { return (a.price ? 0 : 1) - (b.price ? 0 : 1) || (a.price || 0) - (b.price || 0) || RARITY_RANK[b.rarity] - RARITY_RANK[a.rarity]; });
     var owners = S.catalog.owners || {};
-    return '<div class="pet-hint">Нажми на вещь — примеришь на питомца перед покупкой.</div>' + slotChips(S.shopSlot, 'PetUI.shopSlot') +
+    return '<div class="pet-hint">Нажми на вещь — примеришь на питомца. Вещи с плашкой 🎁 не продаются: они выпадают только из сундуков.</div>' + slotChips(S.shopSlot, 'PetUI.shopSlot') +
       '<div class="pet-grid items">' + list.map(function (i) {
-        var afford = st.balance >= i.price;
         var n = owners[i.id];
-        return itemCard(i, '<span class="pet-price' + (afford ? '' : ' no') + '">' + COIN + ' ' + fmt(i.price) + '</span>' + (n != null && (i.rarity === 'legendary' || i.rarity === 'mythic') ? '<small class="pet-own">есть у ' + n + '</small>' : ''),
-          'PetUI.tryOn(\'' + i.id + '\')');
-      }).join('') + '</div>' +
-      '<div class="pet-hint">Мифические вещи в лавке не продаются — только в сундуках.</div>';
+        var own = n != null && (i.rarity === 'legendary' || i.rarity === 'mythic') ? '<small class="pet-own">есть у ' + n + '</small>' : '';
+        if (!i.price) return itemCard(i, '<span class="pet-price box">🎁 Только в сундуках</span>' + own, 'PetUI.tryOn(\'' + i.id + '\')', 'box-only');
+        var afford = st.balance >= i.price;
+        return itemCard(i, '<span class="pet-price' + (afford ? '' : ' no') + '">' + COIN + ' ' + fmt(i.price) + '</span>' + own, 'PetUI.tryOn(\'' + i.id + '\')');
+      }).join('') + '</div>';
+  }
+  var RARITY_RANK = { common: 0, rare: 1, epic: 2, legendary: 3, mythic: 4 };
+  // Шанс именно этой вещи в каждом сундуке: шанс её редкости делится поровну
+  // между всеми вещами этой редкости (так бросает сервер, wallet.openBox).
+  function boxChances(it) {
+    var same = S.catalog.items.filter(function (x) { return x.rarity === it.rarity; }).length || 1;
+    return S.catalog.boxes.map(function (b) {
+      var pct = ((b.odds || {})[it.rarity] || 0) / same;
+      return pct > 0 ? { box: b, pct: pct } : null;
+    }).filter(Boolean).sort(function (a, b) { return b.pct - a.pct; });
+  }
+  function pctFine(v) {
+    var t = v >= 1 ? v.toFixed(1) : v >= 0.1 ? v.toFixed(2) : v.toFixed(3);
+    return t.replace(/0+$/, '').replace(/\.$/, '').replace('.', ',') + '%';
   }
 
   function paneBoxes() {
@@ -1761,7 +1777,10 @@
       '<b>' + esc(it.name) + '</b><i>' + rarityLabel(it.rarity) + ' · ' + slotLabel(it.slot) + ' · ' + esc(it.era) + '</i>' +
       (sigOf(it) ? '<div class="pet-sig-note rar-' + it.rarity + '">✨ ' + esc(sigOf(it).desc) + '</div>' : '') +
       (it.note ? '<div class="pet-note">📜 ' + esc(it.note) + '</div>' : '') +
-      (afford ? '<button type="button" class="go" onclick="PetUI.buyWear(\'' + id + '\')">Купить и надеть · ' + COIN + ' ' + fmt(it.price) + '</button>'
+      (!it.price ? '<div class="pet-boxonly"><b>🎁 Только в сундуках — в лавке не продаётся</b>' + boxChances(it).map(function (x) {
+          return '<span>' + esc(x.box.name) + ' — <b>' + pctFine(x.pct) + '</b>' + (x.box.pity && x.box.pity.atLeast === it.rarity ? ' · ' + rarityLabel(it.rarity).toLowerCase() + ' гарантировано раз в ' + x.box.pity.every + ' (какой из них — случайно)' : '') + '</span>';
+        }).join('') + '</div><button type="button" class="go" onclick="PetUI.closeSheet();PetUI.tab(\'boxes\')">К сундукам</button>'
+      : afford ? '<button type="button" class="go" onclick="PetUI.buyWear(\'' + id + '\')">Купить и надеть · ' + COIN + ' ' + fmt(it.price) + '</button>'
         : '<button type="button" disabled>' + COIN + ' ' + fmt(it.price) + ' · не хватает ' + fmt(it.price - st.balance) + '</button><div class="pet-hint">Это примерно ' + fmt(Math.ceil((it.price - st.balance) / (((S.catalog.economy || {}).rates || {}).solved || 2))) + ' решённых строк — или меньше с ускорителем и заданиями дня</div>') +
       '<button type="button" class="pet-link" onclick="PetUI.closeSheet()">Не сейчас</button></div>');
   }
@@ -1802,7 +1821,7 @@
   // ── Сундук: рулетка (28.09.2026 — «для стрима, феноменально») ───────────
   // Полный экран: сундук трясётся под барабанную дробь и распахивается, лента
   // летит с размытием и тикает на каждой ячейке (звук и вибрация — от реальной
-  // скорости), к концу ползёт мимо «почти выпало», фон окрашивается в редкость
+  // скорости), к концу ползёт и замедляется, фон окрашивается в редкость
   // того, что под стрелкой. Остановка — удар, выигрыш вырастает, остальное
   // гаснет; раскрытие — свой звук и эффект на каждую редкость, миф трясёт экран.
   // Анимация — на requestAnimationFrame, не CSS-переходом: иначе тиканье не
@@ -1830,10 +1849,9 @@
     for (var i = 0; i < CELLS; i++) strip.push(pickOf(pickRar()));
     var win = drop.species ? { species: drop.species, rarity: 'mythic' } : S.items[drop.id];
     strip[WIN] = win;
-    // «Почти выпало»: сразу за выигрышем — легенда или миф, её лента не довезёт.
-    var shiny = pool.filter(function (x) { return x.rarity === 'legendary' || x.rarity === 'mythic'; });
-    strip[WIN + 1] = shiny[Math.floor(Math.random() * shiny.length)];
-    if (Math.random() < 0.5) strip[WIN + 3] = pickOf('mythic');
+    // Лента честная (владелец 28.09): каждая ячейка, включая соседей выигрыша,
+    // — отдельный бросок по настоящим шансам этого сундука. Никаких подложенных
+    // «почти выпало»: легенда рядом появляется ровно так часто, как выпадает.
     var cells = strip.map(function (it, k) {
       var art = it.species ? PetArt.render({ species: it.species, stage: 'adult', state: 'happy', items: S.items, equipped: {}, mini: true }) : PetArt.renderItem(it);
       return '<span class="rl2-cell rar-' + it.rarity + '" data-k="' + k + '"><span class="rl2-art">' + art + '</span><i></i></span>';
