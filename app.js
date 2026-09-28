@@ -365,7 +365,7 @@ function checkAnswers(isSure, auto) {
         if (!lim.ok) { if (window.showDailyLimitModal) window.showDailyLimitModal(); return; }
     }
     const rows = $$('#task-table-body tr');
-    let allCorrect = true, filled = 0, total = $$('#task-table-body .dnd-slot').length, newlyCorrect = 0;
+    let allCorrect = true, filled = 0, total = $$('#task-table-body .dnd-slot').length, newlyCorrect = 0, staleCorrect = 0;
 
     rows.forEach(tr => tr.querySelectorAll('.dnd-slot').forEach(slot => {
         if (slot.classList.contains('has-item') && !slot.classList.contains('revealed-slot')) filled++;
@@ -423,6 +423,11 @@ function checkAnswers(isSure, auto) {
                         if (mIdx !== -1) window.state.mistakesPool.splice(mIdx, 1);
                         tr.dataset.scored = "correct";
                         newlyCorrect++;
+                        // Повтор одного и того же факта сверх нормы дня — тренировка,
+                        // но не очки: в топ, монеты и баллы ЕГЭ он не идёт (см. state.js).
+                        if (window.state.currentMode !== 'duel' && !window.countFreshLine(window.state.currentTask + ':' + fKey)) {
+                            tr.dataset.stale = '1'; staleCorrect++;
+                        }
                     } else {
                         updateFactSRS(fKey, false, false);
                         window.recordMistake(fact, window.state.currentTask,
@@ -484,9 +489,12 @@ function checkAnswers(isSure, auto) {
     }
 
     // NORMAL MODE
+    // В статистику (топ недели, монеты питомца) идут только «свежие» строки;
+    // в ДЗ и дневной лимит — все: учитель задал столько строк, и они решены.
     if (newlyCorrect > 0) {
-        updateScoreAndStats(newlyCorrect, !window.state.tableHasMistake && allCorrect, 0);
+        updateScoreAndStats(newlyCorrect - staleCorrect, !window.state.tableHasMistake && allCorrect, 0, newlyCorrect);
     }
+    if (staleCorrect > 0) window.noteStaleLines(staleCorrect);
     // Таблица целиком без единой ошибки — для задания дня «реши без ошибок».
     // Считаем один раз на таблицу: признак — сам массив строк текущей таблицы.
     if (allCorrect && filled === total && !window.state.tableHasMistake && window.state._perfectFor !== window.state.currentTargetData) {
@@ -495,7 +503,10 @@ function checkAnswers(isSure, auto) {
     }
     // ── FIX: ЕГЭ-баллы начисляются когда ВСЯ таблица решена, даже если были ошибки ──
     if (allCorrect && filled === total) {
-        const egePts = calculateEgePoints(rows, window.state.currentTask || 'task4');
+        let egePts = calculateEgePoints(rows, window.state.currentTask || 'task4');
+        // Баллы ЕГЭ — в той доле, в какой таблица состояла из свежих строк.
+        const stale = [...rows].filter(tr => tr.dataset.stale === '1').length;
+        if (stale && rows.length) egePts = Math.round(egePts * (rows.length - stale) / rows.length);
         if (egePts > 0) {
             updateScoreAndStats(0, false, egePts);
         }

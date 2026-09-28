@@ -7,14 +7,14 @@
             signInWithCredential, signOut, initializeFirestore, collection, doc, setDoc, getDoc,
             getDocs, addDoc, updateDoc, deleteDoc, deleteField, onSnapshot, query, where,
             orderBy, limit, runTransaction, arrayUnion, arrayRemove, vpsApiFetch, refreshVpsAuth
-        } from "./vps-sync-compat.js?v=20260928-7";
+        } from "./vps-sync-compat.js?v=20260928-8";
 
         // jsPDF грузился с cdnjs.cloudflare.com без SRI — то есть посторонний скрипт
         // исполнялся с полными правами страницы, а при недоступности CDN (у части
         // нашей аудитории это обычное дело) экспорт PDF просто не работал. Довод тот
         // же, что и для telegram-web-app.js: своя копия с того же origin.
         // Версия совпадает с прежней CDN-ной — 2.5.1, лежит в vendor/.
-        const VENDOR_JSPDF = 'vendor/jspdf.umd.min.js?v=20260928-7';
+        const VENDOR_JSPDF = 'vendor/jspdf.umd.min.js?v=20260928-8';
 
         const cloudConfig = { projectId: 'vps-postgresql' };
         
@@ -202,6 +202,8 @@
             // раздел мигнёт там, где его быть не должно.
             'class_second_part', 'second_part_news_at', 'second_part_seen_at',
             'second_part_stats',
+            'second_part_live',
+            'lineRepeatsToday',
             'consumed_invite_at', 'seenHwIds',
             // Память об отозванных ДЗ — она про конкретного ученика и его группу.
             // Не стереть при смене аккаунта = чужие задания молча пропадут у нового.
@@ -986,7 +988,9 @@
                         // единой: понять, есть ли там что-то, можно было только
                         // открыв рамку.
                         if (data.secondPart && typeof data.secondPart === 'object') {
-                            localStorage.setItem('second_part_stats', JSON.stringify(data.secondPart));
+                            // Свежая сводка из самой рамки (modes.js) главнее ботовой, пока бот не догнал.
+                            const merged = window.secondPartMergeLive ? window.secondPartMergeLive(data.secondPart) : data.secondPart;
+                            localStorage.setItem('second_part_stats', JSON.stringify(merged));
                         }
                         if (window.updateHwNavBadge) window.updateHwNavBadge();
                     } catch (e) {}

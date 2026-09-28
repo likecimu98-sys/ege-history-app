@@ -572,10 +572,49 @@ window.canSolveMore = function() {
     return { ok: left > 0, left: Math.max(0, left), limit };
 };
 
+// --- Повторы одного факта за день ---
+// 28.09.2026: ученик поставил период 862–1157 (в задании 1 там 17 дат) и за
+// 37 минут решил 1388 строк — каждую дату ~80 раз — и ушёл на 1-е место недели
+// с отрывом втрое. Повторять полезно, но очки должны идти за охват, а не за
+// заученные по кругу 17 ответов. Поэтому один и тот же факт одного задания
+// засчитывается в топ, монеты и баллы ЕГЭ не больше REPEAT_CAP раз за день;
+// дальше строка остаётся верной и тренирует, но «+0». ДЗ и лимит считают всё.
+// Счётчик живёт в localStorage текущего дня: это защита от честного фарма,
+// а не от взлома (очки и так считает клиент).
+const REPEAT_CAP = 3;
+const REPEAT_LS = 'lineRepeatsToday';
+let _rep = null;
+function _repLoad() {
+    const day = getTodayString();
+    if (_rep && _rep.day === day) return _rep;
+    try { _rep = JSON.parse(localStorage.getItem(REPEAT_LS) || 'null'); } catch (e) { _rep = null; }
+    if (!_rep || _rep.day !== day || typeof _rep.n !== 'object') _rep = { day, n: {} };
+    return _rep;
+}
+window.countFreshLine = function (key) {
+    if (!key) return true;
+    const r = _repLoad();
+    const c = (r.n[key] || 0) + 1;
+    r.n[key] = c;
+    try { localStorage.setItem(REPEAT_LS, JSON.stringify(r)); } catch (e) {}
+    return c <= REPEAT_CAP;
+};
+let _staleToastAt = 0;
+window.noteStaleLines = function (n) {
+    // Объясняем один раз в несколько минут, а не на каждой таблице.
+    if (Date.now() - _staleToastAt < 5 * 60 * 1000) return;
+    _staleToastAt = Date.now();
+    showToast('🔁', `Повтор: эти факты сегодня уже были по ${REPEAT_CAP} раза — в топ и монеты не идут (${n} стр.). Расширь период!`, 'bg-amber-600', 'border-amber-800');
+};
+
 // --- Статистика ---
-function updateScoreAndStats(linesCount, isPerfectHw, egePointsToAdd) {
+// hwLines — сколько строк засчитать в ДЗ и дневной лимит (по умолчанию = linesCount).
+// Отличается, когда часть строк — повторы сверх нормы дня: они решены, но не в статистику.
+function updateScoreAndStats(linesCount, isPerfectHw, egePointsToAdd, hwLines) {
     isPerfectHw = isPerfectHw || false;
     egePointsToAdd = egePointsToAdd || 0;
+    linesCount = Math.max(0, Number(linesCount) || 0);
+    hwLines = hwLines == null ? linesCount : Math.max(0, Number(hwLines) || 0);
 
     // Списание квоты на сервере. Делается здесь, потому что это единственное
     // место, где строки реально засчитываются, — и значит ни один режим не
@@ -583,12 +622,12 @@ function updateScoreAndStats(linesCount, isPerfectHw, egePointsToAdd) {
     // упираться в сеть, а показ экрана лимита берёт на себя consumeDailyQuota.
     // Оптимистично уменьшаем остаток сразу, чтобы canSolveMore не пропустила
     // лишний раунд, пока ответ в пути.
-    if (linesCount > 0 && !window.isQuotaExempt() && window.consumeDailyQuota) {
+    if (hwLines > 0 && !window.isQuotaExempt() && window.consumeDailyQuota) {
         const info = window._dailyLimitInfo;
         if (info && Number(info.limit) > 0 && Number.isFinite(Number(info.left))) {
-            info.left = Math.max(0, Number(info.left) - linesCount);
+            info.left = Math.max(0, Number(info.left) - hwLines);
         }
-        window.consumeDailyQuota(linesCount);
+        window.consumeDailyQuota(hwLines);
     }
 
     const s = window.state.stats;
@@ -621,8 +660,8 @@ function updateScoreAndStats(linesCount, isPerfectHw, egePointsToAdd) {
 
     // ── ДЗ: засчитываем прогресс ──
     // lines/points идут в активный этап (если ученик в потоке ДЗ); learned-этапы пересчитываются живьём.
-    if (window.state.activeHw && (linesCount > 0 || egePointsToAdd > 0)) {
-        creditActiveHwItem(curTask, linesCount, egePointsToAdd);
+    if (window.state.activeHw && (hwLines > 0 || egePointsToAdd > 0)) {
+        creditActiveHwItem(curTask, hwLines, egePointsToAdd);
         if (isPerfectHw) s.achievementsData.hwPerfect = (s.achievementsData.hwPerfect || 0) + 1;
     }
     if (Array.isArray(s.assignments) && s.assignments.length) refreshHwState();

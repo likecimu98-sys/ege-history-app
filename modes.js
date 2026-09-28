@@ -63,6 +63,37 @@ window.secondPartHasNews = function() {
     } catch (e) { return false; }
 };
 
+// 🔴 Живая сводка из самой «Проверочной».
+//
+// 28.09.2026 ученик сдал последнюю работу, вернулся в «Домашку» и увидел
+// «1 не сдано»: сводку приносит бот опросом, и она отставала на минуты — а
+// синхронизация профиля ещё и перезаписывала её тем же старым значением.
+// Теперь рамка сама присылает свои числа (proverochnaya:summary) сразу при
+// показе списка и после сдачи. Они главнее бота SECOND_PART_LIVE_MS: за это
+// время бот успевает забрать то же самое, и дальше снова ведёт он.
+const SECOND_PART_LIVE_MS = 3 * 60 * 1000;
+const SECOND_PART_FIELDS = ['todo', 'waiting', 'reviewed', 'unread'];
+window.secondPartMergeLive = function(box) {
+    try {
+        const live = JSON.parse(localStorage.getItem('second_part_live') || 'null');
+        if (!live || !(Date.now() - (Number(live.at) || 0) < SECOND_PART_LIVE_MS)) return box;
+        const out = Object.assign({}, box || {});
+        SECOND_PART_FIELDS.forEach(k => { out[k] = Number(live[k]) || 0; });
+        return out;
+    } catch (e) { return box; }
+};
+function _secondPartTakeLive(data) {
+    const live = { at: Date.now() };
+    SECOND_PART_FIELDS.forEach(k => { live[k] = Math.max(0, Number(data[k]) || 0); });
+    try {
+        localStorage.setItem('second_part_live', JSON.stringify(live));
+        const cur = JSON.parse(localStorage.getItem('second_part_stats') || 'null') || {};
+        localStorage.setItem('second_part_stats', JSON.stringify(window.secondPartMergeLive(cur)));
+        if (live.todo || live.waiting || live.reviewed) localStorage.setItem('class_second_part', '1');
+    } catch (e) {}
+    if (window.updateHwNavBadge) window.updateHwNavBadge();
+}
+
 // «2 разбора», а не «2 разборов»: строку читают люди.
 function _plural(n, one, few, many) {
     const tail = Math.abs(n) % 100, last = tail % 10;
@@ -242,6 +273,7 @@ window.openSecondPart = async function() {
     // окажется в рамке, если адрес когда-нибудь подменят.
     const onMessage = (e) => {
         if (e.origin !== SECOND_PART_ORIGIN) return;
+        if (e.data && e.data.type === 'proverochnaya:summary') { _secondPartTakeLive(e.data); return; }
         if (!e.data || e.data.type !== 'proverochnaya:ready') return;
         try {
             frame.contentWindow.postMessage(
@@ -268,6 +300,8 @@ window.openSecondPart = async function() {
         window.popBackHandler && window.popBackHandler('second-part');
         // Домашка первой части могла измениться, пока человек был во второй.
         if (window.updateHwNavBadge) window.updateHwNavBadge();
+        // «Домашка» под рамкой нарисована старыми числами — перерисовать.
+        if (document.getElementById('hw-tab-overlay') && window.openHwTab) window.openHwTab('second');
     };
 };
 
