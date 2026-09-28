@@ -440,7 +440,14 @@ function checkAnswers(isSure, auto) {
                 }
             } else {
                 if (!tr.dataset.scored) {
-                    if (rowAllCor && rowFilled === slots.length) { tr.dataset.scored = "correct"; newlyCorrect++; }
+                    if (rowAllCor && rowFilled === slots.length) {
+                        tr.dataset.scored = "correct"; newlyCorrect++;
+                        // «Секретный архив»: в теме 1–5 дел по 5 строк, и одно дело шло по
+                        // кругу за 5 секунд (28.09.2026, 1359 строк за вечер). Повтор той же
+                        // улики сверх нормы дня — тоже +0 (ключ — текст строки дела).
+                        const clue = fact && (fact.text || fact.answer);
+                        if (clue && !window.countFreshLine('det:' + clue)) { tr.dataset.stale = '1'; staleCorrect++; }
+                    }
                     else tr.dataset.scored = "incorrect";
                 } else if (tr.dataset.scored === "incorrect" && rowAllCor && rowFilled === slots.length) {
                     tr.dataset.scored = "fixed";
