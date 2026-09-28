@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Летописчик — лаборатория редких вещей</title>
+<!-- Инструмент разработки: каждая легенда и миф на большой сцене, фирменное
+     действие крутится само каждые 3 секунды, как в окне питомца.
+     http://localhost:8123/tools-and-docs/pet-lab.html?sp=kitten&stage=adult
+     На прод не попадает (tools-and-docs/ — export-ignore). -->
+<script>document.write('<link rel="stylesheet" href="../pet.css?t=' + Date.now() + '">');</script>
+<style>
+  body { font: 14px/1.35 system-ui, sans-serif; margin: 0; padding: 16px; background: #f5f3ef; color: #222; }
+  .bar { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 10px; }
+  .bar button { border: 1px solid #ccc; background: #fff; border-radius: 8px; padding: 5px 9px; cursor: pointer; }
+  .bar button.on { background: #222; color: #fff; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 14px; }
+  .cell { background: #fff; border-radius: 14px; padding: 8px; text-align: center; }
+  .cell .st { position: relative; width: 230px; height: 230px; margin: 0 auto; }
+  .cell .st > svg { width: 100%; height: 100%; }
+  .cell b { display: block; } .cell i { font-size: 12px; color: #777; font-style: normal; }
+  .pet-chip { position: absolute; width: 7px; height: 7px; border-radius: 0; pointer-events: none; animation: lab-chip .9s ease-out forwards; }
+  @keyframes lab-chip { from { transform: translate(0, 0) rotate(0); opacity: 1; } to { transform: translate(var(--dx), var(--dy)) rotate(var(--r)); opacity: 0; } }
+</style>
+</head>
+<body>
+<div class="bar" id="species"></div>
+<div class="bar" id="stages"></div>
+<div class="grid" id="grid"></div>
+<script>var module = { exports: {} };</script>
+<script>document.write('<script src="../server/api/src/pet/catalog.js?t=' + Date.now() + '"><\/script><script src="../pet-art.js?t=' + Date.now() + '"><\/script>');</script>
+<script>
+  var CAT = module.exports.publicCatalog();
+  var items = {}; CAT.items.forEach(function (i) { items[i.id] = i; });
+  var q = new URLSearchParams(location.search);
+  var species = q.get('sp') || 'kitten', stage = q.get('stage') || 'adult', only = q.get('only');
+  if (q.get('big')) document.write('<style>.grid{grid-template-columns:repeat(auto-fill,minmax(380px,1fr))}.cell .st{width:360px;height:360px}</style>');
+  function btns(el, list, cur, on) {
+    el.innerHTML = list.map(function (x) { return '<button class="' + (x[0] === cur ? 'on' : '') + '" data-v="' + x[0] + '">' + x[1] + '</button>'; }).join('');
+    el.onclick = function (e) { var v = e.target.dataset.v; if (v) on(v); };
+  }
+  var timers = [];
+  function draw() {
+    timers.forEach(clearInterval); timers = [];
+    btns(document.getElementById('species'), CAT.species.map(function (s) { return [s.id, s.name]; }), species, function (v) { species = v; draw(); });
+    btns(document.getElementById('stages'), [['baby', 'Малыш'], ['teen', 'Подросток'], ['adult', 'Взрослый'], ['sage', 'Мудрец']], stage, function (v) { stage = v; draw(); });
+    var list = CAT.items.filter(function (i) { return (i.rarity === 'legendary' || i.rarity === 'mythic') && (!only || only.split(',').indexOf(i.id) >= 0); });
+    document.getElementById('grid').innerHTML = list.map(function (i) {
+      var eq = {}; eq[i.slot] = i.id;
+      var sg = PetArt.signatures(eq, items)[0] || {};
+      return '<div class="cell" data-id="' + i.id + '"><div class="st">' + PetArt.render({ species: species, stage: stage, state: 'ok', items: items, equipped: eq, scene: q.get('night') ? 'night' : 'day' }) + '</div>' +
+        '<b>' + i.name + '</b><i>' + i.rarity + ' · ' + (sg.act || sg.form || '—') + '</i></div>';
+    }).join('');
+    document.querySelectorAll('.cell').forEach(function (cell, k) {
+      var eq = {}; var it = items[cell.dataset.id]; eq[it.slot] = it.id;
+      var sg = PetArt.signatures(eq, items)[0];
+      if (!sg || !sg.act || q.get('still')) return;
+      var host = cell.querySelector('.st');
+      var run = function () {
+        var svg = host.querySelector('svg'); var cls = 'act-' + sg.act;
+        svg.classList.remove(cls); void svg.getBoundingClientRect(); svg.classList.add(cls);
+        setTimeout(function () { svg.classList.remove(cls); }, 1800);
+        if (sg.fx) for (var n = 0; n < 10; n++) (function (n) { setTimeout(function () {
+          var el = document.createElement('span'); el.className = 'pet-chip';
+          el.style.left = sg.fx.at[0] + '%'; el.style.top = sg.fx.at[1] + '%'; el.style.background = sg.fx.colors[n % sg.fx.colors.length];
+          el.style.setProperty('--dx', (sg.fx.dx[0] + Math.random() * (sg.fx.dx[1] - sg.fx.dx[0])).toFixed(0) + 'px');
+          el.style.setProperty('--dy', (sg.fx.dy[0] + Math.random() * (sg.fx.dy[1] - sg.fx.dy[0])).toFixed(0) + 'px');
+          el.style.setProperty('--r', (Math.random() * 360).toFixed(0) + 'deg');
+          host.appendChild(el); setTimeout(function () { el.remove(); }, 900);
+        }, n * 60); })(n);
+      };
+      setTimeout(function () { run(); timers.push(setInterval(run, 3000)); }, k * 150);
+    });
+  }
+  draw();
+</script>
+</body>
+</html>

@@ -90,10 +90,12 @@
   //   оглядывается, виляет хвостом, пританцовывает, иногда делает пируэт
   //   и рассказывает исторический факт.
   var SPECIES_SOUND = { kitten: ['Мур!', 'Мяу!', 'Муррр 💛'], owl: ['Уху!', 'Ух-ух!', 'Уху-у 💛'], hedgehog: ['Фыр!', 'Фыр-фыр!', 'Пых 💛'], dragon: ['Рррр! 🔥', 'Фшшш!', 'Ррр 💛'],
-    ghoul: ['zxc', '1000-7…', '993… 986…'], tsar: ['Бог в помощь!', 'Ну-с, учимся?', 'Весьма похвально!'] };
+    ghoul: ['zxc', '1000-7…', '993… 986…'], tsar: ['Бог в помощь!', 'Ну-с, учимся?', 'Весьма похвально!'],
+    burunday: ['Хурай!', 'Урагш! Вперёд!', 'Хм. Достойно.'] };
   // Свои реплики у редких видов — иногда вместо общих.
   var SPECIES_SAY = {
     ghoul: ['1000-7… 993… 986…', 'Я просто хочу решить ЕГЭ', 'Мир — это таблица, где все ответы неверны', 'zxc', 'Я гуль. Но историю знаю', 'Тьма внутри. Строки — снаружи'],
+    burunday: ['Река Сить, 4 марта 1238-го. Я там был', 'Темник не отступает — и ты не отступай', 'Сиди ровно. Решай молча', '1259 — Даниил Галицкий срыл крепости по моему слову', 'Орда уважает тех, кто помнит даты', 'Хурай! Ещё таблицу'],
     tsar: ['1894 — начало моего царствования. Запомни!', '1905 — Манифест 17 октября. Моя подпись', 'Дома меня звали Ники', 'Хозяин земли Русской — и твоей подготовки', 'Ну-с, ещё таблицу?', 'Весьма похвально, сударь!'],
   };
   var FACTS = [
@@ -296,6 +298,13 @@
     // Легендарная вещь даёт своё движение — и оно частое: это и есть «видно, что круто».
     var sig = mySigs().filter(function (x) { return x.act; })[0];
     if (sig) { this.sigAct(sig, big); return; }
+    // Бурундай сам по себе «гигачад»: время от времени медленно поворачивает
+    // голову в профиль, как на том самом фото.
+    if (p.species === 'burunday' && p.stage !== 'baby' && r < 0.3) {
+      this.act('chad', 1800);
+      if (big && Math.random() < 0.5) this.say(pick(SPECIES_SAY.burunday), 2600);
+      return;
+    }
     var h = new Date(Date.now() + 3 * 3600e3).getUTCHours();
     if (h >= 21 || h < 9) acts.push('yawn', 'yawn');
     if (Math.random() < 0.08) acts.push('spin');
@@ -498,8 +507,43 @@
     $('petw-line').textContent = statusLine(st) + (extras.length ? ' · ' + extras.join(' · ') : '');
     $('petw-bars').innerHTML = bar('Сытость', p.sat, 'b-sat') + bar('Настроение', p.mood, 'b-mood') + bar('Здоровье', p.health, 'b-hp');
     $('petw-coins').innerHTML = COIN + ' ' + fmt(st.balance);
+    headerChip();
     widgetStage.draw(st);
     newsLine(host);
+  }
+
+  // ── Плашка в шапке: монеты и уровень (владелец 28.09.2026) ────────────────
+  // Видна на всех экранах, в том числе во время решения: каждая верная строка
+  // заметно прибавляет монеты — монета подпрыгивает, число «перетекает».
+  var hdrShown = null;
+  function shortNum(n) {
+    n = Number(n) || 0;
+    if (n >= 100000) return Math.round(n / 1000) + 'к';
+    if (n >= 10000) return (Math.floor(n / 100) / 10).toLocaleString('ru-RU') + 'к';
+    return fmt(n);
+  }
+  function headerChip() {
+    var box = $('hdr-pet'); if (!box) return;
+    var st = S.state, sep = $('hdr-pet-sep');
+    var on = !!(st && st.hatched && st.pet);
+    box.style.display = on ? '' : 'none';
+    if (sep) sep.style.display = on ? '' : 'none';
+    if (!on) { hdrShown = null; return; }
+    var bal = Number(st.balance) || 0;
+    $('hdr-pet-lv').textContent = 'ур. ' + st.pet.level;
+    box.classList.toggle('boost', !!(st.boostUntil && st.boostUntil > Date.now()));
+    var el = $('hdr-pet-coins');
+    if (hdrShown === null || bal <= hdrShown) { el.innerHTML = COIN + shortNum(bal); hdrShown = bal; return; }
+    // Прибавка: плавный пересчёт и «прыжок» монеты.
+    var from = hdrShown, t0 = 0; hdrShown = bal;
+    box.classList.remove('bump'); void box.offsetWidth; box.classList.add('bump');
+    var stepFn = function (ts) {
+      if (!t0) t0 = ts;
+      var k = Math.min(1, (ts - t0) / 500);
+      el.innerHTML = COIN + shortNum(Math.round(from + (bal - from) * k));
+      if (k < 1 && hdrShown === bal) requestAnimationFrame(stepFn);
+    };
+    requestAnimationFrame(stepFn);
   }
 
   // Тап по виджету: питомец откликается и открывается его окно.
@@ -723,7 +767,7 @@
     var d = st.daily || {};
     var coins = Math.round(n * (rates.solved || 2) * boost);
     if (d.cap && d.earned >= d.cap) coins = 0;
-    if (coins) { d.earned = (d.earned || 0) + coins; st.balance = (st.balance || 0) + coins; }
+    if (coins) { d.earned = (d.earned || 0) + coins; st.balance = (st.balance || 0) + coins; headerChip(); }
     st.pet.sat = Math.min(100, (st.pet.sat || 0) + n * 0.4);
     var el = buddy.el;
     el.classList.remove('hop'); void el.offsetWidth; el.classList.add('show', 'hop');
@@ -755,8 +799,8 @@
         text: 'Каждая верная строка — ' + (r.solved || 2) + ' монеты, выученный факт — ' + (r.facts || 10) + ', победа в дуэли — ' + (r.duelWins || 30) + '. Решаешь — питомец сыт и растёт: Малыш → Подросток → Взрослый → Мудрец.' },
       { art: '<div class="pet-guide-emoji">🍲 💊 🎲 ✋</div>', title: 'Уход — пара секунд в день',
         text: 'Корми, лечи, играй и гладь. Голодный питомец грустит, а заболевший не носит одежду. Ночью он спит.' },
-      { art: '<div class="pet-guide-pair">' + art({ species: 'tsar', stage: 'adult' }) + art({ species: 'squid', stage: 'adult' }) + art({ species: 'ghoul', stage: 'adult' }) + '</div>', title: 'Сундуки и редкие питомцы',
-        text: 'В сундуках ' + ((S.catalog && S.catalog.items) || []).length + ' вещей от обычных до мифических. А ещё там живут редкие питомцы: Николай II, Сквидвард и Гуль — лучше всего шансы в Императорском ларце (' + pctText((drops.box_emperor || {}).tsar) + ', ' + pctText((drops.box_emperor || {}).squid) + ' и ' + pctText((drops.box_emperor || {}).ghoul) + '). Их можно собрать и из осколков — смотри «Питомник».',
+      { art: '<div class="pet-guide-pair">' + art({ species: 'tsar', stage: 'adult' }) + art({ species: 'burunday', stage: 'adult' }) + art({ species: 'squid', stage: 'adult' }) + art({ species: 'ghoul', stage: 'adult' }) + '</div>', title: 'Сундуки и редкие питомцы',
+        text: 'В сундуках ' + ((S.catalog && S.catalog.items) || []).length + ' вещей от обычных до мифических. А ещё там живут редкие питомцы: Николай II, легендарный Бурундай, Сквидвард и Гуль — лучше всего шансы в Императорском ларце (' + pctText((drops.box_emperor || {}).tsar) + ', ' + pctText((drops.box_emperor || {}).burunday) + ', ' + pctText((drops.box_emperor || {}).squid) + ' и ' + pctText((drops.box_emperor || {}).ghoul) + '). Их можно собрать и из осколков — смотри «Питомник».',
         go: ['Смотреть сундуки', "PetUI.guideGo('boxes')"] },
       { art: '<div class="pet-guide-emoji">⚔️ 👀 🔥 📣</div>', title: 'Двор: похвастаться и сравнить',
         text: 'Тапни по питомцу в любом топе — откроется его профиль, поставь 🔥 👑 😂 💯. В «Кто круче?» выбирай лучший образ — победитель недели получает 500 монет и корону. Позови друга ссылкой — обоим сундук.',
@@ -801,6 +845,7 @@
     if (!owned.tsar) out.push({ html: '👑 Николай II живёт в Царском ларце — шанс 2%', go: "PetUI.open('stable')" });
     if (!owned.ghoul) out.push({ html: '🖤 Гуль «дед инсайд» — 5% в Царском ларце или 6 осколков тьмы', go: "PetUI.open('stable')" });
     if (!owned.squid) out.push({ html: '🦑 Сквидвард вырастает в Красавчика — 6% в Императорском ларце', go: "PetUI.open('boxes')" });
+    if (!owned.burunday) out.push({ html: '🏹 Легендарный Бурундай на троне — 5% в Императорском ларце или 8 волос бунчука', go: "PetUI.open('stable')" });
     out.push({ html: '👀 Тапни по питомцу в топе — профиль и реакции', go: 'PetUI.openTop()' });
     return out;
   }
@@ -1264,9 +1309,10 @@
     var rare = '<button type="button" class="pet-rare-banner" onclick="PetUI.tab(\'stable\')">' +
       '<span class="pet-rare-banner-art">' + PetArt.render({ species: 'tsar', stage: 'sage', state: 'happy', items: S.items, equipped: {}, mini: true }) + '</span>' +
       '<span class="pet-rare-banner-art">' + PetArt.render({ species: 'ghoul', stage: 'sage', state: 'ok', items: S.items, equipped: {}, mini: true }) + '</span>' +
+      '<span class="pet-rare-banner-art">' + PetArt.render({ species: 'burunday', stage: 'adult', state: 'ok', items: S.items, equipped: {}, mini: true }) + '</span>' +
       '<span class="pet-rare-banner-art">' + PetArt.render({ species: 'squid', stage: 'adult', state: 'ok', items: S.items, equipped: {}, mini: true }) + '</span>' +
-      '<span><b>В сундуках живут редкие питомцы</b><i>Николай II, Сквидвард и Гуль: в Императорском ларце — ' + pctText((drops.box_emperor || {}).tsar) + ', ' +
-      pctText((drops.box_emperor || {}).squid) + ' и ' + pctText((drops.box_emperor || {}).ghoul) + ', в Царском — ' + pctText((drops.box_tsar || {}).tsar) + ', ' + pctText((drops.box_tsar || {}).squid) + ' и ' + pctText((drops.box_tsar || {}).ghoul) + '. Или собери из осколков →</i></span></button>';
+      '<span><b>В сундуках живут редкие питомцы</b><i>Николай II, Бурундай, Сквидвард и Гуль: в Императорском ларце — ' + pctText((drops.box_emperor || {}).tsar) + ', ' +
+      pctText((drops.box_emperor || {}).burunday) + ', ' + pctText((drops.box_emperor || {}).squid) + ' и ' + pctText((drops.box_emperor || {}).ghoul) + ', в Царском — ' + pctText((drops.box_tsar || {}).tsar) + ', ' + pctText((drops.box_tsar || {}).burunday) + ', ' + pctText((drops.box_tsar || {}).squid) + ' и ' + pctText((drops.box_tsar || {}).ghoul) + '. Или собери из осколков →</i></span></button>';
     return rare + '<div class="pet-boxes">' + S.catalog.boxes.map(function (b) {
       var own = inv[b.id] || 0;
       var odds = Object.keys(b.odds).filter(function (r) { return b.odds[r] > 0; }).map(function (r) {

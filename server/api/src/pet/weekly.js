@@ -156,6 +156,9 @@ async function finalizeByLedger(pool, tx, key, fromSql, toSql, params, field, ta
       if (!prize) continue;
       const w = await W.lockWallet(client, row.user_id);
       const paid = await W.move(client, w, prize.coins, 'weekly', key, { place, source });
+      // Осколок за место (1-е в дуэлях — «Волос бунчука» к Бурундаю). Только
+      // вместе с первой выплатой: повторный прогон недели его не удвоит.
+      if (paid && prize.fragment) W.addFragment(w, prize.fragment, 1);
       if (paid && extra) extra(w, place, prize);
       await W.saveWallet(client, w);
     }

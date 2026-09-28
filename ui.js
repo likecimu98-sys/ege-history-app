@@ -2106,6 +2106,54 @@ window.openEGEModal = function() {
 
 const DAILY_GOAL_LINES = 30; // дневная норма нового материала (≈10 заданий)
 
+// 🔥 «Стрик засчитан» (владелец 28.09.2026): в момент, когда решённое за день
+// переходит порог серии, — заметный праздник на весь экран с огнём и новым числом
+// дней. Только на живом переходе в этой вкладке (первый вызов лишь запоминает
+// исходное число: открыл приложение с уже закрытой нормой — праздновать нечего)
+// и один раз за день на устройство.
+let _streakPrevDone = null;
+function _maybeCelebrateStreak(doneToday, streakDays) {
+    const min = window.STREAK_DAILY_MIN || DAILY_GOAL_LINES;
+    const prev = _streakPrevDone;
+    _streakPrevDone = doneToday;
+    if (prev === null || prev >= min || doneToday < min) return;
+    const today = getTodayString();
+    try {
+        if (localStorage.getItem('streak_celebrated_day') === today) return;
+        localStorage.setItem('streak_celebrated_day', today);
+    } catch (e) {}
+    setTimeout(() => window.showStreakCelebration(streakDays), 700); // после тоста о таблице
+}
+window.showStreakCelebration = function (days) {
+    days = Math.max(1, Number(days) || 1);
+    const old = document.getElementById('streak-cele'); if (old) old.remove();
+    const word = plural(days, 'день', 'дня', 'дней');
+    const sub = days === 1 ? 'Серия началась. Завтра — второй день!'
+        : days % 7 === 0 ? `Целая неделя${days > 7 ? ' ×' + (days / 7) : ''} без пропусков!`
+        : 'Огонёк горит — завтра не дай ему погаснуть';
+    const box = document.createElement('div');
+    box.id = 'streak-cele';
+    box.className = 'streak-cele';
+    box.setAttribute('role', 'status');
+    let sparks = '';
+    for (let i = 0; i < 14; i++) {
+        const a = (i / 14) * Math.PI * 2, r = 90 + (i % 3) * 22;
+        sparks += `<i style="--x:${Math.round(Math.cos(a) * r)}px;--y:${Math.round(Math.sin(a) * r - 20)}px;animation-delay:${(0.35 + (i % 4) * 0.05).toFixed(2)}s"></i>`;
+    }
+    box.innerHTML = `<div class="streak-cele-card">
+        <div class="streak-cele-fire"><span class="sc-glow"></span><span class="sc-flame">🔥</span><span class="sc-sparks">${sparks}</span></div>
+        <div class="streak-cele-num"><span class="sc-old">${days - 1}</span><span class="sc-new">${days}</span></div>
+        <div class="streak-cele-title">Стрик засчитан!</div>
+        <div class="streak-cele-sub">${days} ${word} подряд · ${sub}</div>
+    </div>`;
+    const close = () => { box.classList.add('out'); setTimeout(() => box.remove(), 350); };
+    box.addEventListener('click', close);
+    document.body.appendChild(box);
+    try { haptic('success'); } catch (e) {}
+    try { if (window.Sfx && window.Sfx.play) window.Sfx.play('wow'); } catch (e) {}
+    setTimeout(close, 3400);
+};
+
 // Русское склонение после числа: 1 день, 2 дня, 5 дней. Своя копия, а не общая с
 // ботом — клиент и бот не делят код, а «5 день подряд» в интерфейсе выглядит так,
 // будто продукт делали наспех.
@@ -2195,7 +2243,9 @@ window.applyTrainerPeriod = function () {
 
 function _workingPeriod() {
     const s = window.state.stats;
-    const act = (s.assignments || []).find(a => a.status === 'active');
+    // Тот же признак «живой домашки», что у самой кнопки (_hwAssignmentActive): иначе
+    // первая «активная» домашка со всеми сданными этапами заслоняла следующую.
+    const act = (s.assignments || []).find(_hwAssignmentActive);
     const it = act && (act.items || []).find(i => !window.hwItemDone(i));
     // Этап ДЗ, заданный точными годами, тоже задаёт рабочий период. Раньше здесь
     // стояло только `it.period !== 'custom'`, то есть ГОДА игнорировались и учитывались
@@ -2227,8 +2277,12 @@ function _workingPeriod() {
     if (upto >= 862 && upto <= 2026) return { upto };
     const cp = localStorage.getItem('class_current_period');
     if (cp && TASK_EPOCHS.includes(cp)) return { era: cp };
-    const lp = localStorage.getItem('ege_last_period');
-    if (lp && TASK_EPOCHS.includes(lp)) return { era: lp };
+    // 🔴 «Последний период» (ege_last_period) сюда больше НЕ подставляется (28.09.2026).
+    // Его писал quickStartGame из того, что стояло в фильтре, — а туда период кладут
+    // и автоматические ветки: этап ДЗ по «древности» оставлял 'early', разбор ошибок —
+    // 'all'. Итог — жалоба владельца: «Учим новое» то всё по древности, то по всей
+    // истории, смотря что ученик делал до этого. Осознанный выбор ученика хранит
+    // rememberOwnPeriod, и он стоит выше; без него и без рамок класса — вся история.
     return null;
 }
 
@@ -2328,12 +2382,14 @@ function _unlearnedCountsByTask(wp) {
     return { by, total, bestTask };
 }
 
-// Ротация типов заданий: ~30 строк на тип, потом следующий. task7 не первым (там
+// Ротация типов заданий: 16 строк на тип, потом следующий (было 30 — владелец
+// 28.09.2026: «не 30 строк до следующего типа задания, а 16»). task7 не первым (там
 // таблицы по 4 строки). Выбираем тип с невыученным материалом, у которого сегодня
 // решено МЕНЬШЕ всего строк (при равенстве — по порядку, task7 последним). Так после
-// 30 строк одного типа кнопка сама переходит к следующему, и цикл повторяется.
+// 16 строк одного типа кнопка сама переходит к следующему, и цикл повторяется.
+// Внутри занятия смену делает maybeRotateLadderTask — на «Дальше», без выхода в меню.
 const NEW_ROTATION = ['task4', 'task1', 'task3', 'task5', 'task7'];
-const LINES_PER_TASK = 30;
+const LINES_PER_TASK = 16;
 function _dtSolvedKey(t) { return 'solved' + t.charAt(0).toUpperCase() + t.slice(1); }
 function _pickNewTask(unlearned) {
     const today = (window.state.stats.dailyStats && window.state.stats.dailyStats[getTodayString()]) || {};
@@ -2416,7 +2472,7 @@ function computeMainAction() {
     const pick = _pickNewTask(unlearned);
     if (pick) return { ...base, kind: 'continue',
         task: pick.task,
-        period: wp || { era: localStorage.getItem('ege_last_period') || 'all' },
+        period: wp,
         left: pick.left };
 
     // Нового в периоде не осталось → разбираем ошибки/повтор
@@ -2430,6 +2486,33 @@ function computeMainAction() {
     return { ...base, kind: 'done', period: wp,
         streak: (window.computeDayStreak && window.computeDayStreak()) || 0 };
 }
+
+function _todayLines(task) {
+    const d = (window.state.stats.dailyStats || {})[getTodayString()] || {};
+    return Number(d[_dtSolvedKey(task)]) || 0;
+}
+
+// Смена типа задания ВНУТРИ занятия «Учим новое» (владелец 28.09.2026). Раньше
+// ротация жила только в меню: пока ученик жмёт «Дальше», тип не менялся никогда,
+// и «16 строк на тип» оставались надписью на кнопке. Срабатывает на «Дальше»,
+// только в занятии, начатом с главной кнопки, и только в обычном режиме.
+// true — занятие перезапущено с новым типом, обычную следующую таблицу не строить.
+window.maybeRotateLadderTask = function () {
+    const st = window.state, run = st._ladderRun;
+    if (!run || st.currentMode !== 'normal' || st.isHomeworkMode || st.activeHw) return false;
+    if (st.currentTask !== run.task) { st._ladderRun = null; return false; }
+    if (_todayLines(run.task) - run.from < run.left) return false;
+    const a = computeMainAction();
+    if (a.kind !== 'continue') { st._ladderRun = null; return false; } // дальше — ДЗ/повтор: решает меню
+    if (a.task === run.task) { st._ladderRun = { task: run.task, from: _todayLines(run.task), left: a.left || LINES_PER_TASK }; return false; }
+    const cfg = TASK_CONFIG[a.task] || TASK_CONFIG.task4;
+    showToast('🔄', `${LINES_PER_TASK} строк есть — теперь ${cfg.shortLabel}`, 'bg-blue-500', 'border-blue-700');
+    _applyWpFilter(a.period);
+    Promise.resolve(quickStartGame(a.task, 'normal')).then(() => {
+        window.state._ladderRun = { task: a.task, from: _todayLines(a.task), left: a.left || LINES_PER_TASK };
+    });
+    return true;
+};
 
 window.mainActionGo = function(kind) {
     const a = computeMainAction();
@@ -2466,10 +2549,14 @@ window.mainActionGo = function(kind) {
         return quickStartGame(bestTask, 'mistakes');
     }
     if (act === 'continue' || act === 'start') {
-        // continue хранит период строкой (свой последний), start — объект рабочего периода
         const wp = (typeof a.period === 'string') ? { era: a.period } : a.period;
         _applyWpFilter(wp);
-        return quickStartGame(act === 'start' ? 'task1' : a.task, 'normal');
+        const task = act === 'start' ? 'task1' : a.task;
+        // Занятие «Учим новое» помнит, сколько строк этого типа было на старте:
+        // набралось ещё a.left — на «Дальше» сменим тип (maybeRotateLadderTask).
+        return Promise.resolve(quickStartGame(task, 'normal')).then(() => {
+            if (act === 'continue') window.state._ladderRun = { task, from: _todayLines(task), left: a.left || LINES_PER_TASK };
+        });
     }
     if (act === 'weak') {
         const w = _weakestSpot();
@@ -2518,8 +2605,7 @@ function renderMainAction() {
         if (!a.repeatDay && a.due.total > shown) sub += ` · всего ${a.due.total}`;
     } else if (a.kind === 'continue') {
         const cfg = TASK_CONFIG[a.task] || TASK_CONFIG.task4;
-        const pl = (typeof a.period === 'string')
-            ? (TASK_EPOCHS.includes(a.period) ? periodName(a.period) : 'все периоды')
+        const pl = (a.period && a.period.era === 'all') ? 'все периоды'
             : (_wpLabel(a.period) || 'все периоды');
         title = 'Учим новое';
         sub = `${cfg.shortLabel} · ${pl} · ещё ${a.left} до смены задания`;
@@ -2813,6 +2899,7 @@ function updateGlobalUI() {
         // Дневной стрик (дни подряд с решёнными строками), НЕ серия верных ответов
         const streakDays = (window.computeDayStreak && window.computeDayStreak()) || 0;
         if (goalEl) updateText(goalEl, `🔥${streakDays}`);
+        _maybeCelebrateStreak(doneToday, streakDays);
 
         // Подсказка с КОНКРЕТНЫМ числом. Раньше здесь было общее «цель дня и стрик»,
         // и на вопрос «сколько мне сегодня решить, чтобы огонёк не погас» приложение

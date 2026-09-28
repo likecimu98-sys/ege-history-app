@@ -44,16 +44,22 @@ const SPECIES = [
   // (решение владельца 27.09.2026; разрешение Nickelodeon — со слов владельца).
   { id: 'squid', name: 'Сквидвард', rare: true, fragment: 'ink', petName: 'Сквидвард',
     stages: { baby: 'Малыш Сквидвард', teen: 'Сквидвард', adult: 'Красавчик Сквидвард', sage: 'Сквидвард-гигачад' } },
+  // Бурундай — легендарный вид (решение владельца 28.09.2026): темник Батыя,
+  // победитель битвы на реке Сить (1238). Сидит на троне, растёт от нукера
+  // на сундуке до «гигачада» на золотом троне. По редкости — между Николаем
+  // и Сквидвардом; осколки — «Волос бунчука», в том числе за 1-е место в дуэлях.
+  { id: 'burunday', name: 'Бурундай', rare: true, fragment: 'horse', petName: 'Бурундай',
+    stages: { baby: 'Юный нукер', teen: 'Сотник', adult: 'Темник', sage: 'Бурундай-гигачад' } },
 ];
 
 // Шанс редкого вида при открытии коробки, в процентах (решение владельца:
 // Николай — 0,05% из сундука и 2% из ларца; Гуль чуть чаще). Бросок отдельный,
 // поверх обычного, поэтому шансы вещей в коробке не меняются.
 const RARE_SPECIES_DROPS = {
-  box_chest: { tsar: 0.05, squid: 0.15, ghoul: 0.3 },
-  box_tsar: { tsar: 2, squid: 3, ghoul: 5 },
-  box_week: { tsar: 2, squid: 3, ghoul: 5 },
-  box_emperor: { tsar: 4, squid: 6, ghoul: 8 },
+  box_chest: { tsar: 0.05, burunday: 0.1, squid: 0.15, ghoul: 0.3 },
+  box_tsar: { tsar: 2, burunday: 2.5, squid: 3, ghoul: 5 },
+  box_week: { tsar: 2, burunday: 2.5, squid: 3, ghoul: 5 },
+  box_emperor: { tsar: 4, burunday: 5, squid: 6, ghoul: 8 },
 };
 // Осколки — запасной путь к редкому виду: падают из ларцов, за 1-е место недели,
 // за 30 дней серии входов и изредка с колеса.
@@ -66,11 +72,13 @@ const FRAGMENTS = {
     sources: 'колесо (1%), каждые 7 ежедневных кругов подряд, ларцы (3%)' },
   ink: { name: 'Капля чернил', icon: '🦑', species: 'squid', need: 8,
     sources: 'Императорский ларец (6%), Царский ларец и Ларец недели (3%), 1-е место в «Кто круче?»' },
+  horse: { name: 'Волос бунчука', icon: '🐎', species: 'burunday', need: 8,
+    sources: 'Императорский ларец (5%), Царский ларец и Ларец недели (3%), 1-е место в топе дуэлей недели' },
 };
 const FRAGMENT_DROPS = {
-  box_tsar: { faberge: 3, dark: 3, ink: 3 },
-  box_week: { faberge: 3, dark: 3, ink: 3 },
-  box_emperor: { faberge: 5, dark: 5, ink: 6 },
+  box_tsar: { faberge: 3, dark: 3, ink: 3, horse: 3 },
+  box_week: { faberge: 3, dark: 3, ink: 3, horse: 3 },
+  box_emperor: { faberge: 5, dark: 5, ink: 6, horse: 5 },
 };
 const STABLE_MAX = 8;
 
@@ -481,7 +489,7 @@ const MONTHLY_PRIZES = [
   { from: 3, to: 3, coins: 500, title: true }, { from: 4, to: 10, coins: 250 },
 ];
 const DUEL_PRIZES = [
-  { from: 1, to: 1, coins: 500 }, { from: 2, to: 3, coins: 300 }, { from: 4, to: 10, coins: 100 },
+  { from: 1, to: 1, coins: 500, fragment: 'horse' }, { from: 2, to: 3, coins: 300 }, { from: 4, to: 10, coins: 100 },
 ];
 
 const BY_ID = new Map([...ITEMS, ...CONSUMABLES, ...BOXES].map(entry => [entry.id, entry]));
@@ -522,7 +530,7 @@ function publicCatalog() {
 }
 
 // Меняется вместе с содержимым каталога: клиент кэширует каталог по версии.
-const CATALOG_VERSION = '2026-09-28-9';
+const CATALOG_VERSION = '2026-09-28-10';
 
 module.exports = {
   RARITIES, RARITY_VALUE, DUPLICATE_SHARE, SLOTS, SPECIES, ITEMS, CONSUMABLES, BOXES,

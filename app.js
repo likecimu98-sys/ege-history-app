@@ -89,18 +89,17 @@ window.quickStartGame = async function(task, mode) {
         mode = 'study';
     }
     window.state._normalTableTick = 0; // блендинг повтора считаем от начала сессии
+    window.state._ladderRun = null;    // ротацию типов заводит только главная кнопка (ui.js)
     window.state.currentTask = task;
     $('filter-task').value = task;
     $('filter-mode').value = mode;
     // Ручной запуск «Ошибок» из лобби — обычный пул ошибок, без фокуса повторения/ошибок
     if (mode !== 'mistakes') { window.state.reviewFocus = false; window.state.mistakeFocus = false; }
-    // Запоминаем последнее занятие для кнопки «Продолжить» (только табличные задания).
+    // Запоминаем последнее занятие (только табличные задания). Период больше не
+    // запоминаем: его сюда подкладывали и автоматические ветки (ДЗ, разбор ошибок),
+    // и «Учим новое» прыгало между эпохами — см. _workingPeriod в ui.js.
     if (TASK_LIST.includes(task)) {
-        try {
-            localStorage.setItem('ege_last_task', task);
-            const p = $('filter-period') ? $('filter-period').value : '';
-            if (p && p !== 'custom') localStorage.setItem('ege_last_period', p);
-        } catch (e) {}
+        try { localStorage.setItem('ege_last_task', task); } catch (e) {}
     }
     const sortYC = $('pg-sort-year-container');
     if (sortYC) sortYC.classList.toggle('hidden', !supportsYearSort(task));
@@ -754,7 +753,7 @@ const ACTION_HANDLERS = {
     confirmTaskPick:        (a) => window.confirmTaskPick?.(a),
     closeTaskPicker:        () => window.closeTaskPicker?.(),
     checkAnswersTrue:       () => window.checkAnswers?.(true),
-    generateTable:          () => window.generateTable?.(),
+    generateTable:          () => window.maybeRotateLadderTask?.() || window.generateTable?.(),
     toggleAnswers:          () => window.toggleAnswers?.(),
     giveUpRedPencil:        () => window.giveUpRedPencil?.(),
     nextRedPencilCase:      () => window.nextRedPencilCase?.(),

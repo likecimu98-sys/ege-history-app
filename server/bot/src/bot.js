@@ -1470,7 +1470,7 @@ const TASK_LABELS = { task1: '№1 (Хронология)', task3: '№3 (Про
 const JOB_MAX_AGE_MS = 24 * 3600 * 1000;
 const NICK_WORD = { gold: 'золотой', silver: 'серебряный', bronze: 'бронзовый', violet: 'фиолетовый' };
 const BOX_WORD = { box_week: '«Ларец недели»', box_tsar: '«Царский ларец»', box_chest: '«Сундук летописца»' };
-const PET_EMOJI = { kitten: '🐱', owl: '🦉', hedgehog: '🦔', dragon: '🐉', ghoul: '🖤', tsar: '👑' };
+const PET_EMOJI = { kitten: '🐱', owl: '🦉', hedgehog: '🦔', dragon: '🐉', ghoul: '🖤', tsar: '👑', squid: '🦑', burunday: '🏹' };
 function petNudgeText(r) {
     const name = String(r.name || 'Летописчик').replace(/[<>]/g, '').slice(0, 20);
     const e = PET_EMOJI[r.species] || '🐾';

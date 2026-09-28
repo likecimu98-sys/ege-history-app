@@ -658,3 +658,52 @@ button.pet-quest[disabled] { cursor: default; }
 @keyframes sig-drop { 0% { opacity: 0; transform: translateY(-10px); } 20% { opacity: 1; } 100% { opacity: 0; transform: translateY(40px); } }
 .pet-svg.mini.sig-mythic .sig-pulse { animation: sig-pulse 2.4s ease-in-out infinite !important; }
 .pet-svg.mini.sig-mythic .sig-float { animation: sig-float 3.2s ease-in-out infinite !important; }
+
+/* ── Плашка питомца в шапке: монеты + уровень ── */
+.hdr-pet { display: flex; flex-direction: column; align-items: center; gap: 2px; min-width: 44px; padding: 2px 4px; border: 0; background: none; cursor: pointer; border-radius: var(--r-md); transition: transform .15s; }
+.hdr-pet:active { transform: scale(.94); }
+.hdr-pet-coins { display: inline-flex; align-items: center; gap: 3px; font-size: 15px; font-weight: 900; line-height: 1; color: #fcd34d; font-variant-numeric: tabular-nums; }
+.hdr-pet-coins .coin { width: 13px; height: 13px; }
+.hdr-pet-lv { font-size: 11px; font-weight: 900; line-height: 1; letter-spacing: .04em; text-transform: uppercase; color: #c4b5fd; }
+.hdr-pet.bump .coin { animation: hdr-coin-hop .6s ease-out; }
+.hdr-pet.bump .hdr-pet-coins { animation: hdr-coin-glow .7s ease-out; }
+.hdr-pet.boost .hdr-pet-lv::after { content: " ⚡"; }
+@keyframes hdr-coin-hop { 0% { transform: translateY(0) rotateY(0); } 40% { transform: translateY(-6px) rotateY(180deg); } 100% { transform: translateY(0) rotateY(360deg); } }
+@keyframes hdr-coin-glow { 0% { text-shadow: 0 0 0 transparent; } 30% { text-shadow: 0 0 10px #ffd66b; } 100% { text-shadow: 0 0 0 transparent; } }
+@media (min-width: 640px) { .hdr-pet { min-width: 60px; } .hdr-pet-coins { font-size: 18px; } }
+html:not(.dark) #main-header .hdr-pet-coins { color: #b45309; }
+html:not(.dark) #main-header .hdr-pet-lv { color: #6d28d9; }
+
+/* ── Перерисованные редкие вещи (28.09.2026) ── */
+/* Мантия Екатерины: блик по парче, шлейф раскрывается при повороте. */
+.pet-svg .mt-gleam { animation: mt-gleam 4.2s ease-in-out infinite; }
+@keyframes mt-gleam { 0%, 45% { transform: skewX(-22deg) translateX(0); } 100% { transform: skewX(-22deg) translateX(320px); } }
+.pet-svg .mt-star { transform-box: fill-box; transform-origin: 50% 50%; animation: it-spin 9s linear infinite; }
+.pet-svg.act-twirl .mt-cape { transform-box: view-box; transform-origin: 100px 120px; animation: mt-flare 1.4s ease-in-out; }
+@keyframes mt-flare { 0%, 100% { transform: scaleX(1); } 25%, 75% { transform: scaleX(1.22) skewX(4deg); } 50% { transform: scaleX(1.12) skewX(-4deg); } }
+/* Плащ Жар-птицы: перья чуть колышутся. */
+.pet-svg .fc-cloak { transform-box: view-box; transform-origin: 100px 118px; animation: fc-sway 3s ease-in-out infinite; }
+@keyframes fc-sway { 0%, 100% { transform: skewX(0); } 50% { transform: skewX(-2.5deg); } }
+/* Держава: пульсирующее сияние. Спутник: радиоволны. */
+.pet-svg .or-glow { transform-box: fill-box; transform-origin: 50% 50%; animation: or-glow 2.2s ease-in-out infinite; }
+@keyframes or-glow { 0%, 100% { transform: scale(.85); opacity: .15; } 50% { transform: scale(1.1); opacity: .4; } }
+.pet-svg .sp-beep { animation: sp-beep 1.5s ease-out infinite; opacity: 0; }
+@keyframes sp-beep { 0% { opacity: 0; } 25% { opacity: 1; } 100% { opacity: 0; } }
+/* Снег: снежинки падают и вращаются. */
+.pet-svg .sn-flake { transform-box: fill-box; transform-origin: 50% 50%; animation: sn-fall 5s linear infinite; }
+@keyframes sn-fall { 0% { transform: translate(0, -30px) rotate(0); opacity: 0; } 10% { opacity: 1; } 50% { transform: translate(6px, 40px) rotate(90deg); } 90% { opacity: 1; } 100% { transform: translate(-4px, 110px) rotate(180deg); opacity: 0; } }
+/* Золотые искры: всплывают. */
+.pet-svg .gs-rise { animation: gs-rise 4s ease-in-out infinite; }
+@keyframes gs-rise { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-8px); } }
+/* Алый вихрь. */
+.pet-svg .vx-spin { transform-box: view-box; transform-origin: 100px 112px; animation: it-spin 6s linear infinite; }
+.pet-svg .vx-orbit { transform-box: view-box; transform-origin: 100px 112px; animation: it-spin 9s linear infinite reverse; }
+.pet-svg.act-spin .vx-spin { animation-duration: 1.2s; }
+
+/* Бурундай: бунчук колышется на ветру, султан шлема качается, лучи за золотым троном. */
+.pet-svg .bu-hair { transform-box: fill-box; transform-origin: 50% 0; animation: bu-wind 2.6s ease-in-out infinite; }
+@keyframes bu-wind { 0%, 100% { transform: skewX(0) rotate(0); } 50% { transform: skewX(-9deg) rotate(4deg); } }
+.pet-svg .bu-plume { transform-box: fill-box; transform-origin: 90% 10%; animation: bu-plume 2.2s ease-in-out infinite; }
+@keyframes bu-plume { 0%, 100% { transform: rotate(0); } 50% { transform: rotate(-10deg); } }
+.pet-svg .bu-rays { transform-box: view-box; transform-origin: 100px 60px; animation: bu-rays 6s ease-in-out infinite; }
+@keyframes bu-rays { 0%, 100% { opacity: .35; } 50% { opacity: .6; } }
