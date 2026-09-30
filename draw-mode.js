@@ -101,11 +101,29 @@
     }
     var s = scrollable(e);
     if (s) return { type: 'scroll', el: s, clip: s };
-    return { type: 'page' };
+    // 🔴 Окно, в котором рисуют (задание, пробник, режимы), — тоже якорь, даже если
+    // оно не прокручивается. Иначе штрих ложился «на страницу» и оставался висеть
+    // поверх экрана, когда из задания выходили (владелец, 30.09.2026).
+    var f = fixedAncestor(e);
+    if (f) return { type: 'scroll', el: f, clip: null };   // не режем: стрелка может выйти из окна на фон
+    // На самой странице: запоминаем, поверх чего рисовали, — чтобы штрих
+    // прятался, когда это закроют окном.
+    return { type: 'page', el: e };
+  }
+  function fixedAncestor(n) {
+    for (; n && n !== document.body && n !== document.documentElement; n = n.parentElement) {
+      var pos = getComputedStyle(n).position;
+      if (pos === 'fixed') return n;
+    }
+    return null;
   }
   // Кадр якоря на сейчас: перевод его координат в экранные, масштаб линий, рамка обрезки.
   function frameOf(a) {
-    if (a.type === 'page') { var ox = sx(), oy = sy(); return { fx: function (p) { return { x: p.x - ox, y: p.y - oy }; }, k: 1, clip: null }; }
+    if (a.type === 'page') {
+      if (a.el) { var pr = a.el.isConnected && a.el.getBoundingClientRect(); if (!pr || !pr.width || !pr.height || !visible(a.el, pr)) return null; }
+      var ox = sx(), oy = sy();
+      return { fx: function (p) { return { x: p.x - ox, y: p.y - oy }; }, k: 1, clip: null };
+    }
     if (!a.el || !a.el.isConnected) return null;
     var r = a.el.getBoundingClientRect();
     if (!r.width || !r.height) return null;
@@ -382,8 +400,18 @@
 
   // ── Отрисовка ────────────────────────────────────────────────────────────
   function clearLive() { lctx.setTransform(1, 0, 0, 1, 0, 0); lctx.clearRect(0, 0, live.width, live.height); }
+  // Якорь исчез совсем (окно закрыли, элемент удалён или скрыт) — его штрихи
+  // выбрасываем, чтобы при следующем открытии окна старый рисунок не вернулся.
+  // Просто закрытый другим окном якорь (карта под своим увеличением) — не трогаем.
+  function gone(a) {
+    if (!a || !a.el) return false;
+    if (!a.el.isConnected) return true;
+    var r = a.el.getBoundingClientRect();
+    return !r.width || !r.height;
+  }
   function redraw() {
     if (!bctx) return;
+    if (!cur && strokes.some(function (s) { return gone(s.anchor); })) strokes = strokes.filter(function (s) { return !gone(s.anchor); });
     bctx.setTransform(1, 0, 0, 1, 0, 0); bctx.clearRect(0, 0, base.width, base.height);
     bctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     var now = performance.now();
@@ -458,7 +486,7 @@
     var now = performance.now();
     // Якоря-карты и окна двигаются без событий (зум — это transform): пока есть
     // такие штрихи или свежий штамп «бьёт», перерисовываем каждый кадр.
-    if (strokes.some(function (s) { return (s.anchor && s.anchor.type !== 'page') || (s.kind === 'stamp' && now - s.born < 280); })) redraw();
+    if (strokes.some(function (s) { return (s.anchor && s.anchor.el) || (s.kind === 'stamp' && now - s.born < 280); })) redraw();
     if (cur && cur.anchor && cur.anchor.type !== 'page') drawLive();
     // Плавное «очистить».
     if (fading) {
