@@ -806,7 +806,13 @@
             return false;
         }
         const kim = Number(taskKey.replace(/\D/g, ''));
-        const pool = (window.EGE_EXAM_BANK.tasks || []).filter(task => task.kim === kim);
+        // В банке ФИПИ все таблицы на 4 строки. Ученик, выбравший 6 или 10 строк,
+        // получал каждую пятую таблицу на 4 — выглядело как сбой генератора
+        // (замер 30.09: задание 3, «вся история», 6 строк → 4 строки в 20% раундов).
+        // Подмешиваем только задания ровно того размера, что выбран.
+        const rows = parseInt(document.getElementById('filter-rows')?.value, 10) || 4;
+        const rowsOf = task => (kim === 4 ? task.grid : task.targets)?.length || 0;
+        const pool = (window.EGE_EXAM_BANK.tasks || []).filter(task => task.kim === kim && rowsOf(task) === rows);
         if (!pool.length || typeof window.renderEmbeddedFipiTask !== 'function') return false;
         const fresh = freshPool(pool, task => task.id);
         return window.renderEmbeddedFipiTask(fresh[randomIndex(fresh.length)]) !== false;
