@@ -1444,6 +1444,38 @@ async function studentOverview(teacherUserId, classId, studentUserId, { db = poo
   const gradedPossible = rows.reduce((sum, row) => sum + row.possible, 0);
   const gradedEarned = rows.reduce((sum, row) => sum + row.earned, 0);
 
+  // 🔴 Работа ученика НЕ СВОДИТСЯ к домашкам. Карточка показывала только их, и
+  // ученик, решивший триста заданий сам, выглядел в ней как бездельник, если
+  // учитель ничего не задавал. Здесь — всё, что он делал в приложении.
+  //
+  // Вклад одной попытки во время ограничен десятью минутами: время меряет
+  // клиент, и забытая открытая вкладка на двух заданиях давала час работы.
+  const practice = await db.query(
+    `SELECT count(*)::int AS answers,
+            count(DISTINCT task_id)::int AS tasks,
+            count(*) FILTER (WHERE correct)::int AS correct,
+            count(DISTINCT msk_day)::int AS days,
+            COALESCE(SUM(LEAST(elapsed_ms, 600000)), 0)::bigint AS elapsed_ms,
+            MIN(attempted_at) AS first_at,
+            MAX(attempted_at) AS last_at,
+            COALESCE(SUM(earned), 0)::int AS earned,
+            COALESCE(SUM(possible), 0)::int AS possible
+     FROM social_attempt_events WHERE user_id = $1`, [studentUserId]);
+  const p = practice.rows[0] || {};
+
+  // Персонально трудные: первая попытка по заданию без полного балла. Именно
+  // первая — в разборе ошибок он решает то же второй раз, уже зная ответ.
+  const personal = await db.query(
+    `WITH first_try AS (
+       SELECT DISTINCT ON (task_id) task_id, task_type, exam_line, topic_codes,
+              earned, possible, attempted_at
+       FROM social_attempt_events WHERE user_id = $1
+       ORDER BY task_id, attempted_at)
+     SELECT task_id, task_type, exam_line, topic_codes, earned, possible, attempted_at
+     FROM first_try WHERE earned < possible
+     ORDER BY (possible - earned) DESC, attempted_at DESC
+     LIMIT 8`, [studentUserId]);
+
   return {
     student: {
       studentId: studentUserId,
@@ -1461,6 +1493,25 @@ async function studentOverview(teacherUserId, classId, studentUserId, { db = poo
       possible: gradedPossible,
       percent: gradedPossible > 0 ? Math.round((gradedEarned / gradedPossible) * 100) : 0,
     },
+    practice: {
+      answers: numeric(p.answers),
+      tasks: numeric(p.tasks),
+      correct: numeric(p.correct),
+      accuracy: numeric(p.possible) > 0 ? Math.round((numeric(p.earned) / numeric(p.possible)) * 100) : 0,
+      days: numeric(p.days),
+      elapsedMs: numeric(p.elapsed_ms),
+      firstAt: p.first_at ? new Date(p.first_at).getTime() : null,
+      lastAt: p.last_at ? new Date(p.last_at).getTime() : null,
+    },
+    personalHard: personal.rows.map(row => ({
+      taskId: row.task_id,
+      taskType: row.task_type,
+      examLine: row.exam_line || 0,
+      topicCodes: row.topic_codes || [],
+      earned: numeric(row.earned),
+      possible: numeric(row.possible),
+      attemptedAt: new Date(row.attempted_at).getTime(),
+    })),
   };
 }
 
