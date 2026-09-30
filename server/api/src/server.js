@@ -1100,6 +1100,27 @@ async function handle(req, res) {
       const docs = await store.query(`artifacts/${APP}/public/data/students`, [{ type: 'where', field: 'classCode', op: '==', value: classCode }, { type: 'limit', count: 3000 }], session);
       return json(res, 200, { students: docs });
     }
+    // Кнопка «Написать» в кабинете. tg://user?id= открывает чат только у тех,
+    // кого клиент учителя уже «знает», — у остальных молча ничего. Работает
+    // ссылка по @username, а он лежит в Telegram-личности, а не в профиле
+    // ученика (профиль читают и другие ученики через топы). Отдаём его только
+    // учителю этой группы и только по его ученикам.
+    if (req.method === 'GET' && url.pathname === '/api/v1/teacher/contacts') {
+      const ctx = await accessContext(session);
+      const classCode = String(url.searchParams.get('classCode') || '');
+      if (!classCode || (!ctx.admin && (!ctx.teacher || !ctx.classes.has(classCode)))) throw Object.assign(new Error('forbidden'), { statusCode: 403 });
+      const { rows } = await pool.query(
+        `SELECT s.doc_id, COALESCE(NULLIF(byuser.profile->>'username',''), NULLIF(bytg.profile->>'username','')) AS username
+           FROM student_profiles s
+           LEFT JOIN LATERAL (SELECT profile FROM user_identities i WHERE i.provider='telegram' AND i.user_id = s.user_id
+                               ORDER BY i.last_seen_at DESC LIMIT 1) byuser ON s.user_id IS NOT NULL
+           LEFT JOIN user_identities bytg ON bytg.provider='telegram' AND bytg.subject = COALESCE(NULLIF(s.data->>'tgId',''), s.data->>'knownTgId')
+          WHERE s.data->>'classCode' = $1 AND s.data->>'_mergedInto' IS NULL
+          LIMIT 3000`, [classCode]);
+      const contacts = {};
+      for (const row of rows) if (row.username) contacts[row.doc_id] = String(row.username).replace(/[^A-Za-z0-9_]/g, '').slice(0, 64);
+      return json(res, 200, { contacts });
+    }
 
     throw noRoute();
   } catch (error) {

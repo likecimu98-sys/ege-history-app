@@ -160,8 +160,10 @@ assert.match(appSrc, /maybeOpenSecondPartFromLink\(\)/,
 // разные люди, половина экзамена шла мимо него.
 assert.match(sync, /secondPart: s\.secondPart \|\| null/,
   'Сводка второй части не доезжает до строки ученика в кабинете учителя');
-assert.match(sync, /\$\{hwBadge\}\$\{spBadge\}/,
-  'Значок второй части не выведен в карточке ученика');
+// Карточку ученика с 01.10.2026 рисует teacher-cabinet.js (редизайн кабинета).
+const cabinet = fs.readFileSync(path.join(root, 'teacher-cabinet.js'), 'utf8');
+assert.match(cabinet, /const sp = s\.secondPart;[\s\S]{0,400}Вторая часть/,
+  'Вторая часть не выведена в карточке ученика');
 assert.match(sync, /localStorage\.setItem\('second_part_stats'/,
   'Свой итог по второй части не сохраняется — ученик его не увидит');
 assert.match(modes, /function _secondPartSummary\(\)/,

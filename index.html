@@ -99,15 +99,15 @@
     <link rel="manifest" href="manifest.webmanifest">
     <link rel="icon" type="image/png" href="assets/icons/icon-192.png">
     <link rel="apple-touch-icon" href="assets/icons/icon-180.png">
-    <link rel="stylesheet" href="tokens.css?v=20260930-23">
-    <link rel="stylesheet" href="output.css?v=20260930-23">
-    <link rel="stylesheet" href="theme-classic.css?v=20260930-23">
-    <link rel="stylesheet" href="styles.css?v=20260930-23">
+    <link rel="stylesheet" href="tokens.css?v=20261001-1">
+    <link rel="stylesheet" href="output.css?v=20261001-1">
+    <link rel="stylesheet" href="theme-classic.css?v=20261001-1">
+    <link rel="stylesheet" href="styles.css?v=20261001-1">
     
     <!-- Самохостинг telegram-web-app.js: telegram.org часто недоступен (сеть/VPN),
          тогда window.Telegram не создавался → known_tg_id не считывался → случайный id «через раз».
          Локальная копия отдаётся с того же origin и кэшируется service worker'ом. -->
-    <script src="vendor/telegram-web-app.js?v=20260930-23" defer></script>
+    <script src="vendor/telegram-web-app.js?v=20261001-1" defer></script>
 
     <style>
         /* Этот inline-блок намеренно МИНИМАЛЕН: только то, что должно сработать на
@@ -333,7 +333,7 @@
 
     <script>
       (function() {
-      var BOOT_RELEASE = '20260930-23';
+      var BOOT_RELEASE = '20261001-1';
         var bootT0 = Date.now();
         // 🔴 Диагностика загрузки НЕ должна зависеть только от fetch.
         // 30.07 два айфона скачали страницу и ВСЕ 20 скриптов (200 в логе), но не
@@ -591,30 +591,31 @@
          диагностика поломок сама стала способом их устроить.
          Единственное, что теряется с defer, — ошибки инлайн-скриптов ВЫШЕ по
          документу. Они уже покрыты своим отчётом (bootSignal('error')). -->
-    <script src="telemetry.js?v=20260930-23" defer></script>
+    <script src="telemetry.js?v=20261001-1" defer></script>
 
     <!-- JS разбит на модули: config → utils → state → table → ui → modes → app -->
     <!-- Порядок defer гарантирован браузером: выполняются строго по порядку в DOM -->
-    <script src="config.js?v=20260930-23" defer></script>
-    <script src="utils.js?v=20260930-23" defer></script>
-    <script src="exam-scoring.js?v=20260930-23" defer></script>
-    <script src="state.js?v=20260930-23" defer></script>
-    <script src="table.js?v=20260930-23" defer></script>
-    <script src="lesson-plan.js?v=20260930-23" defer></script>
-    <script src="ui.js?v=20260930-23" defer></script>
-    <script src="modes.js?v=20260930-23" defer></script>
-    <script src="swipe-data.js?v=20260930-23" defer></script>
-    <script src="swipe-mode.js?v=20260930-23" defer></script>
-    <script src="match-mode.js?v=20260930-23" defer></script>
-    <script src="order-mode.js?v=20260930-23" defer></script>
-    <script src="order-data.js?v=20260930-23" defer></script>
-    <script src="tetris-mode.js?v=20260930-23" defer></script>
-    <script src="map-mode.js?v=20260930-23" defer></script>
-    <script src="duel-react.js?v=20260930-23" defer></script>
-    <script src="vov-mode.js?v=20260930-23" defer></script>
-    <script src="visual-trainer.js?v=20260930-23" defer></script>
-    <script src="exam-mode.js?v=20260930-23" defer></script>
-    <script src="app.js?v=20260930-23" defer></script>
+    <script src="config.js?v=20261001-1" defer></script>
+    <script src="utils.js?v=20261001-1" defer></script>
+    <script src="exam-scoring.js?v=20261001-1" defer></script>
+    <script src="state.js?v=20261001-1" defer></script>
+    <script src="table.js?v=20261001-1" defer></script>
+    <script src="lesson-plan.js?v=20261001-1" defer></script>
+    <script src="ui.js?v=20261001-1" defer></script>
+    <script src="teacher-cabinet.js?v=20261001-1" defer></script>
+    <script src="modes.js?v=20261001-1" defer></script>
+    <script src="swipe-data.js?v=20261001-1" defer></script>
+    <script src="swipe-mode.js?v=20261001-1" defer></script>
+    <script src="match-mode.js?v=20261001-1" defer></script>
+    <script src="order-mode.js?v=20261001-1" defer></script>
+    <script src="order-data.js?v=20261001-1" defer></script>
+    <script src="tetris-mode.js?v=20261001-1" defer></script>
+    <script src="map-mode.js?v=20261001-1" defer></script>
+    <script src="duel-react.js?v=20261001-1" defer></script>
+    <script src="vov-mode.js?v=20261001-1" defer></script>
+    <script src="visual-trainer.js?v=20261001-1" defer></script>
+    <script src="exam-mode.js?v=20261001-1" defer></script>
+    <script src="app.js?v=20261001-1" defer></script>
 
     <!-- ШАПКА -->
     <header id="main-header" class="sticky top-0 z-50 no-print transition-colors duration-400 pt-2 pb-2 sm:pt-3 sm:pb-3 px-4">
@@ -714,6 +715,14 @@
                  ученика. Содержимое рисует renderMainAction() (ui.js) при updateGlobalUI.
                  Это единственное на экране пятно со сплошной заливкой — так и задумано:
                  заливка цветом = «сюда», всё остальное = поверхность плюс акцент. -->
+            <!-- Вход в кабинет для учителя. Раньше — только двойной клик по логотипу,
+                 о котором учитель узнавал из тоста. Показывает TeacherCabinet.showEntry
+                 после серверной проверки роли. -->
+            <button type="button" id="lobby-teacher-entry" class="card-row tcab-entry hidden" style="--a:var(--c-brand)" onclick="window.openTeacherModal&&window.openTeacherModal()">
+                <span class="ico"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 10l9-5 9 5-9 5z"/><path d="M7 12v4c0 1.5 2.5 3 5 3s5-1.5 5-3v-4"/></svg></span>
+                <span class="txt"><b>Кабинет учителя</b><i id="lobby-teacher-sub">Ученики, домашние задания, статистика</i></span>
+                <span class="cnt">→</span>
+            </button>
             <div id="main-action"></div>
 
             <!-- «Летописчик» — питомец ученика. Пусто, пока ученик не порешал ~10 минут:
@@ -1275,121 +1284,59 @@
     </div>
 
     <!-- Кабинет учителя -->
-    <div id="teacher-modal" class="fixed inset-0 bg-black/80 z-[10001] hidden flex-col items-center justify-center backdrop-blur-sm transition-opacity no-print modal-content-hidden">
-        <div class="bg-white dark:bg-[#1e1e1e] rounded-2xl w-[95%] max-w-3xl h-[85vh] flex flex-col overflow-hidden text-gray-800 dark:text-gray-300 shadow-2xl border border-gray-200 dark:border-[#2c2c2c]">
-             <div class="p-3 sm:p-4 border-b border-gray-200 dark:border-[#2c2c2c] flex justify-between items-center bg-gray-50 dark:bg-[#181818] shrink-0 gap-2"><h2 class="font-black text-base sm:text-xl flex items-center gap-2 uppercase tracking-wide truncate">👨‍🏫 Кабинет учителя</h2><button data-action="hideModal" data-arg="teacher-modal" class="text-3xl shrink-0 text-gray-400 hover:text-rose-500 transition-colors leading-none">&times;</button></div>
-             <div class="grid grid-cols-2 border-b border-gray-200 dark:border-[#2c2c2c] bg-white dark:bg-[#1e1e1e] shrink-0 w-full text-center">
-                 <button id="tab-btn-stats" data-action="switchTeacherTab" data-arg="stats" class="py-3 text-[10px] sm:text-xs font-black border-b-2 border-examBlue text-examBlue dark:text-blue-400 dark:border-blue-400 transition-colors uppercase tracking-wide leading-none truncate">Ученики</button>
-                 <button id="tab-btn-weekly" data-action="switchTeacherTab" data-arg="weekly" class="py-3 text-[10px] sm:text-xs font-black border-b-2 border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300 transition-colors uppercase tracking-wide leading-none truncate">Топ недели</button>
-             </div>
-             
-             <!-- ВКЛАДКА: УЧЕНИКИ -->
-             <div class="flex-grow p-3 sm:p-4 overflow-y-auto overflow-x-hidden custom-scroll flex flex-col bg-gray-50 dark:bg-[#121212] relative w-full" id="teacher-tab-stats">
-                <!-- Панель потока: код класса · «дошли до года» · фильтр -->
-                <!-- Панель управления классом. Была синим градиентом во всю ширину:
-                     белые подписи на white/15 давали плейсхолдеры «код» и «год»
-                     контрастом ниже 2:1, а сама панель кричала громче данных. -->
-                <div class="tc-toolbar mb-3 shrink-0">
-                    <!-- flex-wrap, а не колонка на телефоне: поля короткие, в колонку
-                         они занимали пять экранных строк ради пяти слов -->
-                    <div class="flex flex-row flex-wrap items-center gap-2">
-                        <!-- Дропдаун групп учителя (заполняется populateTeacherGroups). Появляется, когда есть группы. -->
-                        <label id="teacher-group-wrap" class="tc-field hidden cursor-pointer">
-                            <span class="lb">Группа</span>
-                            <select id="teacher-group-select" onchange="window.onTeacherGroupChange&&window.onTeacherGroupChange(this.value)" class="cursor-pointer max-w-[180px] truncate"></select>
-                        </label>
-                        <label id="teacher-code-wrap" class="tc-field">
-                            <span class="lb">Класс</span>
-                            <input type="text" id="teacher-class-code-input" placeholder="код" onchange="saveTeacherClassCode()" class="w-20 font-mono">
-                        </label>
-                        <button onclick="window.copyClassInvite&&window.copyClassInvite()" class="tc-btn" title="Ссылка-приглашение: ученик нажимает её в Telegram и автоматически попадает в этот класс">🔗 Пригласить</button>
-                        <!-- «Дошли до года»: ученики повторяют всё от 862 до этой границы (кнопка «Продолжить») -->
-                        <label class="tc-field" title="До какого года дошли на занятиях — ученики будут повторять всё от 862 года до этой границы">
-                            <span class="lb">Дошли до</span>
-                            <input type="number" id="teacher-current-upto" min="862" max="2026" placeholder="год" onchange="window.saveClassCurrentUpto&&window.saveClassCurrentUpto(this.value)" class="w-16">
-                        </label>
-                        <label class="tc-field cursor-pointer sm:ml-auto">
-                            <input type="checkbox" id="teacher-filter-class" onchange="window.loadClassProgress()" class="w-4 h-4 rounded shrink-0">
-                            <span class="lb" style="color:var(--c-text)">Только мой класс</span>
-                        </label>
-                    </div>
-                    <!-- Что реально показано: класс / все — заполняет loadClassProgress -->
-                    <div id="teacher-filter-mode-note" class="hidden w-full text-center text-[11px] font-medium text-gray-500 dark:text-gray-400 mt-2"></div>
-                </div>
-                <!-- Сводка по классу: «сегодня одним взглядом» -->
-                <div id="teacher-class-summary" class="hidden mb-3 shrink-0">
-                    <!-- Четыре сводных числа. Было: четыре пастельных фона, четыре
-                         цвета цифр и подписи кеглем 8px — ряд читался как гирлянда,
-                         а не как сводка. Цветом остался только «молчат 3 дня+»:
-                         единственное число, которое требует действия. -->
-                    <div class="tc-kpis" style="grid-template-columns:repeat(4,minmax(0,1fr));padding:0">
-                        <div class="tc-kpi tc-card" style="padding:10px 6px"><span class="v" id="summary-count">0</span><span class="k">учеников</span></div>
-                        <div class="tc-kpi tc-card" style="padding:10px 6px"><span class="v" id="summary-active">0</span><span class="k">были сегодня</span></div>
-                        <div class="tc-kpi tc-card" style="padding:10px 6px"><span class="v" id="summary-avg">0</span><span class="k">в среднем решено</span></div>
-                        <div class="tc-kpi tc-card" style="padding:10px 6px"><span class="v acc-lo" id="summary-atrisk">0</span><span class="k">молчат 3 дня+</span></div>
-                    </div>
-                </div>
-                <div id="teacher-hw-control" class="hidden mb-3 shrink-0"></div>
-                <!-- Действия: выдача ДЗ + PDF-сводка -->
-                <!-- Раньше «ДЗ всему классу 🔥» было красным во всю ширину — самым
-                     громким элементом экрана. Массовая выдача домашки не то, ради
-                     чего сюда заходят, и красный тут ничего не предупреждает. -->
-                <div class="flex gap-2 mb-3 shrink-0">
-                    <button onclick="window.promptAssignHwClass&&window.promptAssignHwClass()" class="tc-btn is-primary is-grow">📝 Выдать ДЗ всему классу</button>
-                    <button onclick="window.openClassAssignmentsList&&window.openClassAssignmentsList()" class="tc-btn" title="Список выданных ДЗ и отмена">📋 ДЗ</button>
-                    <button onclick="window.downloadClassReportPDF&&window.downloadClassReportPDF()" class="tc-btn" title="Скачать PDF-сводку класса">📄 PDF</button>
-                </div>
-                <div class="stat-h3 shrink-0 mt-1">Ученики</div>
-                <!-- Сегменты учеников: быстрые фильтры списка карточек -->
-                <div id="teacher-segments" class="tc-segments mb-2 shrink-0">
-                    <button data-seg="all" aria-pressed="true" onclick="window.setTeacherSegment&&window.setTeacherSegment('all')" class="tc-seg">Все <span data-segcnt="all"></span></button>
-                    <button data-seg="risk" aria-pressed="false" onclick="window.setTeacherSegment&&window.setTeacherSegment('risk')" class="tc-seg">🔴 Риск <span data-segcnt="risk"></span></button>
-                    <button data-seg="debt" aria-pressed="false" onclick="window.setTeacherSegment&&window.setTeacherSegment('debt')" class="tc-seg">📚 Долги ДЗ <span data-segcnt="debt"></span></button>
-                    <button data-seg="new" aria-pressed="false" onclick="window.setTeacherSegment&&window.setTeacherSegment('new')" class="tc-seg">🆕 Новички <span data-segcnt="new"></span></button>
-                    <button data-seg="top" aria-pressed="false" onclick="window.setTeacherSegment&&window.setTeacherSegment('top')" class="tc-seg">🏆 Топ недели</button>
-                </div>
-                <!-- Поиск + сортировка -->
-                <div class="mb-2 shrink-0">
-                    <input type="search" id="teacher-student-search" placeholder="🔍 Найти ученика: имя, ТГ-ID или код класса…" oninput="window.sortAndRenderStudents&&window.sortAndRenderStudents()" class="w-full bg-white dark:bg-[#1e1e1e] border border-gray-200 dark:border-[#2c2c2c] text-[13px] font-medium text-gray-700 dark:text-gray-300 rounded-xl px-3 py-2.5 outline-none">
-                </div>
-                <div class="flex items-center gap-2 mb-3 shrink-0">
-                    <span class="text-[12px] font-semibold text-gray-500 dark:text-gray-400 shrink-0">Сортировка</span>
-                    <select id="teacher-sort-select" onchange="window.sortAndRenderStudents()" class="flex-1 bg-white dark:bg-[#1e1e1e] border border-gray-200 dark:border-[#2c2c2c] text-[13px] font-medium text-gray-700 dark:text-gray-300 rounded-xl px-3 py-2.5 outline-none">
-                        <option value="total">По решённым строкам</option>
-                        <option value="weekly">По активности за неделю</option>
-                        <option value="streak">По стрику</option>
-                        <option value="learned">По выученным фактам</option>
-                        <option value="accuracy">По точности</option>
-                        <option value="homework">По ДЗ: долги сверху</option>
-                        <option value="lastActive">По последнему входу</option>
-                    </select>
-                </div>
-                <!-- Аналитика класса -->
-                <details class="tc-details mb-3 shrink-0">
-                    <summary>📊 Аналитика класса</summary>
-                    <div id="teacher-class-analytics" class="px-3 pb-3 pt-1 border-t border-gray-200 dark:border-[#2c2c2c]"></div>
-                </details>
-                <!-- Дедупликация аккаунтов -->
-                <details class="tc-details mb-3 shrink-0">
-                    <summary>🔀 Устранить дубли аккаунтов</summary>
-                    <div class="px-3 pb-3 pt-2 border-t border-gray-200 dark:border-[#2c2c2c]">
-                        <p class="text-[12px] text-gray-600 dark:text-gray-400 mb-2.5 leading-relaxed">Сканирует всех студентов, находит дубли (по email, ТГ-ID, имени) и автоматически объединяет их данные. Старые документы помечаются как поглощённые, не удаляются.</p>
-                        <button id="dedup-btn" onclick="window.runDeduplication&&window.runDeduplication()"
-                            class="tc-btn is-grow w-full disabled:opacity-50 disabled:cursor-not-allowed">
-                            ▶ Запустить дедупликацию
-                        </button>
-                        <div id="dedup-log" class="mt-2 max-h-36 overflow-y-auto bg-gray-50 dark:bg-[#181818] rounded-lg p-2 text-[11px] text-gray-600 dark:text-gray-400 hidden"></div>
+    <div id="teacher-modal" class="tcab-overlay fixed inset-0 z-[10001] hidden flex-col items-center justify-center transition-opacity no-print modal-content-hidden" role="dialog" aria-label="Кабинет учителя">
+        <!-- Кабинет учителя (редизайн 01.10.2026). Раньше: лента карточек в экран
+             высотой на каждого ученика, поиск под блоком ДЗ, пять полей настроек
+             сверху. Теперь шапка с группой и главными действиями, три вкладки,
+             содержимое рисует teacher-cabinet.js по данным loadClassProgress. -->
+        <div class="tcab">
+            <header class="tcab-top">
+                <div class="tcab-title">Кабинет учителя</div>
+                <label id="teacher-group-wrap" class="tcab-field hidden">
+                    <span class="lb">Группа</span>
+                    <select id="teacher-group-select" onchange="window.onTeacherGroupChange&&window.onTeacherGroupChange(this.value)"></select>
+                </label>
+                <label id="teacher-code-wrap" class="tcab-field hidden" title="Код класса (только для администратора)">
+                    <span class="lb">Код</span>
+                    <input type="text" id="teacher-class-code-input" placeholder="код" onchange="saveTeacherClassCode()" style="width:120px">
+                </label>
+                <span class="tcab-spacer"></span>
+                <button class="tcab-btn" onclick="window.copyClassInvite&&window.copyClassInvite()" title="Ссылка-приглашение: ученик нажимает её в Telegram и попадает в эту группу">
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1"/><path d="M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1"/></svg><span class="tcab-hide-xs">Пригласить</span></button>
+                <button class="tcab-btn is-primary" onclick="window.promptAssignHwClass&&window.promptAssignHwClass()">
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>Выдать ДЗ</button>
+                <button class="tcab-close" onclick="window.closeTeacherModal&&window.closeTeacherModal()" aria-label="Закрыть кабинет">&times;</button>
+            </header>
+            <!-- «Дошли до года» — рабочая настройка учителя, её не прячем (владелец 01.10) -->
+            <div class="tcab-sub">
+                <label class="tcab-field" title="До какого года дошли на занятиях: ученики повторяют всё от 862 года до этой границы, путь по главам считается в этих рамках">
+                    <span class="lb">Дошли до</span>
+                    <input type="number" id="teacher-current-upto" min="862" max="2026" placeholder="год" inputmode="numeric" onchange="window.saveClassCurrentUpto&&window.saveClassCurrentUpto(this.value)" style="width:84px">
+                    <span class="lb">года</span>
+                </label>
+                <span class="tcab-subhint">ученики повторяют всё от 862 г. до этой границы</span>
+                <label class="tcab-field is-check hidden" id="teacher-filter-wrap">
+                    <input type="checkbox" id="teacher-filter-class" onchange="window.loadClassProgress()">
+                    <span>Только эта группа</span>
+                </label>
+                <span id="teacher-filter-mode-note" class="tcab-subhint hidden"></span>
+                <details class="tcab-more" id="teacher-admin-tools">
+                    <summary class="tcab-btn is-ghost" aria-label="Служебное">⋯</summary>
+                    <div class="tcab-menu">
+                        <button data-act="classpdf">Скачать PDF-сводку группы</button>
+                        <button data-act="hwjournal">Журнал ДЗ и отмена</button>
+                        <button data-act="reload">Обновить данные</button>
+                        <button id="dedup-btn" class="tcab-admin-only hidden" onclick="window.runDeduplication&&window.runDeduplication()">Устранить дубли аккаунтов</button>
+                        <div id="dedup-log" class="tcab-dedup-log"></div>
                     </div>
                 </details>
-                <div id="teacher-class-stats" class="flex flex-col gap-3 w-full"></div>
-             </div>
-             
-             <!-- ВКЛАДКА: ТОП НЕДЕЛИ -->
-             <div class="flex-grow p-3 sm:p-4 overflow-y-auto overflow-x-hidden custom-scroll hidden flex-col bg-gray-50 dark:bg-[#121212] relative w-full" id="teacher-tab-weekly">
-                <div class="text-center mb-5 shrink-0"><h3 class="font-black text-xl text-gray-800 dark:text-gray-200">🔥 Топ за неделю</h3><p class="text-[12px] font-medium text-gray-500 dark:text-gray-400 mt-1">По решённым строкам задания №4, с понедельника</p></div>
-                <div id="weekly-class-stats" class="flex flex-col gap-3 w-full"></div>
-             </div>
-             
+            </div>
+            <nav class="tcab-tabs" role="tablist">
+                <button class="tcab-tab" role="tab" data-act="tab" data-tab="students" data-v="students" aria-selected="true">Ученики</button>
+                <button class="tcab-tab" role="tab" data-act="tab" data-tab="hw" data-v="hw" aria-selected="false">Домашние задания</button>
+                <button class="tcab-tab" role="tab" data-act="tab" data-tab="class" data-v="class" aria-selected="false">Группа</button>
+            </nav>
+            <main id="tcab-body" class="tcab-body custom-scroll"></main>
         </div>
     </div>
 
@@ -1519,11 +1466,11 @@
     <!-- jsPDF грузится лениво (см. loadJsPDFOnDemand в cloud-sync.js) — не нужен при старте -->
 
     <!-- === PWA + first-party cloud sync loader === -->
-    <script src="pwa.js?v=20260930-23" defer></script>
+    <script src="pwa.js?v=20261001-1" defer></script>
 
     <!-- Ядро (факты, ~659 КБ): нужно для лобби и заданий. Приложение ОТКРЫВАЕТСЯ сразу
          после него — defer парсит HTML параллельно, порядок выполнения гарантирован. -->
-    <script src="data.js?v=20260930-23" defer></script>
+    <script src="data.js?v=20261001-1" defer></script>
     <!-- app:ready диспатчит инлайн-вотчер готовности в начале <body> (см. watchBoot):
          отдельный boot-ready.js убран — свежий файл не лежал в старом SW-кэше и на
          моргнувшей сети вис, не давая снять заставку. -->

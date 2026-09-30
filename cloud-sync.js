@@ -7,14 +7,14 @@
             signInWithCredential, signOut, initializeFirestore, collection, doc, setDoc, getDoc,
             getDocs, addDoc, updateDoc, deleteDoc, deleteField, onSnapshot, query, where,
             orderBy, limit, runTransaction, arrayUnion, arrayRemove, vpsApiFetch, refreshVpsAuth
-        } from "./vps-sync-compat.js?v=20260930-23";
+        } from "./vps-sync-compat.js?v=20261001-1";
 
         // jsPDF грузился с cdnjs.cloudflare.com без SRI — то есть посторонний скрипт
         // исполнялся с полными правами страницы, а при недоступности CDN (у части
         // нашей аудитории это обычное дело) экспорт PDF просто не работал. Довод тот
         // же, что и для telegram-web-app.js: своя копия с того же origin.
         // Версия совпадает с прежней CDN-ной — 2.5.1, лежит в vendor/.
-        const VENDOR_JSPDF = 'vendor/jspdf.umd.min.js?v=20260930-23';
+        const VENDOR_JSPDF = 'vendor/jspdf.umd.min.js?v=20261001-1';
 
         const cloudConfig = { projectId: 'vps-postgresql' };
         
@@ -30,7 +30,6 @@
         
         let fbUser = null; 
         const TEXT_TASK_KEYS = ['task1', 'task3', 'task4', 'task5', 'task7'];
-        const TEXT_TASK_EMOJI = { task1: '⏳', task3: '🔗', task4: '📍', task5: '👤', task7: '🎨' };
         const TEXT_TASK_SHORT = { task1: '№1', task3: '№3', task4: '№4', task5: '№5', task7: '№7' };
 
         function getTelegramWebApp() {
@@ -1685,8 +1684,10 @@
             const dStat = stats.dailyStats || state.dailyStats || {};
             let wScore = 0, wScoreTask4 = 0, wEgePoints = 0;
             const now = new Date();
-            const last7 = [];
-            for (let i = 6; i >= 0; i--) {
+            // 14 дней — для карточки ученика в кабинете; строка списка и недельный
+            // счёт берут последние 7 (понедельник всегда внутри последних семи).
+            const last14 = [];
+            for (let i = 13; i >= 0; i--) {
                 const d = new Date(now); d.setDate(d.getDate() - i);
                 const dStr = d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
                 const val = (dStat[dStr] && dStat[dStr].solved) || 0;
@@ -1695,8 +1696,9 @@
                 const dayScore = perTaskVal > 0 ? perTaskVal : val;
                 const dayEge = (dStat[dStr] && dStat[dStr].egePoints) || 0;
                 if (dStr >= monStr) { wScore += dayScore; wScoreTask4 += valT4; wEgePoints += dayEge; }
-                last7.push({ date: dStr, val, t1: (dStat[dStr] && dStat[dStr].solvedTask1) || 0, t4: (dStat[dStr] && dStat[dStr].solvedTask4) || 0, t5: (dStat[dStr] && dStat[dStr].solvedTask5) || 0, t7: (dStat[dStr] && dStat[dStr].solvedTask7) || 0, mins: dStat[dStr] ? Math.floor((dStat[dStr].timeSpent || 0) / 60) : 0, egePoints: dayEge });
+                last14.push({ date: dStr, val, t1: (dStat[dStr] && dStat[dStr].solvedTask1) || 0, t4: (dStat[dStr] && dStat[dStr].solvedTask4) || 0, t5: (dStat[dStr] && dStat[dStr].solvedTask5) || 0, t7: (dStat[dStr] && dStat[dStr].solvedTask7) || 0, mins: dStat[dStr] ? Math.floor((dStat[dStr].timeSpent || 0) / 60) : 0, egePoints: dayEge });
             }
+            const last7 = last14.slice(-7);
             // No totalSolved fallback — must come from actual dailyStats
 
             const daysSinceActive = s.lastActive ? Math.floor((Date.now() - s.lastActive) / 86400000) : 999;
@@ -1784,10 +1786,10 @@
                 hwTotalUnits += goal;
                 if (a.status === 'done' || (items.length && rem === 0)) {
                     hwDoneAssignments++; a.onTime ? hwDoneOnTime++ : hwDoneLate++;
-                    hwPerAssignment.push({ id: a.id, title: a.title, deadline: a.deadline, assignedAt: a.assignedAt || 0, state: 'done' });
+                    hwPerAssignment.push({ id: a.id, title: a.title, items, deadline: a.deadline, assignedAt: a.assignedAt || 0, state: 'done' });
                     return;
                 }
-                if (rem > 0) hwPerAssignment.push({ id: a.id, title: a.title, deadline: a.deadline, assignedAt: a.assignedAt || 0, state: 'active' });
+                if (rem > 0) hwPerAssignment.push({ id: a.id, title: a.title, items, deadline: a.deadline, assignedAt: a.assignedAt || 0, state: 'active' });
                 if (rem > 0) {
                     hwOpenAssignments++;
                     hwActiveAssignments++;
@@ -1800,7 +1802,7 @@
                 }
             });
             docPending.forEach(r => {
-                hwPerAssignment.push({ id: r.id, title: r.title, deadline: r.deadline, assignedAt: r.assignedAt || 0, state: 'pending' });
+                hwPerAssignment.push({ id: r.id, title: r.title, items: Array.isArray(r.items) ? r.items : (r.task ? [{ task: r.task, metric: 'lines', goal: Number(r.total) || 0 }] : null), deadline: r.deadline, assignedAt: r.assignedAt || 0, state: 'pending' });
                 const g = Array.isArray(r.items) ? r.items.reduce((x, it) => x + (Number(it.goal) || 0), 0) : (Number(r.total) || 0);
                 hwTotalAssignments++;
                 hwOpenAssignments++;
@@ -1848,7 +1850,9 @@
             });
             const solvedByTask = stats.solvedByTask || state.solvedByTask || {};
 
-            return { ...s, streak, timeSpentMin, learnedCount, accuracy, eraData, taskStats, wScore, wScoreTask4, wEgePoints, last7, dStat,
+            return { ...s, streak, timeSpentMin, learnedCount, accuracy, eraData, taskStats, wScore, wScoreTask4, wEgePoints, last7, last14, dStat,
+                     // Для кабинета: путь по главам (LessonPlan) и сами ошибки с ответом ученика.
+                     factStreaks: allFactStreaks, mistakes: mistakesPool,
                      daysSinceActive, isToday: daysSinceActive === 0, atRisk: daysSinceActive >= 3,
                      lastActiveStr, weakEra, totalCorrect, totalAttempts, hwRemaining, hwDeadline,
                      // Вторая часть: пишет бот, забирая сводку у «Проверочной».
@@ -1860,393 +1864,12 @@
                      hwPerAssignment, mistakesByTask, mistakeTotal: mistakeList.length, mistakeList, solvedByTask };
         }
 
-        function renderMiniBar(last7) {
-            const max = Math.max(...last7.map(d => d.val), 1);
-            const days = ['Пн','Вт','Ср','Чт','Пт','Сб','Вс'];
-            return last7.map((d, i) => {
-                const h = Math.max(3, Math.round((d.val / max) * 28));
-                const color = d.val === 0 ? '#e5e7eb' : i === 6 ? 'var(--c-brand)' : '#6ee7b7';
-                const dayIdx = (new Date(d.date).getDay() + 6) % 7;
-                return `<div style="display:flex;flex-direction:column;align-items:center;gap:2px;flex:1">
-                    <div title="${d.date}: ${d.val} строк" style="width:100%;max-width:14px;height:${h}px;background:${color};border-radius:3px 3px 0 0"></div>
-                    <span style="font-size:11px;color:var(--c-muted-2);font-weight:500">${days[dayIdx]}</span>
-                </div>`;
-            }).join('');
-        }
-
-        function renderEraRows(eraData) {
-            // Без защиты Object.values(null) роняет рендер ВСЕГО списка учеников
-            // из-за одного ученика без данных по эпохам.
-            return Object.values(eraData || {}).map(e => {
-                if (!e.total) return '';
-                const c = e.pct >= 80 ? 'var(--c-success)' : e.pct >= 60 ? 'var(--c-warn)' : 'var(--c-danger-soft)';
-                return `<div style="display:flex;align-items:center;gap:6px;margin-bottom:4px">
-                    <span style="font-size:11px;color:var(--c-muted-2);font-weight:500;min-width:72px">${e.name}</span>
-                    <div style="flex:1;height:6px;background:var(--c-card-2);border-radius:999px;overflow:hidden">
-                        <div style="height:100%;width:${e.pct}%;background:${c};border-radius:999px"></div>
-                    </div>
-                    <span style="font-size:11px;font-weight:700;color:var(--c-text);min-width:30px;text-align:right;font-variant-numeric:tabular-nums">${e.pct}%</span>
-                </div>`;
-            }).join('');
-        }
-
-        function renderDailyDetail(last7) {
-            const days = ['Пн','Вт','Ср','Чт','Пт','Сб','Вс'];
-            return last7.filter(d => d.val > 0).reverse().map(d => {
-                const dayIdx = (new Date(d.date).getDay() + 6) % 7;
-                const dateStr = new Date(d.date).toLocaleDateString('ru-RU', {day:'2-digit', month:'2-digit'});
-                const parts = [];
-                if (d.t1) parts.push(`<span style="color:#0891b2">⏳${d.t1}</span>`);
-                if (d.t4) parts.push(`<span style="color:var(--c-brand)">📍${d.t4}</span>`);
-                if (d.t5) parts.push(`<span style="color:var(--c-purple)">👤${d.t5}</span>`);
-                if (d.t7) parts.push(`<span style="color:var(--c-warn)">🎨${d.t7}</span>`);
-                const taskStr = parts.length ? parts.join(' ') : `<span style="color:var(--c-brand)">${d.val}</span>`;
-                return `<div style="display:flex;justify-content:space-between;align-items:center;font-size:12px;padding:4px 0;border-bottom:1px solid var(--c-border);font-variant-numeric:tabular-nums">
-                    <span style="font-weight:600;color:var(--c-text);min-width:34px">${dateStr}</span>
-                    <span style="font-weight:600">${taskStr}</span>
-                    <span style="color:var(--c-muted-2);font-weight:500">${d.mins} мин</span>
-                </div>`;
-            }).join('') || '<div style="font-size:12px;color:var(--c-muted-2);padding:4px 0">Нет данных</div>';
-        }
-
-        function renderStudentCard(s, idx) {
-            // Имя/код класса/ID приходят из документа ученика, который пишет клиент —
-            // экранируем ВСЁ пользовательское, иначе имя вида <img onerror=…> исполнится у учителя.
-            const esc = t => String(t || '').replace(/[<>&"]/g, c => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;', '"': '&quot;' }[c]));
-            const dispName = esc(s.name || 'Без имени');
-            const safeUid  = (s.uid  || '').replace(/'/g, "\\'");
-            const safeName = (s.name || 'Без имени').replace(/'/g, "\\'").replace(/"/g, '&quot;');
-            const medal    = idx === 0 ? '🥇' : idx === 1 ? '🥈' : idx === 2 ? '🥉' : '';
-            // Аватар: инициал на стабильном цвете из uid — ученика легко находить глазами в списке
-            const initial  = esc((String(s.name || '?').trim().charAt(0) || '?').toUpperCase());
-            const hue      = Array.from(String(s.uid || s.name || 'x')).reduce((h, c) => (h * 31 + c.charCodeAt(0)) >>> 0, 7) % 360;
-            const timeStr  = s.timeSpentMin >= 60 ? `${Math.floor(s.timeSpentMin/60)}ч ${s.timeSpentMin%60}м` : `${s.timeSpentMin}м`;
-            const accStr   = s.accuracy !== null ? `${s.accuracy}%` : '—';
-            // Цветом кодируем ОДНУ цифру — точность: она и есть оценка. Остальные
-            // KPI были пятью разными цветами и не читались как один ряд.
-            const accCls = s.accuracy === null ? '' : s.accuracy >= 80 ? 'acc-hi' : s.accuracy >= 60 ? 'acc-mid' : 'acc-lo';
-            const atRiskBadge = s.atRisk
-                ? `<span class="tc-badge is-danger">⚠️ ${s.daysSinceActive}д без входа</span>` : '';
-            const todayBadge = s.isToday
-                ? `<span class="tc-badge is-ok">🟢 сегодня</span>` : '';
-            const hwDeadlineStr = s.hwDeadline ? ' · до ' + new Date(s.hwDeadline + 'T00:00:00').toLocaleDateString('ru-RU', {day:'numeric',month:'short'}) : '';
-            const hwBadge = (s.hwRemaining > 0)
-                ? `<span class="tc-badge is-warn">📝 ДЗ: ${s.hwRemaining}${hwDeadlineStr}</span>`
-                : (s.hwDeadline ? `<span class="tc-badge is-ok">✅ ДЗ сдано</span>` : '');
-            const hwTimingBadge = ((s.hwOnTimeTotal||0) || (s.hwLateTotal||0))
-                ? `<span class="tc-badge is-info">⏱ вовремя ${s.hwOnTimeTotal||0}${(s.hwLateTotal||0)?` · опозд. ${s.hwLateTotal}`:''}${(s.hwStreakMax||0)>=3?` · 🔥${s.hwStreakMax}`:''}</span>`
-                : '';
-            // ✍️ Вторая часть. Показываем ТОЛЬКО тем, у кого она открыта: у
-            // остальных сводки нет вовсе, и пустой значок сбивал бы с толку.
-            const sp = s.secondPart;
-            const spBadge = (sp && (sp.todo || sp.waiting || sp.reviewed))
-                ? `<span class="tc-badge ${sp.todo > 0 ? 'is-warn' : 'is-info'}">✍️ 2-я часть: `
-                  + `${sp.reviewed} пров.${sp.waiting ? ` · ${sp.waiting} на проверке` : ''}`
-                  + `${sp.todo ? ` · ${sp.todo} не сдано` : ''}`
-                  + `${sp.maxScore ? ` · ${sp.score}/${sp.maxScore} б` : ''}</span>`
-                : '';
-
-            const weakBlock = s.weakEra
-                ? `<div class="tc-foot" style="padding:6px 0 0">📍 Слабая тема: <b>${s.weakEra.name} — ${s.weakEra.pct}%</b></div>` : '';
-            const _sbt = s.solvedByTask || {}, _mbt = s.mistakesByTask || {};
-            const _tm = [['task1','⏳'],['task3','🔗'],['task4','📍'],['task5','👤'],['task7','🎨']];
-            const solvedRow = _tm.map(([t,e]) => `<span>${e}<b>${_sbt[t]||0}</b></span>`).join('');
-            const mistRow = _tm.map(([t,e]) => `<span>${e}<b style="color:${(_mbt[t]||0)>0?'var(--c-danger)':'var(--c-muted-3)'}">${_mbt[t]||0}</b></span>`).join('');
-            const tgId = String(s.tgId || s.knownTgId || '');
-
-            return `<div class="tc-card">
-                <div class="tc-head tc-sep" style="border-top:0;border-bottom:1px solid var(--c-border)">
-                    <div class="tc-ident">
-                        <div class="tc-avatar" style="background:hsl(${hue},58%,46%)">${initial}${medal ? `<span class="medal">${medal}</span>` : ''}</div>
-                        <div style="min-width:0">
-                            <div class="tc-name">${dispName}</div>
-                            <div class="tc-meta">
-                                <span>#${idx + 1}</span>
-                                <span class="id">🆔 ${esc(s.tgId || s.knownTgId || s.canonicalId || s.uid || '—')}</span>
-                                ${s.classCode ? `<span>класс ${esc(s.classCode)}</span>` : ''}
-                                <span>${s.lastActiveStr}</span>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="tc-badges">${hwBadge}${spBadge}${hwTimingBadge}${atRiskBadge}${todayBadge}</div>
-                </div>
-                <div class="tc-kpis tc-sep" style="border-top:0;border-bottom:1px solid var(--c-border)">
-                    <div class="tc-kpi"><span class="k">Решено</span><span class="v">${s.totalSolved||0}</span></div>
-                    <div class="tc-kpi"><span class="k">Баллы</span><span class="v">${s.egePoints||0}</span></div>
-                    <div class="tc-kpi"><span class="k">Выучено</span><span class="v">${s.learnedCount}</span></div>
-                    <div class="tc-kpi"><span class="k">Стрик</span><span class="v">${s.streak}</span></div>
-                    <div class="tc-kpi"><span class="k">Точность</span><span class="v ${accCls}">${accStr}</span></div>
-                </div>
-                <div class="tc-split" style="border-bottom:1px solid var(--c-border)">
-                    <div>
-                        <div class="tc-sub">Решено по заданиям</div>
-                        <div class="tc-tasks">${solvedRow}</div>
-                    </div>
-                    <div>
-                        <div class="tc-sub">Ошибки сейчас (${s.mistakeTotal||0})</div>
-                        <div class="tc-tasks">${mistRow}</div>
-                    </div>
-                </div>
-                <div class="tc-split" style="border-bottom:1px solid var(--c-border)">
-                    <div>
-                        <div class="tc-sub">Активность 7 дней</div>
-                        <div style="display:flex;align-items:flex-end;gap:2px;height:40px">${renderMiniBar(s.last7)}</div>
-                    </div>
-                    <div>
-                        <div class="tc-sub">Точность по эпохам</div>
-                        ${renderEraRows(s.eraData) || '<div class="tc-sub" style="margin:0">Нет данных</div>'}
-                        ${weakBlock}
-                    </div>
-                </div>
-                <div style="padding:10px 0;border-bottom:1px solid var(--c-border)">
-                    <div class="tc-sub">Подневная статистика</div>
-                    ${renderDailyDetail(s.last7)}
-                </div>
-                <div class="tc-foot">
-                    <span>⏱ В игре: <b>${timeStr}</b></span>
-                    <span>📝 Попыток: <b>${s.totalAttempts||0}</b></span>
-                    <span>✅ Верных: <b>${s.totalCorrect||0}</b></span>
-                </div>
-                <div class="tc-actions" style="border-top:1px solid var(--c-border)">
-                    ${/^\d{5,}$/.test(tgId) ? `<button class="tc-btn" onclick="window.open('tg://user?id=${tgId}')" title="Написать ученику в Telegram">✈️</button>` : ''}
-                    <button class="tc-btn is-primary is-grow" onclick="window.promptAssignHw('${safeUid}','${safeName}')">📝 Выдать ДЗ</button>
-                    <button class="tc-btn" onclick="window.openStudentAssignmentsList('${safeUid}','${safeName}')" title="Выданные ДЗ ученика и отмена">📋</button>
-                    <button class="tc-btn is-grow" onclick="window.downloadStudentPDF('${safeUid}')">📄 Отчёт</button>
-                    <button class="tc-btn" onclick="window.selectStudentForMerge('${safeUid}','${safeName}')" data-student-uid="${safeUid}" title="Объединить с другим аккаунтом">🔀</button>
-                </div>
-            </div>`;
-        }
+        // Список учеников, карточку ученика, контроль ДЗ и аналитику группы рисует
+        // teacher-cabinet.js (редизайн 01.10.2026). Здесь остаются данные и PDF.
+        window._studentMistakeLines = m => studentMistakeReportLines(m);
+        window._teacherContacts = code => vpsApiFetch('/api/v1/teacher/contacts?classCode=' + encodeURIComponent(code));
 
         window._cachedStudents = [];
-
-        window._teacherHwFilter = window._teacherHwFilter || 'problem';
-        function renderTeacherHwControl(students) {
-            const cont = document.getElementById('teacher-hw-control');
-            if (!cont) return;
-            const esc = t => String(t || '').replace(/[<>&"]/g, c => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;', '"': '&quot;' }[c]));
-            const js = t => String(t || '')
-                .replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]))
-                .replace(/\\/g, '\\\\')
-                .replace(/'/g, "\\'");
-            const rows = (students || []).filter(s => (s.hwStatus && s.hwStatus !== 'none') || (s.hwRemaining || 0) > 0 || (s.hwTotalAssignments || 0) > 0);
-            if (!rows.length) {
-                cont.classList.remove('hidden');
-                const hasStudents = Array.isArray(students) && students.length > 0;
-                cont.innerHTML = `
-                  <div class="bg-white dark:bg-[#1e1e1e] border border-rose-200 dark:border-rose-900/40 rounded-xl overflow-hidden shadow-sm">
-                    <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;padding:11px 12px">
-                        <div>
-                            <div class="text-gray-900 dark:text-gray-100" style="font-size:13px;font-weight:900">Контроль ДЗ</div>
-                            <div style="font-size:10px;color:#64748b;font-weight:700;margin-top:1px">${hasStudents ? 'У загруженных учеников сейчас нет выданных ДЗ' : 'Загрузите учеников класса, чтобы увидеть выполнение ДЗ'}</div>
-                        </div>
-                        <button onclick="window.openClassAssignmentsList&&window.openClassAssignmentsList()" style="background:#fff1f2;color:#be123c;border:1px solid #fecdd3;border-radius:10px;padding:8px 10px;font-size:10px;font-weight:900;cursor:pointer;white-space:nowrap">список ДЗ</button>
-                    </div>
-                  </div>`;
-                return;
-            }
-            cont.classList.remove('hidden');
-
-            const meta = {
-                overdue: { title: 'Просрочили', short: 'просрочено', icon: '🔴', color: '#dc2626', bg: '#fef2f2', border: '#fecaca' },
-                pending: { title: 'Не приняли', short: 'не принято', icon: '🟠', color: '#d97706', bg: '#fffbeb', border: '#fde68a' },
-                active:  { title: 'В работе', short: 'в работе', icon: '🔵', color: '#2563eb', bg: '#eff6ff', border: '#bfdbfe' },
-                done:    { title: 'Сдали', short: 'сдано', icon: '🟢', color: '#059669', bg: '#ecfdf5', border: '#bbf7d0' },
-                none:    { title: 'Без ДЗ', short: 'без ДЗ', icon: '⚪', color: '#64748b', bg: '#f8fafc', border: '#e2e8f0' }
-            };
-            const rank = s => ({ overdue: 0, pending: 1, active: 2, done: 3, none: 4 }[s.hwStatus] ?? 4);
-            const byStatus = key => rows.filter(s => (s.hwStatus || 'none') === key).length;
-            const problemCount = byStatus('overdue') + byStatus('pending') + byStatus('active');
-            const filter = window._teacherHwFilter || 'problem';
-            const btn = (key, label, count, color) => {
-                const active = filter === key;
-                return `<button onclick="window.setTeacherHwFilter('${key}')" style="border:1px solid ${active ? color : 'rgba(148,163,184,.35)'};background:${active ? color : 'rgba(255,255,255,.72)'};color:${active ? '#fff' : '#475569'};border-radius:10px;padding:8px 7px;text-align:center;cursor:pointer;min-width:0">
-                    <div style="font-size:16px;font-weight:900;line-height:1">${count}</div>
-                    <div style="font-size:8px;font-weight:900;text-transform:uppercase;letter-spacing:.04em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${label}</div>
-                </button>`;
-            };
-            let shown = rows;
-            if (filter === 'problem') shown = rows.filter(s => ['overdue', 'pending', 'active'].includes(s.hwStatus));
-            else if (filter !== 'all') shown = rows.filter(s => (s.hwStatus || 'none') === filter);
-            shown = shown.sort((a, b) =>
-                rank(a) - rank(b) ||
-                (b.hwRemaining || 0) - (a.hwRemaining || 0) ||
-                ((a.hwDeadline ? Date.parse(a.hwDeadline) : Infinity) - (b.hwDeadline ? Date.parse(b.hwDeadline) : Infinity)) ||
-                String(a.name || '').localeCompare(String(b.name || ''), 'ru')
-            ).slice(0, 18);
-
-            const rowHtml = shown.length ? shown.map(s => {
-                const m = meta[s.hwStatus] || meta.none;
-                const pct = s.hwStatus === 'done' ? 100 : (s.hwProgressPct || 0);
-                const safeUid = js(s.uid);
-                const safeName = js(s.name || 'Ученик');
-                const deadline = s.hwDeadline ? 'до ' + new Date(s.hwDeadline + 'T00:00:00').toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' }) : 'без срока';
-                const rest = (s.hwRemaining || 0) > 0 ? `осталось ${s.hwRemaining}` : 'готово';
-                const note = s.hwStatus === 'pending' ? 'задание ещё не открыл'
-                    : (s.hwStatus === 'active' && !(s.hwStartedAssignments || 0) ? 'ещё не начал'
-                    : (s.hwStatus === 'done' ? `${s.hwDoneAssignments || 1} ДЗ сдано` : `${s.hwOpenAssignments || 1} ДЗ открыто`));
-                return `<div style="display:flex;align-items:center;gap:9px;padding:9px 0;border-top:1px solid rgba(226,232,240,.8)">
-                    <div style="width:34px;height:34px;border-radius:10px;background:${m.bg};border:1px solid ${m.border};display:flex;align-items:center;justify-content:center;flex-shrink:0">${m.icon}</div>
-                    <div style="flex:1;min-width:0">
-                        <div style="display:flex;align-items:center;gap:6px;min-width:0">
-                            <div class="text-gray-900 dark:text-gray-200" style="font-size:12px;font-weight:900;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(s.name || 'Без имени')}</div>
-                            <span style="font-size:9px;font-weight:900;color:${m.color};background:${m.bg};border:1px solid ${m.border};border-radius:999px;padding:2px 6px;white-space:nowrap">${m.short}</span>
-                            ${s.classCode ? `<span style="font-size:9px;font-weight:800;color:#94a3b8;white-space:nowrap">·&nbsp;${esc(s.classCode)}</span>` : ''}
-                        </div>
-                        <div style="display:flex;align-items:center;gap:7px;margin-top:5px">
-                            <div style="flex:1;height:6px;background:#e5e7eb;border-radius:999px;overflow:hidden"><div style="height:100%;width:${pct}%;background:${m.color};border-radius:999px"></div></div>
-                            <span style="font-size:10px;font-weight:900;color:${m.color};min-width:34px;text-align:right">${pct}%</span>
-                        </div>
-                        <div style="font-size:9px;color:#64748b;font-weight:700;margin-top:3px">${rest} · ${deadline} · ${note}</div>
-                    </div>
-                    <button onclick="window.openStudentAssignmentsList&&window.openStudentAssignmentsList('${safeUid}','${safeName}')" style="flex-shrink:0;background:#eef2ff;color:#4338ca;border:none;border-radius:10px;padding:8px 9px;font-size:10px;font-weight:900;cursor:pointer">ДЗ</button>
-                </div>`;
-            }).join('') : `<div style="padding:12px 0;text-align:center;font-size:11px;font-weight:800;color:#059669;border-top:1px solid rgba(226,232,240,.8)">По выбранному фильтру пусто</div>`;
-
-            // «Сдача по заданиям»: по каждому выданному ДЗ — сколько получивших его сдали
-            const asgMap = {};
-            rows.forEach(s => (s.hwPerAssignment || []).forEach(p => {
-                const key = p.id || p.title || '?';
-                const rec = asgMap[key] || (asgMap[key] = { title: p.title || 'Задание', deadline: null, assignedAt: 0, done: 0, total: 0 });
-                rec.total++;
-                if (p.state === 'done') rec.done++;
-                if ((p.assignedAt || 0) > rec.assignedAt) rec.assignedAt = p.assignedAt || 0;
-                if (p.deadline && (!rec.deadline || p.deadline > rec.deadline)) rec.deadline = p.deadline;
-            }));
-            const asgList = Object.values(asgMap).sort((a, b) => (b.assignedAt || 0) - (a.assignedAt || 0)).slice(0, 5);
-            const asgHtml = asgList.length ? `<div style="padding:2px 12px 6px;border-bottom:1px solid rgba(226,232,240,.6)">
-                <div style="font-size:10px;color:#94a3b8;font-weight:900;text-transform:uppercase;letter-spacing:.06em;margin:2px 0 6px">Сдача по заданиям</div>
-                ${asgList.map(r => {
-                    const pct = r.total ? Math.round(r.done / r.total * 100) : 0;
-                    const col = pct >= 80 ? '#059669' : pct >= 40 ? '#d97706' : '#dc2626';
-                    const dl = r.deadline ? ' · до ' + new Date(r.deadline + 'T00:00:00').toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' }) : '';
-                    return `<div style="margin-bottom:7px">
-                        <div style="display:flex;justify-content:space-between;align-items:baseline;gap:8px;font-size:10px;font-weight:800">
-                            <span class="text-slate-800 dark:text-gray-300" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0">${esc(r.title)}</span>
-                            <span style="color:${col};white-space:nowrap;flex-shrink:0">сдали ${r.done}/${r.total}${dl}</span>
-                        </div>
-                        <div style="height:5px;background:#e5e7eb;border-radius:999px;overflow:hidden;margin-top:3px"><div style="height:100%;width:${pct}%;background:${col};border-radius:999px"></div></div>
-                    </div>`;
-                }).join('')}
-            </div>` : '';
-
-            const titleMap = { problem: 'Кому нужно внимание', overdue: 'Просрочили', pending: 'Не приняли задание', active: 'В работе', done: 'Сдали', all: 'Все с ДЗ' };
-            cont.innerHTML = `
-              <div class="bg-white dark:bg-[#1e1e1e] border border-rose-200 dark:border-rose-900/40 rounded-xl overflow-hidden shadow-sm">
-                <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;padding:11px 12px;border-bottom:1px solid rgba(254,205,211,.75)">
-                    <div>
-                        <div class="text-gray-900 dark:text-gray-100" style="font-size:13px;font-weight:900">Контроль ДЗ</div>
-                        <div style="font-size:10px;color:#64748b;font-weight:700;margin-top:1px">быстро видно, кто сдал, кто завис и кто просрочил</div>
-                    </div>
-                    <button onclick="var s=document.getElementById('teacher-sort-select');if(s){s.value='homework';window.sortAndRenderStudents&&window.sortAndRenderStudents();}" style="background:#fff1f2;color:#be123c;border:1px solid #fecdd3;border-radius:10px;padding:8px 10px;font-size:10px;font-weight:900;cursor:pointer;white-space:nowrap">долги ↑</button>
-                </div>
-                <div style="display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:6px;padding:10px 10px 8px">
-                    ${btn('problem', 'надо проверить', problemCount, '#be123c')}
-                    ${btn('overdue', 'просрочили', byStatus('overdue'), meta.overdue.color)}
-                    ${btn('pending', 'не приняли', byStatus('pending'), meta.pending.color)}
-                    ${btn('active', 'в работе', byStatus('active'), meta.active.color)}
-                    ${btn('done', 'сдали', byStatus('done'), meta.done.color)}
-                </div>
-                ${asgHtml}
-                <div style="padding:0 12px 10px">
-                    <div style="display:flex;align-items:center;justify-content:space-between;margin:2px 0 5px">
-                        <div style="font-size:10px;color:#94a3b8;font-weight:900;text-transform:uppercase;letter-spacing:.06em">${titleMap[filter] || 'ДЗ'}</div>
-                        <button onclick="window.setTeacherHwFilter('all')" style="background:none;border:none;color:#64748b;font-size:10px;font-weight:900;cursor:pointer">показать все</button>
-                    </div>
-                    ${rowHtml}
-                </div>
-              </div>`;
-        }
-        window.renderTeacherHwControl = renderTeacherHwControl;
-        window.setTeacherHwFilter = function(filter) {
-            window._teacherHwFilter = filter || 'problem';
-            renderTeacherHwControl(window._cachedStudents || []);
-        };
-
-        // Сводная аналитика по всему классу/курсу
-        function renderClassAnalytics(students) {
-            const cont = document.getElementById('teacher-class-analytics');
-            if (!cont) return;
-            if (!students || !students.length) { cont.innerHTML = '<p style="font-size:10px;color:#94a3b8;text-align:center;padding:6px 0">Нет данных</p>'; return; }
-
-            const solved = { task1:0, task3:0, task4:0, task5:0, task7:0 };
-            const mistByTask = { task1:0, task3:0, task4:0, task5:0, task7:0 };
-            const eraAgg = {};
-            const mistByKey = {};
-            let hwDone = 0, hwAssigned = 0, accNumer = 0, accDenom = 0;
-            let hwOnTimeSum = 0, hwLateSum = 0;
-            const debtors = []; // не сдавшие ДЗ
-            const nowTs = Date.now();
-            const isOverdue = dl => dl ? (new Date(dl + 'T23:59:59').getTime() < nowTs) : false;
-
-            students.forEach(s => {
-                TEXT_TASK_KEYS.forEach(t => { solved[t] += (s.solvedByTask?.[t]||0); mistByTask[t] += (s.mistakesByTask?.[t]||0); });
-                if (s.totalAttempts) { accNumer += s.totalCorrect||0; accDenom += s.totalAttempts||0; }
-                Object.entries(s.eraData||{}).forEach(([k,e]) => { if (e && e.total) { (eraAgg[k] = eraAgg[k]||{name:e.name,c:0,t:0}); eraAgg[k].c += e.correct||0; eraAgg[k].t += e.total||0; } });
-                (s.mistakeList||[]).forEach(m => { const key = m.task+'|'+m.label; (mistByKey[key] = mistByKey[key]||{count:0,task:m.task,label:m.label}); mistByKey[key].count++; });
-                if ((s.hwTotalAssignments || 0) > 0) { hwAssigned++; if (s.hwStatus === 'done') hwDone++; }
-                hwOnTimeSum += (s.hwOnTimeTotal||0); hwLateSum += (s.hwLateTotal||0);
-                if ((s.hwRemaining||0) > 0) debtors.push({ name: s.name || 'Без имени', remaining: s.hwRemaining, deadline: s.hwDeadline, overdue: isOverdue(s.hwDeadline) });
-            });
-            const hwTimingTotal = hwOnTimeSum + hwLateSum;
-            const hwOnTimePct = hwTimingTotal ? Math.round(hwOnTimeSum / hwTimingTotal * 100) : null;
-            debtors.sort((a,b) => (b.overdue?1:0) - (a.overdue?1:0) || b.remaining - a.remaining);
-
-            const classAcc = accDenom >= 10 ? Math.round(accNumer/accDenom*100) : null;
-            const topMistakes = Object.values(mistByKey).sort((a,b)=>b.count-a.count).slice(0,10);
-            const em = TEXT_TASK_EMOJI;
-            const esc = t => String(t||'').replace(/[<>&]/g, c => ({'<':'&lt;','>':'&gt;','&':'&amp;'}[c]));
-
-            const solvedHtml = TEXT_TASK_KEYS.map(t =>
-                `<div style="text-align:center"><div style="font-size:15px">${em[t]}</div><div style="font-size:13px;font-weight:900;color:var(--c-brand)">${solved[t]}</div><div style="font-size:8px;color:${mistByTask[t]>0?'var(--c-danger)':'#94a3b8'}">−${mistByTask[t]}</div></div>`).join('');
-
-            const eraHtml = ['early','18th','19th','20th'].filter(k=>eraAgg[k]).map(k => {
-                const e = eraAgg[k], pc = Math.round(e.c/e.t*100), col = pc>=80?'var(--c-success)':pc>=60?'var(--c-warn)':'var(--c-danger-soft)';
-                return `<div style="display:flex;align-items:center;gap:6px;font-size:10px;margin-bottom:3px"><span style="min-width:72px;color:#64748b;font-weight:700">${esc(e.name)}</span><div style="flex:1;height:5px;background:#f1f5f9;border-radius:3px;overflow:hidden"><div style="height:100%;width:${pc}%;background:${col}"></div></div><span style="min-width:34px;text-align:right;font-weight:700;color:${col}">${pc}%</span></div>`;
-            }).join('');
-
-            const mistHtml = topMistakes.length ? topMistakes.map((m,i) =>
-                `<div style="display:flex;align-items:center;gap:6px;font-size:10px;padding:2px 0"><span style="color:#cbd5e1;min-width:14px">${i+1}.</span><span>${em[m.task]||''}</span><span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" class="text-slate-800 dark:text-gray-300" title="${esc(m.label)}">${esc(m.label)}</span><span style="font-weight:900;color:var(--c-danger);min-width:54px;text-align:right">${m.count} уч.</span></div>`).join('')
-                : '<p style="font-size:10px;color:var(--c-success);font-weight:700;padding:4px 0">Активных ошибок нет 🎉</p>';
-
-            // ── Прогресс выучивания: сколько фактов из общего пула выучил каждый ученик ──
-            let totalPool = 0;
-            if (typeof TASK_CONFIG !== 'undefined') {
-                TEXT_TASK_KEYS.forEach(tk => {
-                    const cfg = TASK_CONFIG[tk];
-                    if (cfg && cfg.data) {
-                        const seen = new Set();
-                        (cfg.data() || []).forEach(f => { try { seen.add(cfg.keyFn(f)); } catch(e){} });
-                        totalPool += seen.size;
-                    }
-                });
-            }
-            const learnRows = students.map(s => ({ name: s.name || 'Без имени', learned: Math.min(s.learnedCount || 0, totalPool || (s.learnedCount||0)) }))
-                                      .sort((a,b) => b.learned - a.learned);
-            const avgLearned = learnRows.length ? Math.round(learnRows.reduce((x,r)=>x+r.learned,0)/learnRows.length) : 0;
-            const avgPct = totalPool ? Math.round(avgLearned/totalPool*100) : 0;
-            const learnColor = pc => pc>=66?'var(--c-success)':pc>=33?'var(--c-warn)':'var(--c-danger-soft)';
-            const learnHtml = (totalPool && learnRows.length) ? learnRows.map(r => {
-                const pc = Math.round(r.learned/totalPool*100), col = learnColor(pc);
-                return `<div style="display:flex;align-items:center;gap:6px;font-size:10px;margin-bottom:3px"><span style="min-width:84px;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" class="text-slate-800 dark:text-gray-300" title="${esc(r.name)}">${esc(r.name)}</span><div style="flex:1;height:6px;background:#f1f5f9;border-radius:3px;overflow:hidden"><div style="height:100%;width:${pc}%;background:${col}"></div></div><span style="min-width:70px;text-align:right;font-weight:700;color:${col}">${r.learned}<span style="color:#cbd5e1;font-weight:400">/${totalPool}</span> · ${pc}%</span></div>`;
-            }).join('') : '<p style="font-size:10px;color:#94a3b8">Нет данных</p>';
-
-            cont.innerHTML = `
-              <div style="font-size:9px;color:#94a3b8;font-weight:700;text-transform:uppercase;margin:2px 0 4px">Решено по заданиям (− активные ошибки)</div>
-              <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:6px;margin-bottom:8px">${solvedHtml}</div>
-              ${(classAcc!==null || hwAssigned) ? `<div style="font-size:10px;color:#64748b;font-weight:700;margin-bottom:6px">${classAcc!==null?`Средняя точность класса: <b style="color:${classAcc>=80?'var(--c-success)':classAcc>=60?'var(--c-warn)':'var(--c-danger-soft)'}">${classAcc}%</b>`:''}${hwAssigned?`${classAcc!==null?' · ':''}ДЗ сдали: <b style="color:#16a34a">${hwDone}/${hwAssigned}</b>`:''}</div>`:''}
-              ${hwTimingTotal ? `<div style="font-size:10px;color:#64748b;font-weight:700;margin-bottom:6px">⏱ Сдают вовремя: <b style="color:${hwOnTimePct>=80?'var(--c-success)':hwOnTimePct>=50?'var(--c-warn)':'var(--c-danger-soft)'}">${hwOnTimePct}%</b> <span style="color:#94a3b8;font-weight:400">(вовремя ${hwOnTimeSum} · с опозданием ${hwLateSum})</span></div>`:''}
-              <div style="font-size:9px;color:#94a3b8;font-weight:700;text-transform:uppercase;margin:8px 0 4px">Точность класса по эпохам</div>
-              ${eraHtml || '<p style="font-size:10px;color:#94a3b8">Нет данных</p>'}
-              <div style="font-size:9px;color:#94a3b8;font-weight:700;text-transform:uppercase;margin:10px 0 4px">📚 Выучено фактов${totalPool?` · в среднем ${avgLearned}/${totalPool} (${avgPct}%)`:''}</div>
-              ${learnHtml}
-              <div style="font-size:9px;color:#94a3b8;font-weight:700;text-transform:uppercase;margin:10px 0 4px">🔥 Где класс чаще ошибается</div>
-              ${mistHtml}
-              <div style="font-size:9px;color:#94a3b8;font-weight:700;text-transform:uppercase;margin:10px 0 4px">📋 Не сдали ДЗ${debtors.length?` (${debtors.length})`:''}</div>
-              ${debtors.length ? debtors.map(d =>
-                `<div style="display:flex;align-items:center;gap:6px;font-size:10px;padding:2px 0"><span>${d.overdue?'🔴':'🟠'}</span><span style="flex:1;color:#334155;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" class="dark:text-gray-300">${esc(d.name)}</span><span style="font-weight:700;color:${d.overdue?'var(--c-danger)':'#ea580c'};min-width:120px;text-align:right">${d.remaining} стр.${d.overdue?' · просрочено':(d.deadline?' · до '+new Date(d.deadline+'T00:00:00').toLocaleDateString('ru-RU',{day:'numeric',month:'short'}):'')}</span></div>`
-              ).join('') : '<p style="font-size:10px;color:var(--c-success);font-weight:700;padding:4px 0">Все сдали ДЗ ✅</p>'}`;
-        }
-        window.renderClassAnalytics = renderClassAnalytics;
 
         // PDF-сводка по всему классу
         window.downloadClassReportPDF = async function() {
@@ -2320,62 +1943,8 @@
             showToast('📄','PDF-сводка скачана!','bg-blue-500','border-blue-700');
         };
 
-        // Сегменты учеников: быстрые срезы списка (риск / долги ДЗ / новички / топ недели)
-        const _SEGMENT_FILTERS = {
-            risk: s => s.atRisk,                                   // 3+ дня не заходил
-            debt: s => (s.hwRemaining || 0) > 0,                   // есть невыполненное ДЗ
-            new:  s => (s.totalSolved || 0) < 10,                  // только начали (<10 строк)
-        };
-        window._teacherSegment = window._teacherSegment || 'all';
-        window.setTeacherSegment = function(seg) {
-            window._teacherSegment = seg || 'all';
-            // Раньше состояние переключалось девятью Tailwind-классами руками.
-            // Теперь один aria-pressed: и вид, и доступность из одного источника.
-            document.querySelectorAll('#teacher-segments button[data-seg]').forEach(b => {
-                b.setAttribute('aria-pressed', String(b.dataset.seg === window._teacherSegment));
-            });
-            window.sortAndRenderStudents();
-        };
-        function _updateSegmentCounts(students) {
-            const set = (seg, n) => {
-                const el = document.querySelector(`#teacher-segments [data-segcnt="${seg}"]`);
-                if (el) el.textContent = n ? `· ${n}` : '';
-            };
-            set('all', (students || []).length);
-            for (const seg in _SEGMENT_FILTERS) set(seg, (students || []).filter(_SEGMENT_FILTERS[seg]).length);
-        }
-
-        window.sortAndRenderStudents = function() {
-            const st = window._cachedStudents;
-            if (!st || !st.length) return;
-            const q = (document.getElementById('teacher-student-search')?.value || '').trim().toLowerCase();
-            let pool = !q ? st : st.filter(s =>
-                String(s.name || '').toLowerCase().includes(q) ||
-                String(s.tgId || s.knownTgId || s.uid || '').toLowerCase().includes(q) ||
-                String(s.classCode || '').toLowerCase().includes(q));
-            const seg = window._teacherSegment || 'all';
-            if (_SEGMENT_FILTERS[seg]) pool = pool.filter(_SEGMENT_FILTERS[seg]);
-            else if (seg === 'top') pool = [...pool].sort((a, b) => (b.wEgePoints || 0) - (a.wEgePoints || 0) || (b.wScore || 0) - (a.wScore || 0)).slice(0, 10);
-            const sort = document.getElementById('teacher-sort-select')?.value || 'total';
-            const sorted = [...pool].sort((a, b) => {
-                if (sort === 'weekly')    return (b.wScore||0)       - (a.wScore||0);
-                if (sort === 'streak')    return (b.streak||0)       - (a.streak||0);
-                if (sort === 'learned')   return (b.learnedCount||0) - (a.learnedCount||0);
-                if (sort === 'accuracy')  return (b.accuracy||0)     - (a.accuracy||0);
-                if (sort === 'homework') {
-                    const rank = x => ({ overdue: 0, pending: 1, active: 2, done: 3, none: 4 }[x.hwStatus] ?? 4);
-                    return rank(a) - rank(b)
-                        || (b.hwRemaining || 0) - (a.hwRemaining || 0)
-                        || ((a.hwDeadline ? Date.parse(a.hwDeadline) : Infinity) - (b.hwDeadline ? Date.parse(b.hwDeadline) : Infinity));
-                }
-                if (sort === 'lastActive') return (b.lastActive||0)  - (a.lastActive||0);
-                return (b.totalSolved||0) - (a.totalSolved||0);
-            });
-            const cont = document.getElementById('teacher-class-stats');
-            if (cont) cont.innerHTML = sorted.length
-                ? sorted.map((s, i) => renderStudentCard(s, i)).join('')
-                : '<p class="text-center py-4 text-xs font-bold text-gray-500">В этом срезе никого нет — сними фильтр или поменяй запрос</p>';
-        };
+        // Старые имена оставлены: их зовут композер ДЗ и выпуск из группы.
+        window.sortAndRenderStudents = function() { if (window.TeacherCabinet) window.TeacherCabinet.sync(window._cachedStudents || []); };
 
         function studentMistakeReportLines(m) {
             const f = m.fact || {};
@@ -2701,10 +2270,9 @@
             }
             const mySeq = ++_loadSeq;
             const tc  = document.getElementById('teacher-class-code-input').value.trim();
-            const cont  = document.getElementById('teacher-class-stats');
-            const wCont = document.getElementById('weekly-class-stats');
-            cont.innerHTML = '<p class="text-center py-4 text-xs font-bold text-gray-500">Загрузка...</p>';
-            if (wCont) wCont.innerHTML = '<p class="text-center py-4 text-xs font-bold text-gray-500">Загрузка...</p>';
+            const cab = window.TeacherCabinet || null;
+            if (cab) cab.loading(tc);
+            let classUpto = 0;
 
             try {
                 // Кабинет считает «за неделю» по той же границе, что и топ учеников,
@@ -2776,6 +2344,7 @@
                         const cd = cs.exists() ? cs.data() : {};
                         const inp = document.getElementById('teacher-current-upto');
                         if (inp) inp.value = cd.currentUpto || '';
+                        classUpto = Number(cd.currentUpto) || 0;
                         window._teacherRevoked = new Set(Array.isArray(cd.revokedAssignments) ? cd.revokedAssignments : []);
                         window._teacherSweepTs = Number(cd.revokeBefore) || 0;
                     } catch (e) { console.warn('[Teacher] класс-док не прочитан:', e); }
@@ -2799,6 +2368,7 @@
                             const j = await _readPrivateBlob(s.uid);
                             if (j) s.fullStateJson = j;
                         }));
+                        if (cab && mySeq === _loadSeq) cab.progress(Math.min(st.length, i + BLOB_CONC), st.length);
                     }
                 }
                 if (mySeq !== _loadSeq) return;
@@ -2806,10 +2376,6 @@
                 const enriched = st.map(s => computeStudentData(s, monStr));
                 enriched.sort((a,b) => (b.totalSolved||0) - (a.totalSolved||0));
                 window._cachedStudents = enriched;
-                renderTeacherHwControl(enriched);
-                renderClassAnalytics(enriched);
-                _updateSegmentCounts(enriched);
-
                 // Прозрачность фильтра: показываем, какой запрос реально выполнен, и сколько в выборке
                 // ЧУЖИХ кодов класса. Если при включённом «только мой класс» число большое — это не баг
                 // фильтра, а признак того, что все регистрируются с одним общим кодом.
@@ -2817,69 +2383,18 @@
                 enriched.forEach(s => { const c = (s.classCode || '—'); byCls[c] = (byCls[c] || 0) + 1; });
                 console.log('[Teacher] запрос:', (filterClass && tc) ? `класс "${tc}"` : 'общий (все классы)',
                     '· получено:', enriched.length, '· по кодам:', JSON.stringify(byCls));
-                const modeEl = document.getElementById('teacher-filter-mode-note');
-                if (modeEl) {
-                    const foreign = enriched.length - (byCls[tc] || 0);
-                    modeEl.textContent = (filterClass && tc)
-                        ? `показан класс ${tc}` + (foreign > 0 ? ` · ⚠️ чужих кодов: ${foreign}` : '')
-                        : `показаны все классы (${Object.keys(byCls).length} кодов)` + (tc ? ` · с кодом ${tc}: ${byCls[tc] || 0}` : '');
-                    modeEl.classList.remove('hidden');
-                }
-
-                // Сводка
-                const summaryEl = document.getElementById('teacher-class-summary');
-                if (enriched.length && summaryEl) {
-                    summaryEl.classList.remove('hidden');
-                    document.getElementById('summary-count').textContent  = enriched.length;
-                    document.getElementById('summary-avg').textContent    = Math.round(enriched.reduce((s,x)=>s+(x.totalSolved||0),0)/enriched.length);
-                    document.getElementById('summary-active').textContent = enriched.filter(x=>x.isToday).length;
-                    document.getElementById('summary-atrisk').textContent = enriched.filter(x=>x.atRisk).length;
-                }
-
-                if (enriched.length === 0) {
-                    cont.innerHTML = '<p class="text-center py-4 text-xs font-bold text-gray-500">Ученики не найдены</p>';
-                } else {
-                    window.sortAndRenderStudents();
-                }
-
-                // Топ недели — сортируем по ЕГЭ-баллам (новый показатель), если нет — по строкам
-                if (wCont) {
-                    const weeklySt = [...enriched]
-                        .sort((a,b) => (b.wEgePoints||0) - (a.wEgePoints||0) || (b.wScore||0) - (a.wScore||0))
-                        .filter(s => (s.wEgePoints||0) > 0 || (s.wScore||0) > 0);
-                    let wHt = weeklySt.length
-                        ? weeklySt.map((s,idx) => `<div class="bg-white dark:bg-[#1e1e1e] rounded-2xl p-3 shadow-sm border border-gray-100 dark:border-[#2c2c2c] flex justify-between items-center mb-2">
-                            <div class="flex items-center gap-3">
-                              <span class="text-2xl font-black">${idx===0?'🥇':idx===1?'🥈':idx===2?'🥉':`<span class="text-gray-400 w-6 inline-block text-center text-lg">${idx+1}</span>`}</span>
-                              <span class="font-black text-sm dark:text-gray-200">${String(s.name || 'Без имени').replace(/[<>&]/g, c => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;' }[c]))}</span>
-                            </div>
-                            <div class="flex items-center gap-2">
-                              ${s.wEgePoints > 0 ? `<span class="text-sm font-black text-yellow-600 dark:text-yellow-400 bg-yellow-50 dark:bg-yellow-900/20 px-2 py-1 rounded-lg">⭐ ${s.wEgePoints}б</span>` : ''}
-                              <span class="text-xs font-bold text-gray-400">${s.wScore} стр.</span>
-                            </div>
-                          </div>`).join('')
-                        : '<p class="text-center py-4 text-xs font-bold text-gray-500">На этой неделе пока нет активности</p>';
-                    wCont.innerHTML = wHt;
-                }
+                const foreign = enriched.length - (byCls[tc] || 0);
+                const note = (filterClass && tc)
+                    ? (foreign > 0 ? `⚠️ чужих кодов в выборке: ${foreign}` : '')
+                    : `все классы: ${enriched.length} учеников, ${Object.keys(byCls).length} кодов`;
+                if (cab) cab.setData(enriched, { code: tc, upto: classUpto, note: isGlobalAdmin ? note : '' });
             } catch(e) {
                 console.error(e);
                 // 429 — это не «офлайн», а сгоревший минутный лимит запросов: говорим честно.
                 const tooMany = !!e && (e.status === 429 || e.code === 'rate_limited');
-                cont.innerHTML = tooMany
-                    ? '<p class="text-rose-500 text-xs font-bold text-center py-4">Слишком много запросов подряд — подожди минуту и обнови кабинет</p>'
-                    : '<p class="text-rose-500 text-xs font-bold text-center py-4">Нет подключения к серверу (Офлайн)</p>';
-                const hwCtrl = document.getElementById('teacher-hw-control');
-                if (hwCtrl) {
-                    hwCtrl.classList.remove('hidden');
-                    hwCtrl.innerHTML = `
-                      <div class="bg-white dark:bg-[#1e1e1e] border border-rose-200 dark:border-rose-900/40 rounded-xl overflow-hidden shadow-sm">
-                        <div style="padding:11px 12px">
-                            <div class="text-gray-900 dark:text-gray-100" style="font-size:13px;font-weight:900">Контроль ДЗ</div>
-                            <div style="font-size:10px;color:#be123c;font-weight:800;margin-top:2px">Не удалось загрузить данные учеников. Проверьте подключение и обновите кабинет.</div>
-                        </div>
-                      </div>`;
-                }
-                if (wCont) wCont.innerHTML = '';
+                if (mySeq === _loadSeq && cab) cab.error(tooMany
+                    ? 'Слишком много запросов подряд — подождите минуту и обновите кабинет'
+                    : 'Нет связи с сервером — проверьте интернет и обновите кабинет');
             }
         };
 
@@ -3431,6 +2946,7 @@
                 await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'classes', code),
                     { currentUpto: valid ? y : 0, currentPeriod: era, updatedAt: Date.now() }, { merge: true });
                 showToast('🗓', valid ? `Граница потока: до ${y} г. — ученики повторяют всё до неё` : 'Граница потока снята', 'bg-indigo-500', 'border-indigo-700');
+                if (window.TeacherCabinet) window.TeacherCabinet.setUpto(valid ? y : 0);
             } catch (e) { console.error('saveClassCurrentUpto error:', e); showToast('❌', 'Не удалось сохранить границу', 'bg-rose-500', 'border-rose-700'); }
         };
 
@@ -3657,7 +3173,6 @@
                 // убираем из локального кэша кабинета, чтобы карточки исчезли без перезагрузки
                 if (Array.isArray(window._cachedStudents)) {
                     window._cachedStudents = window._cachedStudents.filter(s => !ids.has(s.uid));
-                    if (window.renderTeacherHwControl) window.renderTeacherHwControl(window._cachedStudents);
                     if (window.sortAndRenderStudents) window.sortAndRenderStudents();
                 }
                 return true;
@@ -4263,6 +3778,7 @@
                 window._teacherOrgId = null;
                 window._teacherGroups = [];
                 window._teacherRoleVerifiedAt = 0;
+                if (window.TeacherCabinet) window.TeacherCabinet.hideEntry();
                 return Promise.resolve(false);
             }
 
@@ -4334,13 +3850,12 @@
                 }
                 if (window.populateTeacherGroups) window.populateTeacherGroups();
                 _dropOwnClassHomework(groups);
-                if (!sessionStorage.getItem('teacher_hint_shown')) {
-                    sessionStorage.setItem('teacher_hint_shown', '1');
-                    setTimeout(() => showToast('👨‍🏫', 'Кабинет учителя доступен: двойной клик по логотипу', 'bg-purple-600', 'border-purple-800'), 2500);
-                }
+                // Вход в кабинет — строка в лобби (раньше тост «двойной клик по логотипу»).
+                if (window.TeacherCabinet) window.TeacherCabinet.showEntry(groups);
                 return true;
             } catch (e) {
                 if (window.populateTeacherGroups) window.populateTeacherGroups();
+                if (window.TeacherCabinet) window.TeacherCabinet.hideEntry();
                 const modal = document.getElementById('teacher-modal');
                 if (modal && !modal.classList.contains('hidden') && typeof hideModal === 'function') hideModal('teacher-modal');
                 if (e && e.status !== 401 && e.status !== 403) console.warn('[teacherRole]', e && e.message);

@@ -3588,8 +3588,17 @@ window.openTeacherModal = async function() {
     }
     let tc = localStorage.getItem('teacher_class_code'); if(!tc) { tc = Math.floor(1000 + Math.random() * 9000).toString(); localStorage.setItem('teacher_class_code', tc); } $('teacher-class-code-input').value = tc;
     if (window.populateTeacherGroups) window.populateTeacherGroups();
-    switchTeacherTab('stats'); showModal('teacher-modal');
+    showModal('teacher-modal');
+    if (window.TeacherCabinet) window.TeacherCabinet.tab('students');
+    if (window.loadClassProgress) window.loadClassProgress();
     return true;
+};
+// Закрыть кабинет. Если открыта карточка ученика, сначала снимаем её запись
+// «назад» (иначе в стеке осталась бы лишняя и съела бы следующее нажатие назад).
+window.closeTeacherModal = function() {
+    const cab = window.TeacherCabinet;
+    if (cab && cab._state.openUid) { cab._state.openUid = null; window.popBackHandler('tcab:student'); setTimeout(() => hideModal('teacher-modal'), 120); return; }
+    hideModal('teacher-modal');
 };
 
 // Заполнить дропдаун группами учителя (window._teacherGroups = [{code,name}]).
@@ -3601,6 +3610,7 @@ window.populateTeacherGroups = function() {
     const filterLabel = $('teacher-filter-class') ? $('teacher-filter-class').closest('label') : null;
     const groups = Array.isArray(window._teacherGroups) ? window._teacherGroups : [];
     const isAdmin = !!window._isGlobalAdmin;
+    const dedup = $('dedup-btn'); if (dedup) dedup.classList.toggle('hidden', !isAdmin);
 
     if (groups.length) {
         const cur = localStorage.getItem('teacher_class_code') || groups[0].code;
@@ -3680,7 +3690,7 @@ window.copyClassInvite = function() {
     const fallback = () => { const ta = document.createElement('textarea'); ta.value = link; ta.style.position = 'fixed'; document.body.appendChild(ta); ta.select(); document.execCommand('copy'); document.body.removeChild(ta); done(); };
     if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(link).then(done).catch(fallback); else fallback();
 };
-window.switchTeacherTab = function(tab) { ['stats', 'weekly'].forEach(t => { $(`teacher-tab-${t}`).classList.add('hidden'); $(`teacher-tab-${t}`).classList.remove('flex'); $(`tab-btn-${t}`).className = "py-3 text-[9px] sm:text-xs font-black border-b-2 border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400 transition-colors uppercase tracking-wide leading-none truncate"; }); $(`teacher-tab-${tab}`).classList.remove('hidden'); $(`teacher-tab-${tab}`).classList.add('flex'); $(`tab-btn-${tab}`).className = "py-3 text-[9px] sm:text-xs font-black border-b-2 border-examBlue text-examBlue dark:text-blue-400 transition-colors uppercase tracking-wide leading-none truncate"; if (window.loadClassProgress) window.loadClassProgress(); };
+window.switchTeacherTab = function(tab) { if (window.TeacherCabinet) window.TeacherCabinet.tab(tab === 'weekly' ? 'class' : tab === 'stats' ? 'students' : tab); };
 
 window.openGlobalTopModal = function() {
     showModal('global-top-modal');

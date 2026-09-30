@@ -1,17 +1,17 @@
 {
-  "updated": "2026-09-27",
+  "updated": "2026-09-30",
   "counts": {
-    "radius": 132,
-    "font-too-small": 204,
+    "radius": 127,
+    "font-too-small": 168,
     "shadow-literal": 68
   },
   "byFile": {
     "radius": {
-      "cloud-sync.js": 14,
+      "cloud-sync.js": 6,
       "cram.html": 7,
       "exam-mode.js": 15,
       "index.html": 2,
-      "styles.css": 14,
+      "styles.css": 17,
       "swipe-mode.js": 9,
       "tools-and-docs/pet-gallery.html": 1,
       "tools-and-docs/tools/fipi-parser/constructor.html": 8,
@@ -22,14 +22,14 @@
       "vov-mode.js": 4
     },
     "font-too-small": {
-      "cloud-sync.js": 41,
+      "cloud-sync.js": 9,
       "exam-mode.js": 7,
-      "index.html": 90,
+      "index.html": 88,
       "match-mode.js": 3,
       "modes.js": 10,
       "styles.css": 11,
       "swipe-mode.js": 2,
-      "ui.js": 34,
+      "ui.js": 32,
       "visual-trainer.js": 2,
       "vov-mode.js": 4
     },

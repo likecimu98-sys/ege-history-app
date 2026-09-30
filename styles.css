@@ -1889,137 +1889,313 @@ button.stat-card:hover { border-color: var(--c-border-2); }
 }
 
 /* ══════════════════════════════════════════════════════════════════════════
-   КАБИНЕТ УЧИТЕЛЯ — карточка ученика
+   КАБИНЕТ УЧИТЕЛЯ (редизайн 01.10.2026, teacher-cabinet.js)
    ──────────────────────────────────────────────────────────────────────────
-   Замер до правки (одна карточка): 11 подписей кеглем 8px, 5 цифр в KPI-ряду
-   пятью разными цветами, 5 кнопок пятью пастельными фонами, разделители
-   захардкожены как #f1f5f9 БЕЗ тёмного варианта — в тёмной теме карточка
-   расчерчена почти белыми линиями. Всё это инлайн-стилями в шаблоне строки.
-
-   Экран, где учитель ищет глазами отстающего, обязан быть спокойным: цвет
-   работает, только пока он редкий. Здесь цветом кодируются ровно две вещи —
-   точность (она и есть оценка) и статус-бейджи. Остальное — текст.
+   Было: лента карточек в экран высотой на каждого ученика — 28 учеников = 28
+   экранов, поиск под блоком ДЗ. Стало: строка на ученика, как в журнале;
+   карточка — по нажатию. Цвет кодирует только оценку (точность, статус ДЗ,
+   «молчит 3+ дня»); всё остальное — текст и серые полосы, один акцент brand.
+   На ПК — большая панель по центру, на телефоне — весь экран.
    ══════════════════════════════════════════════════════════════════════════ */
-.tc-card {
-    background: var(--c-card); border: 1px solid var(--c-border);
-    border-radius: var(--r-md); box-shadow: var(--e-1); padding: 14px;
+.tcab-overlay { background: var(--c-scrim); }
+.tcab {
+    --tc-good: var(--c-success-text); --tc-bad: #b91c1c; --tc-warn: #b45309; --tc-info: var(--c-brand-strong);
+    --tc-good-bg: #ecfdf5; --tc-bad-bg: #fef2f2; --tc-warn-bg: #fffbeb; --tc-info-bg: #eff6ff;
+    background: var(--c-bg); color: var(--c-text);
+    width: min(1080px, 100%); height: min(92vh, 100%);
+    display: flex; flex-direction: column; overflow: hidden;
+    border-radius: var(--r-md); box-shadow: var(--e-3);
+    font-size: var(--t-label); font-weight: 450;
 }
-.tc-sep { border-top: 1px solid var(--c-border); }
+.dark .tcab {
+    --tc-bad: #fca5a5; --tc-warn: #fcd34d; --tc-info: #93c5fd;
+    --tc-good-bg: rgba(16,185,129,.16); --tc-bad-bg: rgba(239,68,68,.16); --tc-warn-bg: rgba(245,158,11,.16); --tc-info-bg: rgba(59,130,246,.18);
+}
+@media (max-width: 719px) {
+    .tcab { width: 100%; height: 100%; border-radius: 0; box-shadow: none; }
+}
+.tcab svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; flex: 0 0 auto; }
 
-/* Шапка карточки. На телефоне бейджи и имя в одной строке не уживаются: бейджи
-   съедали половину ширины, и мета-строка рассыпалась по одному пункту на строку.
-   Поэтому по умолчанию два ряда, и только с 560px — в строку. */
-.tc-head { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 8px 10px; padding-bottom: 11px; }
-.tc-ident { display: flex; align-items: center; gap: 10px; flex: 1 1 100%; min-width: 0; }
-.tc-avatar {
-    position: relative; flex-shrink: 0;
-    width: 38px; height: 38px; border-radius: var(--r-sm);
-    display: flex; align-items: center; justify-content: center;
-    color: #fff; font-weight: 800; font-size: 16px;
+/* шапка */
+.tcab-top {
+    display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+    padding: 12px 16px; background: var(--c-card); border-bottom: 1px solid var(--c-border);
 }
-.tc-avatar .medal { position: absolute; bottom: -5px; right: -6px; font-size: 14px; }
-.tc-name { font-weight: 700; font-size: 14px; color: var(--c-text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.tc-meta { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 2px; font-size: var(--t-micro); font-weight: 500; color: var(--c-muted-2); }
-.tc-meta .id { font-family: ui-monospace, monospace; }
-.tc-badges { display: flex; gap: 4px; flex-wrap: wrap; flex: 1 1 100%; }
-@media (min-width: 560px) {
-    .tc-ident  { flex: 1 1 auto; }
-    .tc-badges { flex: 0 1 auto; justify-content: flex-end; max-width: 50%; }
+.tcab-title { font-size: var(--t-title); font-weight: 750; margin-right: 4px; }
+.tcab-spacer { flex: 1; }
+.tcab-field { display: inline-flex; align-items: center; gap: 6px; min-height: 36px; }
+.tcab-field .lb { font-size: var(--t-caption); color: var(--c-muted-2); font-weight: 500; }
+.tcab-field select, .tcab-field input[type="text"], .tcab-field input[type="number"], .tcab-tools select {
+    height: 36px; padding: 0 10px; border-radius: var(--r-sm); border: 1px solid var(--c-border-2);
+    background: var(--c-card); color: var(--c-text); font-size: var(--t-label); font-weight: 650; max-width: 260px;
 }
-.tc-badge {
-    font-size: var(--t-micro); font-weight: 600; white-space: nowrap;
-    padding: 3px 7px; border-radius: var(--r-sm);
-    background: var(--c-card-2); color: var(--c-muted-2); border: 1px solid var(--c-border);
+.tcab-field.is-check { gap: 8px; font-size: var(--t-caption); font-weight: 600; cursor: pointer; }
+.tcab-field.hidden, .tcab-menu .hidden { display: none; }
+.tcab-btn {
+    display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+    height: 36px; padding: 0 14px; border-radius: var(--r-sm);
+    border: 1px solid var(--c-border-2); background: var(--c-card); color: var(--c-text);
+    font-size: var(--t-label); font-weight: 650; white-space: nowrap; cursor: pointer; list-style: none;
 }
-.tc-badge.is-danger { background: #fef2f2; color: #b91c1c; border-color: #fecaca; }
-.tc-badge.is-warn   { background: #fff7ed; color: #9a3412; border-color: #fed7aa; }
-.tc-badge.is-ok     { background: #f0fdf4; color: #15803d; border-color: #bbf7d0; }
-.tc-badge.is-info   { background: #eff6ff; color: #1d4ed8; border-color: #bfdbfe; }
-.dark .tc-badge.is-danger { background: rgba(190,18,60,.18); color: #fda4af; border-color: rgba(190,18,60,.4); }
-.dark .tc-badge.is-warn   { background: rgba(234,88,12,.18); color: #fdba74; border-color: rgba(234,88,12,.4); }
-.dark .tc-badge.is-ok     { background: rgba(22,163,74,.18); color: #86efac; border-color: rgba(22,163,74,.4); }
-.dark .tc-badge.is-info   { background: rgba(37,99,235,.18); color: #93c5fd; border-color: rgba(37,99,235,.4); }
+.tcab-btn:hover { border-color: var(--c-muted); }
+.tcab-btn:active { transform: scale(.97); }
+.tcab-btn.is-primary { background: var(--c-brand); border-color: var(--c-brand); color: #fff; }
+.tcab-btn.is-primary:hover { background: var(--c-brand-strong); }
+.tcab-btn.is-ghost { border-color: transparent; background: transparent; }
+.tcab-close {
+    width: 36px; height: 36px; border-radius: var(--r-sm); border: 0; background: transparent;
+    font-size: 26px; line-height: 1; color: var(--c-muted-2); cursor: pointer;
+}
+.tcab-close:hover { background: var(--c-card-2); color: var(--c-text); }
+.tcab-sub {
+    display: flex; align-items: center; gap: 6px 14px; flex-wrap: wrap;
+    padding: 6px 16px; background: var(--c-card); border-bottom: 1px solid var(--c-border);
+}
+.tcab-subhint { font-size: var(--t-caption); color: var(--c-muted-2); }
+.tcab-subhint.hidden { display: none; }
+.tcab-sub .tcab-more { margin-left: auto; }
+.tcab-tabs { display: flex; gap: 22px; padding: 0 16px; background: var(--c-card); border-bottom: 1px solid var(--c-border); overflow-x: auto; }
+.tcab-tab {
+    padding: 11px 0; border: 0; background: none; border-bottom: 2px solid transparent;
+    font-size: var(--t-label); font-weight: 650; color: var(--c-muted-2); cursor: pointer; white-space: nowrap;
+}
+.tcab-tab[aria-selected="true"] { color: var(--c-text); border-bottom-color: var(--c-brand); }
+.tcab-body { flex: 1; overflow-y: auto; padding: 14px 16px 28px; -webkit-overflow-scrolling: touch; }
+.tcab-body > * + * { margin-top: 12px; }
 
-.tc-kpis { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 6px; padding: 11px 0; text-align: center; }
-.tc-kpi > .k { display: block; font-size: var(--t-micro); font-weight: 500; color: var(--c-muted-2); }
-.tc-kpi > .v { display: block; margin-top: 2px; font-size: 15px; font-weight: 700; color: var(--c-text); font-variant-numeric: tabular-nums; }
-/* Точность — единственная цифра, которую красим: это оценка, а не счётчик. */
-.tc-kpi > .v.acc-hi  { color: var(--c-success-text); }
-.tc-kpi > .v.acc-mid { color: #b45309; }
-.tc-kpi > .v.acc-lo  { color: var(--c-danger); }
-.dark .tc-kpi > .v.acc-mid { color: #fbbf24; }
+/* меню «⋯» */
+.tcab-more { position: relative; }
+.tcab-more > summary::-webkit-details-marker { display: none; }
+.tcab-menu {
+    position: absolute; right: 0; top: calc(100% + 4px); z-index: 5; min-width: 250px;
+    background: var(--c-card); border: 1px solid var(--c-border); border-radius: var(--r-sm);
+    box-shadow: var(--e-2); padding: 4px; display: flex; flex-direction: column;
+}
+.tcab-menu > button {
+    text-align: left; padding: 10px 12px; border: 0; background: none; border-radius: var(--r-sm);
+    font-size: var(--t-label); font-weight: 600; color: var(--c-text); cursor: pointer;
+}
+.tcab-menu > button:hover { background: var(--c-card-2); }
+.tcab-dedup-log:empty { display: none; }
+.tcab-dedup-log { max-height: 180px; overflow: auto; font-size: var(--t-micro); padding: 6px 10px; color: var(--c-muted-2); }
 
-/* Две колонки только когда они реально помещаются. На 375px пять пар «эмодзи +
-   число» в половине ширины переносились в кашу. */
-.tc-split { display: grid; grid-template-columns: 1fr; gap: 12px; padding: 10px 0; }
-@media (min-width: 560px) { .tc-split { grid-template-columns: 1fr 1fr; gap: 14px; } }
-.tc-sub { font-size: var(--t-micro); font-weight: 600; color: var(--c-muted-2); margin-bottom: 5px; }
-.tc-tasks { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: var(--t-label); font-weight: 600; color: var(--c-text); font-variant-numeric: tabular-nums; }
-.tc-tasks b { font-weight: 700; margin-left: 2px; }
-.tc-foot { display: flex; gap: 10px; flex-wrap: wrap; padding: 9px 0 4px; font-size: var(--t-caption); font-weight: 500; color: var(--c-muted-2); }
-.tc-foot b { color: var(--c-text); font-weight: 700; font-variant-numeric: tabular-nums; }
+/* сводные числа */
+.tcab-metrics { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
+.tcab-metrics.is-5 { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+.tcab-m {
+    background: var(--c-card); border: 1px solid var(--c-border); border-radius: var(--r-sm);
+    padding: 10px 12px; text-align: left; color: var(--c-text); min-width: 0; font: inherit;
+}
+button.tcab-m { cursor: pointer; }
+button.tcab-m:hover { border-color: var(--c-border-2); }
+.tcab-m b { display: block; font-size: var(--t-display); font-weight: 750; font-variant-numeric: tabular-nums; line-height: 1.15; }
+.tcab-m b small { font-size: var(--t-label); font-weight: 600; color: var(--c-muted-2); }
+.tcab-m span { display: block; font-size: var(--t-caption); color: var(--c-muted-2); margin-top: 2px; }
+.tcab-m.is-alert { border-color: var(--tc-bad); }
+.tcab-m.is-alert b { color: var(--tc-bad); }
+.tcab-m.is-skel { height: 64px; }
+.tcab-loading { font-size: var(--t-caption); color: var(--c-muted-2); }
+.tcab .is-skel { background: linear-gradient(90deg, var(--c-card) 0%, var(--c-card-2) 50%, var(--c-card) 100%); background-size: 200% 100%; animation: tcab-skel 1.2s linear infinite; }
+@keyframes tcab-skel { to { background-position: -200% 0; } }
 
-/* wrap обязателен: пять кнопок в 375px не помещаются, и последняя («объединить
-   аккаунты») уезжала за правый край карточки. */
-.tc-actions { display: flex; flex-wrap: wrap; gap: 6px; padding-top: 9px; }
-.tc-btn {
-    display: flex; align-items: center; justify-content: center; gap: 5px;
-    min-height: 38px; padding: 0 12px;
-    border-radius: var(--r-sm); border: 1px solid var(--c-border);
-    background: var(--c-card-2); color: var(--c-text-soft);
-    font-size: var(--t-label); font-weight: 600; white-space: nowrap;
-    cursor: pointer; transition: border-color .15s, transform .1s;
+/* поиск, сортировка, срезы */
+.tcab-tools { display: flex; gap: 8px; }
+.tcab-search {
+    flex: 1; min-width: 0; display: flex; align-items: center; gap: 8px; height: 40px; padding: 0 12px;
+    background: var(--c-card); border: 1px solid var(--c-border-2); border-radius: var(--r-sm); color: var(--c-muted-2);
 }
-.tc-btn:active { transform: scale(.96); }
-.tc-btn:hover { border-color: var(--c-border-2); }
-.tc-btn.is-grow { flex: 1; }
-/* Ровно одно основное действие на карточку — выдать домашку. */
-.tc-btn.is-primary { background: var(--c-brand); border-color: var(--c-brand); color: #fff; }
+.tcab-search:focus-within { border-color: var(--c-brand); }
+.tcab-search input { flex: 1; min-width: 0; border: 0; outline: 0; background: none; color: var(--c-text); font-size: var(--t-body); height: 100%; }
+.tcab-tools select { height: 40px; flex: 0 1 auto; min-width: 0; max-width: 45%; }
+.tcab-chips { display: flex; gap: 6px; flex-wrap: wrap; }
+.tcab-chip {
+    height: 32px; padding: 0 12px; border-radius: var(--r-full); border: 1px solid var(--c-border-2);
+    background: var(--c-card); color: var(--c-text-soft); font-size: var(--t-caption); font-weight: 600; cursor: pointer;
+}
+.tcab-chip span { color: var(--c-muted-2); font-variant-numeric: tabular-nums; margin-left: 2px; }
+.tcab-chip[aria-pressed="true"] { background: var(--c-text); border-color: var(--c-text); color: var(--c-card); }
+.tcab-chip[aria-pressed="true"] span { color: inherit; opacity: .7; }
 
-/* Панель управления классом. Была сплошным синим градиентом: белые подписи на
-   белом-с-прозрачностью давали плейсхолдеры «код»/«год» контрастом ниже 2:1. */
-.tc-toolbar {
-    background: var(--c-card); border: 1px solid var(--c-border);
-    border-radius: var(--r-md); box-shadow: var(--e-1); padding: 10px;
+/* список учеников */
+.tcab-list { background: var(--c-card); border: 1px solid var(--c-border); border-radius: var(--r-md); overflow: hidden; }
+.tcab-row {
+    display: grid; grid-template-columns: minmax(0, 2.2fr) 88px 60px 76px minmax(0, 1.6fr) 132px;
+    gap: 12px; align-items: center; width: 100%; padding: 9px 14px; min-height: 56px;
+    border: 0; border-top: 1px solid var(--c-border); background: none; color: var(--c-text);
+    text-align: left; font: inherit; cursor: pointer;
 }
-.tc-field {
-    display: flex; align-items: center; gap: 8px;
-    background: var(--c-card-2); border: 1px solid var(--c-border);
-    border-radius: var(--r-sm); padding: 7px 11px; min-height: 40px;
+.tcab-row:first-child { border-top: 0; }
+.tcab-row:hover { background: var(--c-card-2); }
+.tcab-row.is-head { min-height: 0; padding-top: 8px; padding-bottom: 8px; cursor: default; font-size: var(--t-micro); font-weight: 600; color: var(--c-muted-2); background: var(--c-card-2); }
+.tcab-row.is-skel { min-height: 56px; }
+.tcab-row .c-num { text-align: right; font-variant-numeric: tabular-nums; }
+.tcab-row .c-num b { font-weight: 700; }
+.tcab .c-who { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.tcab .c-name { min-width: 0; display: flex; flex-direction: column; }
+.tcab .c-name b { font-weight: 650; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tcab .c-name i { font-style: normal; font-size: var(--t-caption); color: var(--c-muted-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tcab .c-name i.is-bad { color: var(--tc-bad); }
+.tcab .c-hw { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; min-width: 0; }
+.tcab-hwsub { font-size: var(--t-micro); font-weight: 500; color: var(--c-muted-2); white-space: nowrap; }
+.tcab-av {
+    --h: 210; width: 34px; height: 34px; border-radius: var(--r-full); flex: 0 0 auto;
+    display: inline-flex; align-items: center; justify-content: center;
+    background: hsl(var(--h) 70% 92%); color: hsl(var(--h) 55% 30%); font-size: var(--t-caption); font-weight: 750;
 }
-.tc-field > .lb { font-size: var(--t-caption); font-weight: 600; color: var(--c-muted-2); flex-shrink: 0; }
-.tc-field input[type="text"], .tc-field input[type="number"], .tc-field select {
-    background: transparent; outline: none; border: 0;
-    font-size: var(--t-label); font-weight: 700; color: var(--c-text);
+.dark .tcab-av { background: hsl(var(--h) 35% 24%); color: hsl(var(--h) 70% 82%); }
+.tcab-av.is-big { width: 48px; height: 48px; font-size: var(--t-body); }
+.tcab-bars { display: flex; align-items: flex-end; gap: 3px; height: 26px; }
+.tcab-bars i { width: 8px; border-radius: 2px; background: var(--c-border); }
+.tcab-bars i.is-on { background: var(--c-muted); }
+.tcab-bars i.is-today { background: var(--c-brand); }
+.tcab-bars.is-wide { height: 64px; gap: 6px; }
+.tcab-bars.is-wide i { flex: 1; width: auto; border-radius: 3px; }
+.tcab-bars.is-wide i.is-on { background: var(--c-brand); opacity: .55; }
+.tcab-bars.is-wide i.is-today { opacity: 1; }
+.tcab-daylabels { display: flex; gap: 6px; margin-top: 4px; }
+.tcab-daylabels span { flex: 1; font-size: var(--t-micro); font-weight: 500; color: var(--c-muted-2); white-space: nowrap; }
+.tcab-path { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.tcab-path .t { font-size: var(--t-caption); color: var(--c-text-soft); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tcab-bar { display: block; height: 6px; background: var(--c-card-2); border-radius: var(--r-full); overflow: hidden; }
+.dark .tcab-bar { background: var(--c-border); }
+.tcab-bar > i { display: block; height: 100%; background: var(--c-brand); border-radius: var(--r-full); }
+.tcab-bar > i.is-good { background: var(--c-success); }
+.tcab-bar > i.is-bad { background: var(--c-danger); }
+.tcab-pill {
+    display: inline-flex; align-items: center; height: 22px; padding: 0 9px; border-radius: var(--r-full);
+    font-size: var(--t-micro); font-weight: 700; white-space: nowrap;
 }
-.tc-field input::placeholder { color: var(--c-muted-3); font-weight: 500; }
+.tcab-pill.is-good { background: var(--tc-good-bg); color: var(--tc-good); }
+.tcab-pill.is-bad { background: var(--tc-bad-bg); color: var(--tc-bad); }
+.tcab-pill.is-warn { background: var(--tc-warn-bg); color: var(--tc-warn); }
+.tcab-pill.is-info { background: var(--tc-info-bg); color: var(--tc-info); }
+.tcab-pill.is-mute { background: var(--c-card-2); color: var(--c-muted-2); }
+.tcab .c-num.is-good, .tcab b.is-good { color: var(--tc-good); }
+.tcab .c-num.is-bad, .tcab b.is-bad, .tcab td.is-bad, .tcab span.is-bad { color: var(--tc-bad); }
+.tcab td.is-good { color: var(--tc-good); }
+.tcab-mute { color: var(--c-muted-2); font-size: var(--t-caption); }
+.tcab-empty {
+    background: var(--c-card); border: 1px dashed var(--c-border-2); border-radius: var(--r-md);
+    padding: 28px 16px; text-align: center; color: var(--c-muted-2); font-size: var(--t-label); line-height: 1.5;
+}
+.tcab-list .tcab-empty { border: 0; border-top: 1px solid var(--c-border); border-radius: 0; }
+.tcab-empty b { display: block; color: var(--c-text); font-size: var(--t-body); margin-bottom: 4px; }
+.tcab-empty .tcab-btn { margin-top: 12px; }
+.tcab-empty.is-bad { color: var(--tc-bad); }
 
-/* Сегменты списка. Раньше лежали в overflow-x-auto и последний («Топ недели»)
-   уезжал за край — на телефоне о нём просто не знали. */
-.tc-segments { display: flex; flex-wrap: wrap; gap: 6px; }
-.tc-seg {
-    min-height: 34px; padding: 0 12px;
-    display: inline-flex; align-items: center; gap: 5px;
-    border-radius: var(--r-full); border: 1px solid var(--c-border);
-    background: var(--c-card); color: var(--c-muted-2);
-    font-size: var(--t-label); font-weight: 600; cursor: pointer;
-    transition: background .15s, color .15s, border-color .15s;
+/* карточка ученика */
+.tcab-back {
+    display: inline-flex; align-items: center; gap: 4px; height: 32px; padding: 0 8px 0 2px; border: 0; background: none;
+    color: var(--c-brand-strong); font-size: var(--t-label); font-weight: 650; cursor: pointer;
 }
-.tc-seg[aria-pressed="true"] { background: var(--c-brand); border-color: var(--c-brand); color: #fff; }
+.dark .tcab-back, .dark .tcab-link { color: #93c5fd; }
+.tcab-sv-head { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.tcab-sv-head > .c-name { flex: 1; min-width: 180px; }
+.tcab-sv-head > .c-name b { font-size: var(--t-title); font-weight: 750; white-space: normal; }
+.tcab-sv-head > .c-name i { white-space: normal; }
+.tcab-sv-actions { display: flex; gap: 6px; flex-wrap: wrap; }
+.tcab-sec { background: var(--c-card); border: 1px solid var(--c-border); border-radius: var(--r-md); padding: 12px 14px; }
+.tcab-sec > h4 { font-size: var(--t-label); font-weight: 750; margin: 0 0 10px; }
+.tcab-sec > h4 span { font-weight: 500; font-size: var(--t-caption); color: var(--c-muted-2); margin-left: 6px; }
+.tcab-two { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 12px; align-items: start; }
+.tcab-two > div > * + * { margin-top: 12px; }
+.tcab-chapters { display: flex; gap: 3px; }
+.tcab-chapters i, .tcab-legend i { flex: 1; height: 16px; border-radius: 3px; background: var(--c-card-2); border: 1px solid var(--c-border); }
+.tcab-chapters i.is-done, .tcab-legend i.is-done { background: var(--c-brand); border-color: var(--c-brand); }
+.tcab-chapters i.is-cur, .tcab-legend i.is-cur { background: var(--tc-info-bg); border-color: var(--c-brand); }
+.tcab-chapters i.is-ahead { opacity: .45; }
+.tcab-legend { display: flex; gap: 14px; flex-wrap: wrap; margin-top: 8px; font-size: var(--t-micro); font-weight: 500; color: var(--c-muted-2); }
+.tcab-legend span { display: inline-flex; align-items: center; gap: 5px; }
+.tcab-legend i { flex: 0 0 auto; width: 12px; height: 12px; }
+.tcab-table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
+.tcab-table th { font-size: var(--t-micro); font-weight: 600; color: var(--c-muted-2); text-align: right; padding: 0 0 6px 8px; }
+.tcab-table td { padding: 7px 0 7px 8px; border-top: 1px solid var(--c-border); text-align: right; }
+.tcab-table td:first-child, .tcab-table th:first-child { text-align: left; padding-left: 0; }
+.tcab-era { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, 2fr) 44px; gap: 10px; align-items: center; padding: 5px 0; font-size: var(--t-caption); }
+.tcab-era > b { text-align: right; font-variant-numeric: tabular-nums; }
+.tcab-mistake { display: flex; gap: 10px; padding: 8px 0; border-top: 1px solid var(--c-border); font-size: var(--t-caption); }
+.tcab-sec > h4 + .tcab-mistake { border-top: 0; padding-top: 0; }
+.tcab-mistake b { display: block; font-weight: 650; color: var(--c-text); }
+.tcab-mistake i { display: block; font-style: normal; color: var(--tc-bad); margin-top: 2px; }
+.tcab-mistake i.is-mute { color: var(--c-muted-2); }
+.tcab-tag { flex: 0 0 auto; height: 22px; padding: 0 7px; border-radius: var(--r-sm); background: var(--c-card-2); color: var(--c-muted-2); font-size: var(--t-micro); font-weight: 700; display: inline-flex; align-items: center; }
+.tcab-link { border: 0; background: none; color: var(--c-brand-strong); font-weight: 650; padding: 8px 0 0; cursor: pointer; font-size: var(--t-caption); }
+.tcab-hwrow { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 8px 0; border-top: 1px solid var(--c-border); }
+.tcab-sec > h4 + .tcab-hwrow { border-top: 0; padding-top: 0; }
+.tcab-hwrow b { display: block; font-weight: 650; }
+.tcab-hwrow i { display: block; font-style: normal; font-size: var(--t-caption); color: var(--c-muted-2); }
+.tcab-kv { display: flex; gap: 16px; flex-wrap: wrap; font-size: var(--t-caption); color: var(--c-muted-2); }
+.tcab-kv b { color: var(--c-text); }
 
-/* Раскрывающиеся блоки: «нажми чтобы раскрыть» словами заменено на шеврон. */
-.tc-details { background: var(--c-card); border: 1px solid var(--c-border); border-radius: var(--r-md); overflow: hidden; }
-.tc-details > summary {
-    display: flex; align-items: center; gap: 8px;
-    padding: 11px 12px; cursor: pointer; list-style: none;
-    font-size: var(--t-label); font-weight: 650; color: var(--c-text);
+/* домашние задания */
+.tcab-bar-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.tcab-hwcard { border: 1px solid var(--c-border); border-radius: var(--r-sm); margin-top: 8px; overflow: hidden; }
+.tcab-sec > h4 + .tcab-hwcard { margin-top: 0; }
+.tcab-hwhead {
+    display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 6px 12px; width: 100%; padding: 10px 12px;
+    border: 0; background: none; text-align: left; color: var(--c-text); font: inherit; cursor: pointer;
 }
-.tc-details > summary::-webkit-details-marker { display: none; }
-.tc-details > summary::after {
-    content: '⌄'; margin-left: auto; font-size: 15px; line-height: 1;
-    color: var(--c-muted-2); transform: translateY(-2px); transition: transform .2s;
+.tcab-hwhead:hover { background: var(--c-card-2); }
+.tcab-hwhead .t b { display: block; font-weight: 650; }
+.tcab-hwhead .t i { display: block; font-style: normal; font-size: var(--t-caption); color: var(--c-muted-2); }
+.tcab-hwhead .n { font-size: var(--t-caption); color: var(--c-muted-2); white-space: nowrap; align-self: center; }
+.tcab-hwhead .n b { font-size: var(--t-body); color: var(--c-text); }
+.tcab-hwhead .tcab-bar { grid-column: 1 / -1; }
+.tcab-hwcard.is-open .tcab-people { border-top: 1px solid var(--c-border); padding: 6px 12px 8px; }
+.tcab-people { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 2px 12px; }
+.tcab-person {
+    display: flex; align-items: center; gap: 10px; padding: 6px 4px; border: 0; background: none; border-radius: var(--r-sm);
+    text-align: left; color: var(--c-text); font: inherit; cursor: pointer; min-width: 0; width: 100%;
 }
-.tc-details[open] > summary::after { transform: rotate(180deg) translateY(-1px); }
+.tcab-person:hover { background: var(--c-card-2); }
+.tcab-person > span:not(.tcab-av):not(.tcab-pill):not(.r):not(.n) { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.tcab-person b { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tcab-person i { font-style: normal; font-size: var(--t-caption); color: var(--c-muted-2); }
+.tcab-person .tcab-av { width: 28px; height: 28px; font-size: var(--t-micro); }
+.tcab-person .r { width: 20px; text-align: right; color: var(--c-muted-2); font-variant-numeric: tabular-nums; font-weight: 700; }
+.tcab-person .n { font-weight: 700; font-variant-numeric: tabular-nums; }
+
+/* путь группы */
+.tcab-ch { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 2fr) 64px 72px; gap: 10px; align-items: center; padding: 5px 0; font-size: var(--t-caption); }
+.tcab-ch .t { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tcab-ch .t b { color: var(--c-muted-2); font-weight: 600; }
+.tcab-ch .n { text-align: right; font-variant-numeric: tabular-nums; color: var(--c-muted-2); }
+.tcab-ch .h { font-weight: 700; color: var(--tc-info); }
+.tcab-ch.is-ahead { opacity: .5; }
+
+/* вход из лобби */
+.tcab-entry .ico svg { width: 20px; height: 20px; fill: none; stroke: var(--c-brand); stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; position: relative; }
+
+/* телефон: строка ученика складывается в две линии */
+@media (max-width: 719px) {
+    .tcab-top { position: relative; padding: 10px 52px 10px 12px; }
+    .tcab-title { width: 100%; }
+    .tcab-top .tcab-spacer { display: none; }
+    .tcab-top .tcab-close { position: absolute; right: 8px; top: 6px; }
+    .tcab-hide-xs { display: none; }
+    .tcab-sub, .tcab-tabs { padding-left: 12px; padding-right: 12px; }
+    .tcab-subhint { display: none; }
+    .tcab-body { padding: 12px 12px 28px; }
+    .tcab-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .tcab-metrics.is-5 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+    .tcab-m b { font-size: var(--t-title); }
+    .tcab-tools select { max-width: 42%; }
+    .tcab-row.is-head { display: none; }
+    .tcab-row {
+        grid-template-columns: minmax(0, 1fr) minmax(0, 150px); grid-template-areas: "who hw" "bars path";
+        gap: 6px 10px; padding: 10px 12px;
+    }
+    .tcab-row .c-who { grid-area: who; }
+    .tcab-row .c-hw { grid-area: hw; align-items: flex-end; }
+    .tcab-row .c-bars { grid-area: bars; }
+    .tcab-row .c-path { grid-area: path; min-width: 0; }
+    .tcab-row > .c-num { display: none; }
+    .tcab-two { grid-template-columns: minmax(0, 1fr); }
+    .tcab-ch { grid-template-columns: minmax(0, 1fr) 64px 64px; }
+    .tcab-ch .tcab-bar { display: none; }
+    .tcab-sv-actions { width: 100%; }
+    .tcab-sv-actions .tcab-btn.is-primary { flex: 1; }
+}
 
 /* ── Служебное ───────────────────────────────────────────────────────────── */
 /* Только для скринридера: сохраняем поля, которые читает/пишет старый JS
