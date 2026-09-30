@@ -71,36 +71,116 @@ html.dm-laser, html.dm-laser * { cursor: none !important; }
 
 /* ── Сцена для стрима (кнопка на панели, клавиша T или ?stream=1) ─────────────
    Задание — почти на весь экран, вместо затемнённого лобби фирменный фон,
-   сверху плашка «что это и где взять». Всё крупнее: Tailwind считает от rem,
-   поэтому достаточно поднять корневой кегль — перетаскивание не ломается
-   (в отличие от CSS zoom). */
+   сверху тонкая плашка «что это и где взять». Всё крупнее: Tailwind считает от
+   rem, поэтому достаточно поднять корневой кегль — перетаскивание не ломается
+   (в отличие от CSS zoom).
+   Фоны (30.09.2026, «современно, вау, но минималистично»): слой .dm-bg под
+   окном задания, четыре темы — переключает кнопка-палитра или клавиша B.
+     aurora   — почти чёрный, медленно плывущее северное сияние, точечная сетка;
+     graphite — графит, тонкая сетка и один луч света сверху;
+     paper    — светлая бумага, пастельный туман (для светлого стрима);
+     horizon  — чёрный, сетка-горизонт в перспективе и мягкое «солнце».
+   Поверх всех — лёгкое зерно, чтобы градиенты не шли полосами в видео. */
 html.dm-stage { font-size: 17px; }
 @media (min-width: 1500px) { html.dm-stage { font-size: 18.5px; } }
 html.dm-stage body.in-game #lobby-area.hidden { display: none; }
-html.dm-stage body.in-game::before {
-  background:
-    radial-gradient(900px 600px at 12% 8%, rgba(168, 85, 247, .38), transparent 62%),
-    radial-gradient(900px 620px at 92% 96%, rgba(56, 189, 248, .30), transparent 60%),
-    radial-gradient(700px 480px at 70% 20%, rgba(255, 59, 92, .18), transparent 60%),
-    linear-gradient(140deg, #0a0f24, #141a3d 55%, #1d1033);
-  -webkit-backdrop-filter: none; backdrop-filter: none;
-}
+html.dm-stage body.in-game::before { background: transparent; -webkit-backdrop-filter: none; backdrop-filter: none; }
 html.dm-stage body.in-game #game-container {
-  top: 62px; left: 84px; right: 22px; bottom: 18px; transform: none;
+  top: 64px; left: 84px; right: 24px; bottom: 20px; transform: none;
   width: auto; max-height: none; padding: 18px;
+  border-color: var(--dm-edge, rgba(255, 255, 255, .1));
 }
+
+.dm-bg { display: none; position: fixed; inset: 0; z-index: 60; overflow: hidden; pointer-events: none; background: var(--dm-base); }
+html.dm-stage body.in-game .dm-bg { display: block; }
+.dm-bg i { position: absolute; display: block; border-radius: 999px; filter: blur(90px); opacity: var(--dm-blob-o, .5); will-change: transform; }
+.dm-bg .b1 { width: 46vw; height: 46vw; left: -8vw; top: -14vw; background: var(--dm-c1); animation: dm-drift1 26s ease-in-out infinite alternate; }
+.dm-bg .b2 { width: 40vw; height: 40vw; right: -10vw; top: 10vh; background: var(--dm-c2); animation: dm-drift2 32s ease-in-out infinite alternate; }
+.dm-bg .b3 { width: 38vw; height: 38vw; left: 30vw; bottom: -18vw; background: var(--dm-c3); animation: dm-drift3 29s ease-in-out infinite alternate; }
+.dm-bg .grid { inset: 0; border-radius: 0; filter: none; opacity: 1; background: var(--dm-grid);
+  -webkit-mask: radial-gradient(ellipse 75% 70% at 50% 45%, #000 30%, transparent 85%); mask: radial-gradient(ellipse 75% 70% at 50% 45%, #000 30%, transparent 85%); }
+.dm-bg .grain { inset: -50%; border-radius: 0; filter: none; opacity: var(--dm-grain, .07);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  animation: dm-grain 1.2s steps(6) infinite; }
+.dm-bg .sun, .dm-bg .floor { display: none; }
+@keyframes dm-drift1 { to { transform: translate(14vw, 10vh) scale(1.15); } }
+@keyframes dm-drift2 { to { transform: translate(-16vw, 18vh) scale(.9); } }
+@keyframes dm-drift3 { to { transform: translate(-12vw, -14vh) scale(1.2); } }
+@keyframes dm-grain { 0% { transform: translate(0, 0); } 33% { transform: translate(-3%, 2%); } 66% { transform: translate(2%, -3%); } 100% { transform: translate(0, 0); } }
+
+/* Аврора: почти чёрный, фиолет–бирюза–роза, точки. */
+.dm-bg[data-theme="aurora"] { --dm-base: #07080d; --dm-c1: #6d28d9; --dm-c2: #0891b2; --dm-c3: #e11d48; --dm-blob-o: .42;
+  --dm-grid: radial-gradient(rgba(255, 255, 255, .09) 1px, transparent 1.4px) 0 0 / 26px 26px; }
+/* Графит: без цвета, тонкая сетка и луч сверху. */
+.dm-bg[data-theme="graphite"] { --dm-base: radial-gradient(120% 80% at 50% -10%, #2a2f3a 0%, #111318 45%, #0b0c10 100%); --dm-blob-o: 0;
+  --dm-grid: linear-gradient(rgba(255, 255, 255, .045) 1px, transparent 1px) 0 0 / 56px 56px, linear-gradient(90deg, rgba(255, 255, 255, .045) 1px, transparent 1px) 0 0 / 56px 56px; }
+/* Бумага: светлый пастельный туман. */
+.dm-bg[data-theme="paper"] { --dm-base: #f4f1ea; --dm-c1: #fbcfe8; --dm-c2: #bae6fd; --dm-c3: #fde68a; --dm-blob-o: .75; --dm-grain: .09;
+  --dm-grid: radial-gradient(rgba(15, 23, 42, .09) 1px, transparent 1.4px) 0 0 / 26px 26px; }
+/* Горизонт: сетка уходит в перспективу, мягкое солнце. */
+.dm-bg[data-theme="horizon"] { --dm-base: linear-gradient(180deg, #05040b 0%, #120a24 55%, #1b0d2e 100%); --dm-blob-o: 0; --dm-grid: none; }
+.dm-bg[data-theme="horizon"] .sun { display: block; left: 50%; top: 44%; width: 42vw; height: 42vw; margin-left: -21vw; margin-top: -21vw; filter: blur(2px); opacity: .9;
+  background: radial-gradient(circle, rgba(255, 110, 150, .55), rgba(168, 85, 247, .25) 42%, transparent 68%); animation: dm-pulse 7s ease-in-out infinite alternate; }
+.dm-bg[data-theme="horizon"] .floor { display: block; left: -50%; right: -50%; top: 58%; bottom: -30%; border-radius: 0; filter: none; opacity: 1;
+  background: linear-gradient(rgba(192, 132, 252, .35) 1.5px, transparent 1.5px) 0 0 / 100% 48px, linear-gradient(90deg, rgba(192, 132, 252, .35) 1.5px, transparent 1.5px) 0 0 / 64px 100%;
+  transform: perspective(420px) rotateX(62deg); transform-origin: 50% 0;
+  -webkit-mask: linear-gradient(transparent, #000 35%); mask: linear-gradient(transparent, #000 35%); animation: dm-floor 3.2s linear infinite; }
+@keyframes dm-pulse { to { transform: scale(1.06); opacity: 1; } }
+@keyframes dm-floor { to { background-position: 0 48px, 0 0; } }
+
+/* Плашка: тонко и чисто — метка, имя, раздел, адрес. Цвета — от темы. */
 .dm-brand { display: none; }
 html.dm-stage body.in-game .dm-brand {
-  display: flex; align-items: center; gap: 12px; position: fixed; z-index: 62; top: 14px; left: 84px; right: 22px; height: 36px;
-  color: #fff; font-weight: 900; pointer-events: none; white-space: nowrap;
+  display: flex; align-items: center; gap: 12px; position: fixed; z-index: 62; top: 16px; left: 86px; right: 26px; height: 32px;
+  color: var(--dm-ink, #fff); pointer-events: none; white-space: nowrap; font-family: Inter, system-ui, sans-serif;
 }
-.dm-brand-logo { font-size: 20px; letter-spacing: .02em; background: linear-gradient(90deg, #ffd23f, #ff3b5c 45%, #a855f7);
-  -webkit-background-clip: text; background-clip: text; color: transparent; filter: drop-shadow(0 2px 6px rgba(0, 0, 0, .35)); }
-.dm-brand-sub { font-size: 13px; font-weight: 700; color: #c7cbe6; }
-.dm-brand-mode { font-size: 12px; font-weight: 900; letter-spacing: .12em; text-transform: uppercase; color: #fff; padding: 5px 12px;
-  border-radius: 999px; background: rgba(255, 255, 255, .1); border: 1px solid rgba(255, 255, 255, .18); }
+html.dm-stage[data-dm-theme="paper"] body.in-game .dm-brand { --dm-ink: #111827; --dm-muted: #6b7280; --dm-glass: rgba(15, 23, 42, .06); --dm-line: rgba(15, 23, 42, .12); }
+.dm-brand-mark { width: 12px; height: 12px; border-radius: 999px; background: conic-gradient(from 200deg, #ff3b5c, #a855f7, #38bdf8, #ff3b5c);
+  filter: drop-shadow(0 0 8px rgba(168, 85, 247, .8)); }
+.dm-brand-logo { font-size: 16px; font-weight: 800; letter-spacing: -.01em; }
+.dm-brand-sub { font-size: 13px; font-weight: 500; color: var(--dm-muted, rgba(255, 255, 255, .55)); }
+.dm-brand-mode { font-size: 12px; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; color: var(--dm-muted, rgba(255, 255, 255, .6));
+  padding-left: 12px; border-left: 1px solid var(--dm-line, rgba(255, 255, 255, .16)); }
 .dm-brand-mode:empty { display: none; }
-.dm-brand-url { margin-left: auto; font-size: 15px; font-weight: 900; color: #fff; padding: 5px 14px; border-radius: 999px;
-  background: linear-gradient(135deg, #ff3b5c, #a855f7); }
+.dm-brand-url { margin-left: auto; font-size: 13px; font-weight: 600; letter-spacing: .02em; color: var(--dm-ink, #fff); padding: 6px 14px; border-radius: 999px;
+  background: var(--dm-glass, rgba(255, 255, 255, .07)); border: 1px solid var(--dm-line, rgba(255, 255, 255, .14)); backdrop-filter: blur(8px); }
 /* Строки таблицы на сцене повыше — на стриме таблица заполняет экран, а не жмётся кверху. */
 html.dm-stage body.in-game #task-table-body td { padding-top: .95rem; padding-bottom: .95rem; }
+@media (prefers-reduced-motion: reduce) { .dm-bg i { animation: none !important; } }
+
+/* ── Доводка фонов (30.09.2026): больше «воздуха», меньше пятен ───────────── */
+html.dm-stage body.in-game #game-container { top: 70px; left: max(86px, 4vw); right: 4vw; bottom: 4vh; }
+html.dm-stage body.in-game .dm-brand { left: max(88px, calc(4vw + 2px)); right: calc(4vw + 2px); }
+/* Аврора: свечение только сверху, внизу — чистый чёрный. */
+.dm-bg[data-theme="aurora"] { --dm-base: #05060a; --dm-blob-o: .34; }
+.dm-bg[data-theme="aurora"] i.b1 { width: 44vw; height: 26vw; left: -4vw; top: -14vw; filter: blur(110px); }
+.dm-bg[data-theme="aurora"] i.b2 { width: 38vw; height: 24vw; right: -6vw; top: -12vw; filter: blur(110px); }
+.dm-bg[data-theme="aurora"] i.b3 { width: 26vw; height: 16vw; left: 38vw; top: -10vw; bottom: auto; filter: blur(100px); opacity: .24; }
+/* Графит: прожектор сверху и тонкая цветная линия по краю — как у дорогих продуктовых сайтов. */
+.dm-bg[data-theme="graphite"] { --dm-grid: linear-gradient(rgba(255, 255, 255, .06) 1px, transparent 1px) 0 0 / 56px 56px, linear-gradient(90deg, rgba(255, 255, 255, .06) 1px, transparent 1px) 0 0 / 56px 56px; }
+.dm-bg[data-theme="graphite"] i.sun { display: block; left: 50%; top: -38vh; width: 96vw; height: 90vh; margin-left: -48vw; border-radius: 0; filter: none; opacity: 1;
+  background: radial-gradient(ellipse 50% 60% at 50% 0%, rgba(255, 255, 255, .13), transparent 70%); animation: none; }
+.dm-bg[data-theme="graphite"] i.floor { display: block; left: 18%; right: 18%; top: 0; height: 1px; border-radius: 0; filter: none; opacity: 1; transform: none; animation: none;
+  background: linear-gradient(90deg, transparent, rgba(168, 85, 247, .9), rgba(56, 189, 248, .9), transparent); -webkit-mask: none; mask: none; }
+/* Горизонт: чёткое ретро-солнце с прорезями, а не мутное пятно. */
+.dm-bg[data-theme="horizon"] i.sun { top: 30%; width: 30vw; height: 30vw; margin-left: -15vw; margin-top: -8vw; filter: drop-shadow(0 0 60px rgba(255, 59, 92, .55)); opacity: .9;
+  background: linear-gradient(180deg, #ffd23f 0%, #ff6a3d 45%, #ff3b5c 65%, #a855f7 100%);
+  -webkit-mask: linear-gradient(#000 52%, transparent 52% 55%, #000 55% 62%, transparent 62% 66%, #000 66% 73%, transparent 73% 78%, #000 78% 85%, transparent 85% 91%, #000 91%);
+  mask: linear-gradient(#000 52%, transparent 52% 55%, #000 55% 62%, transparent 62% 66%, #000 66% 73%, transparent 73% 78%, #000 78% 85%, transparent 85% 91%, #000 91%);
+  animation: dm-pulse 7s ease-in-out infinite alternate; }
+.dm-bg[data-theme="horizon"] i.grid { display: block; left: 0; right: 0; top: 58%; height: 2px; border-radius: 0; opacity: 1; -webkit-mask: none; mask: none;
+  background: linear-gradient(90deg, transparent, rgba(255, 110, 150, .85), transparent); filter: blur(1px); }
+/* Бумага: пастель тише и мельче — светлый «дорогой» фон, а не акварель. */
+.dm-bg[data-theme="paper"] { --dm-blob-o: .5; }
+.dm-bg[data-theme="paper"] i.b1 { width: 34vw; height: 24vw; left: -6vw; top: -10vw; }
+.dm-bg[data-theme="paper"] i.b2 { width: 30vw; height: 22vw; right: -6vw; top: auto; bottom: -8vw; }
+.dm-bg[data-theme="paper"] i.b3 { width: 24vw; height: 18vw; left: 42vw; top: -12vw; bottom: auto; }
+.dm-bg[data-theme="graphite"] { --dm-grid: linear-gradient(rgba(255, 255, 255, .085) 1px, transparent 1px) 0 0 / 56px 56px, linear-gradient(90deg, rgba(255, 255, 255, .085) 1px, transparent 1px) 0 0 / 56px 56px; }
+.dm-bg[data-theme="graphite"] i.sun { background: radial-gradient(ellipse 50% 60% at 50% 0%, rgba(190, 200, 255, .2), transparent 70%); }
+/* Окно задания — стекло: белые карточки таблицы парят над фоном, фон просвечивает
+   в пустых местах. Без этого большое окно закрывало фон целиком. */
+html.dm-stage body.in-game #game-container { background: rgba(12, 14, 24, .42); -webkit-backdrop-filter: blur(22px) saturate(1.35); backdrop-filter: blur(22px) saturate(1.35);
+  border: 1px solid rgba(255, 255, 255, .12); }
+html.dm-stage[data-dm-theme="paper"] body.in-game #game-container { background: rgba(255, 255, 255, .5); border-color: rgba(15, 23, 42, .1); }
+/* Карточка таблицы — по содержимому, а не до низа окна: иначе на сцене висит пустой белый хвост. */
+html.dm-stage body.in-game #classic-task-area { align-items: flex-start; }

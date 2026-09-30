@@ -26,4 +26,10 @@ assert.doesNotMatch(src, /if \(\/\^\[1-6\]\$\/\.test\(code\)\) \{/, 'голые 
 assert.match(src, /k === 'Escape'\) \{ eat\(\); toggle\(false\)/);
 assert.match(src, /function eat\(\) \{ e\.preventDefault\(\); e\.stopPropagation\(\); \}/);
 
+// Каждая функция объявлена ОДИН раз: 30.09.2026 правка скриптом задвоила ~300
+// строк модуля — работало (поздние объявления перекрывают ранние), но это мина.
+for (const fn of ['build', 'tick', 'paint', 'applyStage', 'toggle', 'key', 'makeAnchor']) {
+  const n = src.split('function ' + fn + '(').length - 1;
+  assert.strictEqual(n, 1, 'function ' + fn + ' объявлена ' + n + ' раз');
+}
 console.log('draw-mode.selftest: ok');
