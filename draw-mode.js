@@ -36,14 +36,13 @@
     { id: 'eraser', key: 'E', name: 'Ластик — стирает штрих целиком' }
   ];
 
-  var THEMES = [['aurora', 'Аврора'], ['graphite', 'Графит'], ['horizon', 'Горизонт'], ['paper', 'Бумага']];
-  var st = { on: false, tool: 'pen', color: COLORS[0], size: 1, stamp: 0, autoClear: true, stage: false, theme: 'aurora' };
+  var st = { on: false, tool: 'pen', color: COLORS[0], size: 1, stamp: 0, autoClear: true, stage: false };
   try {
     var saved = JSON.parse(localStorage.getItem('draw_mode_prefs') || 'null');
-    if (saved) { st.color = saved.color || st.color; st.size = saved.size != null ? saved.size : st.size; st.autoClear = saved.autoClear !== false; st.stage = !!saved.stage; if (saved.theme) st.theme = saved.theme; }
+    if (saved) { st.color = saved.color || st.color; st.size = saved.size != null ? saved.size : st.size; st.autoClear = saved.autoClear !== false; st.stage = !!saved.stage; }
   } catch (e) {}
   try { if (/[?&]stream=1(&|$)/.test(location.search)) st.stage = true; } catch (e) {}
-  function savePrefs() { try { localStorage.setItem('draw_mode_prefs', JSON.stringify({ color: st.color, size: st.size, autoClear: st.autoClear, stage: st.stage, theme: st.theme })); } catch (e) {} }
+  function savePrefs() { try { localStorage.setItem('draw_mode_prefs', JSON.stringify({ color: st.color, size: st.size, autoClear: st.autoClear, stage: st.stage })); } catch (e) {} }
 
   var strokes = [];          // готовое: {kind, color, w, anchor, pts[] | from,to | at, stamp, born}
   var cur = null;            // рисуемое сейчас
@@ -148,7 +147,6 @@
     eraser: '<path d="M3 16l9-9 7 7-6 6H7z"/><path d="M13 20h8" fill="none"/>',
     undo: '<path d="M9 7L4 12l5 5" fill="none" stroke-width="2.4"/><path d="M4 12h10a6 6 0 010 12" fill="none" stroke-width="2.4" transform="translate(0 -5)"/>',
     clear: '<path d="M6 7h12M9 7V4h6v3M8 7l1 13h6l1-13" fill="none" stroke-width="2"/>',
-    theme: '<path d="M12 3a9 9 0 100 18c1.2 0 1.6-1 1.1-1.9-.6-1-.2-2.1 1-2.1H17a4 4 0 004-4c0-5-4-10-9-10z" fill="none" stroke-width="2"/><circle cx="7.5" cy="11" r="1.4"/><circle cx="10" cy="7" r="1.4"/><circle cx="14.5" cy="7" r="1.4"/>',
     stage: '<rect x="3" y="5" width="18" height="12" rx="2" fill="none" stroke-width="2"/><path d="M9 21h6M12 17v4" fill="none" stroke-width="2"/><circle cx="12" cy="11" r="2.6"/>',
     close: '<path d="M6 6l12 12M18 6L6 18" fill="none" stroke-width="2.6"/>'
   };
@@ -179,7 +177,7 @@
       '<span class="dm-brand-mode" id="dm-brand-mode"></span><span class="dm-brand-url">reshay-istoriyu.ru</span>');
     document.body.appendChild(brand);
     // Фон сцены — отдельный слой под окном задания (стили и темы — в draw-mode.css).
-    bg = el('div', 'dm-bg', '<i class="b1"></i><i class="b2"></i><i class="b3"></i><i class="sun"></i><i class="floor"></i><i class="grid"></i><i class="grain"></i>');
+    bg = el('div', 'dm-bg', '<i class="b1"></i><i class="b2"></i><i class="b3"></i><i class="grid"></i><i class="grain"></i>');
     bg.setAttribute('aria-hidden', 'true');
     document.body.appendChild(bg);
     applyStage();
@@ -216,7 +214,6 @@
       '<button type="button" class="dm-btn" data-act="clear" title="Очистить всё (C)">' + svg('clear') + '</button>' +
       '<button type="button" class="dm-auto' + (st.autoClear ? ' on' : '') + '" data-act="auto" title="Очищать при новой таблице">авто<br>очистка</button>' +
       '<button type="button" class="dm-btn dm-stage-btn' + (st.stage ? ' on' : '') + '" data-act="stage" title="Сцена для стрима: задание на весь экран, фирменный фон (T)">' + svg('stage') + '</button>' +
-      (st.stage ? '<button type="button" class="dm-btn" data-act="theme" title="Фон сцены: ' + themeName() + ' (B — следующий)">' + svg('theme') + '</button>' : '') +
       '<button type="button" class="dm-btn dm-exit" data-act="exit" title="Выйти (Esc или D)">' + svg('close') + '</button>';
     bar.innerHTML = h;
     bar.onclick = function (e) {
@@ -228,7 +225,6 @@
       else if (b.dataset.act === 'clear') clearAll();
       else if (b.dataset.act === 'auto') { st.autoClear = !st.autoClear; savePrefs(); renderBar(); }
       else if (b.dataset.act === 'stage') toggleStage();
-      else if (b.dataset.act === 'theme') nextTheme();
       else if (b.dataset.act === 'exit') toggle(false);
     };
   }
@@ -259,16 +255,8 @@
   }
   function applyStage() {
     document.documentElement.classList.toggle('dm-stage', st.stage);
-    if (!THEMES.some(function (t) { return t[0] === st.theme; })) st.theme = THEMES[0][0];
-    document.documentElement.dataset.dmTheme = st.theme;
-    if (bg) bg.dataset.theme = st.theme;
     var m = document.getElementById('dm-brand-mode'), t = document.getElementById('game-title-display');
     if (m) m.textContent = t ? t.textContent.trim() : '';
-  }
-  function themeName() { var t = THEMES.filter(function (x) { return x[0] === st.theme; })[0]; return t ? t[1] : ''; }
-  function nextTheme() {
-    var i = THEMES.map(function (t) { return t[0]; }).indexOf(st.theme);
-    st.theme = THEMES[(i + 1) % THEMES.length][0]; savePrefs(); applyStage(); renderBar();
   }
   function toggleStage() { st.stage = !st.stage; savePrefs(); applyStage(); renderBar(); setTimeout(resize, 50); }
 
@@ -375,7 +363,6 @@
     if (code === 'S') { eat(); if (st.tool === 'stamp') st.stamp = (st.stamp + 1) % STAMPS.length; setTool('stamp'); return; }
     if (code === 'C') { eat(); clearAll(); return; }
     if (code === 'T') { eat(); toggleStage(); return; }
-    if (code === 'B' && st.stage) { eat(); nextTheme(); return; }
     if (code === 'BracketLeft') { eat(); st.size = Math.max(0, st.size - 1); savePrefs(); renderBar(); cursorDot(); }
     if (code === 'BracketRight') { eat(); st.size = Math.min(SIZES.length - 1, st.size + 1); savePrefs(); renderBar(); cursorDot(); }
   }
