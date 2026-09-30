@@ -88,9 +88,15 @@ window.quickStartGame = async function(task, mode) {
     if (isMediaTaskChoice(task) && mode !== 'flashcards' && mode !== 'study') {
         mode = 'study';
     }
-    window.state._normalTableTick = 0; // блендинг повтора считаем от начала сессии
+    // Урок главной кнопки (ui.js, _startLessonRun) передаёт себя ДО запуска: иначе
+    // первая таблица каждого перезапуска (смена задания/главы) строилась без урока —
+    // не из фактов главы. И счётчик «каждая 2-я/3-я таблица — повтор» у урока
+    // сквозной: при частой смене задания он обнулялся, и повтор не наступал.
+    const pendingLesson = window.state._pendingLesson || null;
+    window.state._pendingLesson = null;
+    if (!pendingLesson) window.state._normalTableTick = 0; // блендинг повтора считаем от начала сессии
     window.state._ladderRun = null;    // ротацию типов заводит только главная кнопка (ui.js)
-    window.state._lesson = null;       // урок (повтор из пройденного) — тоже только она
+    window.state._lesson = pendingLesson;
     window.state.currentTask = task;
     $('filter-task').value = task;
     $('filter-mode').value = mode;

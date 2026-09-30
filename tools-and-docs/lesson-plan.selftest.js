@@ -125,6 +125,25 @@ const mist = [{ task: 'task4', fact: ctx.bigData.find(x => ctx.getYearFromFact(x
 assert.strictEqual(LP.backlog(f, 862, 1399, mist, Date.now()), 6);
 assert.strictEqual(LP.backlog(f, 1400, 2026, mist, Date.now()), 0);
 
+// 12. «Свои» задания главы: в «Руси IX–X» культуры (задание 7) один факт — глава его не
+//     требует, таблицы по нему не идут (иначе — памятники XI–XII вв. под вывеской главы).
+assert.ok(!LP.nativeTypes(862, 999).has('task7'), 'культура стала «своей» для Руси IX–X');
+assert.ok(LP.nativeTypes(862, 999).has('task4'), 'задание 4 выпало из Руси IX–X');
+// 13. Готовность главы: 0 у нового, 100 у закрытой, не убывает по мере учёбы.
+assert.strictEqual(LP.plan({ fs: {}, from: 862, to: 2026 }).cur.progress, 0);
+f = {}; learnAll(f, 862, 999, 0.6);
+assert.strictEqual(LP.plan({ fs: f, from: 862, to: 2026 }).chapters[0].progress, 100);
+{
+  const g = {}; let last = -1;
+  keysOf(1000, 1199).forEach((k, i) => {
+    g[k] = { level: i % 2 ? 1 : 0, points: 1, nextReview: 0 };
+    const pr = LP.windowStats(g, 1000, 1199).progress;
+    assert.ok(pr >= last, 'готовность главы убыла'); last = pr;
+  });
+}
+// 14. Невиданное главы считается отдельно — по нему урок ведёт первым.
+assert.ok(LP.unlearnedByTask({}, 862, 999).unseen > 0 && LP.unlearnedByTask({}, 862, 999).unseenBy.task7 === 0, 'невиданное считается по чужим заданиям');
+
 // ── Обвязка ──
 const ui = read('ui.js'), st = read('state.js'), app = read('app.js');
 assert.match(ui, /const forced = window\.state && window\.state\._forcedWin;/, 'applyTrainerPeriod перетирает окно урока');
@@ -146,6 +165,11 @@ assert.ok(w5.from < 1900, 'отказ пробы не расширил окно:
 LP.setProbe(() => { throw new Error('x'); });
 assert.ok(LP.taskWindow({ from: 1700, to: 1725 }, 'task4', 862).from === 1700, 'сломанная проба ломает окно');
 LP.setProbe(null);
+assert.match(app, /window\.state\._lesson = pendingLesson;/, 'первая таблица перезапуска урока строится без урока');
+assert.match(ui, /window\.state\._pendingLesson = lesson;/, 'урок не передаётся до первой таблицы');
+assert.match(st, /if \(lessonNow && lessonNow\.segTo && window\.state\._lessonPoolRelax\) return pool;/, 'запасные попытки урока не берут всё окно');
+assert.match(table, /const fullTries = window\.state\._lesson \? 30 : 15;/, 'у урока нет запаса полных попыток');
+assert.match(table, /putBack\(old, from\)/, 'перенос в занятую ячейку снова выкидывает ответ в варианты');
 assert.match(read('index.html'), /<script src="lesson-plan\.js\?v=[^"]+" defer><\/script>\s*<script src="ui\.js/, 'lesson-plan.js не подключён перед ui.js');
 assert.match(read('service-worker.js'), /\.\/lesson-plan\.js\?v=/, 'lesson-plan.js не в прекэше SW');
 

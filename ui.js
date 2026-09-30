@@ -793,6 +793,10 @@ function _startFirstRun() {
     const want = _openRequested();
     // Годы до 1890 — для «вслепую» пришедших. Пришедший со страницы конкретного
     // задания ищет его, а не начало курса: ему — вся история.
+    // Новичок «вслепую» сразу идёт первой главой пути (главная кнопка), а не
+    // случайными годами 862–1890: иначе первые факты разбросаны по всей истории,
+    // и путь начинался с уже «надкусанных» глав.
+    if (!want && window.mainActionGo && window.LessonPlan) { window.mainActionGo(); return; }
     if (!want) window._firstRunPeriod = { from: 862, to: 1890 };
     if (typeof window.quickStartGame === 'function') window.quickStartGame(want || 'task4', 'normal');
     else _showOnboardingOverlay();
@@ -2640,8 +2644,10 @@ window.maybeRotateLadderTask = function () {
         st._ladderRun = { ...run, from: _todayLines(run.task), left: a.left || LINES_PER_TASK };
         return false;
     } else {
+        // Не «16 строк есть»: в главе задание меняется и раньше — когда его новые
+        // факты кончились.
         const cfg = TASK_CONFIG[a.task] || TASK_CONFIG.task4;
-        showToast('🔄', `${LINES_PER_TASK} строк есть — теперь ${cfg.shortLabel}`, 'bg-blue-500', 'border-blue-700');
+        showToast('🔄', `Теперь ${cfg.shortLabel}`, 'bg-blue-500', 'border-blue-700');
     }
     _startLessonRun(a);
     return true;
@@ -2661,6 +2667,7 @@ function _startLessonRun(a) {
         // Много долга (к повтору + ошибки) — повтор каждой 2-й таблицей, иначе каждой 3-й.
         lesson = { ...L, backlog: back, every: back >= 40 ? 2 : 3 };
     }
+    window.state._pendingLesson = lesson; // quickStartGame возьмёт его до первой таблицы
     return Promise.resolve(quickStartGame(task, 'normal')).then(() => {
         window.state._ladderRun = { task, from: _todayLines(task), left: a.left || LINES_PER_TASK,
             key: lesson ? lesson.key : null, name: lesson ? lesson.name : '' };

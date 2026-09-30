@@ -1828,14 +1828,20 @@ function generateTable() {
     const retick = () => { window.state._normalTableTick = tick0; };
     // Урок сужает пул до фактов своей главы (state.js). Если из такого пула честная
     // таблица не складывается — вторую половину попыток пул обычный, без сужения.
+    // Урок: окно лет — одна глава, строк в нём меньше, чем во «всей истории», и
+    // короткую таблицу ученик видел примерно раз на сотню (симулятор, 30.09).
+    // Полных попыток у урока вдвое больше, прежде чем соглашаться на короткую.
+    const fullTries = window.state._lesson ? 30 : 15;
     try {
-        for (let attempt = 0; attempt < 15; attempt++) {
-            window.state._lessonPoolRelax = attempt >= 8;
+        for (let attempt = 0; attempt < fullTries; attempt++) {
+            window.state._lessonPoolRelax = attempt >= 6;
             retick();
             generateTableOnce();
             if (skipValidation() || (validateTable() && _task5GateOk())) return;
         }
     } finally { window.state._lessonPoolRelax = false; }
+    // Дальше — короткая таблица в рамках. Пул урока здесь НЕ сужаем: иначе из двух
+    // невиданных фактов главы получалась таблица на 2 строки (симулятор, 30.09).
     // 🔴 Рамки заданы — из них не уходим.
     //
     // Проверка требует ровно столько строк, сколько выбрано, и раньше, не набрав
@@ -1845,11 +1851,14 @@ function generateTable() {
     // бывает меньше: в 1812–1814 всего три разных года. Короткая таблица в своих
     // годах — правильный ответ; вся история — только если нет и двух строк.
     if (_tableYearRange()) {
-        for (let attempt = 0; attempt < 15; attempt++) {
-            retick();
-            generateTableOnce();
-            if (validateTable({ allowShort: true }) && _task5GateOk()) return;
-        }
+        try {
+            window.state._lessonPoolRelax = true;
+            for (let attempt = 0; attempt < 15; attempt++) {
+                retick();
+                generateTableOnce();
+                if (validateTable({ allowShort: true }) && _task5GateOk()) return;
+            }
+        } finally { window.state._lessonPoolRelax = false; }
     }
     retick();
     // Фолбэк: умный подбор по всем эпохам обычно даёт корректную таблицу.
@@ -2458,6 +2467,17 @@ window.onChipClick = function(chip, e) {
 
     document.addEventListener('pointercancel', () => { endDrag(false); pending = null; });
 
+    function putBack(chip, slot) {
+        chip.classList.remove('selected', 'crossed-out');
+        chip.classList.add('in-slot');
+        slot.innerHTML = '';
+        slot.appendChild(chip);
+        slot.classList.add('has-item');
+        slot.classList.remove('incorrect-slot');
+        updateSlotGlow();
+        if (window.maybeAutoSubmit) window.maybeAutoSubmit();
+    }
+
     /* Область тренажёра таблиц (и детектива — он рисует слоты в той же таблице).
        Поведение ровно прежнее: перенос ничего не решает сам, а зовёт тот же
        handleSlotClick(), что и тап. */
@@ -2472,6 +2492,7 @@ window.onChipClick = function(chip, e) {
         pickUp(chip) {
             // Фишка, лежащая в слоте, честно оттуда вынимается — тем же путём, что
             // и по тапу. Иначе слот остался бы с классом has-item, но пустой.
+            chip._fromSlot = null;
             if (chip.classList.contains('in-slot')) {
                 const slot = chip.parentElement;
                 if (isLocked(slot)) return false;
@@ -2479,6 +2500,7 @@ window.onChipClick = function(chip, e) {
                 $('pool-container').appendChild(chip);
                 slot.innerHTML = '';
                 slot.classList.remove('has-item', 'incorrect-slot');
+                chip._fromSlot = slot; // откуда взяли — туда вернём при промахе или обмене
             }
             if (window.state.selectedChip && window.state.selectedChip !== chip) {
                 window.state.selectedChip.classList.remove('selected');
@@ -2488,11 +2510,26 @@ window.onChipClick = function(chip, e) {
             updateSlotGlow();
             return true;
         },
-        drop(chip, slot) { handleSlotClick(slot); },
+        // Перенос из ячейки в ЗАНЯТУЮ ячейку — обмен: прежний ответ встаёт туда,
+        // откуда взяли перенесённый. Раньше он улетал в варианты, и казалось, что
+        // «ответ улетает» (владелец 30.09).
+        drop(chip, slot) {
+            const from = chip._fromSlot;
+            chip._fromSlot = null;
+            const old = slot.classList.contains('has-item') ? slot.querySelector('.dnd-chip') : null;
+            handleSlotClick(slot);
+            if (old && old !== chip && from && from !== slot && from.isConnected && !isLocked(from) && !from.classList.contains('has-item')) {
+                putBack(old, from);
+            }
+        },
         cancel(chip) {
-            // Бросили мимо — снимаем выбор, чтобы фишка не осталась «в руке».
+            // Бросили мимо (или на проверенную ячейку) — фишка из ячейки возвращается
+            // на своё место, а не в варианты; из вариантов — просто снимаем выбор.
             chip.classList.remove('selected');
             if (window.state.selectedChip === chip) window.state.selectedChip = null;
+            const from = chip._fromSlot;
+            chip._fromSlot = null;
+            if (from && from.isConnected && !isLocked(from) && !from.classList.contains('has-item')) putBack(chip, from);
             updateSlotGlow();
         }
     });
