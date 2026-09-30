@@ -51,6 +51,7 @@
   var dpr = 1, W = 0, H = 0;
 
   var root, base, live, bctx, lctx, bar, fab, dot, brand;
+  var trail = null, tctx = null;   // скрытый холст для следа лазера
 
   function el(tag, cls, html) { var e = document.createElement(tag); if (cls) e.className = cls; if (html != null) e.innerHTML = html; return e; }
   function sx() { return window.scrollX || 0; }
@@ -187,6 +188,321 @@
     window.addEventListener('pointercancel', up);
     window.addEventListener('keydown', key, true);
     hookTables();
+    requestAnimationFrame(tick);
+  }
+
+  function renderBar() {
+    var h = '<div class="dm-grip" title="Рисование">✎</div>';
+    TOOLS.forEach(function (t) {
+      h += '<button type="button" class="dm-btn' + (st.tool === t.id ? ' on' : '') + '" data-tool="' + t.id + '" title="' + t.name + ' (' + t.key + ')">' +
+        (t.id === 'stamp' ? stampIcon(STAMPS[st.stamp]) : svg(t.id)) + '</button>';
+    });
+    h += '<div class="dm-sep"></div>';
+    COLORS.forEach(function (c, i) {
+      h += '<button type="button" class="dm-color' + (st.color === c ? ' on' : '') + '" data-color="' + c + '" style="--dm-c:' + c + '" title="Цвет (Shift+' + (i + 1) + ')"></button>';
+    });
+    h += '<div class="dm-sep"></div>';
+    SIZES.forEach(function (s, i) {
+      h += '<button type="button" class="dm-size' + (st.size === i ? ' on' : '') + '" data-size="' + i + '" title="Толщина ([ и ])"><i style="width:' + (4 + i * 3) + 'px;height:' + (4 + i * 3) + 'px"></i></button>';
+    });
+    h += '<div class="dm-sep"></div>' +
+      '<button type="button" class="dm-btn" data-act="undo" title="Отменить (Ctrl+Z)">' + svg('undo') + '</button>' +
+      '<button type="button" class="dm-btn" data-act="clear" title="Очистить всё (C)">' + svg('clear') + '</button>' +
+      '<button type="button" class="dm-auto' + (st.autoClear ? ' on' : '') + '" data-act="auto" title="Очищать при новой таблице">авто<br>очистка</button>' +
+      '<button type="button" class="dm-btn dm-stage-btn' + (st.stage ? ' on' : '') + '" data-act="stage" title="Сцена для стрима: задание на весь экран, фирменный фон (T)">' + svg('stage') + '</button>' +
+      '<button type="button" class="dm-btn dm-exit" data-act="exit" title="Выйти (Esc или D)">' + svg('close') + '</button>';
+    bar.innerHTML = h;
+    bar.onclick = function (e) {
+      var b = e.target.closest('button'); if (!b) return;
+      if (b.dataset.tool) { if (b.dataset.tool === 'stamp' && st.tool === 'stamp') st.stamp = (st.stamp + 1) % STAMPS.length; setTool(b.dataset.tool); }
+      else if (b.dataset.color) { st.color = b.dataset.color; if (st.tool === 'cursor' || st.tool === 'eraser') st.tool = 'pen'; savePrefs(); setTool(st.tool); }
+      else if (b.dataset.size) { st.size = +b.dataset.size; savePrefs(); renderBar(); cursorDot(); }
+      else if (b.dataset.act === 'undo') undo();
+      else if (b.dataset.act === 'clear') clearAll();
+      else if (b.dataset.act === 'auto') { st.autoClear = !st.autoClear; savePrefs(); renderBar(); }
+      else if (b.dataset.act === 'stage') toggleStage();
+      else if (b.dataset.act === 'exit') toggle(false);
+    };
+  }
+  function stampIcon(kind) {
+    var p = { check: '<path d="M5 12.5l4.5 4.5L19 7" fill="none" stroke-width="3"/>', cross: '<path d="M6 6l12 12M18 6L6 18" fill="none" stroke-width="3"/>',
+      question: '<path d="M8.5 9a3.5 3.5 0 117 0c0 2.5-3.5 3-3.5 5.5" fill="none" stroke-width="2.6"/><circle cx="12" cy="19" r="1.4"/>',
+      star: '<path d="M12 3l2.7 5.6 6.1.9-4.4 4.3 1 6.1L12 17l-5.4 2.9 1-6.1-4.4-4.3 6.1-.9z"/>' }[kind];
+    return '<svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + p + '</svg>';
+  }
+
+  function setTool(t) {
+    st.tool = t;
+    root.dataset.tool = t;
+    document.documentElement.classList.toggle('dm-laser', st.on && t === 'laser');
+    renderBar(); cursorDot();
+  }
+  function toggle(on) {
+    st.on = on == null ? !st.on : !!on;
+    root.classList.toggle('on', st.on);
+    bar.classList.toggle('on', st.on);
+    fab.classList.toggle('on', st.on);
+    document.documentElement.classList.toggle('dm-drawing', st.on);
+    root.dataset.tool = st.tool;
+    document.documentElement.classList.toggle('dm-laser', st.on && st.tool === 'laser');
+    if (!st.on) { cur = null; laser = []; clearLive(); dot.style.opacity = '0'; }
+    cursorDot();
+    try { if (window.Sfx && window.Sfx.play) window.Sfx.play(st.on ? 'tap' : 'pop'); } catch (e) {}
+  }
+  function applyStage() {
+    document.documentElement.classList.toggle('dm-stage', st.stage);
+    var m = document.getElementById('dm-brand-mode'), t = document.getElementById('game-title-display');
+    if (m) m.textContent = t ? t.textContent.trim() : '';
+  }
+  function toggleStage() { st.stage = !st.stage; savePrefs(); applyStage(); renderBar(); setTimeout(resize, 50); }
+
+  function resize() {
+    dpr = Math.min(window.devicePixelRatio || 1, 2);
+    W = window.innerWidth; H = window.innerHeight;
+    [base, live].forEach(function (c) { c.width = Math.round(W * dpr); c.height = Math.round(H * dpr); c.style.width = W + 'px'; c.style.height = H + 'px'; });
+    redraw();
+  }
+
+  // ── Ввод ─────────────────────────────────────────────────────────────────
+  // Холст ловит указатель только для «рисующих» инструментов. Курсор и лазер
+  // пропускают клики насквозь: можно показывать лазером и тут же отвечать.
+  function drawing() { return st.on && st.tool !== 'cursor' && st.tool !== 'laser'; }
+  function pressure(e) { return e.pointerType === 'pen' && e.pressure ? e.pressure : 0.5; }
+
+  function down(e) {
+    if (!drawing() || e.button > 0) return;
+    e.preventDefault();
+    try { live.setPointerCapture(e.pointerId); } catch (er) {}
+    if (st.tool === 'eraser') { cur = { kind: 'erase' }; eraseAt(e.clientX, e.clientY); return; }
+    var a = makeAnchor(e.clientX, e.clientY), p = toAnchor(a, e.clientX, e.clientY, pressure(e));
+    if (st.tool === 'stamp') {
+      strokes.push({ kind: 'stamp', stamp: STAMPS[st.stamp], color: st.color, w: width(), anchor: a, at: p, born: performance.now() });
+      redraw(); boom(e.clientX, e.clientY); return;
+    }
+    if (st.tool === 'arrow') { cur = { kind: 'arrow', color: st.color, w: width(), anchor: a, from: p, to: p, c0: [e.clientX, e.clientY], c1: [e.clientX, e.clientY] }; return; }
+    cur = { kind: st.tool, color: st.color, w: width() * (st.tool === 'marker' ? 3.2 : 1), anchor: a, pts: [p], last: [e.clientX, e.clientY] };
+  }
+  function move(e) {
+    if (!st.on) return;
+    moveDot(e);
+    if (st.tool === 'laser') { laser.push({ x: e.clientX, y: e.clientY, t: performance.now() }); return; }
+    if (!cur) return;
+    if (cur.kind === 'erase') { eraseAt(e.clientX, e.clientY); return; }
+    if (!cur.anchor || (cur.anchor.el && !cur.anchor.el.isConnected)) return;
+    var p = toAnchor(cur.anchor, e.clientX, e.clientY, pressure(e));
+    if (cur.kind === 'arrow') { cur.to = p; cur.c1 = [e.clientX, e.clientY]; drawLive(); return; }
+    if (Math.abs(e.clientX - cur.last[0]) + Math.abs(e.clientY - cur.last[1]) < 1.5) return;
+    cur.last = [e.clientX, e.clientY];
+    cur.pts.push(p); drawLive();
+  }
+  function up() {
+    if (!cur) return;
+    if (cur.kind !== 'erase') {
+      var ok = cur.kind === 'arrow' ? Math.hypot(cur.c1[0] - cur.c0[0], cur.c1[1] - cur.c0[1]) > 8 : cur.pts.length > 0;
+      if (ok) { cur.born = performance.now(); delete cur.last; strokes.push(cur); }
+    }
+    cur = null; clearLive(); redraw();
+  }
+  // Колесо — тому, что под холстом: карта приближается, окно прокручивается.
+  function wheel(e) {
+    live.style.pointerEvents = 'none';
+    var t = document.elementFromPoint(e.clientX, e.clientY);
+    live.style.pointerEvents = '';
+    if (!t || mine(t)) return;
+    e.preventDefault();
+    var ev = new WheelEvent('wheel', { bubbles: true, cancelable: true, clientX: e.clientX, clientY: e.clientY, screenX: e.screenX, screenY: e.screenY,
+      deltaX: e.deltaX, deltaY: e.deltaY, deltaZ: e.deltaZ, deltaMode: e.deltaMode, ctrlKey: e.ctrlKey, shiftKey: e.shiftKey, altKey: e.altKey, metaKey: e.metaKey });
+    // Подставной обработчик (зум карты) сам гасит событие; иначе — прокрутка вручную,
+    // синтетическое колесо браузер сам не прокручивает.
+    if (t.dispatchEvent(ev)) { var s = scrollable(t); var k = e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? H : 1; (s || window).scrollBy(e.deltaX * k, e.deltaY * k); }
+  }
+  function eraseAt(cx, cy) {
+    var r = 14, before = strokes.length;
+    strokes = strokes.filter(function (s) {
+      var f = frameOf(s.anchor); if (!f) return true;
+      if (s.kind === 'stamp') { var q = f.fx(s.at); return Math.hypot(q.x - cx, q.y - cy) > r + 16 * f.k; }
+      if (s.kind === 'arrow') return distSeg({ x: cx, y: cy }, f.fx(s.from), f.fx(s.to)) > r;
+      for (var i = 0; i < s.pts.length; i++) { var c = f.fx(s.pts[i]); if (Math.abs(c.x - cx) < r && Math.abs(c.y - cy) < r) return false; }
+      return true;
+    });
+    if (strokes.length !== before) redraw();
+  }
+  function distSeg(p, a, b) {
+    var dx = b.x - a.x, dy = b.y - a.y, l = dx * dx + dy * dy || 1;
+    var t = Math.max(0, Math.min(1, ((p.x - a.x) * dx + (p.y - a.y) * dy) / l));
+    return Math.hypot(p.x - (a.x + t * dx), p.y - (a.y + t * dy));
+  }
+  function undo() { strokes.pop(); redraw(); }
+  function clearAll(silent) {
+    if (!strokes.length) return;
+    if (silent) { strokes = []; redraw(); return; }
+    fading = performance.now();
+  }
+
+  function key(e) {
+    var t = e.target, typing = t && (t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName));
+    if (typing || e.altKey || e.metaKey) return;
+    var k = e.key;
+    // Своё гасим целиком: Esc у тренажёра — «в лобби», а тут он лишь выключает рисование.
+    function eat() { e.preventDefault(); e.stopPropagation(); }
+    if (e.ctrlKey) { if (st.on && (k === 'z' || k === 'Z' || k === 'я' || k === 'Я')) { eat(); undo(); } return; }
+    // Раскладка русская или английская — клавиша одна и та же (e.code).
+    var code = (e.code || '').replace(/^Key/, '').replace(/^Digit/, '');
+    if (code === 'D' && !e.shiftKey) { eat(); toggle(); return; }
+    if (!st.on) return;
+    if (k === 'Escape') { eat(); toggle(false); return; }
+    // Цифры без Shift остаются тренажёру (1–9 ставят ответ), цвета — Shift+1…6.
+    if (e.shiftKey && /^[1-6]$/.test(code)) { eat(); st.color = COLORS[+code - 1]; if (st.tool === 'cursor' || st.tool === 'eraser') st.tool = 'pen'; savePrefs(); setTool(st.tool); return; }
+    if (e.shiftKey) return;
+    var tool = { V: 'cursor', P: 'pen', M: 'marker', A: 'arrow', L: 'laser', E: 'eraser' }[code];
+    if (tool) { eat(); setTool(tool); return; }
+    if (code === 'S') { eat(); if (st.tool === 'stamp') st.stamp = (st.stamp + 1) % STAMPS.length; setTool('stamp'); return; }
+    if (code === 'C') { eat(); clearAll(); return; }
+    if (code === 'T') { eat(); toggleStage(); return; }
+    if (code === 'BracketLeft') { eat(); st.size = Math.max(0, st.size - 1); savePrefs(); renderBar(); cursorDot(); }
+    if (code === 'BracketRight') { eat(); st.size = Math.min(SIZES.length - 1, st.size + 1); savePrefs(); renderBar(); cursorDot(); }
+  }
+
+  // Новая таблица — чистый лист (если не выключено): рисунок относится к той таблице.
+  function hookTables() {
+    var tries = 0;
+    (function wrap() {
+      if (typeof window.generateTable !== 'function') { if (tries++ < 40) setTimeout(wrap, 500); return; }
+      if (window.generateTable._dm) return;
+      var orig = window.generateTable;
+      var wrapped = function () { var r = orig.apply(this, arguments); if (st.autoClear && strokes.length) clearAll(); applyStage(); return r; };
+      wrapped._dm = true;
+      window.generateTable = wrapped;
+    })();
+  }
+
+  // ── Отрисовка ────────────────────────────────────────────────────────────
+  function clearLive() { lctx.setTransform(1, 0, 0, 1, 0, 0); lctx.clearRect(0, 0, live.width, live.height); }
+  function redraw() {
+    if (!bctx) return;
+    bctx.setTransform(1, 0, 0, 1, 0, 0); bctx.clearRect(0, 0, base.width, base.height);
+    bctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    var now = performance.now();
+    strokes.forEach(function (s) { paint(bctx, s, now); });
+  }
+  function drawLive() {
+    clearLive();
+    if (!cur || cur.kind === 'erase') return;
+    lctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    paint(lctx, cur, performance.now());
+  }
+  function paint(c, s, now) {
+    var f = frameOf(s.anchor || { type: 'page' });
+    if (!f) return;
+    c.save();
+    if (f.clip) { c.beginPath(); c.rect(f.clip.left, f.clip.top, f.clip.width, f.clip.height); c.clip(); }
+    c.lineCap = 'round'; c.lineJoin = 'round';
+    if (s.kind === 'pen' || s.kind === 'marker') {
+      c.strokeStyle = s.color;
+      if (s.kind === 'marker') { c.globalAlpha = 0.38; c.lineCap = 'butt'; }
+      else { c.shadowColor = s.color; c.shadowBlur = 7; }   // неоновый отсвет — на стриме смотрится сочно
+      var pts = s.pts.map(function (p) { var q = f.fx(p); q.p = p.p; return q; });
+      if (pts.length === 1) { c.fillStyle = s.color; c.beginPath(); c.arc(pts[0].x, pts[0].y, s.w * f.k / 2 + 1, 0, 7); c.fill(); }
+      for (var i = 1; i < pts.length; i++) {
+        var a = pts[i - 1], b = pts[i], m0 = i > 1 ? mid(pts[i - 2], a) : a, m1 = mid(a, b);
+        c.lineWidth = (s.kind === 'pen' ? s.w * (0.55 + b.p * 0.9) : s.w) * f.k;
+        c.beginPath(); c.moveTo(m0.x, m0.y); c.quadraticCurveTo(a.x, a.y, m1.x, m1.y); c.stroke();
+      }
+    } else if (s.kind === 'arrow') {
+      arrow(c, f.fx(s.from), f.fx(s.to), s.color, s.w * f.k);
+    } else if (s.kind === 'stamp') {
+      var age = now - (s.born || 0), kk = age < 260 ? 1 + 0.7 * Math.pow(1 - age / 260, 2) : 1, q = f.fx(s.at);
+      stamp(c, s.stamp, q.x, q.y, (22 + s.w * 2.2) * f.k, s.color, kk);
+    }
+    c.restore();
+  }
+  function mid(a, b) { return { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 }; }
+  function arrow(c, a, b, color, w) {
+    var ang = Math.atan2(b.y - a.y, b.x - a.x), head = 12 + w * 2.2;
+    c.strokeStyle = color; c.fillStyle = color; c.lineWidth = w + 1;
+    c.shadowColor = color; c.shadowBlur = 8;
+    var bx = b.x - Math.cos(ang) * head * 0.6, by = b.y - Math.sin(ang) * head * 0.6;
+    c.beginPath(); c.moveTo(a.x, a.y); c.lineTo(bx, by); c.stroke();
+    c.beginPath(); c.moveTo(b.x, b.y);
+    c.lineTo(b.x - Math.cos(ang - 0.45) * head, b.y - Math.sin(ang - 0.45) * head);
+    c.lineTo(b.x - Math.cos(ang + 0.45) * head, b.y - Math.sin(ang + 0.45) * head);
+    c.closePath(); c.fill();
+  }
+  function stamp(c, kind, x, y, r, color, k) {
+    c.translate(x, y); c.scale(k, k);
+    c.shadowColor = 'rgba(0,0,0,.35)'; c.shadowBlur = 6; c.shadowOffsetY = 2;
+    c.lineWidth = Math.max(4, r * 0.2); c.strokeStyle = color; c.fillStyle = color;
+    if (kind === 'check') { c.beginPath(); c.moveTo(-r * 0.62, 0); c.lineTo(-r * 0.15, r * 0.48); c.lineTo(r * 0.7, -r * 0.55); c.stroke(); }
+    else if (kind === 'cross') { c.beginPath(); c.moveTo(-r * 0.55, -r * 0.55); c.lineTo(r * 0.55, r * 0.55); c.moveTo(r * 0.55, -r * 0.55); c.lineTo(-r * 0.55, r * 0.55); c.stroke(); }
+    else if (kind === 'question') {
+      c.beginPath(); c.arc(0, -r * 0.3, r * 0.38, Math.PI * 1.05, Math.PI * 0.35); c.quadraticCurveTo(0, r * 0.1, 0, r * 0.3); c.stroke();
+      c.beginPath(); c.arc(0, r * 0.72, c.lineWidth * 0.62, 0, 7); c.fill();
+    } else {
+      c.beginPath();
+      for (var i = 0; i < 10; i++) { var a = -Math.PI / 2 + i * Math.PI / 5, rr = i % 2 ? r * 0.42 : r * 0.9; c.lineTo(Math.cos(a) * rr, Math.sin(a) * rr); }
+      c.closePath(); c.fill();
+    }
+  }
+  // Штамп «бьёт» по экрану: кольцо разлетается — видно и на маленьком окне стрима.
+  function boom(x, y) {
+    var b = el('span', 'dm-boom'); b.style.left = x + 'px'; b.style.top = y + 'px'; b.style.setProperty('--dm-c', st.color);
+    document.body.appendChild(b); setTimeout(function () { b.remove(); }, 520);
+    try { if (window.Sfx && window.Sfx.play) window.Sfx.play('pop'); } catch (e) {}
+  }
+
+  function tick() {
+    var now = performance.now();
+    // Якоря-карты и окна двигаются без событий (зум — это transform): пока есть
+    // такие штрихи или свежий штамп «бьёт», перерисовываем каждый кадр.
+    if (strokes.some(function (s) { return (s.anchor && s.anchor.type !== 'page') || (s.kind === 'stamp' && now - s.born < 280); })) redraw();
+    if (cur && cur.anchor && cur.anchor.type !== 'page') drawLive();
+    // Плавное «очистить».
+    if (fading) {
+      var f = (now - fading) / 260;
+      if (f >= 1) { fading = 0; strokes = []; base.style.opacity = ''; redraw(); }
+      else base.style.opacity = String(1 - f);
+    }
+    // Лазер: след за 700 мс, сужается к хвосту, голова светится.
+    // 🔴 След рисуется НЕПРОЗРАЧНЫМ на скрытом холсте и переносится на экран
+    // одним разом со свечением. Раньше каждый отрезок был полупрозрачным и со
+    // своей тенью — на стыках прозрачность и свечение складывались, и след
+    // выглядел цепочкой точек (владелец, 30.09.2026).
+    if (st.on && (laser.length || st.tool === 'laser')) {
+      laser = laser.filter(function (p) { return now - p.t < 700; });
+      if (!cur) {
+        clearLive();
+        if (laser.length > 1) {
+          if (!trail) { trail = document.createElement('canvas'); tctx = trail.getContext('2d'); }
+          if (trail.width !== live.width || trail.height !== live.height) { trail.width = live.width; trail.height = live.height; }
+          tctx.setTransform(1, 0, 0, 1, 0, 0); tctx.clearRect(0, 0, trail.width, trail.height);
+          tctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+          tctx.lineCap = 'round'; tctx.lineJoin = 'round';
+          // Два прохода: алая полоса и светлая сердцевина у головы.
+          [['#ff3b5c', 1], ['#ffd6de', 0.38]].forEach(function (pass, pi) {
+            tctx.strokeStyle = pass[0];
+            for (var i = 1; i < laser.length; i++) {
+              var life = 1 - (now - laser[i].t) / 700;
+              if (pi && life < 0.45) continue;
+              var a0 = i > 1 ? mid(laser[i - 2], laser[i - 1]) : laser[i - 1], a1 = mid(laser[i - 1], laser[i]);
+              tctx.lineWidth = (1.2 + life * 7.5) * pass[1];
+              tctx.beginPath(); tctx.moveTo(a0.x, a0.y); tctx.quadraticCurveTo(laser[i - 1].x, laser[i - 1].y, a1.x, a1.y); tctx.stroke();
+            }
+          });
+          lctx.setTransform(1, 0, 0, 1, 0, 0);
+          lctx.shadowColor = '#ff3b5c'; lctx.shadowBlur = 18 * dpr;
+          lctx.globalAlpha = 0.92;
+          lctx.drawImage(trail, 0, 0);
+          lctx.globalAlpha = 1;
+        }
+        var h = laser[laser.length - 1];
+        if (h && now - h.t < 700) {
+          lctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+          lctx.fillStyle = '#fff'; lctx.shadowColor = '#ff3b5c'; lctx.shadowBlur = 22;
+          lctx.beginPath(); lctx.arc(h.x, h.y, 5.5, 0, 7); lctx.fill();
+        }
+        lctx.shadowBlur = 0;
+      }
+    }
     requestAnimationFrame(tick);
   }
 
