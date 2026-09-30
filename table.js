@@ -1840,8 +1840,41 @@ function generateTable() {
             if (skipValidation() || (validateTable() && _task5GateOk())) return;
         }
     } finally { window.state._lessonPoolRelax = false; }
-    // Дальше — короткая таблица в рамках. Пул урока здесь НЕ сужаем: иначе из двух
-    // невиданных фактов главы получалась таблица на 2 строки (симулятор, 30.09).
+    // Дальше — запасные шаги. Пул урока в них НЕ сужаем: иначе из двух невиданных
+    // фактов главы получалась таблица на 2 строки (симулятор, 30.09).
+    // Урок: раньше отсюда таблица уходила сразу во «всю историю» — в «Главе 2. Русь
+    // XI–XII» ученик получал «Бурлаков на Волге» и «Псковитянку» (владелец 30.09).
+    // Сначала расширяем годы шагами: всё пройденное до конца главы → эпоха главы →
+    // от начала истории до конца эпохи. Годы окна после таблицы возвращаем. Идёт ДО
+    // короткой таблицы: полная таблица из пройденных глав урока полезнее 3-строчной
+    // (симулятор, 30.09); короткая — только если не сложилось и так.
+    const lesson = window.state._lesson;
+    const ys = $('custom-year-start'), ye = $('custom-year-end');
+    if (lesson && lesson.cumTo && ys && ye && $('filter-period') && $('filter-period').value === 'custom') {
+        const a0 = parseInt(ys.value, 10), b0 = parseInt(ye.value, 10);
+        const E = window.EPOCH_YEARS || {};
+        const era = Object.values(E).find(r => lesson.segFrom >= r[0] && lesson.segFrom <= r[1]) || [862, 2026];
+        const steps = [
+            [Math.min(a0, lesson.cumFrom), Math.max(b0, lesson.cumTo)],
+            [Math.min(a0, era[0]), Math.max(b0, era[1])],
+            [862, Math.max(b0, era[1])],
+        ];
+        try {
+            window.state._lessonPoolRelax = true;
+            for (const [a, b] of steps) {
+                ys.value = a; ye.value = b;
+                for (let attempt = 0; attempt < 8; attempt++) {
+                    retick();
+                    generateTableOnce();
+                    if (validateTable() && _task5GateOk()) return;
+                }
+            }
+        } finally {
+            window.state._lessonPoolRelax = false;
+            ys.value = a0; ye.value = b0;
+        }
+        retick();
+    }
     // 🔴 Рамки заданы — из них не уходим.
     //
     // Проверка требует ровно столько строк, сколько выбрано, и раньше, не набрав

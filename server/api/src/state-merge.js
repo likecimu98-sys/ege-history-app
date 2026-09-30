@@ -6,6 +6,19 @@ function clone(value) {
   return value == null ? value : JSON.parse(JSON.stringify(value));
 }
 
+// Какая из двух копий записи факта правдивее: обновлённая последней. Лучший уровень —
+// только для записей без отметки времени. Копия закона — window.factStreakNewer (state.js).
+function factStreakNewer(v, cur) {
+  if (!cur) return true;
+  if (!v || typeof v !== 'object') return false;
+  if (typeof cur !== 'object') return true;
+  const tv = Number(v.lastUpdated) || 0, tc = Number(cur.lastUpdated) || 0;
+  if (tv && tc && tv !== tc) return tv > tc;
+  const lv = v.level || 0, lc = cur.level || 0;
+  if (lv !== lc) return lv > lc;
+  return (v.points || v.streak || 0) > (cur.points || cur.streak || 0);
+}
+
 function normalize(raw) {
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null;
   const stats = { ...(raw.stats || raw) };
@@ -92,13 +105,14 @@ function mergeStateValues(values) {
     st.solvedByTask[key] = Math.max(st.solvedByTask[key], Number(state.stats.solvedByTask?.[key]) || 0);
   }
 
+  // Факт — из копии, где его обновляли последним (lastUpdated); «лучший уровень» только
+  // для записей без отметки времени. Раньше при равном уровне побеждала первая, старая
+  // копия, и повтор фактов 5-го уровня терялся навсегда (Eva Efimova, 30.09.2026).
+  // Тот же закон — window.factStreakNewer в state.js.
   st.factStreaks = {};
   for (const state of states) for (const [key, value] of Object.entries(state.stats.factStreaks || {})) {
     const current = st.factStreaks[key];
-    if (!current || (value.level || 0) > (current.level || 0)
-      || ((value.level || 0) === (current.level || 0) && (value.points || value.streak || 0) > (current.points || current.streak || 0))) {
-      st.factStreaks[key] = clone(value);
-    }
+    if (!current || factStreakNewer(value, current)) st.factStreaks[key] = clone(value);
   }
 
   st.eraStats = {};

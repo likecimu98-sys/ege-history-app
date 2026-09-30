@@ -325,7 +325,19 @@
             '.lp-go{flex-shrink:0;font-size:var(--t-caption);font-weight:750;color:var(--c-brand)}',
             '.lp-foot{padding:10px 16px 16px;display:flex;gap:8px;flex-wrap:wrap;border-top:1px solid var(--c-border-soft, var(--c-border))}',
             '.lp-btn{flex:1;min-height:44px;border-radius:8px;border:0;font:inherit;font-size:var(--t-label);font-weight:750;cursor:pointer;background:var(--c-card-2);color:var(--c-text)}',
-            '.lp-btn.is-main{background:var(--c-brand);color:#fff}'
+            '.lp-btn.is-main{background:var(--c-brand);color:#fff}',
+            '.lp-cele{position:fixed;inset:0;z-index:10060;background:var(--c-scrim, rgba(0,0,0,.6));display:flex;align-items:center;justify-content:center;padding:16px;animation:lp-in .25s ease-out}',
+            '@keyframes lp-in{from{opacity:0}to{opacity:1}}',
+            '@keyframes lp-pop{0%{transform:scale(.6);opacity:0}70%{transform:scale(1.08)}100%{transform:scale(1);opacity:1}}',
+            '.lp-cele-card{background:var(--c-card);color:var(--c-text);border-radius:14px;box-shadow:var(--e-3);width:100%;max-width:380px;padding:22px 18px 16px;text-align:center}',
+            '.lp-cele-badge{font-size:52px;line-height:1;animation:lp-pop .5s ease-out}',
+            '.lp-cele-kicker{margin-top:10px;font-size:var(--t-micro);font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--c-success)}',
+            '.lp-cele-title{margin-top:4px;font-size:var(--t-title);font-weight:800}',
+            '.lp-cele-sub{margin-top:6px;font-size:var(--t-caption);color:var(--c-muted);line-height:1.4}',
+            '.lp-cele .lp-strip{cursor:default;margin:14px 0 4px}',
+            '.lp-cele-next{margin-top:10px;font-size:var(--t-label);font-weight:700}',
+            '.lp-cele .lp-btn{width:100%;margin-top:14px}',
+            '@media (prefers-reduced-motion: reduce){.lp-cele,.lp-cele-badge{animation:none}}'
         ].join('\n');
         document.head.appendChild(st);
     }
@@ -396,7 +408,41 @@
         if (cur && cur.scrollIntoView) try { cur.scrollIntoView({ block: 'center' }); } catch (e) {}
     }
 
+    // «Глава пройдена!» — праздник, а не тост: владелец дорешал главу и не заметил
+    // короткой надписи (30.09). opts: { chapter, next, plan, onGo }.
+    function celebrate(opts) {
+        _ensureCss();
+        const old = document.getElementById('lp-cele');
+        if (old) old.remove();
+        const c = opts.chapter, next = opts.next, p = opts.plan;
+        const box = document.createElement('div');
+        box.id = 'lp-cele';
+        box.className = 'lp-cele';
+        box.setAttribute('role', 'dialog');
+        box.setAttribute('aria-modal', 'true');
+        const how = c.knewIt ? 'Ты знал эту главу — закрыта с первого прохода.'
+            : 'Встречено ' + c.seen + ' из ' + c.n + ' фактов, выучено ' + c.learned + '.' +
+              (c.learned < c.n ? ' Недоученное вернётся в таблицах повтора.' : '');
+        box.innerHTML = '<div class="lp-cele-card">' +
+            '<div class="lp-cele-badge">📗</div>' +
+            '<div class="lp-cele-kicker">Глава ' + (c.i + 1) + ' из ' + CHAPTERS.length + ' пройдена</div>' +
+            '<div class="lp-cele-title">' + esc(c.name) + '</div>' +
+            '<div class="lp-cele-sub">' + esc(how) + '</div>' +
+            (p ? stripHtml(p) : '') +
+            (next ? '<div class="lp-cele-next">Дальше — глава ' + (next.ch + 1) + '. ' + esc(next.name) + '</div>' : '<div class="lp-cele-next">Весь путь пройден!</div>') +
+            '<button type="button" class="lp-btn is-main">' + (next ? 'Продолжить' : 'Ура!') + '</button></div>';
+        const close = function () { box.remove(); document.removeEventListener('keydown', onKey, true); };
+        const onKey = function (e) { if (e.key === 'Escape' || e.key === 'Enter') { e.preventDefault(); e.stopPropagation(); go(); } };
+        const go = function () { close(); if (opts.onGo) opts.onGo(); };
+        box.addEventListener('click', function (e) { if (e.target === box || e.target.closest('.lp-btn')) go(); });
+        document.addEventListener('keydown', onKey, true);
+        document.body.appendChild(box);
+        try { if (typeof haptic === 'function') haptic('success'); } catch (e) {}
+        try { if (window.PetSfx && window.PetSfx.play) window.PetSfx.play('streak'); } catch (e) {}
+    }
+
     window.LessonPlan = {
+        celebrate: celebrate,
         CHAPTERS: CHAPTERS,
         chapterOf: chapterOf,
         index: index,

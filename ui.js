@@ -2167,8 +2167,8 @@ window.showStreakCelebration = function (days) {
     box.innerHTML = `<div class="streak-cele-card">
         <div class="streak-cele-fire"><span class="sc-glow"></span><span class="sc-flame">🔥</span><span class="sc-sparks">${sparks}</span></div>
         <div class="streak-cele-num"><span class="sc-old">${days - 1}</span><span class="sc-new">${days}</span></div>
-        <div class="streak-cele-title">Стрик засчитан!</div>
-        <div class="streak-cele-sub">${days} ${word} подряд · ${sub}</div>
+        <div class="streak-cele-title">Норма на сегодня выполнена!</div>
+        <div class="streak-cele-sub">🔥 ${days} ${word} подряд · ${sub}<br>Дальше — по желанию: всё решённое идёт в зачёт</div>
     </div>`;
     const close = () => { box.classList.add('out'); setTimeout(() => box.remove(), 350); };
     box.addEventListener('click', close);
@@ -2475,6 +2475,26 @@ function _lessonRangeLabel(r) {
     if (r.src === 'own') return `Твой период: ${r.from}–${r.to} гг. — сначала он`;
     return '';
 }
+// «Глава пройдена!» — один раз на каждую главу (на устройстве). Какие уже
+// отпразднованы — localStorage lesson_closed_seen; первый запуск запоминает уже
+// закрытые молча (без праздника задним числом). Вызывается и в игре (смена главы
+// на «Дальше»), и в меню — глава могла закрыться на последней таблице перед выходом.
+const LESSON_SEEN_KEY = 'lesson_closed_seen';
+function _celebrateNewChapters(plan, onGo) {
+    if (!plan || !window.LessonPlan || !window.LessonPlan.celebrate) return false;
+    const closedNow = plan.chapters.filter(c => c.closed && c.n > 0).map(c => c.i);
+    let seen = null;
+    try { seen = JSON.parse(localStorage.getItem(LESSON_SEEN_KEY) || 'null'); } catch (e) {}
+    const save = list => { try { localStorage.setItem(LESSON_SEEN_KEY, JSON.stringify(list)); } catch (e) {} };
+    if (!Array.isArray(seen)) { save(closedNow); return false; }
+    const fresh = closedNow.filter(i => !seen.includes(i));
+    if (!fresh.length) return false;
+    save(Array.from(new Set(seen.concat(closedNow))));
+    const c = plan.chapters[fresh[fresh.length - 1]];
+    window.LessonPlan.celebrate({ chapter: c, next: plan.cur, plan, onGo });
+    return true;
+}
+
 // Проба «соберётся ли таблица» в окне урока — теми же проверками на двусмысленность,
 // что у генератора (table.js). Окно считается годным, если строгий случайный подбор
 // 4 строк удаётся хотя бы в половине попыток (проба мягче генератора: тот ещё
@@ -2639,7 +2659,7 @@ window.maybeRotateLadderTask = function () {
     if (!typeDone && !chapterMoved) return false;
     if (a.kind !== 'continue') { st._ladderRun = null; st._lesson = null; return false; } // дальше — ДЗ/повтор: решает меню
     if (chapterMoved) {
-        showToast('📗', `Глава «${run.name}» закрыта! Дальше — ${a.lesson.name}`, 'bg-emerald-500', 'border-emerald-700');
+        if (!_celebrateNewChapters(a.plan)) showToast('📗', `Дальше — глава ${a.lesson.ch + 1}. ${a.lesson.name}`, 'bg-emerald-500', 'border-emerald-700');
     } else if (a.task === run.task) {
         st._ladderRun = { ...run, from: _todayLines(run.task), left: a.left || LINES_PER_TASK };
         return false;
@@ -2813,8 +2833,7 @@ function renderMainAction() {
         // — готовность главы в процентах: её двигает каждый новый и выученный факт.
         title = `Глава ${L.ch + 1}. ${L.name}`;
         const where = L.zone === 'after' ? ' · забегаем вперёд' : L.zone === 'before' ? ' · добираем начало' : '';
-        const norm = a.doneToday >= DAILY_GOAL_LINES ? ' · норма дня ✓' : '';
-        sub = `${cfg.shortLabel} · глава готова на ${L.progress || 0}%${where}${norm}`;
+        sub = `${cfg.shortLabel} · глава готова на ${L.progress || 0}%${where}`;
     } else if (a.kind === 'continue') {
         const cfg = TASK_CONFIG[a.task] || TASK_CONFIG.task4;
         const pl = (a.period && a.period.era === 'all') ? 'все периоды'
@@ -2837,6 +2856,17 @@ function renderMainAction() {
     } else if (a.kind === 'start') {
         title = `Начать: ${_wpLabel(a.period) || 'Вся история'}`;
         sub = 'первые факты за 2 минуты';
+    }
+    // Норма дня прямо на кнопке: ученик не понимал, когда «на сегодня достаточно»
+    // (владелец 30.09). 30 строк ≈ 12–15 минут; после нормы решённое тоже идёт в зачёт.
+    let today = '';
+    if ((window.state.stats.totalSolvedEver || 0) > 0 && a.kind !== 'start') {
+        const goal = window.STREAK_DAILY_MIN || DAILY_GOAL_LINES;
+        const done = Math.min(a.doneToday || 0, goal);
+        const ok = (a.doneToday || 0) >= goal;
+        today = `<div style="display:flex;align-items:center;gap:8px;margin-top:10px;font-size:var(--t-micro);font-weight:700;opacity:.95">
+            <div style="flex:1;height:5px;border-radius:999px;background:rgba(255,255,255,.28);overflow:hidden"><div style="width:${Math.round(100 * done / goal)}%;height:100%;border-radius:999px;background:#fff"></div></div>
+            <span style="white-space:nowrap">${ok ? 'Норма дня выполнена ✓' : `Сегодня ${a.doneToday || 0} из ${goal} строк`}</span></div>`;
     }
     // Путь по главам под кнопкой: где ученик сейчас и сколько закрыто. Тап — список глав.
     let path = '';
@@ -2864,7 +2894,9 @@ function renderMainAction() {
                 </div>
                 <div style="font-size:20px;opacity:.8;flex-shrink:0">›</div>
             </div>
+            ${today}
         </div>${path}`;
+    if (a.plan && !document.body.classList.contains('in-game')) _celebrateNewChapters(a.plan);
     box.querySelectorAll('[data-lp-open]').forEach(el => { el.onclick = () => window.openLessonPath(); });
 
     // Строки-дела (тип 3): показываем только когда есть что делать. Пустая строка

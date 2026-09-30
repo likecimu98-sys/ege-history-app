@@ -452,6 +452,20 @@ function _lessonReviewPool(lesson, limit, now) {
     return out.length >= (limit || 1) ? out : null;
 }
 
+// Какая из двух копий записи факта (factStreaks) правдивее при слиянии устройств:
+// обновлённая ПОСЛЕДНЕЙ. Лучший уровень — только для записей без отметки времени.
+// Тот же закон повторяет server/api/src/state-merge.js — держать одинаковыми.
+window.factStreakNewer = function (v, cur) {
+    if (!cur) return true;
+    if (!v || typeof v !== 'object') return false;
+    if (typeof cur !== 'object') return true;
+    const tv = Number(v.lastUpdated) || 0, tc = Number(cur.lastUpdated) || 0;
+    if (tv && tc && tv !== tc) return tv > tc;
+    const lv = v.level || 0, lc = cur.level || 0;
+    if (lv !== lc) return lv > lc;
+    return (v.points || v.streak || 0) > (cur.points || cur.streak || 0);
+};
+
 // --- SRS (Spaced Repetition System) ---
 // Интервалы повторения заданы в ДНЯХ и рассчитаны под реальный ритм
 // 3-4 захода в неделю. Раньше первые шаги были в часах (12ч/1д/3д) — при

@@ -7,14 +7,14 @@
             signInWithCredential, signOut, initializeFirestore, collection, doc, setDoc, getDoc,
             getDocs, addDoc, updateDoc, deleteDoc, deleteField, onSnapshot, query, where,
             orderBy, limit, runTransaction, arrayUnion, arrayRemove, vpsApiFetch, refreshVpsAuth
-        } from "./vps-sync-compat.js?v=20260930-15";
+        } from "./vps-sync-compat.js?v=20260930-16";
 
         // jsPDF грузился с cdnjs.cloudflare.com без SRI — то есть посторонний скрипт
         // исполнялся с полными правами страницы, а при недоступности CDN (у части
         // нашей аудитории это обычное дело) экспорт PDF просто не работал. Довод тот
         // же, что и для telegram-web-app.js: своя копия с того же origin.
         // Версия совпадает с прежней CDN-ной — 2.5.1, лежит в vendor/.
-        const VENDOR_JSPDF = 'vendor/jspdf.umd.min.js?v=20260930-15';
+        const VENDOR_JSPDF = 'vendor/jspdf.umd.min.js?v=20260930-16';
 
         const cloudConfig = { projectId: 'vps-postgresql' };
         
@@ -213,7 +213,9 @@
             'ege_last_task', 'ege_last_period', 'ege_period_chosen',
             // Свой диапазон годами (см. rememberOwnPeriod в ui.js) — выбор конкретного
             // человека, на общем устройстве он не должен переезжать к следующему.
-            'ege_own_period', 'ege_own_year_from', 'ege_own_year_to'
+            'ege_own_period', 'ege_own_year_from', 'ege_own_year_to',
+            // Какие главы пути уже отпразднованы (ui.js, _celebrateNewChapters).
+            'lesson_closed_seen'
         ];
         function _wipeDeviceIdentity() {
             IDENTITY_WIPE_KEYS.forEach(k => { try { localStorage.removeItem(k); } catch (e) {} });
@@ -3956,12 +3958,19 @@
                 const tbt = s.stats?.timeByTask || {};
                 TEXT_TASK_KEYS.forEach(k => { st.timeByTask[k] = Math.max(st.timeByTask[k], tbt[k] || 0); });
             });
+            // 🔴 Факт берём из копии, где его ОБНОВЛЯЛИ ПОСЛЕДНИМ (lastUpdated), а не
+            // «с лучшим уровнем». Правило «лучший уровень» при равенстве оставляло первую
+            // копию — старую облачную: у факта на 5-м уровне повтор не менял ни уровень,
+            // ни очки, и отметка «повторено» терялась при каждом слиянии. Ученица (Eva
+            // Efimova, 30.09) «который день» решала в «Повторении» те же 4 факта: они
+            // не обновлялись с 31.07. И «забыл» (срыв уровня) так же не доживал до облака.
+            // Копия со старым документом по этому факту старее — она и проигрывает.
+            // Без отметки времени (очень старые записи) — прежнее правило.
             st.factStreaks = {};
             states.forEach(s => {
                 Object.entries(s.stats?.factStreaks || {}).forEach(([k, v]) => {
                     const cur = st.factStreaks[k];
-                    if (!cur || (v.level||0) > (cur.level||0) || ((v.level||0)===(cur.level||0) && (v.points||v.streak||0)>(cur.points||cur.streak||0)))
-                        st.factStreaks[k] = v;
+                    if (!cur || window.factStreakNewer(v, cur)) st.factStreaks[k] = v;
                 });
             });
             st.eraStats = {};
