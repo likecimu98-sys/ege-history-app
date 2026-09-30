@@ -1557,49 +1557,35 @@ details.lobby-acc[open] .acc-chev { transform: rotate(180deg); }
    компонент «на будущее» нельзя: неиспользуемый тип карточки — это приглашение
    развести четвёртый визуальный язык, ровно с чего начинался весь этот разбор. */
 
-/* ── Навигация по разделам (30.09.2026: раньше — вкладки, прятавшие разделы) ─
-   Телефон: четыре равные кнопки в одной липкой полосе — помещаются всегда, без
-   прокрутки вбок (раньше «Ещё» уезжало за край экрана). ПК: вертикальный рельс. */
-/* Липнет обёртка: у самой полосы родитель — #lobby-nav её же высоты, и sticky
-   на полосе ничего бы не дал. Встаёт сразу ПОД липкой шапкой (#main-header):
-   её высоту кладёт в --hdr-h initLobbyTabs (ui.js). На ПК рельс липнет своим
-   правилом ниже. */
-#lobby-nav { position: sticky; top: calc(var(--hdr-h, 72px) + 4px); z-index: 30; }
+/* ── Вкладки разделов. На ПК тот же компонент разворачивается в рельс ──── */
 .la-tabs {
-    display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 4px;
-    padding: 4px; border-radius: var(--r-md);
-    background: var(--c-card); border: 1px solid var(--c-border); box-shadow: var(--e-1);
+    display: flex; gap: var(--gap-tap); overflow-x: auto;
+    scrollbar-width: none; -webkit-overflow-scrolling: touch; padding-bottom: 2px;
 }
+.la-tabs::-webkit-scrollbar { display: none; }
 .la-tab {
-    min-height: 40px; min-width: 0;
-    display: inline-flex; align-items: center; justify-content: center; gap: 5px;
-    padding: 0 6px; border-radius: var(--r-sm); border: 0; background: transparent;
+    flex: 0 0 auto; min-height: var(--tap-min);
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 0 14px; border-radius: var(--r-full);
+    background: var(--c-card); border: 1px solid var(--c-border);
     font-size: var(--t-label); font-weight: var(--t-label-w); color: var(--c-muted-2);
-    white-space: nowrap; overflow: hidden; text-overflow: ellipsis; cursor: pointer;
-    transition: background .15s ease, color .15s ease;
+    white-space: nowrap; cursor: pointer;
+    transition: background .15s ease, color .15s ease, border-color .15s ease;
 }
-.la-tab .n { display: none; font-size: var(--t-micro); font-weight: var(--t-micro-w); opacity: .65; font-variant-numeric: tabular-nums; }
-.la-tab[aria-current="true"] { background: var(--c-indigo); color: #fff; }
-.la-tab[aria-current="true"] .n { opacity: .8; }
+.la-tab .n { font-size: var(--t-micro); font-weight: var(--t-micro-w); opacity: .65; font-variant-numeric: tabular-nums; }
+.la-tab[aria-selected="true"] { background: var(--c-indigo); border-color: var(--c-indigo); color: #fff; }
+.la-tab[aria-selected="true"] .n { opacity: .8; }
 .la-tab:focus-visible { outline: 2px solid var(--c-indigo); outline-offset: 2px; }
 
-/* Разделы идут подряд; заголовок — тихий надзаголовок, отступ под липкую полосу. */
-.la-section { scroll-margin-top: calc(var(--hdr-h, 72px) + 64px); }
-.la-section + .la-section { margin-top: 18px; }
-.la-sec {
-    margin: 0 2px 8px; font-size: var(--t-micro); font-weight: 800;
-    letter-spacing: .08em; text-transform: uppercase; color: var(--c-muted-2);
-}
+/* Панель раздела: показана только выбранная вкладка */
+.la-panel[hidden] { display: none; }
 
 /* ── ТИП 1 · Плитка режима ─────────────────────────────────────────────────
    Сетка по 3. Вся плитка — тап-цель, поэтому min-height задан явно. */
 .card-tile {
-    /* 30.09.2026: плитка строкой — иконка слева, название и подпись справа.
-       Подписи читаются целиком («Живопись и архитектура»), а не ломаются по слогам. */
-    min-height: 60px;
-    display: grid; grid-template-columns: 36px minmax(0, 1fr); column-gap: 10px; row-gap: 4px;
-    align-items: center; align-content: center;
-    padding: 10px 12px; text-align: left;
+    min-height: 92px;
+    display: flex; flex-direction: column; align-items: center; gap: 6px;
+    padding: 12px 8px; text-align: center;
     background: var(--c-card); border: 1px solid var(--c-border);
     border-radius: var(--r-md); box-shadow: var(--e-1);
     cursor: pointer; transition: transform .12s ease, box-shadow .12s ease, border-color .12s ease;
@@ -1608,7 +1594,6 @@ details.lobby-acc[open] .acc-chev { transform: rotate(180deg); }
 .card-tile:active { transform: scale(.96); border-color: var(--a, var(--c-border-2)); }
 .card-tile:focus-visible { outline: 2px solid var(--c-indigo); outline-offset: 2px; }
 .card-tile .ico {
-    grid-row: 1 / span 2; align-self: center;
     position: relative; width: 36px; height: 36px; flex: 0 0 36px;
     border-radius: var(--r-sm); display: flex; align-items: center; justify-content: center;
     font-size: 19px; color: var(--a, var(--c-indigo));
@@ -1631,7 +1616,7 @@ details.lobby-acc[open] .acc-chev { transform: rotate(180deg); }
 /* Заливку прогресса намеренно НЕ делаем через <i>: селектор `.card-tile i`
    выше уже задаёт шрифт подзаголовка и подмешивался бы сюда. Отдельный класс
    вместо тега — чтобы каскад не воевал сам с собой. */
-.card-tile .pb { grid-column: 2; width: 100%; height: 3px; border-radius: var(--r-full); background: var(--c-card-2); overflow: hidden; margin-top: 2px; }
+.card-tile .pb { width: 100%; height: 3px; border-radius: var(--r-full); background: var(--c-card-2); overflow: hidden; margin-top: 2px; }
 .card-tile .pb > .fill { display: block; height: 100%; width: 0; border-radius: var(--r-full); background: var(--a, var(--c-indigo)); transition: width .5s ease; }
 .card-tile .pb[data-zero="1"] { display: none; }
 
@@ -1697,10 +1682,10 @@ details.lobby-acc[open] .acc-chev { transform: rotate(180deg); }
 .card-row .cnt { font-size: var(--t-label); font-weight: 800; color: var(--a, var(--c-muted-2)); font-variant-numeric: tabular-nums; flex: 0 0 auto; }
 
 /* ── Сетки лобби ─────────────────────────────────────────────────────────── */
-.la-grid-3 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--gap-tap); }
+.la-grid-3 { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--gap-tap); }
 .la-grid-2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--gap-tap); }
 @media (min-width: 640px) {
-    .la-grid-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+    .la-grid-3 { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
     .la-grid-2 { gap: 12px; }
 }
 
@@ -1741,9 +1726,8 @@ details.lobby-acc[open] .acc-chev { transform: rotate(180deg); }
 
     /* Вкладки разворачиваются в вертикальный рельс. Тот же компонент, та же
        разметка и тот же JS — меняется только направление флекса. */
-    .la-tabs { display: flex; flex-direction: column; gap: 4px; position: static; }
-    .la-tab  { width: 100%; justify-content: space-between; padding: 0 12px; min-height: var(--tap-min); }
-    .la-tab .n { display: inline; }
+    .la-tabs { flex-direction: column; gap: 4px; overflow: visible; }
+    .la-tab  { width: 100%; justify-content: space-between; }
 
     /* Плиток в ряд больше, но сами плитки не раздуваются. */
     .la-grid-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
