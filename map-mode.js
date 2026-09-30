@@ -141,9 +141,94 @@
                 else if (kind && !(kind !== 'person' && /(у|ю|ах|ях|ом|ем|ого|его|ой|ей)$/i.test(String(t.answer).trim())))
                     asks.push({ kind, answer: _cap(t.answer), text: String(t.question || '').trim() });
             });
-            groups.push({ key: 'fipimap:' + id, id, image: ts[0].image, judgments, asks });
+            // Весь текст заданий карты — чтобы знать её время и не брать в обманки
+            // тех, кто в этих заданиях упомянут (они могут оказаться верными).
+            const text = ts.map(t => [t.text, t.question, (t.elements || []).map(e => e.text).join(' ')].join(' ')).join(' ');
+            groups.push({ key: 'fipimap:' + id, id, image: ts[0].image, judgments, asks, text });
         });
         return (_fipi = groups);
+    }
+
+    // ─── Время карты и личности той же эпохи ─────────────────────────────────
+    // Обманки к «назовите полководца» брались с ЛЮБЫХ карт: к карте войны 1941–1945
+    // шли Кутузов и Ярослав Мудрый — ответ угадывался по эпохе (владелец 30.09).
+    // Время берём по САМОМУ ответу: годы в текстах заданий ненадёжны (суждения
+    // упоминают и чужие эпохи — у карты Пугачёва выходил 1550 г.). Ответы ФИПИ
+    // записаны по-своему («Иван Грозный», «Александр второй»), поэтому для них —
+    // справочник; остальных узнаём по деятелям задания 5.
+    const PERSON_YEAR = {
+        'олег': 907, 'ярослав мудрый': 1030, 'александр невский': 1242, 'дмитрий донской': 1380,
+        'мамай': 1380, 'ягайло': 1380, 'иван грозный': 1560, 'ермак': 1582, 'сигизмунд': 1610,
+        'михаил романов': 1620, 'алексей михайлович': 1654, 'разин': 1670, 'пугачев': 1774,
+        'ушаков': 1799, 'кутузов': 1812, 'багратион': 1812, 'наполеон': 1812, 'александр павлович': 1812,
+        'александр первый': 1812, 'александр второй': 1870, 'павлов': 1942, 'рокоссовский': 1943, 'жуков': 1943,
+    };
+    // Одно лицо под разными именами — в одном вопросе не встречаются.
+    const SAME = [
+        ['иван грозный', 'иван iv', 'иван васильевич'], ['александр павлович', 'александр первый', 'александр i'],
+        ['александр второй', 'александр ii', 'александр николаевич'], ['михаил романов', 'михаил федорович'],
+        ['петр i', 'петр первый', 'петр великий'], ['екатерина ii', 'екатерина великая'], ['николай ii', 'николай второй'],
+        ['дмитрий донской', 'дмитрий иванович'], ['пугачев', 'емельян пугачев'], ['разин', 'степан разин'],
+    ];
+    function _canon(name) {
+        const n = _norm(name);
+        const g = SAME.find(list => list.includes(n));
+        return g ? g[0] : n;
+    }
+    // «Иван IV Грозный» = «Иван Грозный», «Ермак Тимофеевич» = «Ермак»: одно имя целиком
+    // входит в другое (без титулов) — это один человек.
+    const TITLES = /^(князь|княгиня|хан|царь|царевна|митрополит|протопоп|патриарх|император|императрица|великий|святой)$/;
+    function _words(name) { return _canon(name).split(' ').filter(w => w && !TITLES.test(w)); }
+    function _samePerson(a, b) {
+        if (_canon(a) === _canon(b)) return true;
+        const x = _words(a), y = _words(b);
+        if (!x.length || !y.length) return false;
+        const inside = (p, q) => p.every(w => q.includes(w));
+        return inside(x, y) || inside(y, x);
+    }
+    const INITIALS = /^((?:[А-ЯЁ]\.\s*){1,3})/;
+    function _surname(p) {
+        p = String(p || '').trim();
+        return INITIALS.test(p) ? p.replace(INITIALS, '').trim() : p;
+    }
+    let _people = null;
+    function _peopleByYear() {
+        if (_people) return _people;
+        const out = [];
+        (window.task5Data || []).forEach(d => {
+            const y = parseInt(String(d.year || '').match(/\d+/), 10);
+            const name = _surname(d.person);
+            if (y && name && !/[,;(]/.test(name)) out.push({ name: _cap(name), y });
+        });
+        return (_people = out);
+    }
+    function _yearOfPerson(name) {
+        const c = _canon(name);
+        if (PERSON_YEAR[c]) return PERSON_YEAR[c];
+        const ys = _peopleByYear().filter(x => _canon(x.name) === c).map(x => x.y).sort((a, b) => a - b);
+        return ys.length ? ys[ys.length >> 1] : 0;
+    }
+    // Личности для обманок: ответы других карт того же времени и деятели задания 5,
+    // окно расширяется, пока не наберётся запас. Не берём тех, кто назван в заданиях
+    // этой карты, и тех, кто совпадает с ответом.
+    function _personPool(g, answer, all) {
+        const Y = _yearOfPerson(answer);
+        const banned = _norm(g.text || '');
+        const ok = name => {
+            const n = _norm(name);
+            return n && n.length > 2 && !_samePerson(name, answer) && banned.indexOf(n) < 0;
+        };
+        const cands = [];
+        all.forEach(x => x !== g && x.asks.forEach(b => { if (b.kind === 'person') cands.push({ name: b.answer, y: _yearOfPerson(b.answer) }); }));
+        _peopleByYear().forEach(p => cands.push(p));
+        if (!Y) return [];
+        let pool = [];
+        for (const w of [5, 10, 20, 40, 80, 150]) {
+            pool = [];
+            cands.forEach(c => { if (c.y && Math.abs(c.y - Y) <= w && ok(c.name) && !pool.some(p => _samePerson(p, c.name))) pool.push(c.name); });
+            if (pool.length >= 6) break;
+        }
+        return pool.length >= 3 ? _shuffle(pool) : [];
     }
     function _fipiAsk(g, all) {
         const asks = _shuffle(g.asks.slice());
@@ -155,9 +240,11 @@
                 const options = _shuffle([...opts]).map(n => ROMAN[n] + ' век');
                 return { kind: 'century', q: 'В каком веке произошли события, отражённые на карте?', answer: a.answer, options };
             }
-            // Обманки — ответы того же вида (город к городу, река к реке) с ДРУГИХ карт ФИПИ.
+            // Обманки — ответы того же вида (город к городу, река к реке) с ДРУГИХ карт ФИПИ;
+            // личности — того же времени, что и карта (см. _personPool).
             const pool = [];
-            _shuffle(all.slice()).forEach(x => x !== g && x.asks.forEach(b => {
+            if (a.kind === 'person') _personPool(g, a.answer, all).forEach(n => pool.push(n));
+            else _shuffle(all.slice()).forEach(x => x !== g && x.asks.forEach(b => {
                 if (b.kind === a.kind && _norm(b.answer) !== _norm(a.answer) && !pool.some(p => _norm(p) === _norm(b.answer))) pool.push(b.answer);
             }));
             if (pool.length < 3) continue;
@@ -338,6 +425,15 @@
         if (!last) {
             document.getElementById('mm-after').innerHTML = '<div class="mm-card mm-reveal"><div class="mm-verdict ' + (ok ? 'ok">✓ Верно' : 'bad">✗ Правильно: ' + _esc(q.answer)) + '</div>' +
                 '<button type="button" class="mm-go" data-mm="next-q">Следующий вопрос →</button></div>';
+            // Верно — дальше сам, через миг (владелец 30.09). Ошибка — ждём: надо
+            // успеть прочесть правильный ответ.
+            if (ok) {
+                const at = { i: _m.i, qi: _m.qi };
+                clearTimeout(_m.autoNext);
+                _m.autoNext = setTimeout(() => {
+                    if (_m && _m.maps && _m.i === at.i && _m.qi === at.qi && document.getElementById('mm-overlay')) _nextQ();
+                }, 900);
+            }
         } else _reveal(ok);
     }
 
@@ -381,6 +477,11 @@
         if (!maps.length) { if (typeof showToast === 'function') showToast('🗺️', 'Карты ещё загружаются', 'bg-amber-500', 'border-amber-700'); return; }
         _m.maps = maps; _m.i = 0; _m.results = maps.map(() => null);
         _nextMap();
+    }
+    function _nextQ() {
+        clearTimeout(_m.autoNext);
+        _m.qi++;
+        _renderRound();
     }
     function _nextMap() {
         _m.qs = _questions(_m.maps[_m.i]); _m.qi = 0; _m.roundOk = true;
@@ -441,7 +542,7 @@
         if (act === 'close') window.closeMapMode();
         else if (act === 'menu') _startScreen();
         else if (act === 'go' || act === 'again') _begin();
-        else if (act === 'next-q') { _m.qi++; _renderRound(); }
+        else if (act === 'next-q') _nextQ();
         else if (act === 'next-map') { _m.i++; if (_m.i < _m.maps.length) _nextMap(); else _summary(); }
         else if (act === 'zoom') { const img = a.querySelector('img'); if (img) _zoom(img.getAttribute('src')); }
     }

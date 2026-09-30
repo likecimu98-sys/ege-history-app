@@ -14,6 +14,8 @@ const read = f => fs.readFileSync(path.join(root, f), 'utf8');
 
 const ctx = { console, localStorage: { getItem: () => null, setItem() {} }, document: { getElementById: () => null } };
 ctx.window = ctx; vm.createContext(ctx);
+// Деятели задания 5 — источник личностей той же эпохи для вопросов «назовите полководца».
+vm.runInContext(read('data.js').replace(/\b(const|let)\s+(bigData|task\w*Data)\b/g, 'var $2'), ctx);
 vm.runInContext(read('visualStudyData.generated.js'), ctx);
 vm.runInContext(read('exam-bank.generated.js'), ctx);
 vm.runInContext(read('map-mode.js'), ctx);
@@ -60,3 +62,38 @@ assert.match(read('index.html'), /<script src="map-mode\.js\?v=/, 'map-mode.js �
 assert.match(read('service-worker.js'), /map-mode\.js\?v=/, 'map-mode.js не в прекэше');
 assert.match(read('app.js'), /openMapMode:/, 'нет обработчика openMapMode');
 console.log('map-mode.selftest: ok', JSON.stringify(kinds));
+
+// Личности в вопросах — из времени карты: у карт войны 1941–1945 все 4 варианта из
+// 1936–1950 (владелец 30.09: «не Кутузовы»), и одно лицо не повторяется под другим именем.
+{
+  const yearOf = name => {
+    const n = String(name).toLowerCase().replace(/ё/g, 'е');
+    const hit = ctx.task5Data.filter(d => String(d.person).toLowerCase().replace(/ё/g, 'е').endsWith(n));
+    // однофамильцы (Павлов-физиолог и Павлов из Сталинграда): годится любой из них
+    const ys = hit.map(d => parseInt(String(d.year).match(/\d+/), 10));
+    return ys.find(y => y >= 1936 && y <= 1950) || ys[0] || 0;
+  };
+  let ww = 0;
+  for (const g of fipi) {
+    const p = g.asks.find(a => a.kind === 'person');
+    if (!p || !['жуков', 'рокоссовский', 'павлов'].includes(p.answer.toLowerCase())) continue;
+    for (let i = 0; i < 20; i++) {
+      const q = ctx.MapMode.fipiQuestions(g).find(z => z.kind === 'person');
+      if (!q) continue;
+      ww++;
+      for (const o of q.options.filter(x => x !== q.answer)) {
+        const y = yearOf(o);
+        assert.ok(!y || (y >= 1936 && y <= 1950), `${g.id}: «${o}» (${y}) не из войны`);
+      }
+    }
+  }
+  assert.ok(ww > 0, 'вопросы по личностям войны не собираются');
+  const dup = [];
+  for (const g of fipi) for (let i = 0; i < 10; i++) {
+    const q = ctx.MapMode.fipiQuestions(g).find(z => z.kind === 'person');
+    if (q && q.options.some(o => o !== q.answer && (o.includes(q.answer) || q.answer.includes(o)))) dup.push(g.id + ': ' + q.options.join(', '));
+  }
+  assert.deepStrictEqual(dup.slice(0, 3), [], 'одно лицо под двумя именами');
+}
+console.log('map-mode: личности по эпохе карты — ok');
+
