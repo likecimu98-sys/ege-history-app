@@ -84,7 +84,7 @@ test('экономика v3, питомец, коробки, итоги, рей�
   const solve = st.events.find(e => e.reason === 'solve');
   assert.equal(solve.delta, 220, JSON.stringify(st.events));
   assert.equal(solve.parts.ege, undefined, 'баллы ЕГЭ за таблицы не оплачиваются');
-  assert.ok(st.pet.sat >= 30 + 40 - 5, 'знания кормят: +40 сытости за 100 строк, ' + st.pet.sat);
+  assert.ok(st.pet.sat >= 30 + 40 - 10, 'знания кормят: +40 сытости за 100 строк (минус час голода, 8/ч), ' + st.pet.sat);
   const gained3 = st.events.reduce((a, e) => a + (e.delta || 0), 0);
   assert.equal(st.balance, before3 + gained3);
   assert.ok(st.quests && st.quests.list.length === 3, 'три задания дня');
@@ -457,8 +457,8 @@ test('экономика v3, питомец, коробки, итоги, рей�
     assert.equal(led.rows[0].n, 2); assert.equal(led.rows[0].s, 12500);
   }
 
-  // 26. Смерть от забвения: 7 заходов без заботы — жив, 8-й — предупреждение,
-  //     9-й — смерть, раздел пропадает; забота сбрасывает счёт; /revive возвращает.
+  // 26. Смерть от забвения: 4 захода без заботы — жив, 5-й — предупреждение,
+  //     6-й — смерть, раздел пропадает; забота сбрасывает счёт; /revive возвращает.
   {
     const DAYMS = 24 * 3600e3;
     const uD = await newUser('Забывчивый');
@@ -466,31 +466,31 @@ test('экономика v3, питомец, коробки, итоги, рей�
     const t0 = Date.parse('2026-10-01T09:00:00Z');
     await tx(c => W.hatch(c, uD, ['d26'], { species: 'kitten', name: 'Барсик' }, t0));
     let s = null;
-    for (let d = 1; d <= 7; d++) {
+    for (let d = 1; d <= 4; d++) {
       s = await state(uD, 'd26', t0 + d * DAYMS);
       assert.equal(s.hatched, true, 'день ' + d); assert.equal(s.doom, null, 'без предупреждения, день ' + d);
     }
-    s = await state(uD, 'd26', t0 + 8 * DAYMS);
-    assert.ok(s.doom && s.doom.neglect === 7, 'на 8-й заход — предупреждение');
+    s = await state(uD, 'd26', t0 + 5 * DAYMS);
+    assert.ok(s.doom && s.doom.neglect === 4, 'на 5-й заход — предупреждение');
     // Погладил — счёт сброшен, предупреждения нет.
-    await tx(c => W.markCare(c, uD, t0 + 8 * DAYMS));
-    s = await state(uD, 'd26', t0 + 8 * DAYMS + 60000);
+    await tx(c => W.markCare(c, uD, t0 + 5 * DAYMS));
+    s = await state(uD, 'd26', t0 + 5 * DAYMS + 60000);
     assert.equal(s.doom, null);
-    for (let d = 9; d <= 16; d++) s = await state(uD, 'd26', t0 + d * DAYMS);
-    assert.ok(s.hatched && s.doom, 'снова 7 забытых заходов — предупреждение');
-    s = await state(uD, 'd26', t0 + 17 * DAYMS);
+    for (let d = 6; d <= 10; d++) s = await state(uD, 'd26', t0 + d * DAYMS);
+    assert.ok(s.hatched && s.doom, 'снова 4 забытых захода — предупреждение');
+    s = await state(uD, 'd26', t0 + 11 * DAYMS);
     assert.equal(s.hatched, false); assert.equal(s.canHatch, false, 'нового не завести');
     assert.equal(s.dead.name, 'Барсик'); assert.equal(s.dead.seen, false);
     const job = (await db.query("SELECT data FROM notification_jobs WHERE doc_id LIKE 'pet_dead_%'")).rows[0];
     assert.equal(job, undefined, 'у тестового нет Telegram — уведомлению некуда идти');
-    s = await state(uD, 'd26', t0 + 18 * DAYMS);
+    s = await state(uD, 'd26', t0 + 12 * DAYMS);
     assert.equal(s.hatched, false); assert.ok(s.dead);
     await tx(c => W.ackDeath(c, uD));
-    s = await state(uD, 'd26', t0 + 18 * DAYMS);
+    s = await state(uD, 'd26', t0 + 12 * DAYMS);
     assert.equal(s.dead.seen, true);
-    const rv = await tx(c => W.revive(c, uD, t0 + 19 * DAYMS));
+    const rv = await tx(c => W.revive(c, uD, t0 + 13 * DAYMS));
     assert.equal(rv.name, 'Барсик');
-    s = await state(uD, 'd26', t0 + 19 * DAYMS + 1000);
+    s = await state(uD, 'd26', t0 + 13 * DAYMS + 1000);
     assert.equal(s.hatched, true); assert.equal(s.pet.sat, 30); assert.equal(s.doom, null);
     await assert.rejects(tx(c => W.revive(c, uD)), /nothing_to_revive/);
   }

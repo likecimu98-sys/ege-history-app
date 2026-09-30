@@ -414,7 +414,7 @@
       sheet('<div class="pet-doom-sheet">' +
         '<div class="pet-try-stage">' + PetArt.render({ species: st.pet.species, stage: st.pet.stage, state: 'sick', items: S.items, equipped: {}, scene: 'night', label: st.pet.name }) + '</div>' +
         '<b>⚠️ ' + esc(st.pet.name) + ' при смерти</b>' +
-        '<i>Ты заходишь в тренажёр уже ' + ((st.doom && st.doom.neglect) || 7) + ' дней подряд, но ни разу не заглянул к нему. Если сегодня его не покормить или хотя бы не погладить — завтра он умрёт. Навсегда.</i>' +
+        '<i>Ты заходишь в тренажёр уже ' + ((st.doom && st.doom.neglect) || 4) + ' ' + plural((st.doom && st.doom.neglect) || 4, 'день', 'дня', 'дней') + ' подряд, но ни разу не заглянул к нему. Если сегодня его не покормить или хотя бы не погладить — завтра он умрёт. Навсегда.</i>' +
         '<button type="button" class="go danger" onclick="PetUI.rescue()">🍲 Покормить и спасти</button>' +
         '<button type="button" class="pet-link" onclick="PetUI.closeSheet()">Потом</button></div>');
     }, 700);

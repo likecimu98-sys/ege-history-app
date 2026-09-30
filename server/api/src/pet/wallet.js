@@ -67,19 +67,22 @@ function decayPet(pet, now) {
     const stop = Math.min(now, (Math.floor(cur / HOUR) + 1) * HOUR);
     const h = (stop - cur) / HOUR;
     const k = isNight(cur) ? 0.5 : 1;
-    sat -= 4 * k * h;
-    mood -= 2 * k * h;
+    // 30.09.2026 (владелец: «почти бессмертный»): всё падает вдвое быстрее —
+    // сытость 8/ч (была 4), настроение 4/ч, болезнь после 6 ч голода (было 12)
+    // и здоровье −6/ч. Полная миска — примерно на полдня, а не на сутки.
+    sat -= 8 * k * h;
+    mood -= 4 * k * h;
     if (sat <= 0) {
       sat = 0;
       starving += h;
-      if (starving >= 12) health -= 3 * k * h;
+      if (starving >= 6) health -= 6 * k * h;
     } else {
       starving = 0;
       if (!sick && sat >= 50) health += 2 * h;
     }
-    if (health < 35) mood -= 1 * k * h;
+    if (health < 35) mood -= 2 * k * h;
     health = clamp(health, 5, 100);
-    if (starving >= 12 || health < 35) sick = true;
+    if (starving >= 6 || health < 35) sick = true;
     cur = stop;
   }
   next.sat = round2(clamp(sat));

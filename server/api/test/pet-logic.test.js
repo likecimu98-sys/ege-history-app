@@ -61,10 +61,10 @@ test('броски распределяются по заявленным шан
   assert.ok(seen.rare > seen.epic && seen.epic > seen.legendary && seen.legendary > seen.mythic);
 });
 
-test('питомец голодает около суток, ночью вдвое медленнее, не умирает', () => {
+test('питомец голодает около полусуток, ночью вдвое медленнее, не умирает', () => {
   const pet = { sat: 100, mood: 100, health: 100, at: noonMsk };
-  const day = W.decayPet(pet, noonMsk + 12 * HOUR); // 12:00 → 00:00, из них час ночи
-  assert.ok(day.sat > 50 && day.sat < 55, String(day.sat));
+  const day = W.decayPet(pet, noonMsk + 12 * HOUR); // 12:00 → 00:00, из них час ночи: 100 − 8·11 − 4
+  assert.ok(day.sat > 5 && day.sat < 10, String(day.sat));
   const week = W.decayPet(pet, noonMsk + 7 * 24 * HOUR);
   assert.equal(week.sat, 0);
   assert.equal(week.sick, true);
