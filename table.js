@@ -57,6 +57,10 @@ function _tableYearRange() {
         const r = window.getActiveHwRange();
         if (r) return r;
     }
+    // Таблица повтора в уроке (state.js, _lessonReviewPool) берёт строки из всего
+    // пройденного, а не из окна главы: и обманки — из тех же лет, иначе к строке
+    // 1380 года в уроке про Петра I пришли бы одни 1700-е.
+    if (st._blendTable && st._lesson && st._lesson.cumTo) return { from: st._lesson.cumFrom, to: st._lesson.cumTo };
     const periodEl = (typeof DOM !== 'undefined' && DOM['filter-period']) || $('filter-period');
     if (periodEl && periodEl.value === 'custom') {
         const a = parseInt(($('custom-year-start') || {}).value, 10);
@@ -1723,7 +1727,13 @@ function generateTable() {
         window.state.currentMode === 'detective' ||
         window.state.isHomeworkMode === true;
 
+    // Счётчик таблиц для повтора в уроке (getFilteredPool: «каждая 2-я/3-я таблица —
+    // повтор») растёт на КАЖДЫЙ вызов пула, а перегенерация зовёт его до 30 раз —
+    // и чередование превращалось в лотерею. Все попытки одной таблицы видят один номер.
+    const tick0 = window.state._normalTableTick || 0;
+    const retick = () => { window.state._normalTableTick = tick0; };
     for (let attempt = 0; attempt < 15; attempt++) {
+        retick();
         generateTableOnce();
         if (skipValidation() || (validateTable() && _task5GateOk())) return;
     }
@@ -1737,10 +1747,12 @@ function generateTable() {
     // годах — правильный ответ; вся история — только если нет и двух строк.
     if (_tableYearRange()) {
         for (let attempt = 0; attempt < 15; attempt++) {
+            retick();
             generateTableOnce();
             if (validateTable({ allowShort: true }) && _task5GateOk()) return;
         }
     }
+    retick();
     // Фолбэк: умный подбор по всем эпохам обычно даёт корректную таблицу.
     const periodEl = $('filter-period');
     const saved = periodEl ? periodEl.value : 'all';

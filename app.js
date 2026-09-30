@@ -90,6 +90,7 @@ window.quickStartGame = async function(task, mode) {
     }
     window.state._normalTableTick = 0; // блендинг повтора считаем от начала сессии
     window.state._ladderRun = null;    // ротацию типов заводит только главная кнопка (ui.js)
+    window.state._lesson = null;       // урок (повтор из пройденного) — тоже только она
     window.state.currentTask = task;
     $('filter-task').value = task;
     $('filter-mode').value = mode;
@@ -141,6 +142,9 @@ window.backToLobby = function() {
     window.state.activeHw = null; // выход из потока ДЗ
     window.state.reviewFocus = false; // фокус «Повторить N фактов» действует одну сессию
     window.state.mistakeFocus = false; // фокус «Разбор ошибок» — тоже одна сессия
+    window.state._lesson = null;       // урок и выбранная в «Пути» глава — до выхода в меню
+    window.state._pinChapter = null;
+    window.state._ladderRun = null;
     $('game-container').classList.add('hidden');
     $('game-container').classList.remove('flex');
     $('lobby-area').classList.remove('hidden');

@@ -341,7 +341,19 @@ function getFilteredPool(period, limit) {
         if (window.state.currentMode === 'normal' && !window.state.isHomeworkMode
             && !window.state.mistakeFocus && !window.state.reviewFocus) {
             window.state._normalTableTick = (window.state._normalTableTick || 0) + 1;
-            if (window.state._normalTableTick % 3 === 0) {
+            const lesson = window.state._lesson;
+            if (lesson && lesson.cumTo) {
+                // УРОК (ui.js → lesson-plan.js): повтор берётся из ВСЕГО пройденного — от
+                // начала рамок до конца текущей главы, а не только из окна главы. Так
+                // старые главы не забываются (решение владельца: «862–N, а не один век»).
+                // Порядок: ошибки → к повтору → невыученное из прошлых глав. Каждая 2-я
+                // таблица при большом долге, иначе каждая 3-я.
+                if (window.state._normalTableTick % (lesson.every || 3) === 0) {
+                    const blend = _lessonReviewPool(lesson, limit, now);
+                    if (blend) { window.state._blendTable = true; return blend; }
+                }
+                window.state._blendTable = false;
+            } else if (window.state._normalTableTick % 3 === 0) {
                 const task = window.state.currentTask;
                 const cfg = TASK_CONFIG[task] || TASK_CONFIG.task4;
                 // 🔴 Ошибки — только из ВЫБРАННОГО периода. Раньше брались все ошибки
@@ -379,6 +391,35 @@ function getFilteredPool(period, limit) {
     return pool;
 }
 
+// Таблица повтора в уроке: факты текущего задания за годы [cumFrom, cumTo].
+// Группы по важности: ошибки → срок повтора прошёл → невыученное из глав ДО текущей
+// (встреченное — раньше невиданного). Берём группы по порядку, пока не наберётся
+// хотя бы две таблицы (подборщику нужна свобода, чтобы строки не спорили друг с
+// другом). Не набралось и на одну — null: будет обычная таблица главы.
+function _lessonReviewPool(lesson, limit, now) {
+    const task = window.state.currentTask;
+    const cfg = TASK_CONFIG[task] || TASK_CONFIG.task4;
+    const fs = window.state.stats.factStreaks || {};
+    const inCum = f => { const y = getYearFromFact(f); return y >= lesson.cumFrom && y <= lesson.cumTo; };
+    const base = (task === 'task7' ? (window.task7Data || []) : cfg.data()).filter(inCum);
+    const inBase = new Set(base.map(f => factKey(f)));
+    const mist = (window.state.mistakesPool || []).filter(m => m.task === task && inBase.has(factKey(m.fact))).map(m => m.fact);
+    const due = base.filter(f => { const d = fs[factKey(f)]; return d && d.level > 0 && d.nextReview <= now; });
+    const earlier = base.filter(f => getYearFromFact(f) < lesson.segFrom);
+    const gapSeen = earlier.filter(f => { const d = fs[factKey(f)]; return d && !(d.level >= 1); });
+    const gapNew = earlier.filter(f => !fs[factKey(f)]);
+    const want = Math.max(limit || 1, 1) * 2;
+    const seen = new Set(); const out = [];
+    for (const group of [mist, due, gapSeen, gapNew]) {
+        for (const f of shuffleArray([...group])) {
+            const k = cfg.dedupeKey(f);
+            if (!seen.has(k)) { seen.add(k); out.push(f); }
+        }
+        if (out.length >= want) break;
+    }
+    return out.length >= (limit || 1) ? out : null;
+}
+
 // --- SRS (Spaced Repetition System) ---
 // Интервалы повторения заданы в ДНЯХ и рассчитаны под реальный ритм
 // 3-4 захода в неделю. Раньше первые шаги были в часах (12ч/1д/3д) — при
@@ -397,7 +438,10 @@ function _srsNext(level) {
 function updateFactSRS(fKey, isCorrect, isSure) {
     const now = Date.now();
     let data = window.state.stats.factStreaks[fKey] ||
-        { points: 0, level: 0, nextReview: 0, lastUpdated: now };
+        // f — «с первого раза»: 1 = первая же встреча с фактом решена верно и уверенно.
+        // По доле таких ответов урок закрывает главу, которую ученик уже знает (онлайн-
+        // школа, репетитор), за один проход — см. lesson-plan.js.
+        { points: 0, level: 0, nextReview: 0, lastUpdated: now, f: (isCorrect && isSure) ? 1 : 0 };
 
     // Миграция старых форматов
     if (typeof data === 'number') {

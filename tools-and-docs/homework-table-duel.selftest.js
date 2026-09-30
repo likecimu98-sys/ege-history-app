@@ -801,7 +801,8 @@ assert.doesNotMatch(tableSource, /_selectHomeworkTargets\('task4', TASK_CONFIG\.
 // Жалоба 23.09: каждая третья таблица («перемешивание» с ошибками) при рамках
 // 1700–1890 приносила ошибки из всей истории. Ошибки обязаны сверяться с базой периода.
 {
-    const blend = stateSource.slice(stateSource.indexOf('БЛЕНДИНГ (Q1)'), stateSource.indexOf('window.state._blendTable = false'));
+    // lastIndexOf: у урока (ui.js → _lessonReviewPool) своя ветка с тем же сбросом флага выше.
+    const blend = stateSource.slice(stateSource.indexOf('БЛЕНДИНГ (Q1)'), stateSource.lastIndexOf('window.state._blendTable = false'));
     assert.ok(blend.length > 100, 'Блок перемешивания с ошибками не найден в state.js');
     assert.match(blend, /const inPeriod = new Set\(pool\.map\(f => factKey\(f\)\)\)/,
         'Перемешивание больше не строит набор фактов периода');

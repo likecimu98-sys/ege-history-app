@@ -1242,6 +1242,10 @@ window.applyGlobalSettings = function() {
     // Ученик явно выбрал период — теперь плашка показывает выбранные годы вместо «Выбрать период».
     window.state.periodChosen = true;
     try { localStorage.setItem('ege_period_chosen', '1'); } catch (e) {}
+    // Ученик сам сменил период посреди урока — урок уступает: без ротации по главам
+    // и без повтора «из всего пройденного», дальше решает выбранное.
+    window.state._ladderRun = null;
+    window.state._lesson = null;
 
     saveProgress();
     closePreGameModal();
@@ -1455,10 +1459,11 @@ window.updateGamePeriodChip = function() {
     // границу применило приложение (кнопка «Продолжить» по «дошли до») — реальные годы.
     const chosen = window.state.periodChosen || window.state._wpApplied
         || (() => { try { return localStorage.getItem('ege_period_chosen') === '1'; } catch (e) { return false; } })();
-    if (txt) txt.textContent = chosen ? window.currentPeriodLabel() : 'Период';
+    const lesson = window.state._lesson;
+    if (txt) txt.textContent = lesson ? `Урок: ${lesson.name}` : chosen ? window.currentPeriodLabel() : 'Период';
     // Пульсация-подсказка только пока период ни разу не выбран осознанно. Дальше она
     // не несёт информации и просто мозолит глаз (CSS: #game-period-chip.is-hinting).
-    chip.classList.toggle('is-hinting', !chosen);
+    chip.classList.toggle('is-hinting', !chosen && !lesson);
     gear.classList.add('hidden');
     chip.classList.remove('hidden'); chip.classList.add('flex');
 };
@@ -2253,6 +2258,10 @@ window.rememberOwnPeriod = function (period, from, to) {
 // идёт класс, а не по всей истории.
 window.applyTrainerPeriod = function () {
     if (window.state && window.state.activeHw) return; // внутри ДЗ рамки чужие
+    // Урок главной кнопки уже выбрал окно лет (глава, у тонких — шире). Без этого
+    // quickStartGame тут же перетирал его рабочим периодом, и урок шёл «по всей истории».
+    const forced = window.state && window.state._forcedWin;
+    if (forced) { window.state._forcedWin = null; _applyWpFilter(forced); return; }
     _applyWpFilter(_workingPeriod());
 };
 
@@ -2436,6 +2445,74 @@ function _weakestSpot() {
     return worst;
 }
 
+// ── «Урок»: рамки пути по главам (lesson-plan.js) ──
+// Свой выбор ученика → граница класса («дошли до») → легаси-эпоха класса → вся история.
+// ДЗ сюда не входит: домашка идёт первой отдельной веткой. Рамки мягкие: когда всё
+// в них закрыто, урок идёт дальше («забегаем вперёд»), а не останавливается.
+function _lessonRange() {
+    const own = _ownChosenPeriod();
+    if (own) {
+        if (own.from && own.to) return { from: own.from, to: own.to, src: 'own' };
+        const y = EPOCH_YEARS[own.era];
+        if (y) return { from: y[0], to: y[1], src: 'own' };
+        return { from: 862, to: 2026, src: 'all' }; // «вся история» — то же, что без выбора
+    }
+    let upto = NaN, cp = '';
+    try { upto = parseInt(localStorage.getItem('class_current_upto'), 10); cp = localStorage.getItem('class_current_period') || ''; } catch (e) {}
+    if (upto >= 862 && upto <= 2026) return { from: 862, to: upto, src: 'class' };
+    if (EPOCH_YEARS[cp]) return { from: 862, to: EPOCH_YEARS[cp][1], src: 'class' };
+    return { from: 862, to: 2026, src: 'all' };
+}
+function _lessonRangeLabel(r) {
+    if (!r) return '';
+    if (r.src === 'class') return `Класс дошёл до ${r.to} г. — сначала всё до этой границы`;
+    if (r.src === 'own') return `Твой период: ${r.from}–${r.to} гг. — сначала он`;
+    return '';
+}
+// Проба «соберётся ли таблица» в окне урока — теми же проверками на двусмысленность,
+// что у генератора (table.js). Окно считается годным, если строгий случайный подбор
+// 4 строк удаётся хотя бы в половине попыток (проба мягче генератора: тот ещё
+// сверяет обманки; при 30% «СССР 1965–1991» срывалась «на всю историю»). Для заданий 1 и 4
+// хватает счёта разных годов в lesson-plan.js.
+function _lessonTableProbe(t, a, b) {
+    const A = window.__tableAudit;
+    const cfg = TASK_CONFIG[t];
+    if (!A || !cfg || (t !== 'task3' && t !== 'task5' && t !== 'task7')) return true;
+    const facts = (t === 'task7' ? (window.task7Data || []) : cfg.data()).filter(f => { const y = getYearFromFact(f); return y >= a && y <= b; });
+    const TRIES = 30, NEED = 15;
+    let ok = 0;
+    if (t === 'task7') {
+        for (let i = 0; i < TRIES; i++) if ((A.pickCompatibleTask7Target(shuffleArray([...facts]), 4) || []).length === 4) ok++;
+        return ok >= NEED;
+    }
+    const reign = (x, y) => typeof y.year === 'number' && !(y.year >= 1941 && y.year <= 1945)
+        && typeof isReigningAuthority === 'function' && isReigningAuthority(x.person, y.year);
+    const clash = t === 'task5'
+        ? (x, y) => x.person === y.person || x.event === y.event || A.task5Interchangeable(x, y) || reign(x, y) || reign(y, x)
+        : (x, y) => x.process === y.process || x.fact === y.fact || A.task3Conflicts(x, y);
+    for (let i = 0; i < TRIES; i++) {
+        const pick = [];
+        for (const f of shuffleArray([...facts])) {
+            if (pick.every(p => !clash(f, p))) pick.push(f);
+            if (pick.length === 4) break;
+        }
+        if (pick.length === 4) ok++;
+    }
+    return ok >= NEED;
+}
+if (window.LessonPlan) window.LessonPlan.setProbe(_lessonTableProbe);
+
+// План урока или null (lesson-plan.js не загрузился — тогда старая логика «новое в периоде»).
+function _lessonPlan() {
+    if (!window.LessonPlan) return null;
+    try {
+        const r = _lessonRange();
+        const p = window.LessonPlan.plan({ fs: window.state.stats.factStreaks || {}, from: r.from, to: r.to, pin: window.state._pinChapter });
+        p.range = r;
+        return p;
+    } catch (e) { console.warn('[lesson]', e); return null; }
+}
+
 function computeMainAction() {
     const s = window.state.stats;
     const due = _dueReviewCounts();
@@ -2443,12 +2520,30 @@ function computeMainAction() {
     const hwRemaining = active.reduce((n, a) => n + (a.items || []).reduce((m, it) => m + window.hwItemRemaining(it), 0), 0);
     const doneToday = (s.dailyStats && s.dailyStats[getTodayString()] && s.dailyStats[getTodayString()].solved) || 0;
     const wp = _workingPeriod();
-    const unlearned = _unlearnedCountsByTask(wp);
+    const lp = _lessonPlan();
+    const fsx = s.factStreaks || {};
+    // Новое для урока — невыученное текущей главы; без плана — по рабочему периоду, как раньше.
+    const unlearned = lp
+        ? (lp.cur ? window.LessonPlan.unlearnedByTask(fsx, lp.cur.from, lp.cur.to) : { by: { task1: 0, task3: 0, task4: 0, task5: 0, task7: 0 }, total: 0, bestTask: 'task4' })
+        : _unlearnedCountsByTask(wp);
     const mistakes = _mistakeCounts();
-    const base = { due, hwCount: active.length, hwRemaining, doneToday, unlearned, mistakes };
+    const base = { due, hwCount: active.length, hwRemaining, doneToday, unlearned, mistakes, plan: lp };
+    // Урок по главе: задание по ротации + окно лет под него (у тонких глав — шире).
+    const lessonOf = (pick) => {
+        const cur = lp.cur;
+        const win = window.LessonPlan.taskWindow(cur, pick.task, cur.zone === 'in' ? lp.range.from : 862);
+        return { task: pick.task, left: pick.left, period: { from: win.from, to: win.to },
+            lesson: { key: cur.key, ch: cur.ch, name: cur.name, zone: cur.zone, n: cur.n, seen: cur.seen, learned: cur.learned,
+                toClose: window.LessonPlan.linesToClose(cur),
+                segFrom: cur.from, segTo: cur.to, cumFrom: Math.min(lp.range.from, cur.from), cumTo: cur.to } };
+    };
 
-    // Новичок — вся история, если учитель или сам ученик не задал ограничение.
-    if (!(s.totalSolvedEver > 0)) return { ...base, kind: 'start', period: wp };
+    // Новичок: первая глава пути (или его рамки), без ротации — сразу к делу.
+    if (!(s.totalSolvedEver > 0)) {
+        const pick = lp && lp.cur && _pickNewTask(unlearned);
+        if (pick) return { ...base, kind: 'start', ...lessonOf(pick) };
+        return { ...base, kind: 'start', period: wp };
+    }
 
     // Порядок: 1) ДЗ  2) ошибки  3) повтор выпавшего из выученного  4) новое  5) слабое  6) готово
 
@@ -2483,9 +2578,10 @@ function computeMainAction() {
     // «День повторения» — если есть что разбирать
     if (isRepeatDay && hasBacklog) return pickReview(true);
 
-    // Обычный день → новое
+    // Обычный день → урок по текущей главе (или, без плана, новое в периоде)
     const pick = _pickNewTask(unlearned);
-    if (pick) return { ...base, kind: 'continue',
+    if (pick && lp && lp.cur) return { ...base, kind: 'continue', ...lessonOf(pick) };
+    if (pick && !lp) return { ...base, kind: 'continue',
         task: pick.task,
         period: wp,
         left: pick.left };
@@ -2512,21 +2608,86 @@ function _todayLines(task) {
 // и «16 строк на тип» оставались надписью на кнопке. Срабатывает на «Дальше»,
 // только в занятии, начатом с главной кнопки, и только в обычном режиме.
 // true — занятие перезапущено с новым типом, обычную следующую таблицу не строить.
+// Урок (lesson-plan.js) дополнительно следит за главой: закрылась она прямо на этой
+// таблице — сразу переходим к следующей, не дожидаясь конца 16 строк типа.
 window.maybeRotateLadderTask = function () {
     const st = window.state, run = st._ladderRun;
     if (!run || st.currentMode !== 'normal' || st.isHomeworkMode || st.activeHw) return false;
-    if (st.currentTask !== run.task) { st._ladderRun = null; return false; }
-    if (_todayLines(run.task) - run.from < run.left) return false;
+    if (st.currentTask !== run.task) { st._ladderRun = null; st._lesson = null; return false; }
+    const typeDone = _todayLines(run.task) - run.from >= run.left;
+    if (!typeDone && !run.key) return false;
     const a = computeMainAction();
-    if (a.kind !== 'continue') { st._ladderRun = null; return false; } // дальше — ДЗ/повтор: решает меню
-    if (a.task === run.task) { st._ladderRun = { task: run.task, from: _todayLines(run.task), left: a.left || LINES_PER_TASK }; return false; }
-    const cfg = TASK_CONFIG[a.task] || TASK_CONFIG.task4;
-    showToast('🔄', `${LINES_PER_TASK} строк есть — теперь ${cfg.shortLabel}`, 'bg-blue-500', 'border-blue-700');
-    _applyWpFilter(a.period);
-    Promise.resolve(quickStartGame(a.task, 'normal')).then(() => {
-        window.state._ladderRun = { task: a.task, from: _todayLines(a.task), left: a.left || LINES_PER_TASK };
-    });
+    const chapterMoved = !!(run.key && a.lesson && a.lesson.key !== run.key);
+    if (!typeDone && !chapterMoved) return false;
+    if (a.kind !== 'continue') { st._ladderRun = null; st._lesson = null; return false; } // дальше — ДЗ/повтор: решает меню
+    if (chapterMoved) {
+        showToast('📗', `Глава «${run.name}» закрыта! Дальше — ${a.lesson.name}`, 'bg-emerald-500', 'border-emerald-700');
+    } else if (a.task === run.task) {
+        st._ladderRun = { ...run, from: _todayLines(run.task), left: a.left || LINES_PER_TASK };
+        return false;
+    } else {
+        const cfg = TASK_CONFIG[a.task] || TASK_CONFIG.task4;
+        showToast('🔄', `${LINES_PER_TASK} строк есть — теперь ${cfg.shortLabel}`, 'bg-blue-500', 'border-blue-700');
+    }
+    _startLessonRun(a);
     return true;
+};
+
+// Запуск занятия с главной кнопки: окно лет, задание и — для урока — состояние
+// урока (state._lesson): по нему getFilteredPool (state.js) собирает таблицы
+// повтора из всего пройденного от начала рамок до конца текущей главы.
+function _startLessonRun(a) {
+    _applyWpFilter(a.period);
+    window.state._forcedWin = a.period || null; // см. applyTrainerPeriod
+    const task = a.task || 'task1';
+    let lesson = null;
+    if (a.lesson && window.LessonPlan) {
+        const L = a.lesson;
+        const back = window.LessonPlan.backlog(window.state.stats.factStreaks || {}, L.cumFrom, L.cumTo, window.state.mistakesPool);
+        // Много долга (к повтору + ошибки) — повтор каждой 2-й таблицей, иначе каждой 3-й.
+        lesson = { ...L, backlog: back, every: back >= 40 ? 2 : 3 };
+    }
+    return Promise.resolve(quickStartGame(task, 'normal')).then(() => {
+        window.state._ladderRun = { task, from: _todayLines(task), left: a.left || LINES_PER_TASK,
+            key: lesson ? lesson.key : null, name: lesson ? lesson.name : '' };
+        window.state._lesson = lesson;
+        window.state._forcedWin = null;
+        if (window.updateGamePeriodChip) window.updateGamePeriodChip();
+    });
+}
+
+// «Путь по истории»: ученик сам выбрал главу — решаем её (одно занятие, до выхода в меню).
+window.startChapterPractice = function (i) {
+    if (!window.LessonPlan || !window.LessonPlan.CHAPTERS[i]) return;
+    window.state._pinChapter = i;
+    const a = computeMainAction();
+    if (!a.lesson) {
+        // Глава пинуется, но кнопка ушла в ДЗ/повтор — всё равно открываем главу.
+        const c = window.LessonPlan.CHAPTERS[i];
+        const un = window.LessonPlan.unlearnedByTask(window.state.stats.factStreaks || {}, c.from, c.to);
+        const pick = _pickNewTask(un) || { task: 'task4', left: LINES_PER_TASK };
+        const seg = { ...window.LessonPlan.windowStats(window.state.stats.factStreaks || {}, c.from, c.to), ch: i, from: c.from, to: c.to, zone: 'pin', name: c.name, key: i + ':pin' };
+        const win = window.LessonPlan.taskWindow(seg, pick.task, 862);
+        return _startLessonRun({ task: pick.task, left: pick.left, period: { from: win.from, to: win.to },
+            lesson: { key: seg.key, ch: i, name: c.name, zone: 'pin', n: seg.n, seen: seg.seen, learned: seg.learned, segFrom: c.from, segTo: c.to, cumFrom: 862, cumTo: c.to } });
+    }
+    return _startLessonRun(a);
+};
+
+window.openLessonPath = function () {
+    const p = _lessonPlan();
+    if (!p || !window.LessonPlan) return;
+    haptic('light');
+    window.LessonPlan.openPath({
+        plan: p,
+        rangeLabel: _lessonRangeLabel(p.range),
+        onChapter: (i) => window.startChapterPractice(i),
+        onResetRange: p.range.src === 'own' ? () => {
+            try { ['ege_own_period', 'ege_own_year_from', 'ege_own_year_to'].forEach(k => localStorage.removeItem(k)); } catch (e) {}
+            showToast('🧭', 'Свой период сброшен — урок идёт по общему пути', 'bg-blue-500', 'border-blue-700');
+            renderMainAction();
+        } : null
+    });
 };
 
 window.mainActionGo = function(kind) {
@@ -2562,6 +2723,11 @@ window.mainActionGo = function(kind) {
         window.state.reviewFocus = true;
         window.state.mistakeFocus = false;
         return quickStartGame(bestTask, 'mistakes');
+    }
+    if ((act === 'continue' || act === 'start') && a.lesson) {
+        // Урок помнит, сколько строк этого типа было на старте: набралось ещё a.left —
+        // на «Дальше» сменим тип; закрылась глава — перейдём к следующей.
+        return _startLessonRun(a);
     }
     if (act === 'continue' || act === 'start') {
         const wp = (typeof a.period === 'string') ? { era: a.period } : a.period;
@@ -2618,6 +2784,14 @@ function renderMainAction() {
         title = a.repeatDay ? `🧠 День повторения` : `Повторить ${shown} фактов`;
         sub = a.repeatDay ? `сегодня закрепляем · ${shown} фактов к повтору` : (a.period ? `твой материал: ${_wpLabel(a.period)}` : 'память просит освежить');
         if (!a.repeatDay && a.due.total > shown) sub += ` · всего ${a.due.total}`;
+    } else if (a.kind === 'continue' && a.lesson) {
+        const cfg = TASK_CONFIG[a.task] || TASK_CONFIG.task4;
+        const L = a.lesson;
+        title = `Урок: ${L.name}`;
+        const where = L.zone === 'after' ? ' · забегаем вперёд' : L.zone === 'before' ? ' · добираем начало' : '';
+        const norm = a.doneToday >= DAILY_GOAL_LINES ? ' · норма дня ✓' : '';
+        const tc = L.toClose > 0 ? ` · осталось ≈${L.toClose} строк` : '';
+        sub = `${cfg.shortLabel} · выучено ${L.learned} из ${L.n}${tc}${where}${norm}`;
     } else if (a.kind === 'continue') {
         const cfg = TASK_CONFIG[a.task] || TASK_CONFIG.task4;
         const pl = (a.period && a.period.era === 'all') ? 'все периоды'
@@ -2630,13 +2804,25 @@ function renderMainAction() {
         sub = `точность ${Math.round((a.weak.acc || 0) * 100)}%${a.weak.era ? ` · ${periodName(a.weak.era)}` : ''} · подтянем`;
     } else if (a.kind === 'done') {
         const moreNew = a.unlearned && a.unlearned.total > 0;
-        title = moreNew ? 'Норма дня выполнена! 🎉' : 'Всё в периоде выучено! 🎉';
+        title = a.plan ? 'Весь путь пройден! 🎉' : moreNew ? 'Норма дня выполнена! 🎉' : 'Всё в периоде выучено! 🎉';
         sub = moreNew
             ? `стрик ${a.streak} дн. · новое продолжим завтра · можно закрепить свайпом`
             : `стрик ${a.streak} дн. · закрепи свайпом или повтори (кнопки ниже)`;
+    } else if (a.kind === 'start' && a.lesson) {
+        title = `Начать: ${a.lesson.name}`;
+        sub = 'первый урок · первые факты за 2 минуты';
     } else if (a.kind === 'start') {
         title = `Начать: ${_wpLabel(a.period) || 'Вся история'}`;
         sub = 'первые факты за 2 минуты';
+    }
+    // Путь по главам под кнопкой: где ученик сейчас и сколько закрыто. Тап — список глав.
+    let path = '';
+    if (a.plan && window.LessonPlan) {
+        const p = a.plan;
+        const cur = p.cur ? `Глава ${p.cur.ch + 1} из ${p.total}` : 'Все главы закрыты';
+        const edge = p.range.src === 'class' ? `класс — до ${p.range.to} г.` : p.range.src === 'own' ? `твой период ${p.range.from}–${p.range.to}` : '';
+        path = window.LessonPlan.stripHtml(p) +
+            `<div class="lp-cap" data-lp-open="1"><span><b>Путь:</b> закрыто ${p.closed} из ${p.total} · ${cur}</span>${edge ? `<span>${edge}</span>` : ''}</div>`;
     }
     // Чипов под кнопкой было четыре, и они спорили с самой кнопкой: «Повтор» и «Слабое» —
     // ровно то, что computeMainAction() и так выбирает сам (kind 'review' / 'weak'), а ДЗ
@@ -2655,7 +2841,8 @@ function renderMainAction() {
                 </div>
                 <div style="font-size:20px;opacity:.8;flex-shrink:0">›</div>
             </div>
-        </div>`;
+        </div>${path}`;
+    box.querySelectorAll('[data-lp-open]').forEach(el => { el.onclick = () => window.openLessonPath(); });
 
     // Строки-дела (тип 3): показываем только когда есть что делать. Пустая строка
     // «0 к повторению» — это шум, а не информация.
