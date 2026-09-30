@@ -2178,16 +2178,9 @@ bot.on('message', async (ctx) => {
     }
     // Неизвестная слэш-команда — говорим честно, а не «вся тренировка в приложении»
     if (text && text.startsWith('/')) return ctx.reply('Не знаю такую команду 🤔 Список — по кнопке «/» или /menu');
-    if (await relayToOwner(ctx)) {
-        // На альбом отвечаем один раз, а не на каждую картинку.
-        const g = ctx.message.media_group_id;
-        if (g) {
-            if (relayAlbums.has('ok:' + g)) return;
-            relayAlbums.set('ok:' + g, 1);
-            setTimeout(() => relayAlbums.delete('ok:' + g), 60 * 1000);
-        }
-        return ctx.reply('✉️ Получили — ответим здесь. А вся тренировка — в приложении 👇', { reply_markup: appKb() });
-    }
+    // Переслали владельцу — ученику ничего не отвечаем (решение владельца 30.09:
+    // «не грузи учеников»). Прежний ответ — только если переслать не вышло.
+    if (await relayToOwner(ctx)) return;
     await ctx.reply('Вся тренировка — в приложении 👇 Меню: /menu', { reply_markup: appKb() });
 });
 
