@@ -2514,6 +2514,28 @@ window.onChipClick = function(chip, e) {
     /* Область тренажёра таблиц (и детектива — он рисует слоты в той же таблице).
        Поведение ровно прежнее: перенос ничего не решает сам, а зовёт тот же
        handleSlotClick(), что и тап. */
+    /* Номера вариантов (владелец 30.09.2026): у каждой фишки в пуле — маленькая цифра
+       по порядку, как в заданиях ФИПИ. Ученик на стриме называет ответ цифрами
+       («3-1-4»), а не переписывает варианты. Номер даётся один раз, когда пул собран
+       новой таблицей, и остаётся при фишке — и в ячейке, и при возврате в пул. */
+    (function numberPool() {
+        const pool = document.getElementById('pool-container');
+        if (!pool || typeof MutationObserver !== 'function') return;
+        const assign = () => {
+            const chips = Array.prototype.slice.call(pool.querySelectorAll('.dnd-chip'));
+            if (!chips.length || chips.every(c => c.dataset.n)) return;
+            // Новая таблица: у всех фишек пула номеров нет — нумеруем по порядку показа.
+            if (chips.every(c => !c.dataset.n)) chips.forEach((c, i) => { c.dataset.n = String(i + 1); });
+            else {
+                let max = 0;
+                document.querySelectorAll('#classic-task-area .dnd-chip[data-n]').forEach(c => { max = Math.max(max, Number(c.dataset.n) || 0); });
+                chips.forEach(c => { if (!c.dataset.n) c.dataset.n = String(++max); });
+            }
+        };
+        new MutationObserver(assign).observe(pool, { childList: true });
+        assign();
+    })();
+
     window.registerChipDropZone('#classic-task-area', {
         canDrag(chip) {
             // Зачёркнутый вариант не таскаем: по нему тапом снимают отсев.

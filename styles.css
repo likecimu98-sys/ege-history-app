@@ -2307,3 +2307,12 @@ body.skin-classic .td-link[data-action] { background: var(--c-card-2) !important
     #lobby-area .card-tile .ico svg { width: 17px; height: 17px; }
     #lobby-area .card-tile b { letter-spacing: -.01em; }
 }
+
+/* Номер варианта в углу фишки (table.js, numberPool): как цифры вариантов у ФИПИ. */
+.dnd-chip[data-n] { position: relative; padding-left: 20px; }
+.dnd-chip[data-n]::before {
+    content: attr(data-n); position: absolute; top: 3px; left: 6px;
+    font-size: 11px; font-weight: 800; line-height: 1; color: var(--c-muted-2);
+    font-variant-numeric: tabular-nums; pointer-events: none;
+}
+.dnd-chip.selected[data-n]::before { color: inherit; opacity: .75; }
