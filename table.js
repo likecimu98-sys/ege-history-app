@@ -1826,11 +1826,16 @@ function generateTable() {
     // и чередование превращалось в лотерею. Все попытки одной таблицы видят один номер.
     const tick0 = window.state._normalTableTick || 0;
     const retick = () => { window.state._normalTableTick = tick0; };
-    for (let attempt = 0; attempt < 15; attempt++) {
-        retick();
-        generateTableOnce();
-        if (skipValidation() || (validateTable() && _task5GateOk())) return;
-    }
+    // Урок сужает пул до фактов своей главы (state.js). Если из такого пула честная
+    // таблица не складывается — вторую половину попыток пул обычный, без сужения.
+    try {
+        for (let attempt = 0; attempt < 15; attempt++) {
+            window.state._lessonPoolRelax = attempt >= 8;
+            retick();
+            generateTableOnce();
+            if (skipValidation() || (validateTable() && _task5GateOk())) return;
+        }
+    } finally { window.state._lessonPoolRelax = false; }
     // 🔴 Рамки заданы — из них не уходим.
     //
     // Проверка требует ровно столько строк, сколько выбрано, и раньше, не набрав

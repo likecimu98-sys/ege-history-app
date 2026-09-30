@@ -82,11 +82,24 @@
         return _idx;
     }
 
+    // «Свои» задания главы — те, по которым в ней хватает фактов хотя бы на таблицу.
+    // В «Руси IX–X» по культуре (задание 7) один факт: таблица неизбежно шла бы
+    // памятниками XI–XII вв. под вывеской «Русь IX–X» (владелец 30.09: «логика
+    // непонятная»), а этот один факт держал бы главу незакрытой. Такие факты
+    // глава не требует — они придут в таблицах повтора и в соседней главе.
+    const NATIVE_MIN = 4;
+    function nativeTypes(a, b) {
+        const out = new Set();
+        TASKS.forEach(function (t) { if (_countTask(t, a, b) >= NATIVE_MIN) out.add(t); });
+        return out;
+    }
+
     // Счёт по окну лет [a, b]: сколько фактов, встречено, выучено, «первый раз».
     function windowStats(fs, a, b) {
         const s = { n: 0, seen: 0, learned: 0, firstN: 0, firstOk: 0, unseen: 0 };
+        const nat = nativeTypes(a, b);
         index().all.forEach(function (v, k) {
-            if (v.y < a || v.y > b) return;
+            if (v.y < a || v.y > b || !nat.has(v.t)) return;
             s.n++;
             const d = fs[k];
             if (!d || typeof d !== 'object') { s.unseen++; return; }
@@ -96,7 +109,19 @@
         });
         s.closed = isClosed(s);
         s.knewIt = s.closed && s.learned < Math.ceil(LEARNED_SHARE * s.n);
+        s.types = Array.from(nat);
+        s.progress = progress(s);
         return s;
+    }
+    // Готовность главы одним числом, 0–100: половина — «встретить» (до 90% фактов),
+    // половина — «выучить» (до 50%). Ученику понятнее процента, чем «строк осталось»:
+    // строка могла не сдвинуть главу, если в таблицу попали факты соседней.
+    function progress(s) {
+        if (!s.n) return 100;
+        if (isClosed(s)) return 100;
+        const seenPart = Math.min(1, s.seen / Math.ceil(SEEN_SHARE * s.n));
+        const learnPart = Math.min(1, s.learned / Math.ceil(LEARNED_SHARE * s.n));
+        return Math.min(99, Math.floor(50 * seenPart + 50 * learnPart));
     }
     function isClosed(s) {
         if (!s.n) return true;
@@ -160,21 +185,28 @@
         };
     }
 
-    // Невыученное (уровень <1, включая невиданное) по заданиям в окне лет.
+    // Невыученное (уровень <1, включая невиданное) по «своим» заданиям главы.
+    // unseenBy — ещё ни разу не встреченное: пока глава не «встречена» на 90%,
+    // урок сначала показывает его (иначе последний невиданный факт мог не попадаться
+    // десятки строк — «пишет 1 строка, решил 4, и снова 1»).
     function unlearnedByTask(fs, a, b) {
         const by = { task1: 0, task3: 0, task4: 0, task5: 0, task7: 0 };
-        let total = 0;
+        const unseenBy = { task1: 0, task3: 0, task4: 0, task5: 0, task7: 0 };
+        let total = 0, unseen = 0;
         const idx = index();
+        const nat = nativeTypes(a, b);
         TASKS.forEach(function (t) {
+            if (!nat.has(t)) return;
             idx.byTask[t].forEach(function (y, k) {
                 if (y < a || y > b) return;
                 const d = fs[k];
                 if (!(d && d.level >= 1)) { by[t]++; total++; }
+                if (!d) { unseenBy[t]++; unseen++; }
             });
         });
         let bestTask = 'task4', bestN = -1;
         for (const t in by) if (by[t] > bestN) { bestN = by[t]; bestTask = t; }
-        return { by: by, total: total, bestTask: bestTask };
+        return { by: by, total: total, bestTask: bestTask, unseenBy: unseenBy, unseen: unseen };
     }
 
     function _countTask(t, a, b) {
@@ -330,7 +362,7 @@
             let sub;
             if (c.closed) sub = c.knewIt ? '✓ закрыта — знал с первого раза' : '✓ закрыта · выучено ' + c.learned + ' из ' + c.n;
             else if (!c.seen) sub = c.n + ' фактов · ещё не начата';
-            else sub = 'выучено ' + c.learned + ' из ' + c.n + ' · встречено ' + c.seen;
+            else sub = 'готова на ' + c.progress + '% · встречено ' + c.seen + ' из ' + c.n + ', выучено ' + c.learned;
             return '<button type="button" class="' + cls + '" data-lp-ch="' + c.i + '">' +
                 '<span class="lp-num">' + (c.closed ? '✓' : (c.i + 1)) + '</span>' +
                 '<span class="lp-mid"><span class="lp-name">' + esc(c.name) + '</span>' +
@@ -340,8 +372,9 @@
         }).join('');
         ov.innerHTML = '<div class="lp-sheet" role="dialog" aria-modal="true" aria-label="Путь по истории">' +
             '<div class="lp-head"><h2>Путь по истории · ' + p.closed + ' из ' + p.total + '</h2>' +
-            '<p>Главная кнопка ведёт по главам по порядку. Глава закрыта, когда все её факты встречены и половина выучена. ' +
-            'Уже знаешь главу — просто реши её: если отвечаешь верно с первого раза, она закроется за один проход. ' +
+            '<p>История разбита на 23 главы-темы. Глава — не урок на день: одну можно закрыть за 15 минут, другую — за неделю. ' +
+            'Главная кнопка ведёт по порядку. Глава готова, когда почти все её факты встречены и половина выучена ' +
+            '(факт выучен — три раза подряд верно). Уже знаешь тему — отвечай уверенно: верные с первого раза ответы закрывают главу за один проход. ' +
             'Невыученное из закрытых глав вернётся в таблицах повтора.' +
             (opts.rangeLabel ? '<br><b>' + esc(opts.rangeLabel) + '</b>' : '') + '</p></div>' +
             '<div class="lp-list">' + rows + '</div>' +
@@ -373,6 +406,8 @@
         taskWindow: taskWindow,
         backlog: backlog,
         linesToClose: linesToClose,
+        progress: progress,
+        nativeTypes: nativeTypes,
         setProbe: setProbe,
         stripHtml: stripHtml,
         openPath: openPath,

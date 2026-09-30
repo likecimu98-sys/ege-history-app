@@ -371,6 +371,30 @@ function getFilteredPool(period, limit) {
             window.state._blendTable = false;
         }
 
+        // УРОК: сначала факты САМОЙ главы — пока есть невиданные, они; потом
+        // невыученные. Окно таблиц у тонких глав шире главы, и без этого таблицы
+        // шли соседними веками, а последний невиданный факт главы мог не
+        // попадаться десятки строк («пишет 1 строка, решил 4 — снова 1», 30.09).
+        // До limit+2 добираем фактами окна, чтобы подборщику было из чего собрать
+        // таблицу без двойных ответов.
+        const lessonNow = window.state._lesson;
+        if (lessonNow && lessonNow.segTo && !window.state._lessonPoolRelax && window.state.currentMode === 'normal' && !window.state.isHomeworkMode
+            && !window.state.mistakeFocus && !window.state.reviewFocus) {
+            const inSeg = f => { const y = getYearFromFact(f); return y >= lessonNow.segFrom && y <= lessonNow.segTo; };
+            const seg = pool.filter(inSeg);
+            const unseen = seg.filter(f => !fs[factKey(f)]);
+            const pri = unseen.length ? unseen : seg.filter(f => { const d = fs[factKey(f)]; return d && !(d.level >= 1); });
+            if (pri.length) {
+                const want = (limit || 1) + 2;
+                if (pri.length >= want) return pri;
+                const priKeys = new Set(pri.map(f => factKey(f)));
+                const others = pool.filter(f => !priKeys.has(factKey(f)));
+                const unl = shuffleArray(others.filter(f => { const d = fs[factKey(f)]; return !(d && d.level >= 1); }));
+                const rest = shuffleArray(others.filter(f => { const d = fs[factKey(f)]; return d && d.level >= 1; }));
+                return pri.concat(unl, rest).slice(0, Math.max(want, pri.length));
+            }
+        }
+
         const isFresh = f => { const d = fs[factKey(f)]; return !(d && d.level > 0 && d.nextReview > now); };
         const fresh = pool.filter(isFresh);
         if (fresh.length >= (limit || 1)) {

@@ -1460,7 +1460,7 @@ window.updateGamePeriodChip = function() {
     const chosen = window.state.periodChosen || window.state._wpApplied
         || (() => { try { return localStorage.getItem('ege_period_chosen') === '1'; } catch (e) { return false; } })();
     const lesson = window.state._lesson;
-    if (txt) txt.textContent = lesson ? `Урок: ${lesson.name}` : chosen ? window.currentPeriodLabel() : 'Период';
+    if (txt) txt.textContent = lesson ? `Глава ${lesson.ch + 1}. ${lesson.name}` : chosen ? window.currentPeriodLabel() : 'Период';
     // Пульсация-подсказка только пока период ни разу не выбран осознанно. Дальше она
     // не несёт информации и просто мозолит глаз (CSS: #game-period-chip.is-hinting).
     chip.classList.toggle('is-hinting', !chosen && !lesson);
@@ -2452,6 +2452,8 @@ function _weakestSpot() {
 function _lessonRange() {
     const own = _ownChosenPeriod();
     if (own) {
+        // «862–2026», выставленное в настройках, — та же вся история, не особые рамки.
+        if (own.from && own.to && own.from <= 862 && own.to >= 2026) return { from: 862, to: 2026, src: 'all' };
         if (own.from && own.to) return { from: own.from, to: own.to, src: 'own' };
         const y = EPOCH_YEARS[own.era];
         if (y) return { from: y[0], to: y[1], src: 'own' };
@@ -2534,13 +2536,25 @@ function computeMainAction() {
         const win = window.LessonPlan.taskWindow(cur, pick.task, cur.zone === 'in' ? lp.range.from : 862);
         return { task: pick.task, left: pick.left, period: { from: win.from, to: win.to },
             lesson: { key: cur.key, ch: cur.ch, name: cur.name, zone: cur.zone, n: cur.n, seen: cur.seen, learned: cur.learned,
-                toClose: window.LessonPlan.linesToClose(cur),
+                progress: cur.progress,
                 segFrom: cur.from, segTo: cur.to, cumFrom: Math.min(lp.range.from, cur.from), cumTo: cur.to } };
+    };
+
+    // Задание для главы: пока она не «встречена» на 90%, — только те, где есть ещё
+    // невиданные факты (иначе последний невиданный факт мог не попадаться десятки
+    // строк). Потом — где есть невыученное.
+    const lessonPick = () => {
+        const cur = lp.cur;
+        if (cur.seen < Math.ceil(0.9 * cur.n) && unlearned.unseen > 0) {
+            const p = _pickNewTask({ by: unlearned.unseenBy });
+            if (p) return p;
+        }
+        return _pickNewTask(unlearned);
     };
 
     // Новичок: первая глава пути (или его рамки), без ротации — сразу к делу.
     if (!(s.totalSolvedEver > 0)) {
-        const pick = lp && lp.cur && _pickNewTask(unlearned);
+        const pick = lp && lp.cur && lessonPick();
         if (pick) return { ...base, kind: 'start', ...lessonOf(pick) };
         return { ...base, kind: 'start', period: wp };
     }
@@ -2579,7 +2593,7 @@ function computeMainAction() {
     if (isRepeatDay && hasBacklog) return pickReview(true);
 
     // Обычный день → урок по текущей главе (или, без плана, новое в периоде)
-    const pick = _pickNewTask(unlearned);
+    const pick = lp && lp.cur ? lessonPick() : _pickNewTask(unlearned);
     if (pick && lp && lp.cur) return { ...base, kind: 'continue', ...lessonOf(pick) };
     if (pick && !lp) return { ...base, kind: 'continue',
         task: pick.task,
@@ -2787,11 +2801,13 @@ function renderMainAction() {
     } else if (a.kind === 'continue' && a.lesson) {
         const cfg = TASK_CONFIG[a.task] || TASK_CONFIG.task4;
         const L = a.lesson;
-        title = `Урок: ${L.name}`;
+        // «Урок» читался как «один день» («23 урока — 23 дня?»). Это глава — тема,
+        // а не день; и вместо «осталось ≈N строк», которое могло не двигаться,
+        // — готовность главы в процентах: её двигает каждый новый и выученный факт.
+        title = `Глава ${L.ch + 1}. ${L.name}`;
         const where = L.zone === 'after' ? ' · забегаем вперёд' : L.zone === 'before' ? ' · добираем начало' : '';
         const norm = a.doneToday >= DAILY_GOAL_LINES ? ' · норма дня ✓' : '';
-        const tc = L.toClose > 0 ? ` · осталось ≈${L.toClose} строк` : '';
-        sub = `${cfg.shortLabel} · выучено ${L.learned} из ${L.n}${tc}${where}${norm}`;
+        sub = `${cfg.shortLabel} · глава готова на ${L.progress || 0}%${where}${norm}`;
     } else if (a.kind === 'continue') {
         const cfg = TASK_CONFIG[a.task] || TASK_CONFIG.task4;
         const pl = (a.period && a.period.era === 'all') ? 'все периоды'
@@ -2809,8 +2825,8 @@ function renderMainAction() {
             ? `стрик ${a.streak} дн. · новое продолжим завтра · можно закрепить свайпом`
             : `стрик ${a.streak} дн. · закрепи свайпом или повтори (кнопки ниже)`;
     } else if (a.kind === 'start' && a.lesson) {
-        title = `Начать: ${a.lesson.name}`;
-        sub = 'первый урок · первые факты за 2 минуты';
+        title = `Глава 1. ${a.lesson.name}`;
+        sub = 'начни путь по истории · первые факты за 2 минуты';
     } else if (a.kind === 'start') {
         title = `Начать: ${_wpLabel(a.period) || 'Вся история'}`;
         sub = 'первые факты за 2 минуты';
@@ -2819,10 +2835,10 @@ function renderMainAction() {
     let path = '';
     if (a.plan && window.LessonPlan) {
         const p = a.plan;
-        const cur = p.cur ? `Глава ${p.cur.ch + 1} из ${p.total}` : 'Все главы закрыты';
+        const cur = p.cur ? `сейчас глава ${p.cur.ch + 1}` : 'все главы закрыты';
         const edge = p.range.src === 'class' ? `класс — до ${p.range.to} г.` : p.range.src === 'own' ? `твой период ${p.range.from}–${p.range.to}` : '';
         path = window.LessonPlan.stripHtml(p) +
-            `<div class="lp-cap" data-lp-open="1"><span><b>Путь:</b> закрыто ${p.closed} из ${p.total} · ${cur}</span>${edge ? `<span>${edge}</span>` : ''}</div>`;
+            `<div class="lp-cap" data-lp-open="1"><span><b>Путь по истории:</b> ${p.closed} из ${p.total} глав · ${cur}</span>${edge ? `<span>${edge}</span>` : ''}</div>`;
     }
     // Чипов под кнопкой было четыре, и они спорили с самой кнопкой: «Повтор» и «Слабое» —
     // ровно то, что computeMainAction() и так выбирает сам (kind 'review' / 'weak'), а ДЗ
