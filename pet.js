@@ -992,9 +992,11 @@
 
   // ── Бегущая строка под питомцем в лобби: новости двора и подсказки ─────────
   // Одна строка, меняется раз в 7 секунд; по тапу ведёт к делу.
+  // Лента под питомцем в лобби — ТОЛЬКО то, что ждёт действия ученика (колесо,
+  // сундук, круг, голос). Реклама редких видов и новости двора ушли из лобби
+  // (владелец 30.09: лобби «мусорно»); они живут в окне питомца.
   function tickerItems() {
     var st = S.state || {}, out = [];
-    (S.news || []).slice(0, 3).forEach(function (n) { var t = newsText(n); if (t) out.push({ html: t, go: "PetUI.open('yard')" }); });
     var r = st.round;
     if (st.daily && st.daily.spinReady) out.push({ html: '🎡 Колесо удачи ждёт — одно вращение в день', go: 'PetUI.openWheel()' });
     if (r && !r.claimed) {
@@ -1003,19 +1005,13 @@
     }
     var v = r && r.steps && r.steps.find(function (x) { return x.id === 'votes'; });
     if (v && !v.done) out.push({ html: '⚔️ «Кто круче?» — выбери образ, за голос опыт', go: 'PetUI.battle()' });
-    var owned = {}; if (st.pet) owned[st.pet.species] = 1; (st.stable || []).forEach(function (x) { owned[x.species] = 1; });
-    if (!owned.tsar) out.push({ html: '👑 Николай II живёт в Царском ларце — шанс 2%', go: "PetUI.open('stable')" });
-    if (!owned.ghoul) out.push({ html: '🖤 Гуль — самый редкий питомец: только из сундуков, без осколков', go: "PetUI.open('boxes')" });
-    if (!owned.squid) out.push({ html: '🦑 Сквидвард вырастает в Красавчика — 6% в Императорском ларце', go: "PetUI.open('boxes')" });
-    if (!owned.burunday) out.push({ html: '🏹 Легендарный Бурундай на троне — 5% в Императорском ларце или 8 волос бунчука', go: "PetUI.open('stable')" });
-    out.push({ html: '👀 Тапни по питомцу в топе — профиль и реакции', go: 'PetUI.openTop()' });
     return out;
   }
   var tickerAt = 0;
   function newsLine(host) {
-    if (!S.newsAt || Date.now() - S.newsAt > 10 * 60 * 1000) loadNews(false);
-    var items = tickerItems(); if (!items.length) return;
+    var items = tickerItems();
     var line = host.querySelector('.petw-news');
+    if (!items.length) { if (line) line.remove(); return; }
     if (!line) { line = document.createElement('button'); line.type = 'button'; line.className = 'petw-news'; host.appendChild(line); }
     var it = items[tickerAt % items.length];
     line.innerHTML = it.html + ' <em>›</em>';

@@ -172,7 +172,7 @@ assert.match(table, /const fullTries = window\.state\._lesson \? 30 : 15;/, 'у 
 assert.match(table, /putBack\(old, from\)/, 'перенос в занятую ячейку снова выкидывает ответ в варианты');
 assert.match(ui, /function _celebrateNewChapters\(plan, onGo\)/, 'нет праздника «Глава пройдена»');
 assert.match(read('cloud-sync.js'), /'lesson_closed_seen'/, 'отпразднованные главы переезжают к другому аккаунту');
-assert.match(ui, /Норма дня выполнена ✓/, 'на кнопке не видно нормы дня');
+assert.match(ui, /Норма дня ✓/, 'на кнопке не видно нормы дня');
 assert.match(table, /const steps = \[\s*\[Math\.min\(a0, lesson\.cumFrom\)/, 'урок снова уходит из глав сразу во «всю историю»');
 assert.ok(table.indexOf('const steps = [') < table.indexOf('validateTable({ allowShort: true })'), 'короткая таблица раньше расширения лет урока');
 assert.match(read('state.js'), /window\.factStreakNewer = function/, 'слияние фактов снова «по лучшему уровню»');

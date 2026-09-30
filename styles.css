@@ -2204,3 +2204,106 @@ html.dark .ach-pop-card { background: #1e1e1e; color: #e5e7eb; }
 @keyframes sc-roll-in { from { transform: translateY(64px); opacity: 0; } to { transform: none; opacity: 1; } }
 @keyframes sc-rise { from { transform: translateY(12px); opacity: 0; } to { transform: none; opacity: 1; } }
 @media (prefers-reduced-motion: reduce) { .streak-cele *, .streak-cele { animation-duration: .01s !important; animation-iteration-count: 1 !important; } }
+
+/* ══════════════════════════════════════════════════════════════════════════
+   ЛОББИ «СПОКОЙНОЕ» (30.09.2026). Владелец про прежний вид: «несерьёзно,
+   мусорно». Причина была в количестве языков: синий градиент, полоса пути,
+   питомец с тремя цветными полосками, реклама ларца, две строки во всю ширину
+   с оранжевым и красным числом, карточки дуэли/пробника, цветные эмодзи.
+   Правила: один акцент (--c-brand) — только главная кнопка и прогресс; красный —
+   только число ошибок и беда питомца; иконки линейные и серые; блоков меньше.
+   ══════════════════════════════════════════════════════════════════════════ */
+
+/* Карточка «Сегодня» (renderMainAction в ui.js) */
+.td-card { background: var(--c-card); border: 1px solid var(--c-border); border-radius: var(--r-md); box-shadow: var(--e-1); padding: 16px; }
+.td-card.urgent { border-color: var(--c-danger); }
+.td-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.td-kicker { font-size: var(--t-micro); font-weight: 800; letter-spacing: .08em; text-transform: uppercase; color: var(--c-muted-2); }
+.td-norm { font-size: var(--t-micro); font-weight: 700; color: var(--c-muted-2); white-space: nowrap; }
+.td-norm.ok { color: var(--c-success-text, var(--c-success)); }
+.td-title { margin-top: 6px; font-size: var(--t-title); font-weight: 800; line-height: 1.2; color: var(--c-text); }
+.td-sub { margin-top: 3px; font-size: var(--t-caption); font-weight: 500; line-height: 1.35; color: var(--c-muted-2); }
+.td-bar { margin-top: 12px; height: 6px; border-radius: 999px; background: var(--c-card-2); overflow: hidden; }
+.td-bar > span { display: block; height: 100%; border-radius: 999px; background: var(--c-brand); transition: width .5s ease; }
+.td-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
+.td-go {
+    min-height: 44px; padding: 0 22px; border: 0; border-radius: var(--r-sm);
+    background: var(--c-brand); color: #fff; font: inherit; font-size: var(--t-label); font-weight: 800;
+    cursor: pointer; box-shadow: var(--e-1); transition: transform .12s ease, filter .12s ease;
+}
+.td-go:hover { filter: brightness(1.06); }
+.td-go:active { transform: scale(.97); }
+.td-chip {
+    min-height: 44px; padding: 0 14px; border: 1px solid var(--c-border-2); border-radius: var(--r-sm);
+    background: var(--c-card); color: var(--c-text); font: inherit; font-size: var(--t-label); font-weight: 650; cursor: pointer;
+}
+.td-chip:hover { border-color: var(--c-muted); }
+.td-chip b { margin-left: 4px; font-weight: 800; color: var(--c-text); font-variant-numeric: tabular-nums; }
+.td-chip b.bad { color: var(--c-danger); }
+.td-more { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin-top: 10px; }
+.td-link {
+    min-height: 40px; padding: 0 12px; text-align: left; border: 1px solid var(--c-border); border-radius: var(--r-sm);
+    background: var(--c-card-2); color: var(--c-text); font: inherit; font-size: var(--t-label); font-weight: 700;
+    cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.td-link:hover { border-color: var(--c-border-2); }
+.td-link span { font-size: var(--t-caption); font-weight: 500; color: var(--c-muted-2); }
+.td-path { margin-top: 14px; padding-top: 10px; border-top: 1px solid var(--c-border-soft, var(--c-border)); }
+.td-path .lp-strip { margin-top: 0; }
+.td-path .lp-cap { margin-top: 4px; }
+
+/* Питомец в лобби — одной строкой: полоски и монеты живут в его окне и в шапке. */
+#lobby-pet .petw { padding: 8px 12px 8px 8px; box-shadow: var(--e-1); }
+#lobby-pet .petw-ava { width: 48px; height: 48px; flex: 0 0 48px; }
+#lobby-pet .petw-bars, #lobby-pet .petw-coins { display: none; }
+#lobby-pet .petw.st-hungry i, #lobby-pet .petw.st-sick i { color: var(--c-danger); }
+
+/* Плитки режимов: строкой, иконка серая на нейтральной подложке, акцент — на наведении. */
+#lobby-area .card-tile {
+    min-height: 60px; display: grid; grid-template-columns: 36px minmax(0, 1fr);
+    column-gap: 10px; row-gap: 4px; align-items: center; align-content: center;
+    padding: 10px 12px; text-align: left;
+}
+#lobby-area .card-tile .ico { grid-row: 1 / span 2; color: var(--c-muted-2); transition: color .15s ease; }
+#lobby-area .card-tile .ico::before { background: var(--c-card-2); opacity: 1; }
+#lobby-area .card-tile:hover .ico { color: var(--c-brand); }
+#lobby-area .card-tile .pb { grid-column: 2; }
+#lobby-area .card-tile .pb > .fill { background: var(--c-brand) !important; }
+#lobby-area .card-tile i { hyphens: manual; }
+.la-grid-3 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+@media (min-width: 640px) { .la-grid-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+
+/* Вкладки: тонкие, подчёркиванием; все четыре помещаются на телефоне. */
+.la-tabs { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 0; overflow: visible; padding-bottom: 0; border-bottom: 1px solid var(--c-border); }
+.la-tab {
+    justify-content: center; min-height: 44px; padding: 0 4px; margin-bottom: -1px;
+    border: 0; border-bottom: 2px solid transparent; border-radius: 0; background: transparent; color: var(--c-muted-2);
+    overflow: hidden; text-overflow: ellipsis;
+}
+.la-tab .n { display: none; }
+.la-tab[aria-selected="true"] { background: transparent; color: var(--c-text); border-bottom-color: var(--c-brand); }
+@media (min-width: 1100px) {
+    .la-tabs { display: flex; flex-direction: column; gap: 2px; border-bottom: 0; }
+    .la-tab { justify-content: space-between; padding: 0 12px; margin: 0; border-bottom: 0; border-left: 3px solid transparent; border-radius: 0; }
+    .la-tab .n { display: inline; }
+    .la-tab[aria-selected="true"] { background: var(--c-card-2); border-left-color: var(--c-brand); }
+}
+
+/* Старая тема красила кнопку дуэли градиентом по data-action — в карточке «Сегодня» это та же тихая кнопка. */
+body.skin-classic .td-link[data-action] { background: var(--c-card-2) !important; border: 1px solid var(--c-border) !important; box-shadow: none !important; }
+/* Панель прогресса на ПК: один цвет у всех заданий, а не пять. */
+#lobby-side .side-row { --a: var(--c-brand) !important; }
+/* Числа в шапке — цветом текста: синий, фиолетовый и красный спорили с кнопкой. */
+#stat-learned, #stat-solved, #stat-ege { color: var(--c-text) !important; }
+/* Телефон: главная кнопка на всю ширину, «Повторить» и «Ошибки» — строкой под ней
+   (иначе три кнопки переносились лесенкой); плитки плотнее — названия в одну строку. */
+@media (max-width: 519px) {
+    .td-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .td-go { grid-column: 1 / -1; }
+    .td-go + .td-chip:last-child { grid-column: 1 / -1; }
+    .td-chip { padding: 0 10px; }
+    #lobby-area .card-tile { grid-template-columns: 28px minmax(0, 1fr); column-gap: 8px; padding: 10px; }
+    #lobby-area .card-tile .ico { width: 28px; height: 28px; flex-basis: 28px; }
+    #lobby-area .card-tile .ico svg { width: 17px; height: 17px; }
+    #lobby-area .card-tile b { letter-spacing: -.01em; }
+}

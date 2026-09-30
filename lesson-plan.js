@@ -351,9 +351,11 @@
             p.chapters.map(function (c) {
                 const lp = _pct(c.learned, c.n);
                 let bg;
-                if (c.closed) bg = 'var(--c-success)';
-                else if (c.i === curCh) bg = 'linear-gradient(90deg,var(--c-brand) ' + Math.max(12, lp) + '%,var(--c-border) ' + Math.max(12, lp) + '%)';
-                else if (lp > 0) bg = 'linear-gradient(90deg,var(--c-success-soft, rgba(16,185,129,.35)) ' + lp + '%,var(--c-border) ' + lp + '%)';
+                // Один цвет (30.09): закрытая — акцент, текущая — акцент по доле готовности,
+                // остальные — серые. Зелёные и полупрозрачные доли делали полосу пёстрой.
+                const cp = Math.max(12, c.progress || 0);
+                if (c.closed) bg = 'var(--c-brand)';
+                else if (c.i === curCh) bg = 'linear-gradient(90deg,var(--c-brand) ' + cp + '%,var(--c-border-2, var(--c-border)) ' + cp + '%)';
                 else bg = '';
                 return '<i class="' + (c.inRange ? '' : 'is-out') + '"' + (bg ? ' style="background:' + bg + '"' : '') + ' title="' + esc(c.name) + '"></i>';
             }).join('') + '</div>';

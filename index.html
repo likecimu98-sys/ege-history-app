@@ -99,15 +99,15 @@
     <link rel="manifest" href="manifest.webmanifest">
     <link rel="icon" type="image/png" href="assets/icons/icon-192.png">
     <link rel="apple-touch-icon" href="assets/icons/icon-180.png">
-    <link rel="stylesheet" href="tokens.css?v=20260930-20">
-    <link rel="stylesheet" href="output.css?v=20260930-20">
-    <link rel="stylesheet" href="theme-classic.css?v=20260930-20">
-    <link rel="stylesheet" href="styles.css?v=20260930-20">
+    <link rel="stylesheet" href="tokens.css?v=20260930-21">
+    <link rel="stylesheet" href="output.css?v=20260930-21">
+    <link rel="stylesheet" href="theme-classic.css?v=20260930-21">
+    <link rel="stylesheet" href="styles.css?v=20260930-21">
     
     <!-- Самохостинг telegram-web-app.js: telegram.org часто недоступен (сеть/VPN),
          тогда window.Telegram не создавался → known_tg_id не считывался → случайный id «через раз».
          Локальная копия отдаётся с того же origin и кэшируется service worker'ом. -->
-    <script src="vendor/telegram-web-app.js?v=20260930-20" defer></script>
+    <script src="vendor/telegram-web-app.js?v=20260930-21" defer></script>
 
     <style>
         /* Этот inline-блок намеренно МИНИМАЛЕН: только то, что должно сработать на
@@ -333,7 +333,7 @@
 
     <script>
       (function() {
-      var BOOT_RELEASE = '20260930-20';
+      var BOOT_RELEASE = '20260930-21';
         var bootT0 = Date.now();
         // 🔴 Диагностика загрузки НЕ должна зависеть только от fetch.
         // 30.07 два айфона скачали страницу и ВСЕ 20 скриптов (200 в логе), но не
@@ -591,30 +591,30 @@
          диагностика поломок сама стала способом их устроить.
          Единственное, что теряется с defer, — ошибки инлайн-скриптов ВЫШЕ по
          документу. Они уже покрыты своим отчётом (bootSignal('error')). -->
-    <script src="telemetry.js?v=20260930-20" defer></script>
+    <script src="telemetry.js?v=20260930-21" defer></script>
 
     <!-- JS разбит на модули: config → utils → state → table → ui → modes → app -->
     <!-- Порядок defer гарантирован браузером: выполняются строго по порядку в DOM -->
-    <script src="config.js?v=20260930-20" defer></script>
-    <script src="utils.js?v=20260930-20" defer></script>
-    <script src="exam-scoring.js?v=20260930-20" defer></script>
-    <script src="state.js?v=20260930-20" defer></script>
-    <script src="table.js?v=20260930-20" defer></script>
-    <script src="lesson-plan.js?v=20260930-20" defer></script>
-    <script src="ui.js?v=20260930-20" defer></script>
-    <script src="modes.js?v=20260930-20" defer></script>
-    <script src="swipe-data.js?v=20260930-20" defer></script>
-    <script src="swipe-mode.js?v=20260930-20" defer></script>
-    <script src="match-mode.js?v=20260930-20" defer></script>
-    <script src="order-mode.js?v=20260930-20" defer></script>
-    <script src="order-data.js?v=20260930-20" defer></script>
-    <script src="tetris-mode.js?v=20260930-20" defer></script>
-    <script src="map-mode.js?v=20260930-20" defer></script>
-    <script src="duel-react.js?v=20260930-20" defer></script>
-    <script src="vov-mode.js?v=20260930-20" defer></script>
-    <script src="visual-trainer.js?v=20260930-20" defer></script>
-    <script src="exam-mode.js?v=20260930-20" defer></script>
-    <script src="app.js?v=20260930-20" defer></script>
+    <script src="config.js?v=20260930-21" defer></script>
+    <script src="utils.js?v=20260930-21" defer></script>
+    <script src="exam-scoring.js?v=20260930-21" defer></script>
+    <script src="state.js?v=20260930-21" defer></script>
+    <script src="table.js?v=20260930-21" defer></script>
+    <script src="lesson-plan.js?v=20260930-21" defer></script>
+    <script src="ui.js?v=20260930-21" defer></script>
+    <script src="modes.js?v=20260930-21" defer></script>
+    <script src="swipe-data.js?v=20260930-21" defer></script>
+    <script src="swipe-mode.js?v=20260930-21" defer></script>
+    <script src="match-mode.js?v=20260930-21" defer></script>
+    <script src="order-mode.js?v=20260930-21" defer></script>
+    <script src="order-data.js?v=20260930-21" defer></script>
+    <script src="tetris-mode.js?v=20260930-21" defer></script>
+    <script src="map-mode.js?v=20260930-21" defer></script>
+    <script src="duel-react.js?v=20260930-21" defer></script>
+    <script src="vov-mode.js?v=20260930-21" defer></script>
+    <script src="visual-trainer.js?v=20260930-21" defer></script>
+    <script src="exam-mode.js?v=20260930-21" defer></script>
+    <script src="app.js?v=20260930-21" defer></script>
 
     <!-- ШАПКА -->
     <header id="main-header" class="sticky top-0 z-50 no-print transition-colors duration-400 pt-2 pb-2 sm:pt-3 sm:pb-3 px-4">
@@ -747,37 +747,9 @@
                 <span class="la-sr" id="personal-hw-alert"></span>
             </button>
 
-            <!-- Три строки-дела идут по срочности: домашка со сроком от учителя →
-                 повторение (память уходит именно сегодня) → ошибки (лежат и ждут,
-                 но не тухнут). Тон: долги красные, повторение янтарное — это не
-                 долг, а предупреждение о забывании. -->
-            <button type="button" id="lobby-review-row" class="card-row hidden" style="--a:var(--c-warn)" onclick="window.mainActionGo&&window.mainActionGo('review')">
-                <span class="ico"><span>🧠</span></span>
-                <span class="txt"><b>Повторение</b><i>память просит освежить</i></span>
-                <span class="cnt" id="lobby-review-count">0</span>
-            </button>
+            <!-- «Повторение» и «Ошибки» с 30.09.2026 — кнопки в карточке «Сегодня» (renderMainAction). -->
 
-            <button type="button" id="lobby-mistakes-row" class="card-row hidden" style="--a:var(--c-danger)" onclick="window.mainActionGo&&window.mainActionGo('mistakes')">
-                <span class="ico"><span>🔧</span></span>
-                <span class="txt"><b>Работа над ошибками</b><i>разбери, пока не закрепились</i></span>
-                <span class="cnt" id="lobby-mistakes-count">0</span>
-            </button>
-
-            <!-- ТИП 2 · События: то, что происходит «сейчас». Ровно два и больше никогда.
-                 Дуэль и пробник — одна геометрия, один язык; различает только тон акцента
-                 и живой статус. Раньше дуэль была градиентным баннером, пробник — другим
-                 градиентным баннером, и они не выглядели как вещи одного рода. -->
-            <div class="la-grid-2">
-                <button type="button" class="card-feat" style="--a:var(--a-duel)" data-action="startDuelSearch">
-                    <span class="live" id="lobby-duel-elo" hidden></span>
-                    <span class="ico"><span>⚔️</span></span>
-                    <span><b>Дуэль</b><i>Соперник вживую · 45 секунд</i></span>
-                </button>
-                <button type="button" class="card-feat" style="--a:var(--a-exam)" data-action="openExamMode">
-                    <span class="ico"><span>📝</span></span>
-                    <span><b>Пробник</b><i>Вариант ФИПИ · до 20 баллов</i></span>
-                </button>
-            </div>
+            <!-- Дуэль и пробник с 30.09.2026 — строкой в карточке «Сегодня». -->
 
             </div><!-- /#lobby-main -->
 
@@ -800,84 +772,79 @@
                          ничего не выучено (data-zero) — пустая шкала демотивирует. -->
                     <div class="la-panel la-grid-3" id="lp-basic" data-panel="basic" role="tabpanel">
                         <button type="button" class="card-tile" style="--a:var(--a-task1)" data-action="quickStartGame" data-arg="task1" data-arg2="normal">
-                            <span class="ico"><span>⏳</span></span>
-                            <span><b>№1</b><i>Хронология</i></span>
+                            <span class="ico"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6.5 7h11M6.5 17h11M6 20v-2a6 6 0 1 1 12 0v2a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1zM6 4v2a6 6 0 1 0 12 0V4a1 1 0 0 0-1-1H7a1 1 0 0 0-1 1z"/></svg></span>
+                            <span><b>№1 Хронология</b><i id="progress-text-task1"></i></span>
                             <span class="pb" data-zero="1"><span class="fill" id="progress-bar-task1"></span></span>
-                            <span class="la-sr" id="progress-text-task1"></span>
                         </button>
                         <button type="button" class="card-tile" style="--a:var(--a-task3)" data-action="quickStartGame" data-arg="task3" data-arg2="normal">
-                            <span class="ico"><span>🔗</span></span>
-                            <span><b>№3</b><i>Процессы</i></span>
+                            <span class="ico"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 15l6-6M11 6l.46-.54a5 5 0 0 1 7.08 7.08l-.54.46M13 18l-.4.53a5.07 5.07 0 0 1-7.12 0 4.97 4.97 0 0 1 0-7.07l.52-.46"/></svg></span>
+                            <span><b>№3 Процессы</b><i id="progress-text-task3"></i></span>
                             <span class="pb" data-zero="1"><span class="fill" id="progress-bar-task3"></span></span>
-                            <span class="la-sr" id="progress-text-task3"></span>
                         </button>
                         <button type="button" class="card-tile" style="--a:var(--a-task4)" data-action="quickStartGame" data-arg="task4" data-arg2="normal">
-                            <span class="ico"><span>📍</span></span>
-                            <span><b>№4</b><i>География</i></span>
+                            <span class="ico"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 11a3 3 0 1 0 6 0 3 3 0 0 0-6 0M17.66 16.66l-4.25 4.24a2 2 0 0 1-2.82 0l-4.25-4.24a8 8 0 1 1 11.32 0z"/></svg></span>
+                            <span><b>№4 География</b><i id="progress-text-task4"></i></span>
                             <span class="pb" data-zero="1"><span class="fill" id="progress-bar-task4"></span></span>
-                            <span class="la-sr" id="progress-text-task4"></span>
                         </button>
                         <button type="button" class="card-tile" style="--a:var(--a-task5)" data-action="quickStartGame" data-arg="task5" data-arg2="normal">
-                            <span class="ico"><span>👤</span></span>
-                            <span><b>№5</b><i>Личности</i></span>
+                            <span class="ico"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 7a4 4 0 1 0 8 0 4 4 0 0 0-8 0M6 21v-2a4 4 0 0 1 4-4h4a4 4 0 0 1 4 4v2"/></svg></span>
+                            <span><b>№5 Личности</b><i id="progress-text-task5"></i></span>
                             <span class="pb" data-zero="1"><span class="fill" id="progress-bar-task5"></span></span>
-                            <span class="la-sr" id="progress-text-task5"></span>
                         </button>
                         <button type="button" class="card-tile" style="--a:var(--a-task7)" data-action="quickStartGame" data-arg="task7" data-arg2="normal">
-                            <span class="ico"><span>🎨</span></span>
-                            <span><b>№7</b><i>Культура</i></span>
+                            <span class="ico"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 21a9 9 0 0 1 0-18c4.97 0 9 3.58 9 8 0 1.06-.47 2.08-1.32 2.83A4.6 4.6 0 0 1 16.5 15H14a2 2 0 0 0-1 3.75A1.3 1.3 0 0 1 12 21M8.5 10.5h.01M12.5 7.5h.01M16.5 10.5h.01"/></svg></span>
+                            <span><b>№7 Культура</b><i id="progress-text-task7"></i></span>
                             <span class="pb" data-zero="1"><span class="fill" id="progress-bar-task7"></span></span>
-                            <span class="la-sr" id="progress-text-task7"></span>
                         </button>
                         <button type="button" class="card-tile" style="--a:var(--a-solve)" data-action="pickTaskForMode" data-arg="solve">
-                            <span class="ico"><span>🎲</span></span>
+                            <span class="ico"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 4l3 3-3 3M18 20l3-3-3-3M3 7h3a5 5 0 0 1 5 5 5 5 0 0 0 5 5h5M21 7h-5a5 5 0 0 0-3 1m-4 8a5 5 0 0 1-3 1H3"/></svg></span>
                             <span><b>Решать</b><i>Вперемешку</i></span>
                         </button>
                     </div>
 
                     <div class="la-panel la-grid-3" id="lp-trainers" data-panel="trainers" role="tabpanel" hidden>
                         <button type="button" class="card-tile" style="--a:var(--a-swipe)" data-action="openSwipeMode">
-                            <span class="ico"><span>👈</span></span>
+                            <span class="ico"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 17H3M6 10L3 7l3-3M3 7h18M18 20l3-3-3-3"/></svg></span>
                             <span><b>Свайп</b><i>На скорость</i></span>
                         </button>
                         <button type="button" class="card-tile" style="--a:var(--a-match)" data-action="openMatchMode">
-                            <span class="ico"><span>🧩</span></span>
+                            <span class="ico"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h3a1 1 0 0 0 1-1V5a2 2 0 0 1 4 0v1a1 1 0 0 0 1 1h3a1 1 0 0 1 1 1v3a1 1 0 0 0 1 1h1a2 2 0 0 1 0 4h-1a1 1 0 0 0-1 1v3a1 1 0 0 1-1 1h-3a1 1 0 0 1-1-1v-1a2 2 0 0 0-4 0v1a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1v-3a1 1 0 0 1 1-1h1a2 2 0 0 0 0-4H4a1 1 0 0 1-1-1V8a1 1 0 0 1 1-1"/></svg></span>
                             <span><b>Подбор</b><i>Событие и дата</i></span>
                         </button>
                         <button type="button" class="card-tile" style="--a:var(--a-order)" data-action="openOrderMode">
-                            <span class="ico"><span>⏳</span></span>
+                            <span class="ico"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11 6h9M11 12h9M12 18h8M4 16a2 2 0 1 1 4 0c0 .59-.5 1-1 1.5L4 20h4M6 10V4L4 6"/></svg></span>
                             <span><b>Кто раньше</b><i>Лента времени</i></span>
                         </button>
                         <button type="button" class="card-tile" style="--a:var(--a-tetris)" data-action="openTetrisMode">
-                            <span class="ico"><span>🧱</span></span>
+                            <span class="ico"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 4h6v6H4zM14 4h6v6h-6zM4 14h6v6H4zM14 14h6v6h-6z"/></svg></span>
                             <span><b>Датрис</b><i>Тетрис с датами</i></span>
                         </button>
                         <button type="button" class="card-tile" style="--a:var(--a-cram)" data-action="openCram">
-                            <span class="ico"><span>⚡</span></span>
+                            <span class="ico"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M13 3v7h6l-8 11v-7H5l8-11"/></svg></span>
                             <span><b>Зубрёжка</b><i>Интенсив дат</i></span>
                         </button>
                         <button type="button" class="card-tile" style="--a:var(--a-vov)" data-action="openVovMode">
-                            <span class="ico"><span>🎖️</span></span>
+                            <span class="ico"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4v3M8 4v6M16 4v6M12 18.5L9 20l.5-3.5-2-2 3-.5 1.5-3 1.5 3 3 .5-2 2 .5 3.5z"/></svg></span>
                             <span><b>ВОВ</b><i>Пропуски о войне</i></span>
                         </button>
                         <button type="button" class="card-tile" style="--a:var(--a-maps)" data-action="openMapMode">
-                            <span class="ico"><span>🗺️</span></span>
+                            <span class="ico"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 7l6-3 6 3 6-3v13l-6 3-6-3-6 3V7M9 4v13M15 7v13"/></svg></span>
                             <span><b>Карты</b><i>81 карта ЕГЭ</i></span>
                         </button>
                     </div>
 
                     <div class="la-panel la-grid-3" id="lp-study" data-panel="study" role="tabpanel" hidden>
                         <button type="button" class="card-tile" style="--a:var(--a-cards)" data-action="pickTaskForMode" data-arg="flashcards">
-                            <span class="ico"><span>🃏</span></span>
+                            <span class="ico"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3.6 7.2l7.14-3.11a.96.96 0 0 1 1.27.53l4.92 11.9a1 1 0 0 1-.51 1.3l-7.14 3.11a.96.96 0 0 1-1.27-.53L3.09 8.5a1 1 0 0 1 .51-1.3zM15 4h1a1 1 0 0 1 1 1v3.5M20 6l.77.32a1 1 0 0 1 .53 1.3L19 13"/></svg></span>
                             <span><b>Карточки</b><i>Повторение</i></span>
                         </button>
                         <button type="button" class="card-tile" style="--a:var(--a-story)" data-action="pickTaskForMode" data-arg="study">
-                            <span class="ico"><span>📖</span></span>
+                            <span class="ico"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 19a9 9 0 0 1 9 0 9 9 0 0 1 9 0M3 6a9 9 0 0 1 9 0 9 9 0 0 1 9 0M3 6v13M12 6v13M21 6v13"/></svg></span>
                             <span><b>Сюжеты</b><i>База знаний</i></span>
                         </button>
                         <button type="button" class="card-tile" style="--a:var(--a-visual)" data-action="pickTaskForMode" data-arg="visual">
-                            <span class="ico"><span>🏛️</span></span>
-                            <span><b>Визуал</b><i>Архитектура</i></span>
+                            <span class="ico"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 21h18M3 10h18M5 6l7-3 7 3M4 10v11M20 10v11M8 14v3M12 14v3M16 14v3"/></svg></span>
+                            <span><b>Визуал</b><i>Живопись и архитектура</i></span>
                         </button>
                     </div>
 
@@ -886,11 +853,11 @@
                          оформления: заметность даёт положение на экране, а не текстура. -->
                     <div class="la-panel la-grid-3" id="lp-extra" data-panel="extra" role="tabpanel" hidden>
                         <button type="button" class="card-tile" style="--a:var(--a-arch)" data-action="pickTaskForMode" data-arg="detective">
-                            <span class="ico"><span>🕵️</span></span>
+                            <span class="ico"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 10a7 7 0 1 0 14 0 7 7 0 1 0-14 0M21 21l-6-6"/></svg></span>
                             <span><b>Архив</b><i>Восстанови данные</i></span>
                         </button>
                         <button type="button" class="card-tile" style="--a:var(--a-pencil)" data-action="pickTaskForMode" data-arg="redpencil">
-                            <span class="ico"><span>🖍️</span></span>
+                            <span class="ico"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 20h4L18.5 9.5a2.83 2.83 0 1 0-4-4L4 16v4M13.5 6.5l4 4"/></svg></span>
                             <span><b>Карандаш</b><i>Найди фейки</i></span>
                         </button>
                     </div>
@@ -1552,11 +1519,11 @@
     <!-- jsPDF грузится лениво (см. loadJsPDFOnDemand в cloud-sync.js) — не нужен при старте -->
 
     <!-- === PWA + first-party cloud sync loader === -->
-    <script src="pwa.js?v=20260930-20" defer></script>
+    <script src="pwa.js?v=20260930-21" defer></script>
 
     <!-- Ядро (факты, ~659 КБ): нужно для лобби и заданий. Приложение ОТКРЫВАЕТСЯ сразу
          после него — defer парсит HTML параллельно, порядок выполнения гарантирован. -->
-    <script src="data.js?v=20260930-20" defer></script>
+    <script src="data.js?v=20260930-21" defer></script>
     <!-- app:ready диспатчит инлайн-вотчер готовности в начале <body> (см. watchBoot):
          отдельный boot-ready.js убран — свежий файл не лежал в старом SW-кэше и на
          моргнувшей сети вис, не давая снять заставку. -->

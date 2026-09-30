@@ -2857,67 +2857,52 @@ function renderMainAction() {
         title = `Начать: ${_wpLabel(a.period) || 'Вся история'}`;
         sub = 'первые факты за 2 минуты';
     }
-    // Норма дня прямо на кнопке: ученик не понимал, когда «на сегодня достаточно»
-    // (владелец 30.09). 30 строк ≈ 12–15 минут; после нормы решённое тоже идёт в зачёт.
-    let today = '';
-    if ((window.state.stats.totalSolvedEver || 0) > 0 && a.kind !== 'start') {
-        const goal = window.STREAK_DAILY_MIN || DAILY_GOAL_LINES;
-        const done = Math.min(a.doneToday || 0, goal);
-        const ok = (a.doneToday || 0) >= goal;
-        today = `<div style="display:flex;align-items:center;gap:8px;margin-top:10px;font-size:var(--t-micro);font-weight:700;opacity:.95">
-            <div style="flex:1;height:5px;border-radius:999px;background:rgba(255,255,255,.28);overflow:hidden"><div style="width:${Math.round(100 * done / goal)}%;height:100%;border-radius:999px;background:#fff"></div></div>
-            <span style="white-space:nowrap">${ok ? 'Норма дня выполнена ✓' : `Сегодня ${a.doneToday || 0} из ${goal} строк`}</span></div>`;
-    }
-    // Путь по главам под кнопкой: где ученик сейчас и сколько закрыто. Тап — список глав.
+    // ── Карточка «Сегодня» (30.09.2026, после «выглядит мусорно») ────────────
+    // Было пять разных блоков подряд: синяя плашка-кнопка, полоса пути, строки
+    // «Повторение» и «Ошибки» во всю ширину, карточки дуэли и пробника. Теперь одна
+    // спокойная карточка: что делать сейчас и одна кнопка; повтор и ошибки — тихие
+    // кнопки рядом; дуэль и пробник — строкой ниже; путь по главам — внизу.
+    // Цвет — только у главной кнопки и прогресса; красный — только у числа ошибок.
+    const esc = t => String(t == null ? '' : t).replace(/[&<>"]/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[ch]));
+    const clean = t => String(t || '').replace(/^[\u{1F300}-\u{1FAFF}☀-➿]️?\s*/u, '').replace(/\s*[\u{1F300}-\u{1FAFF}☀-➿]️?$/u, '');
+    const GO = { hw: 'Решать ДЗ', 'hw-overdue': 'Догнать ДЗ', mistakes: 'Разобрать', review: 'Повторить', continue: 'Продолжить', weak: 'Подтянуть', done: 'Закрепить', start: 'Начать' };
+    const goal = window.STREAK_DAILY_MIN || DAILY_GOAL_LINES;
+    const solvedAny = (window.state.stats.totalSolvedEver || 0) > 0;
+    const normOk = (a.doneToday || 0) >= goal;
+    const norm = !solvedAny ? '' : normOk ? '<span class="td-norm ok">Норма дня ✓</span>'
+        : `<span class="td-norm">Сегодня ${a.doneToday || 0} из ${goal}</span>`;
+    let pct = null;
+    if (a.lesson && a.lesson.progress != null) pct = a.lesson.progress;
+    else if (solvedAny) pct = Math.min(100, Math.round(100 * (a.doneToday || 0) / goal));
+    const dueN = (a.due && a.due.total) || 0, misN = (a.mistakes && a.mistakes.total) || 0;
+    const chips = [];
+    if (dueN && a.kind !== 'review') chips.push(`<button type="button" class="td-chip" onclick="window.mainActionGo('review')">Повторить <b>${dueN}</b></button>`);
+    if (misN && a.kind !== 'mistakes') chips.push(`<button type="button" class="td-chip" onclick="window.mainActionGo('mistakes')">Ошибки <b class="bad">${misN}</b></button>`);
+    const elo = window.state && window.state.stats && window.state.stats.duelElo;
     let path = '';
     if (a.plan && window.LessonPlan) {
         const p = a.plan;
-        const cur = p.cur ? `сейчас глава ${p.cur.ch + 1}` : 'все главы закрыты';
-        const edge = p.range.src === 'class' ? `класс — до ${p.range.to} г.` : p.range.src === 'own' ? `твой период ${p.range.from}–${p.range.to}` : '';
-        path = window.LessonPlan.stripHtml(p) +
-            `<div class="lp-cap" data-lp-open="1"><span><b>Путь по истории:</b> ${p.closed} из ${p.total} глав · ${cur}</span>${edge ? `<span>${edge}</span>` : ''}</div>`;
+        const edge = p.range.src === 'class' ? ` · класс до ${p.range.to} г.` : p.range.src === 'own' ? ` · твой период ${p.range.from}–${p.range.to}` : '';
+        path = `<div class="td-path">${window.LessonPlan.stripHtml(p)}<div class="lp-cap" data-lp-open="1"><span>Путь по истории · ${p.closed} из ${p.total} глав${edge}</span><span>все главы ›</span></div></div>`;
     }
-    // Чипов под кнопкой было четыре, и они спорили с самой кнопкой: «Повтор» и «Слабое» —
-    // ровно то, что computeMainAction() и так выбирает сам (kind 'review' / 'weak'), а ДЗ
-    // живёт отдельной строкой-делом выше.
-    // 26.07: последний чип «Ошибки» тоже уехал в строку-дело. Он остался чипом просто
-    // потому, что был последним выжившим из четырёх, — а по смыслу это ровно то же, что
-    // «Домашка» и «Повторение»: задача со счётчиком, которую можно пойти сделать. Три
-    // одинаковые по смыслу вещи не должны выглядеть двумя разными способами.
     box.innerHTML = `
-        <div onclick="window.mainActionGo()" style="background:${m.bg};border-radius:var(--r-md);padding:16px 18px;cursor:pointer;color:#fff;box-shadow:var(--e-2)" class="active:scale-[0.98] transition-transform">
-            <div style="display:flex;align-items:center;gap:14px">
-                <div style="font-size:28px;line-height:1;flex-shrink:0">${m.icon}</div>
-                <div style="flex:1;min-width:0">
-                    <div style="font-size:var(--t-title);font-weight:800;letter-spacing:.01em">${title}</div>
-                    ${sub ? `<div style="font-size:var(--t-caption);font-weight:600;opacity:.88;margin-top:2px">${sub}</div>` : ''}
-                </div>
-                <div style="font-size:20px;opacity:.8;flex-shrink:0">›</div>
+        <div class="td-card${a.kind === 'hw-overdue' ? ' urgent' : ''}">
+            <div class="td-top"><span class="td-kicker">Сегодня</span>${norm}</div>
+            <div class="td-title">${esc(clean(title))}</div>
+            ${sub ? `<div class="td-sub">${esc(clean(sub))}</div>` : ''}
+            ${pct != null ? `<div class="td-bar" role="progressbar" aria-valuenow="${pct}" aria-valuemin="0" aria-valuemax="100"><span style="width:${pct}%"></span></div>` : ''}
+            <div class="td-actions">
+                <button type="button" class="td-go" onclick="window.mainActionGo()">${GO[a.kind] || 'Продолжить'}</button>
+                ${chips.join('')}
             </div>
-            ${today}
-        </div>${path}`;
+            <div class="td-more">
+                <button type="button" class="td-link" data-action="startDuelSearch">Дуэль<span>${elo ? ' · ★ ' + Math.round(elo) : ' · соперник вживую'}</span></button>
+                <button type="button" class="td-link" data-action="openExamMode">Пробник<span> · вариант ФИПИ</span></button>
+            </div>
+            ${path}
+        </div>`;
     if (a.plan && !document.body.classList.contains('in-game')) _celebrateNewChapters(a.plan);
     box.querySelectorAll('[data-lp-open]').forEach(el => { el.onclick = () => window.openLessonPath(); });
-
-    // Строки-дела (тип 3): показываем только когда есть что делать. Пустая строка
-    // «0 к повторению» — это шум, а не информация.
-    const fillRow = (rowId, cntId, n) => {
-        const row = document.getElementById(rowId);
-        if (!row) return;
-        row.classList.toggle('hidden', !n);
-        const cnt = document.getElementById(cntId);
-        if (cnt) cnt.textContent = n;
-    };
-    fillRow('lobby-review-row', 'lobby-review-count', (a.due && a.due.total) || 0);
-    fillRow('lobby-mistakes-row', 'lobby-mistakes-count', (a.mistakes && a.mistakes.total) || 0);
-    // Живой статус дуэли: собственный рейтинг честнее статичной плашки «Online»,
-    // которая висела на старом баннере независимо от того, есть ли кто-то в сети.
-    const elo = document.getElementById('lobby-duel-elo');
-    if (elo) {
-        const r = window.state && window.state.stats && window.state.stats.duelElo;
-        if (r) { elo.textContent = '★ ' + Math.round(r); elo.hidden = false; }
-        else { elo.hidden = true; }
-    }
 }
 window.renderMainAction = renderMainAction;
 

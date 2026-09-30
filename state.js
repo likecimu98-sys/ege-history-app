@@ -1480,7 +1480,8 @@ function updateProgressBars() {
             const pb = bar.parentElement;
             if (pb && pb.classList.contains('pb')) pb.dataset.zero = info.learned === 0 ? '1' : '0';
         }
-        if (txt) txt.textContent = info.learned + ' / ' + info.total + ' выучено';
+        // Видимая подпись плитки (с 30.09.2026): прогресс вместо названия-дубля.
+        if (txt) txt.textContent = info.learned ? 'выучено ' + info.learned + ' из ' + info.total : info.total + ' фактов';
     });
 }
 
