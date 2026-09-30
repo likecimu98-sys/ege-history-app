@@ -1463,6 +1463,58 @@ async function studentOverview(teacherUserId, classId, studentUserId, { db = poo
      FROM social_attempt_events WHERE user_id = $1`, [studentUserId]);
   const p = practice.rows[0] || {};
 
+  // 🔴 Темы, а не только блоки. Блок «Право» на 46% не говорит, что повторять:
+  // в нём девятнадцать тем. КЭС отвечает на вопрос «открой параграф такой-то».
+  // Порог в три задания — ниже доля считается по одному-двум ответам и скачет
+  // от 0 до 100 на каждом новом.
+  const weakTopics = await db.query(
+    `WITH first_try AS (
+       SELECT DISTINCT ON (task_id) task_id, topic_codes, (earned >= possible) AS took
+       FROM social_attempt_events WHERE user_id = $1
+       ORDER BY task_id, attempted_at)
+     SELECT code, COUNT(*)::int AS tasks,
+            COUNT(*) FILTER (WHERE NOT took)::int AS missed
+     FROM first_try, unnest(topic_codes) AS code
+     GROUP BY code HAVING COUNT(*) >= 3
+     ORDER BY (COUNT(*) FILTER (WHERE NOT took))::numeric / COUNT(*) DESC, COUNT(*) DESC
+     LIMIT 8`, [studentUserId]);
+
+  // Когда и сколько занимался. Неделя, а не день: по дням картина рассыпается
+  // на шум, а учителю нужен ответ «занимается ли он вообще в последнее время».
+  const activity = await db.query(
+    `SELECT week_start, COUNT(*)::int AS answers, COUNT(DISTINCT msk_day)::int AS days
+     FROM social_attempt_events
+     WHERE user_id = $1 AND attempted_at > now() - interval '9 weeks'
+     GROUP BY week_start ORDER BY week_start`, [studentUserId]);
+
+  // Откуда берётся его работа: задали или сам сел.
+  const kinds = await db.query(
+    `SELECT kind, COUNT(*)::int AS answers FROM social_attempt_events
+     WHERE user_id = $1 GROUP BY kind`, [studentUserId]);
+
+  // 🔴 Работа над ошибками — отдельный вопрос, и ответ на него не выводится из
+  // точности. Ученик с 70% может быть тем, кто ни разу не вернулся ни к одной
+  // ошибке, и тем, кто разобрал все до единой; для учителя это разные ученики.
+  // «Исправил» — позже взял по этому заданию полный балл, «не возвращался» —
+  // после неудачной первой попытки не открывал его ни разу.
+  const mistakes = await db.query(
+    `WITH first_try AS (
+       SELECT DISTINCT ON (task_id) task_id, attempted_at AS first_at, (earned >= possible) AS took
+       FROM social_attempt_events WHERE user_id = $1
+       ORDER BY task_id, attempted_at)
+     SELECT
+       COUNT(*) FILTER (WHERE NOT took)::int AS total,
+       COUNT(*) FILTER (WHERE NOT took AND EXISTS (
+         SELECT 1 FROM social_attempt_events e
+         WHERE e.user_id = $1 AND e.task_id = first_try.task_id
+           AND e.attempted_at > first_try.first_at AND e.earned >= e.possible))::int AS fixed,
+       COUNT(*) FILTER (WHERE NOT took AND NOT EXISTS (
+         SELECT 1 FROM social_attempt_events e
+         WHERE e.user_id = $1 AND e.task_id = first_try.task_id
+           AND e.attempted_at > first_try.first_at))::int AS never_retried
+     FROM first_try`, [studentUserId]);
+  const m = mistakes.rows[0] || {};
+
   // Персонально трудные: первая попытка по заданию без полного балла. Именно
   // первая — в разборе ошибок он решает то же второй раз, уже зная ответ.
   const personal = await db.query(
@@ -1502,6 +1554,26 @@ async function studentOverview(teacherUserId, classId, studentUserId, { db = poo
       elapsedMs: numeric(p.elapsed_ms),
       firstAt: p.first_at ? new Date(p.first_at).getTime() : null,
       lastAt: p.last_at ? new Date(p.last_at).getTime() : null,
+    },
+    weakTopics: weakTopics.rows.map(row => ({
+      code: row.code,
+      tasks: numeric(row.tasks),
+      missed: numeric(row.missed),
+      percent: numeric(row.tasks) > 0 ? Math.round((numeric(row.missed) / numeric(row.tasks)) * 100) : 0,
+    })),
+    activity: activity.rows.map(row => ({
+      weekStart: new Date(row.week_start).getTime(),
+      answers: numeric(row.answers),
+      days: numeric(row.days),
+    })),
+    kinds: kinds.rows.reduce((acc, row) => {
+      acc[String(row.kind || 'practice')] = numeric(row.answers);
+      return acc;
+    }, {}),
+    mistakes: {
+      total: numeric(m.total),
+      fixed: numeric(m.fixed),
+      neverRetried: numeric(m.never_retried),
     },
     personalHard: personal.rows.map(row => ({
       taskId: row.task_id,
