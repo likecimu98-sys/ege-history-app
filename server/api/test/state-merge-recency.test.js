@@ -36,10 +36,13 @@ test('записи без отметки времени сливаются по-
   assert.equal(merged.stats.factStreaks.b.points, 2);
 });
 
-test('клиентский закон слияния совпадает с серверным', () => {
+test('клиентский закон слияния совпадает с серверным', (t) => {
   const fs = require('fs');
   const path = require('path');
-  const src = fs.readFileSync(path.join(__dirname, '../../../state.js'), 'utf8');
+  // На сервере лежит только API — сверка идёт там, где есть весь репозиторий.
+  const file = path.join(__dirname, '../../../state.js');
+  if (!fs.existsSync(file)) return t.skip('state.js сайта рядом нет (выкладка API)');
+  const src = fs.readFileSync(file, 'utf8');
   const i = src.indexOf('window.factStreakNewer = function');
   const j = src.indexOf('\n};', i);
   assert.ok(i > 0 && j > i, 'в state.js нет window.factStreakNewer');
