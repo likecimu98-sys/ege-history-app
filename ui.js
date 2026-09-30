@@ -1092,6 +1092,21 @@ document.addEventListener('app:ready', function() {
     // Питомец — на простое, чтобы не отнимать сеть у первого экрана.
     const petIdle = window.requestIdleCallback || (fn => setTimeout(fn, 1500));
     petIdle(() => window.loadPetModule(), { timeout: 4000 });
+    // Рисование поверх экрана (draw-mode.js) — только компьютер: мышь/перо и
+    // широкий экран. На телефон лишний модуль не качаем.
+    try {
+        if (matchMedia('(pointer: fine)').matches && window.innerWidth >= 900) {
+            petIdle(() => {
+                const v = _petRelease ? '?v=' + encodeURIComponent(_petRelease) : '';
+                const css = document.createElement('link');
+                css.rel = 'stylesheet'; css.href = 'draw-mode.css' + v;
+                document.head.appendChild(css);
+                const s = document.createElement('script');
+                s.src = 'draw-mode.js' + v;
+                document.body.appendChild(s);
+            }, { timeout: 5000 });
+        }
+    } catch (e) {}
     if (typeof updateGlobalUI === 'function') updateGlobalUI();
     // data.js уже загружен — можно корректно посчитать дела
     if (typeof window.refreshDetectiveCaseOptions === 'function') window.refreshDetectiveCaseOptions();

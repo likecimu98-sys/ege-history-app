@@ -1,0 +1,70 @@
+/* Рисование поверх тренажёра (draw-mode.js, 30.09.2026). Только компьютер.
+   Холсты — под панелью, над всем приложением; тени — только токены --e-*,
+   неоновое свечение — через filter, как требует design-lint. */
+
+.dm-root { position: fixed; inset: 0; z-index: 2147483000; pointer-events: none; }
+.dm-canvas { position: absolute; left: 0; top: 0; pointer-events: none; transition: opacity .26s ease; }
+/* Рисующие инструменты забирают указатель; курсор и лазер пропускают клики насквозь. */
+.dm-root.on[data-tool="pen"] .dm-live, .dm-root.on[data-tool="marker"] .dm-live,
+.dm-root.on[data-tool="arrow"] .dm-live, .dm-root.on[data-tool="stamp"] .dm-live,
+.dm-root.on[data-tool="eraser"] .dm-live { pointer-events: auto; cursor: none; touch-action: none; }
+.dm-root.on[data-tool="arrow"] .dm-live, .dm-root.on[data-tool="stamp"] .dm-live { cursor: crosshair; }
+html.dm-laser, html.dm-laser * { cursor: none !important; }
+
+/* Прицел под курсором — цвет и толщина видны до первого штриха. */
+.dm-dot { position: fixed; left: 0; top: 0; display: none; opacity: 0; margin: 0; border-radius: 999px;
+  border: 2px solid var(--dm-c, #ff3b5c); background: color-mix(in srgb, var(--dm-c, #ff3b5c) 35%, transparent);
+  translate: -50% -50%; filter: drop-shadow(0 0 4px var(--dm-c, #ff3b5c)); pointer-events: none; }
+.dm-dot.eraser { background: rgba(255, 255, 255, .25); border-style: dashed; border-color: #fff; filter: drop-shadow(0 0 2px #000); }
+
+/* Кнопка-карандаш: слева внизу, не спорит с питомцем справа. */
+.dm-fab { position: fixed; left: 16px; bottom: 16px; z-index: 2147483001; width: 46px; height: 46px; border-radius: 999px;
+  display: flex; align-items: center; justify-content: center; border: 0; cursor: pointer; color: #fff;
+  background: linear-gradient(135deg, #ff3b5c, #a855f7 55%, #38bdf8); box-shadow: var(--e-3);
+  transition: transform .18s cubic-bezier(.3, 1.5, .5, 1), opacity .2s; }
+.dm-fab:hover { transform: scale(1.08) rotate(-8deg); }
+.dm-fab.on { opacity: 0; pointer-events: none; transform: scale(.6); }
+
+/* Панель: тёмное «стекло» слева по центру — читается на любом фоне и на стриме. */
+.dm-bar { position: fixed; left: 14px; top: 50%; z-index: 2147483002; display: flex; flex-direction: column; align-items: center; gap: 4px;
+  padding: 8px 6px; border-radius: 14px; background: rgba(12, 14, 26, .86); backdrop-filter: blur(10px) saturate(1.4);
+  border: 1px solid rgba(255, 255, 255, .12); box-shadow: var(--e-3); color: #e7e9f3;
+  translate: -130% -50%; opacity: 0; pointer-events: none; transition: translate .28s cubic-bezier(.2, 1.3, .4, 1), opacity .2s; }
+.dm-bar.on { translate: 0 -50%; opacity: 1; pointer-events: auto; }
+.dm-bar::before { content: ""; position: absolute; inset: -1px; border-radius: 14px; padding: 1px; pointer-events: none;
+  background: linear-gradient(160deg, #ff3b5c, #a855f7, #38bdf8); opacity: .55;
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0); -webkit-mask-composite: xor; mask-composite: exclude; }
+.dm-grip { font-size: 14px; font-weight: 900; opacity: .7; line-height: 1; padding: 2px 0 4px; }
+.dm-sep { width: 26px; height: 1px; background: rgba(255, 255, 255, .14); margin: 3px 0; }
+
+.dm-btn { width: 38px; height: 38px; border-radius: 8px; border: 0; background: transparent; color: inherit; cursor: pointer;
+  display: flex; align-items: center; justify-content: center; transition: background .15s, transform .15s, color .15s; }
+.dm-btn:hover { background: rgba(255, 255, 255, .1); }
+.dm-btn:active { transform: scale(.9); }
+.dm-btn.on { color: #fff; background: linear-gradient(135deg, #ff3b5c, #a855f7); filter: drop-shadow(0 0 6px rgba(255, 59, 92, .55)); }
+.dm-exit:hover { background: rgba(255, 59, 92, .25); color: #ff8fa3; }
+
+.dm-color { width: 22px; height: 22px; border-radius: 999px; border: 2px solid rgba(255, 255, 255, .25); background: var(--dm-c); cursor: pointer; padding: 0;
+  transition: transform .15s; }
+.dm-color:hover { transform: scale(1.15); }
+.dm-color.on { border-color: #fff; transform: scale(1.18); filter: drop-shadow(0 0 5px var(--dm-c)); }
+
+.dm-size { width: 32px; height: 24px; border: 0; border-radius: 8px; background: transparent; cursor: pointer; display: flex; align-items: center; justify-content: center; }
+.dm-size i { display: block; border-radius: 999px; background: #e7e9f3; opacity: .55; }
+.dm-size.on { background: rgba(255, 255, 255, .12); }
+.dm-size.on i { opacity: 1; }
+
+.dm-auto { width: 38px; border: 0; border-radius: 8px; background: transparent; color: #9aa0b8; font-size: 11px; font-weight: 800; line-height: 1.05;
+  padding: 4px 0; cursor: pointer; }
+.dm-auto.on { color: #22c55e; background: rgba(34, 197, 94, .12); }
+
+/* Удар штампа: кольцо разлетается от точки. */
+.dm-boom { position: fixed; z-index: 2147483001; width: 16px; height: 16px; margin: -8px 0 0 -8px; border-radius: 999px; pointer-events: none;
+  border: 3px solid var(--dm-c, #ff3b5c); animation: dm-boom .5s ease-out forwards; }
+@keyframes dm-boom { from { transform: scale(.4); opacity: 1; } to { transform: scale(6); opacity: 0; } }
+
+@media (prefers-reduced-motion: reduce) {
+  .dm-bar, .dm-fab, .dm-canvas { transition: none; }
+  .dm-boom { display: none; }
+}
+@media (pointer: coarse), (max-width: 899px) { .dm-fab, .dm-bar, .dm-root { display: none; } }

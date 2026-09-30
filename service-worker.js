@@ -1,7 +1,7 @@
 'use strict';
 
-const APP_VERSION = '2026-09-30-vps-154';
-const RELEASE_ASSET_VERSION = '20260930-2';
+const APP_VERSION = '2026-09-30-vps-155';
+const RELEASE_ASSET_VERSION = '20260930-3';
 // ⚠️ Версия НАБОРА КАРТИНОК, а не версия приложения. Поднимай её ТОЛЬКО когда
 // меняется состав offline-assets.json — добавились, удалились или переснялись
 // файлы. От бампа APP_VERSION она не зависит и зависеть не должна.
@@ -71,6 +71,8 @@ const CORE_URLS = [
     `./pet-art.js?v=${RELEASE_ASSET_VERSION}`,
     `./pet.js?v=${RELEASE_ASSET_VERSION}`,
     `./pet.css?v=${RELEASE_ASSET_VERSION}`,
+    `./draw-mode.js?v=${RELEASE_ASSET_VERSION}`,
+    `./draw-mode.css?v=${RELEASE_ASSET_VERSION}`,
     // Тяжёлые visual*.generated.js НЕ прекэшируем на install: они загружаются только
     // при открытии визуальных режимов и затем кэшируются fetch-handler'ом.
     `./data.js?v=${RELEASE_ASSET_VERSION}`,
