@@ -467,7 +467,9 @@
                 openStudent(uid); break;
             case 'back': back(); break;
             case 'write': openTelegram(v); break;
-            case 'nowrite': toast('✉️', 'У ученика нет @username в Telegram — написать по ссылке нельзя. Попросите его завести ник в настройках Telegram.'); break;
+            case 'nowrite':
+                if (st.contactsFailed) { toast('✉️', 'Не удалось загрузить ники учеников — обновите кабинет чуть позже'); loadContacts(st.code); break; }
+                toast('✉️', 'У ученика нет @username в Telegram — написать по ссылке нельзя. Попросите его завести ник в настройках Telegram.'); break;
             case 'pdf': window.downloadStudentPDF && window.downloadStudentPDF(uid); break;
             case 'assign': window.promptAssignHw && window.promptAssignHw(uid, name); break;
             case 'hwlist': window.openStudentAssignmentsList && window.openStudentAssignmentsList(uid, name); break;
@@ -506,9 +508,9 @@
         try {
             const res = await window._teacherContacts(code);
             if (st.contactsFor !== code) return;
-            st.contacts = (res && res.contacts) || {};
+            st.contacts = (res && res.contacts) || {}; st.contactsFailed = false;
             if (st.openUid || st.q) render();
-        } catch (e) { st.contactsFor = ''; }
+        } catch (e) { st.contactsFor = ''; st.contactsFailed = true; }
     }
 
     const api = {
