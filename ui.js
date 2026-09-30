@@ -3058,43 +3058,64 @@ window.renderLobbySide = renderLobbySide;
     });
 })();
 
-// ── Вкладки разделов лобби ──────────────────────────────────────────────────
-// Пришли на смену гармошкам. Гармошка прячет содержимое и заставляет спрашивать
-// «что там внутри», а её заголовок был высотой 16px при норме пальца 44. Вкладки
-// показывают все группы всегда, переключают одним касанием и не дают высоте
-// экрана скакать. Выбранная вкладка переживает перезаход — ученик возвращается
-// туда же, где был. Тот же компонент в волне ПК разворачивается в боковой рельс.
-const _TAB_KEY = 'ege_lobby_tab';
+// ── Разделы лобби: все на виду, полоса сверху — навигация ───────────────────
+// До 30.09.2026 это были вкладки: раздел показывался один, остальные прятались, и
+// нужный тренажёр приходилось искать перебором («по вкладкам ищешь», владелец);
+// на телефоне четвёртая вкладка вообще не помещалась в экран. Теперь все разделы
+// идут подряд с заголовками, а полоса липнет сверху: тап — плавная прокрутка к
+// разделу, при прокрутке подсвечивается раздел, который сейчас на экране.
 function initLobbyTabs() {
     const bar = document.getElementById('lobby-tabs');
     if (!bar || bar.dataset.bound === '1') return;
     bar.dataset.bound = '1';
     const tabs = Array.prototype.slice.call(bar.querySelectorAll('.la-tab'));
-    const panels = Array.prototype.slice.call(document.querySelectorAll('.la-panel'));
-    if (!tabs.length) return;
-    const show = (name, persist) => {
-        if (!tabs.some(t => t.dataset.tab === name)) name = tabs[0].dataset.tab;
-        tabs.forEach(t => t.setAttribute('aria-selected', String(t.dataset.tab === name)));
-        panels.forEach(p => { p.hidden = p.dataset.panel !== name; });
-        if (persist) { try { localStorage.setItem(_TAB_KEY, name); } catch (e) {} }
-    };
+    const sections = Array.prototype.slice.call(document.querySelectorAll('.la-section'));
+    if (!tabs.length || !sections.length) return;
+    // Полоса липнет под шапкой: высота шапки разная (телефон, ПК, безопасная зона).
+    const hdr = document.getElementById('main-header');
+    const setHdr = () => { if (hdr) document.documentElement.style.setProperty('--hdr-h', Math.round(hdr.getBoundingClientRect().height) + 'px'); };
+    setHdr();
+    if (hdr && 'ResizeObserver' in window) new ResizeObserver(setHdr).observe(hdr);
+    else window.addEventListener('resize', setHdr);
+    let lockUntil = 0; // пока идёт прокрутка по тапу, подсветку не дёргаем
+    const mark = name => tabs.forEach(t => {
+        if (t.dataset.tab === name) t.setAttribute('aria-current', 'true');
+        else t.removeAttribute('aria-current');
+    });
     bar.addEventListener('click', e => {
         const t = e.target.closest && e.target.closest('.la-tab');
-        if (t) show(t.dataset.tab, true);
+        if (!t) return;
+        const sec = sections.find(x => x.dataset.section === t.dataset.tab);
+        if (!sec) return;
+        mark(t.dataset.tab);
+        lockUntil = Date.now() + 900;
+        try { sec.scrollIntoView({ behavior: 'smooth', block: 'start' }); } catch (err) { sec.scrollIntoView(); }
+        if (typeof haptic === 'function') haptic('light');
     });
-    // Стрелки: вкладки должны работать с клавиатуры — на ПК это основной способ.
+    // Стрелки — для клавиатуры на ПК.
     bar.addEventListener('keydown', e => {
-        if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
+        if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight' && e.key !== 'ArrowUp' && e.key !== 'ArrowDown') return;
         const i = tabs.indexOf(document.activeElement);
         if (i < 0) return;
         e.preventDefault();
-        const next = tabs[(i + (e.key === 'ArrowRight' ? 1 : tabs.length - 1)) % tabs.length];
+        const fwd = e.key === 'ArrowRight' || e.key === 'ArrowDown';
+        const next = tabs[(i + (fwd ? 1 : tabs.length - 1)) % tabs.length];
         next.focus();
-        show(next.dataset.tab, true);
+        next.click();
     });
-    let saved = null;
-    try { saved = localStorage.getItem(_TAB_KEY); } catch (e) {}
-    show(saved || tabs[0].dataset.tab, false);
+    // Подсветка по прокрутке: текущий — раздел, чья верхняя часть в первой трети экрана.
+    if ('IntersectionObserver' in window) {
+        const visible = new Map();
+        const io = new IntersectionObserver(entries => {
+            entries.forEach(en => visible.set(en.target, en.isIntersecting));
+            if (Date.now() < lockUntil) return;
+            const first = sections.find(x => visible.get(x));
+            if (first) mark(first.dataset.section);
+        }, { rootMargin: '-15% 0px -60% 0px' });
+        sections.forEach(x => io.observe(x));
+    }
+    mark(tabs[0].dataset.tab);
+    try { localStorage.removeItem('ege_lobby_tab'); } catch (e) {} // память вкладки больше не нужна
 }
 window.initLobbyTabs = initLobbyTabs;
 if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', initLobbyTabs, { once: true });

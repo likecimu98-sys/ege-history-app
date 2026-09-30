@@ -99,15 +99,15 @@
     <link rel="manifest" href="manifest.webmanifest">
     <link rel="icon" type="image/png" href="assets/icons/icon-192.png">
     <link rel="apple-touch-icon" href="assets/icons/icon-180.png">
-    <link rel="stylesheet" href="tokens.css?v=20260930-18">
-    <link rel="stylesheet" href="output.css?v=20260930-18">
-    <link rel="stylesheet" href="theme-classic.css?v=20260930-18">
-    <link rel="stylesheet" href="styles.css?v=20260930-18">
+    <link rel="stylesheet" href="tokens.css?v=20260930-19">
+    <link rel="stylesheet" href="output.css?v=20260930-19">
+    <link rel="stylesheet" href="theme-classic.css?v=20260930-19">
+    <link rel="stylesheet" href="styles.css?v=20260930-19">
     
     <!-- Самохостинг telegram-web-app.js: telegram.org часто недоступен (сеть/VPN),
          тогда window.Telegram не создавался → known_tg_id не считывался → случайный id «через раз».
          Локальная копия отдаётся с того же origin и кэшируется service worker'ом. -->
-    <script src="vendor/telegram-web-app.js?v=20260930-18" defer></script>
+    <script src="vendor/telegram-web-app.js?v=20260930-19" defer></script>
 
     <style>
         /* Этот inline-блок намеренно МИНИМАЛЕН: только то, что должно сработать на
@@ -333,7 +333,7 @@
 
     <script>
       (function() {
-      var BOOT_RELEASE = '20260930-18';
+      var BOOT_RELEASE = '20260930-19';
         var bootT0 = Date.now();
         // 🔴 Диагностика загрузки НЕ должна зависеть только от fetch.
         // 30.07 два айфона скачали страницу и ВСЕ 20 скриптов (200 в логе), но не
@@ -591,30 +591,30 @@
          диагностика поломок сама стала способом их устроить.
          Единственное, что теряется с defer, — ошибки инлайн-скриптов ВЫШЕ по
          документу. Они уже покрыты своим отчётом (bootSignal('error')). -->
-    <script src="telemetry.js?v=20260930-18" defer></script>
+    <script src="telemetry.js?v=20260930-19" defer></script>
 
     <!-- JS разбит на модули: config → utils → state → table → ui → modes → app -->
     <!-- Порядок defer гарантирован браузером: выполняются строго по порядку в DOM -->
-    <script src="config.js?v=20260930-18" defer></script>
-    <script src="utils.js?v=20260930-18" defer></script>
-    <script src="exam-scoring.js?v=20260930-18" defer></script>
-    <script src="state.js?v=20260930-18" defer></script>
-    <script src="table.js?v=20260930-18" defer></script>
-    <script src="lesson-plan.js?v=20260930-18" defer></script>
-    <script src="ui.js?v=20260930-18" defer></script>
-    <script src="modes.js?v=20260930-18" defer></script>
-    <script src="swipe-data.js?v=20260930-18" defer></script>
-    <script src="swipe-mode.js?v=20260930-18" defer></script>
-    <script src="match-mode.js?v=20260930-18" defer></script>
-    <script src="order-mode.js?v=20260930-18" defer></script>
-    <script src="order-data.js?v=20260930-18" defer></script>
-    <script src="tetris-mode.js?v=20260930-18" defer></script>
-    <script src="map-mode.js?v=20260930-18" defer></script>
-    <script src="duel-react.js?v=20260930-18" defer></script>
-    <script src="vov-mode.js?v=20260930-18" defer></script>
-    <script src="visual-trainer.js?v=20260930-18" defer></script>
-    <script src="exam-mode.js?v=20260930-18" defer></script>
-    <script src="app.js?v=20260930-18" defer></script>
+    <script src="config.js?v=20260930-19" defer></script>
+    <script src="utils.js?v=20260930-19" defer></script>
+    <script src="exam-scoring.js?v=20260930-19" defer></script>
+    <script src="state.js?v=20260930-19" defer></script>
+    <script src="table.js?v=20260930-19" defer></script>
+    <script src="lesson-plan.js?v=20260930-19" defer></script>
+    <script src="ui.js?v=20260930-19" defer></script>
+    <script src="modes.js?v=20260930-19" defer></script>
+    <script src="swipe-data.js?v=20260930-19" defer></script>
+    <script src="swipe-mode.js?v=20260930-19" defer></script>
+    <script src="match-mode.js?v=20260930-19" defer></script>
+    <script src="order-mode.js?v=20260930-19" defer></script>
+    <script src="order-data.js?v=20260930-19" defer></script>
+    <script src="tetris-mode.js?v=20260930-19" defer></script>
+    <script src="map-mode.js?v=20260930-19" defer></script>
+    <script src="duel-react.js?v=20260930-19" defer></script>
+    <script src="vov-mode.js?v=20260930-19" defer></script>
+    <script src="visual-trainer.js?v=20260930-19" defer></script>
+    <script src="exam-mode.js?v=20260930-19" defer></script>
+    <script src="app.js?v=20260930-19" defer></script>
 
     <!-- ШАПКА -->
     <header id="main-header" class="sticky top-0 z-50 no-print transition-colors duration-400 pt-2 pb-2 sm:pt-3 sm:pb-3 px-4">
@@ -786,19 +786,25 @@
                  всегда и меняют содержимое одним касанием. На ПК тот же компонент
                  разворачивается в вертикальный рельс — переписывать нечего, только CSS. -->
             <div id="lobby-nav">
-                <div class="la-tabs" role="tablist" aria-label="Разделы режимов" id="lobby-tabs">
-                    <button type="button" class="la-tab" role="tab" data-tab="basic"    aria-selected="true"  aria-controls="lp-basic">Задания <span class="n">6</span></button>
-                    <button type="button" class="la-tab" role="tab" data-tab="trainers" aria-selected="false" aria-controls="lp-trainers">Тренажёры <span class="n">7</span></button>
-                    <button type="button" class="la-tab" role="tab" data-tab="study"    aria-selected="false" aria-controls="lp-study">Изучение <span class="n">3</span></button>
-                    <button type="button" class="la-tab" role="tab" data-tab="extra"    aria-selected="false" aria-controls="lp-extra">Ещё <span class="n">2</span></button>
-                </div>
+                <!-- 30.09.2026: разделы больше не прячутся друг за другом — все идут подряд,
+                     а эта полоса стала липкой навигацией: тап прокручивает к разделу,
+                     при прокрутке подсвечивается текущий (initLobbyTabs, ui.js). Владелец:
+                     «по вкладкам ищешь нужный тренажёр»; на телефоне «Ещё» вообще не
+                     помещалось в экран. -->
+                <nav class="la-tabs" aria-label="Разделы режимов" id="lobby-tabs">
+                    <button type="button" class="la-tab" data-tab="basic"    aria-current="true">Задания <span class="n">6</span></button>
+                    <button type="button" class="la-tab" data-tab="trainers">Тренажёры <span class="n">7</span></button>
+                    <button type="button" class="la-tab" data-tab="study">Изучение <span class="n">3</span></button>
+                    <button type="button" class="la-tab" data-tab="extra">Ещё <span class="n">2</span></button>
+                </nav>
             </div><!-- /#lobby-nav -->
 
             <div id="lobby-panels" class="mt-3">
                 <div>
                     <!-- ТИП 1 · Плитки режимов. Прогресс-полоса скрыта, пока по заданию
                          ничего не выучено (data-zero) — пустая шкала демотивирует. -->
-                    <div class="la-panel la-grid-3" id="lp-basic" data-panel="basic" role="tabpanel">
+                    <section class="la-section" data-section="basic" aria-labelledby="ls-basic"><h3 class="la-sec" id="ls-basic">Задания ЕГЭ</h3>
+                    <div class="la-panel la-grid-3" id="lp-basic" data-panel="basic">
                         <button type="button" class="card-tile" style="--a:var(--a-task1)" data-action="quickStartGame" data-arg="task1" data-arg2="normal">
                             <span class="ico"><span>⏳</span></span>
                             <span><b>№1</b><i>Хронология</i></span>
@@ -835,7 +841,9 @@
                         </button>
                     </div>
 
-                    <div class="la-panel la-grid-3" id="lp-trainers" data-panel="trainers" role="tabpanel" hidden>
+                    </section>
+                    <section class="la-section" data-section="trainers" aria-labelledby="ls-trainers"><h3 class="la-sec" id="ls-trainers">Тренажёры</h3>
+                    <div class="la-panel la-grid-3" id="lp-trainers" data-panel="trainers">
                         <button type="button" class="card-tile" style="--a:var(--a-swipe)" data-action="openSwipeMode">
                             <span class="ico"><span>👈</span></span>
                             <span><b>Свайп</b><i>На скорость</i></span>
@@ -866,7 +874,9 @@
                         </button>
                     </div>
 
-                    <div class="la-panel la-grid-3" id="lp-study" data-panel="study" role="tabpanel" hidden>
+                    </section>
+                    <section class="la-section" data-section="study" aria-labelledby="ls-study"><h3 class="la-sec" id="ls-study">Изучение</h3>
+                    <div class="la-panel la-grid-3" id="lp-study" data-panel="study">
                         <button type="button" class="card-tile" style="--a:var(--a-cards)" data-action="pickTaskForMode" data-arg="flashcards">
                             <span class="ico"><span>🃏</span></span>
                             <span><b>Карточки</b><i>Повторение</i></span>
@@ -877,14 +887,16 @@
                         </button>
                         <button type="button" class="card-tile" style="--a:var(--a-visual)" data-action="pickTaskForMode" data-arg="visual">
                             <span class="ico"><span>🏛️</span></span>
-                            <span><b>Визуал</b><i>Архитектура</i></span>
+                            <span><b>Визуал</b><i>Живопись и архитектура</i></span>
                         </button>
                     </div>
 
                     <!-- «Секретный архив» и «Красный карандаш» потеряли бежевые фоны, пунктир
                          и фон в точку. Тематику держат иконка и название, а не отдельная тема
                          оформления: заметность даёт положение на экране, а не текстура. -->
-                    <div class="la-panel la-grid-3" id="lp-extra" data-panel="extra" role="tabpanel" hidden>
+                    </section>
+                    <section class="la-section" data-section="extra" aria-labelledby="ls-extra"><h3 class="la-sec" id="ls-extra">Ещё режимы</h3>
+                    <div class="la-panel la-grid-3" id="lp-extra" data-panel="extra">
                         <button type="button" class="card-tile" style="--a:var(--a-arch)" data-action="pickTaskForMode" data-arg="detective">
                             <span class="ico"><span>🕵️</span></span>
                             <span><b>Архив</b><i>Восстанови данные</i></span>
@@ -894,6 +906,7 @@
                             <span><b>Карандаш</b><i>Найди фейки</i></span>
                         </button>
                     </div>
+                    </section>
                 </div>
             </div><!-- /#lobby-panels -->
 
@@ -1552,11 +1565,11 @@
     <!-- jsPDF грузится лениво (см. loadJsPDFOnDemand в cloud-sync.js) — не нужен при старте -->
 
     <!-- === PWA + first-party cloud sync loader === -->
-    <script src="pwa.js?v=20260930-18" defer></script>
+    <script src="pwa.js?v=20260930-19" defer></script>
 
     <!-- Ядро (факты, ~659 КБ): нужно для лобби и заданий. Приложение ОТКРЫВАЕТСЯ сразу
          после него — defer парсит HTML параллельно, порядок выполнения гарантирован. -->
-    <script src="data.js?v=20260930-18" defer></script>
+    <script src="data.js?v=20260930-19" defer></script>
     <!-- app:ready диспатчит инлайн-вотчер готовности в начале <body> (см. watchBoot):
          отдельный boot-ready.js убран — свежий файл не лежал в старом SW-кэше и на
          моргнувшей сети вис, не давая снять заставку. -->
