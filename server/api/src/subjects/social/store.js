@@ -629,6 +629,92 @@ async function rotateJoinCode(teacherUserId, classId, { db = pool } = {}) {
   });
 }
 
+// 🔴 Класс ЦЕЛИКОМ, а не по одной домашке. Весь кабинет отвечал только на
+// вопрос «кто сдал вот эту работу», и класс, который занимается сам, выглядел
+// мёртвым: у ученицы с 2 597 ответами в списке стояли нули, потому что домашек
+// ей не выдавали. Здесь — сколько класс работает, сколько человек живы и кто
+// выпал совсем.
+//
+// Только агрегаты: полного снимка прогресса ученика тут нет и быть не может.
+async function classSummary(teacherUserId, classId, { db = pool } = {}) {
+  await ownedClass(teacherUserId, classId, { db });
+
+  const totals = await db.query(
+    `WITH members AS (
+       SELECT user_id FROM social_class_members
+       WHERE class_id = $1 AND status = 'active')
+     SELECT
+       (SELECT COUNT(*)::int FROM members) AS students,
+       COUNT(*)::int AS answers,
+       COUNT(*) FILTER (WHERE e.attempted_at > now() - interval '7 days')::int AS answers_week,
+       COUNT(DISTINCT e.user_id)::int AS ever_active,
+       COUNT(DISTINCT e.user_id) FILTER (WHERE e.attempted_at > now() - interval '7 days')::int AS active_week,
+       COUNT(DISTINCT e.user_id) FILTER (WHERE e.attempted_at > now() - interval '30 days')::int AS active_month,
+       COALESCE(SUM(e.earned), 0)::int AS earned,
+       COALESCE(SUM(e.possible), 0)::int AS possible,
+       COALESCE(SUM(LEAST(e.elapsed_ms, 600000)), 0)::bigint AS elapsed_ms
+     FROM members m
+     LEFT JOIN social_attempt_events e ON e.user_id = m.user_id`, [classId]);
+  const t = totals.rows[0] || {};
+
+  const activity = await db.query(
+    `SELECT e.week_start, COUNT(*)::int AS answers,
+            COUNT(DISTINCT e.user_id)::int AS students
+     FROM social_class_members m
+     JOIN social_attempt_events e ON e.user_id = m.user_id
+     WHERE m.class_id = $1 AND m.status = 'active'
+       AND e.attempted_at > now() - interval '9 weeks'
+     GROUP BY e.week_start ORDER BY e.week_start`, [classId]);
+
+  const kinds = await db.query(
+    `SELECT e.kind, COUNT(*)::int AS answers
+     FROM social_class_members m
+     JOIN social_attempt_events e ON e.user_id = m.user_id
+     WHERE m.class_id = $1 AND m.status = 'active'
+     GROUP BY e.kind`, [classId]);
+
+  // 🔴 Два разных «не работает», и путать их нельзя: один не начинал вовсе —
+  // с ним говорят о том, как войти; второй занимался и перестал — с ним о том,
+  // почему бросил. Совет им нужен разный, поэтому и считаем порознь.
+  const idle = await db.query(
+    `SELECT
+       COUNT(*) FILTER (WHERE last_at IS NULL)::int AS never_started,
+       COUNT(*) FILTER (WHERE last_at IS NOT NULL
+                          AND last_at < now() - interval '14 days')::int AS quiet_two_weeks
+     FROM (
+       SELECT m.user_id,
+              (SELECT MAX(e.attempted_at) FROM social_attempt_events e WHERE e.user_id = m.user_id) AS last_at
+       FROM social_class_members m
+       WHERE m.class_id = $1 AND m.status = 'active') z`, [classId]);
+  const i = idle.rows[0] || {};
+
+  return {
+    totals: {
+      students: numeric(t.students),
+      answers: numeric(t.answers),
+      answersWeek: numeric(t.answers_week),
+      everActive: numeric(t.ever_active),
+      activeWeek: numeric(t.active_week),
+      activeMonth: numeric(t.active_month),
+      accuracy: numeric(t.possible) > 0 ? Math.round((numeric(t.earned) / numeric(t.possible)) * 100) : 0,
+      elapsedMs: numeric(t.elapsed_ms),
+    },
+    activity: activity.rows.map(row => ({
+      weekStart: new Date(row.week_start).getTime(),
+      answers: numeric(row.answers),
+      students: numeric(row.students),
+    })),
+    kinds: kinds.rows.reduce((acc, row) => {
+      acc[String(row.kind || 'practice')] = numeric(row.answers);
+      return acc;
+    }, {}),
+    idle: {
+      neverStarted: numeric(i.never_started),
+      quietTwoWeeks: numeric(i.quiet_two_weeks),
+    },
+  };
+}
+
 // Учителю отдаём агрегаты, а не состояние ученика. Полного снимка прогресса
 // здесь нет и появиться не должно: план запрещает учителю читать и тем более
 // перезаписывать state ученика.
@@ -2310,7 +2396,7 @@ module.exports = {
   activeAssignmentsFor,
   taskDifficulty, rankHardest, quotaState, consumeQuota,
   weeklyLeaderboard,
-  createClass, listClasses, ownedClass, updateClass, rotateJoinCode, classStudents, removeClassStudent,
+  createClass, listClasses, ownedClass, updateClass, rotateJoinCode, classStudents, classSummary, removeClassStudent,
   joinClass, myClasses,
   createAssignment, listAssignments, ownedAssignment, updateAssignment, cancelAssignment,
   assignmentResults, assignmentStudentDetail, studentOverview, weakSpots,
