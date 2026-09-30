@@ -85,7 +85,12 @@
     }
     function _qTitle(m, all) {
         const [a, b] = m._span;
-        const same = _shuffle(all.filter(x => x !== m && x.c === m.c && (x._span[0] > b + 5 || x._span[1] < a - 5)));
+        // Соседние карты делят одну географию: на «Правлении Ивана III» подписаны
+        // Казанское и Астраханское ханства и походы на Казань, и обманка «Казанское,
+        // Астраханское и Азовское направления» (1552, разрыв 47 лет) выглядела верной
+        // (владелец 30.09). В древности карты гуще — разрыв 60 лет, дальше — 15.
+        const gap = m.c === 'early' ? 60 : 15;
+        const same = _shuffle(all.filter(x => x !== m && x.c === m.c && (x._span[0] > b + gap || x._span[1] < a - gap)));
         const other = _shuffle(all.filter(x => x !== m && x.c !== m.c));
         const pool = [];
         same.concat(other).forEach(x => { if (pool.length < 3 && !pool.includes(x.culture) && x.culture !== m.culture) pool.push(x.culture); });
