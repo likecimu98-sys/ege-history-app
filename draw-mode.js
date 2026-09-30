@@ -2,13 +2,23 @@
 //
 // Только компьютер: модуль грузит ui.js лениво, если мышь/перо и экран шире 900px.
 // Слой — два холста поверх всего приложения: нижний хранит готовые штрихи,
-// верхний — то, что рисуется прямо сейчас (штрих, стрелка, лазер). Штрихи
-// лежат в координатах СТРАНИЦЫ, поэтому при прокрутке рисунок едет вместе с
-// таблицей, а не висит на месте.
+// верхний — то, что рисуется прямо сейчас (штрих, стрелка, лазер).
 //
-// Инструменты: курсор (рисунок виден, приложение кликается), перо, маркер,
-// стрелка, штампы ✓ ✗ ? ★, лазер (след гаснет сам, клики проходят насквозь),
-// ластик по штрихам. Горячие клавиши — в подсказке панели.
+// 🔴 Штрих привязан к тому, ПОВЕРХ ЧЕГО он нарисован (якорь), а не к экрану:
+//  • карта/картинка — к самой картинке, в долях её рамки: карту в пробнике
+//    приближают и таскают CSS-трансформацией, и рисунок обязан ехать и
+//    масштабироваться вместе с ней (владелец: «для карт очень важно»);
+//  • прокручиваемое окно (пробник, задания, модалки) — к его содержимому;
+//  • иначе — к странице.
+// Рамки якорей меняются без событий (зум карты — это transform), поэтому пока
+// есть такие штрихи, слой перерисовывается каждый кадр. Якорь исчез (окно
+// закрыли) — его штрихи не рисуются.
+//
+// Колесо мыши, пока рисуем, не глохнет на холсте: оно передаётся тому, что под
+// ним, — карта приближается, окно прокручивается.
+//
+// «Сцена для стрима» (кнопка на панели или ?stream=1): задание на весь экран,
+// фирменный фон вместо затемнённого лобби, плашка «что это», всё крупнее.
 (function () {
   'use strict';
   if (window.DrawMode) return;
@@ -17,7 +27,7 @@
   var SIZES = [3, 5, 8, 13];
   var STAMPS = ['check', 'cross', 'question', 'star'];
   var TOOLS = [
-    { id: 'cursor', key: 'V', name: 'Курсор — рисунок остаётся, приложение кликается' },
+    { id: 'cursor', key: 'V', name: 'Курсор — рисунок остаётся, приложение кликается, карту можно двигать' },
     { id: 'pen', key: 'P', name: 'Перо' },
     { id: 'marker', key: 'M', name: 'Маркер' },
     { id: 'arrow', key: 'A', name: 'Стрелка' },
@@ -26,22 +36,105 @@
     { id: 'eraser', key: 'E', name: 'Ластик — стирает штрих целиком' }
   ];
 
-  var st = { on: false, tool: 'pen', color: COLORS[0], size: 1, stamp: 0, autoClear: true };
-  try { var saved = JSON.parse(localStorage.getItem('draw_mode_prefs') || 'null'); if (saved) { st.color = saved.color || st.color; st.size = saved.size != null ? saved.size : st.size; st.autoClear = saved.autoClear !== false; } } catch (e) {}
-  function savePrefs() { try { localStorage.setItem('draw_mode_prefs', JSON.stringify({ color: st.color, size: st.size, autoClear: st.autoClear })); } catch (e) {} }
+  var st = { on: false, tool: 'pen', color: COLORS[0], size: 1, stamp: 0, autoClear: true, stage: false };
+  try {
+    var saved = JSON.parse(localStorage.getItem('draw_mode_prefs') || 'null');
+    if (saved) { st.color = saved.color || st.color; st.size = saved.size != null ? saved.size : st.size; st.autoClear = saved.autoClear !== false; st.stage = !!saved.stage; }
+  } catch (e) {}
+  try { if (/[?&]stream=1(&|$)/.test(location.search)) st.stage = true; } catch (e) {}
+  function savePrefs() { try { localStorage.setItem('draw_mode_prefs', JSON.stringify({ color: st.color, size: st.size, autoClear: st.autoClear, stage: st.stage })); } catch (e) {} }
 
-  var strokes = [];          // готовое: {kind, color, w, pts[] | from,to | x,y,stamp, born}
+  var strokes = [];          // готовое: {kind, color, w, anchor, pts[] | from,to | at, stamp, born}
   var cur = null;            // рисуемое сейчас
   var laser = [];            // точки лазера {x, y, t} — в координатах окна
   var fading = 0;            // «очистить» гасит рисунок плавно
   var dpr = 1, W = 0, H = 0;
 
-  var root, base, live, bctx, lctx, bar, fab, dot;
+  var root, base, live, bctx, lctx, bar, fab, dot, brand;
 
   function el(tag, cls, html) { var e = document.createElement(tag); if (cls) e.className = cls; if (html != null) e.innerHTML = html; return e; }
   function sx() { return window.scrollX || 0; }
   function sy() { return window.scrollY || 0; }
   function width() { return SIZES[st.size] || 5; }
+
+  // ── Якоря ────────────────────────────────────────────────────────────────
+  function mine(n) { return n.closest && n.closest('.dm-root, .dm-bar, .dm-fab, .dm-brand'); }
+  function underPoint(x, y) {
+    var list = document.elementsFromPoint(x, y);
+    for (var i = 0; i < list.length; i++) if (!mine(list[i])) return list[i];
+    return null;
+  }
+  function scrollable(n) {
+    for (; n && n !== document.body && n !== document.documentElement; n = n.parentElement) {
+      var cs = getComputedStyle(n);
+      if (/(auto|scroll)/.test(cs.overflowY + ' ' + cs.overflowX) && (n.scrollHeight > n.clientHeight + 2 || n.scrollWidth > n.clientWidth + 2)) return n;
+    }
+    return null;
+  }
+  function clipper(n) {
+    for (n = n && n.parentElement; n && n !== document.body && n !== document.documentElement; n = n.parentElement) {
+      var cs = getComputedStyle(n);
+      if (cs.overflowX !== 'visible' || cs.overflowY !== 'visible') return n;
+    }
+    return null;
+  }
+  function makeAnchor(cx, cy) {
+    var e = underPoint(cx, cy);
+    if (!e) return { type: 'page' };
+    // Карта или картинка заметного размера — рисуем «на ней».
+    for (var n = e; n && n !== document.body; n = n.parentElement) {
+      if (/^(IMG|CANVAS|svg|VIDEO)$/.test(n.tagName)) {
+        var r = n.getBoundingClientRect();
+        if (r.width > 140 && r.height > 100) return { type: 'box', el: n, w0: r.width, clip: clipper(n) };
+      }
+    }
+    // Картинка с pointer-events:none точкой не находится — ищем её среди потомков
+    // ближайших предков по рамке (так устроена зум-карта пробника).
+    for (var up = e, lvl = 0; up && up !== document.body && lvl < 4; up = up.parentElement, lvl++) {
+      var media = up.querySelectorAll ? up.querySelectorAll('img, canvas, video') : [];
+      for (var j = 0; j < media.length; j++) {
+        var rr = media[j].getBoundingClientRect();
+        if (rr.width > 140 && rr.height > 100 && cx >= rr.left && cx <= rr.right && cy >= rr.top && cy <= rr.bottom && !mine(media[j]))
+          return { type: 'box', el: media[j], w0: rr.width, clip: clipper(media[j]) };
+      }
+    }
+    var s = scrollable(e);
+    if (s) return { type: 'scroll', el: s, clip: s };
+    return { type: 'page' };
+  }
+  // Кадр якоря на сейчас: перевод его координат в экранные, масштаб линий, рамка обрезки.
+  function frameOf(a) {
+    if (a.type === 'page') { var ox = sx(), oy = sy(); return { fx: function (p) { return { x: p.x - ox, y: p.y - oy }; }, k: 1, clip: null }; }
+    if (!a.el || !a.el.isConnected) return null;
+    var r = a.el.getBoundingClientRect();
+    if (!r.width || !r.height) return null;
+    if (!visible(a.el, r)) return null;
+    var clip = a.clip && a.clip.isConnected ? a.clip.getBoundingClientRect() : null;
+    if (a.type === 'box') return { fx: function (p) { return { x: r.left + p.x * r.width, y: r.top + p.y * r.height }; }, k: r.width / a.w0, clip: clip };
+    var ox2 = r.left - a.el.scrollLeft, oy2 = r.top - a.el.scrollTop;
+    return { fx: function (p) { return { x: ox2 + p.x, y: oy2 + p.y }; }, k: 1, clip: r };
+  }
+  // Якорь не закрыт другим окном? Слой рисунка выше всего, и без этой проверки
+  // рисунок с маленькой карты просвечивал бы поверх её же увеличенной копии.
+  // Проверяем точку в видимой части рамки: что там сверху — сам якорь (или его
+  // родня), значит виден. Результат — на кадр, чтобы не спрашивать браузер на
+  // каждый штрих.
+  var visCache = null, visAt = 0;
+  function visible(node, r) {
+    var now = performance.now();
+    if (!visCache || now - visAt > 12) { visCache = new Map(); visAt = now; }
+    if (visCache.has(node)) return visCache.get(node);
+    var x = Math.min(Math.max(r.left + r.width / 2, 2), W - 2), y = Math.min(Math.max(r.top + r.height / 2, 2), H - 2);
+    var hit = underPoint(x, y), ok = !!hit && (hit === node || node.contains(hit) || hit.contains(node));
+    visCache.set(node, ok);
+    return ok;
+  }
+  function toAnchor(a, cx, cy, p) {
+    if (a.type === 'page') return { x: cx + sx(), y: cy + sy(), p: p };
+    var r = a.el.getBoundingClientRect();
+    if (a.type === 'box') return { x: (cx - r.left) / r.width, y: (cy - r.top) / r.height, p: p };
+    return { x: cx - r.left + a.el.scrollLeft, y: cy - r.top + a.el.scrollTop, p: p };
+  }
 
   // ── Иконки панели: свой SVG, а не эмодзи — эмодзи на Windows 10 бывают квадратами.
   var ICON = {
@@ -49,11 +142,11 @@
     pen: '<path d="M4 20l1.2-4.6L16 4.6a2 2 0 012.8 0l.6.6a2 2 0 010 2.8L8.6 18.8z"/><path d="M14 6.6l3.4 3.4" fill="none"/>',
     marker: '<path d="M7 14l7-10 6 4-7 10z"/><path d="M7 14l-3 6h6l3-2z" opacity=".6"/>',
     arrow: '<path d="M5 19L19 5M19 5h-8M19 5v8" fill="none" stroke-width="2.6"/>',
-    stamp: '<path d="M5 12.5l4.5 4.5L19 7" fill="none" stroke-width="3"/>',
     laser: '<circle cx="12" cy="12" r="4"/><circle cx="12" cy="12" r="8.5" fill="none" opacity=".45"/>',
     eraser: '<path d="M3 16l9-9 7 7-6 6H7z"/><path d="M13 20h8" fill="none"/>',
     undo: '<path d="M9 7L4 12l5 5" fill="none" stroke-width="2.4"/><path d="M4 12h10a6 6 0 010 12" fill="none" stroke-width="2.4" transform="translate(0 -5)"/>',
     clear: '<path d="M6 7h12M9 7V4h6v3M8 7l1 13h6l1-13" fill="none" stroke-width="2"/>',
+    stage: '<rect x="3" y="5" width="18" height="12" rx="2" fill="none" stroke-width="2"/><path d="M9 21h6M12 17v4" fill="none" stroke-width="2"/><circle cx="12" cy="11" r="2.6"/>',
     close: '<path d="M6 6l12 12M18 6L6 18" fill="none" stroke-width="2.6"/>'
   };
   function svg(name) { return '<svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + ICON[name] + '</svg>'; }
@@ -77,10 +170,18 @@
     document.body.appendChild(bar);
     renderBar();
 
+    // Плашка сцены: новый зритель сразу видит, что это и где это взять.
+    brand = el('div', 'dm-brand',
+      '<span class="dm-brand-logo">Решай историю!</span><span class="dm-brand-sub">тренажёр ЕГЭ по истории</span>' +
+      '<span class="dm-brand-mode" id="dm-brand-mode"></span><span class="dm-brand-url">reshay-istoriyu.ru</span>');
+    document.body.appendChild(brand);
+    applyStage();
+
     resize();
     window.addEventListener('resize', resize);
     window.addEventListener('scroll', function () { redraw(); }, { passive: true });
     live.addEventListener('pointerdown', down);
+    live.addEventListener('wheel', wheel, { passive: false });
     window.addEventListener('pointermove', move, { passive: true });
     window.addEventListener('pointerup', up);
     window.addEventListener('pointercancel', up);
@@ -107,16 +208,18 @@
       '<button type="button" class="dm-btn" data-act="undo" title="Отменить (Ctrl+Z)">' + svg('undo') + '</button>' +
       '<button type="button" class="dm-btn" data-act="clear" title="Очистить всё (C)">' + svg('clear') + '</button>' +
       '<button type="button" class="dm-auto' + (st.autoClear ? ' on' : '') + '" data-act="auto" title="Очищать при новой таблице">авто<br>очистка</button>' +
+      '<button type="button" class="dm-btn dm-stage-btn' + (st.stage ? ' on' : '') + '" data-act="stage" title="Сцена для стрима: задание на весь экран, фирменный фон (T)">' + svg('stage') + '</button>' +
       '<button type="button" class="dm-btn dm-exit" data-act="exit" title="Выйти (Esc или D)">' + svg('close') + '</button>';
     bar.innerHTML = h;
     bar.onclick = function (e) {
       var b = e.target.closest('button'); if (!b) return;
       if (b.dataset.tool) { if (b.dataset.tool === 'stamp' && st.tool === 'stamp') st.stamp = (st.stamp + 1) % STAMPS.length; setTool(b.dataset.tool); }
-      else if (b.dataset.color) { st.color = b.dataset.color; if (st.tool === 'cursor' || st.tool === 'eraser') setTool('pen'); savePrefs(); renderBar(); }
+      else if (b.dataset.color) { st.color = b.dataset.color; if (st.tool === 'cursor' || st.tool === 'eraser') st.tool = 'pen'; savePrefs(); setTool(st.tool); }
       else if (b.dataset.size) { st.size = +b.dataset.size; savePrefs(); renderBar(); cursorDot(); }
       else if (b.dataset.act === 'undo') undo();
       else if (b.dataset.act === 'clear') clearAll();
       else if (b.dataset.act === 'auto') { st.autoClear = !st.autoClear; savePrefs(); renderBar(); }
+      else if (b.dataset.act === 'stage') toggleStage();
       else if (b.dataset.act === 'exit') toggle(false);
     };
   }
@@ -145,6 +248,12 @@
     cursorDot();
     try { if (window.Sfx && window.Sfx.play) window.Sfx.play(st.on ? 'tap' : 'pop'); } catch (e) {}
   }
+  function applyStage() {
+    document.documentElement.classList.toggle('dm-stage', st.stage);
+    var m = document.getElementById('dm-brand-mode'), t = document.getElementById('game-title-display');
+    if (m) m.textContent = t ? t.textContent.trim() : '';
+  }
+  function toggleStage() { st.stage = !st.stage; savePrefs(); applyStage(); renderBar(); setTimeout(resize, 50); }
 
   function resize() {
     dpr = Math.min(window.devicePixelRatio || 1, 2);
@@ -157,47 +266,62 @@
   // Холст ловит указатель только для «рисующих» инструментов. Курсор и лазер
   // пропускают клики насквозь: можно показывать лазером и тут же отвечать.
   function drawing() { return st.on && st.tool !== 'cursor' && st.tool !== 'laser'; }
-  function pt(e) { return { x: e.clientX + sx(), y: e.clientY + sy(), p: e.pointerType === 'pen' && e.pressure ? e.pressure : 0.5 }; }
+  function pressure(e) { return e.pointerType === 'pen' && e.pressure ? e.pressure : 0.5; }
 
   function down(e) {
     if (!drawing() || e.button > 0) return;
     e.preventDefault();
     try { live.setPointerCapture(e.pointerId); } catch (er) {}
-    var p = pt(e);
-    if (st.tool === 'eraser') { cur = { kind: 'erase' }; eraseAt(p); return; }
+    if (st.tool === 'eraser') { cur = { kind: 'erase' }; eraseAt(e.clientX, e.clientY); return; }
+    var a = makeAnchor(e.clientX, e.clientY), p = toAnchor(a, e.clientX, e.clientY, pressure(e));
     if (st.tool === 'stamp') {
-      strokes.push({ kind: 'stamp', stamp: STAMPS[st.stamp], color: st.color, w: width(), x: p.x, y: p.y, born: performance.now() });
+      strokes.push({ kind: 'stamp', stamp: STAMPS[st.stamp], color: st.color, w: width(), anchor: a, at: p, born: performance.now() });
       redraw(); boom(e.clientX, e.clientY); return;
     }
-    if (st.tool === 'arrow') { cur = { kind: 'arrow', color: st.color, w: width(), from: p, to: p }; return; }
-    cur = { kind: st.tool, color: st.color, w: width() * (st.tool === 'marker' ? 3.2 : 1), pts: [p] };
+    if (st.tool === 'arrow') { cur = { kind: 'arrow', color: st.color, w: width(), anchor: a, from: p, to: p, c0: [e.clientX, e.clientY], c1: [e.clientX, e.clientY] }; return; }
+    cur = { kind: st.tool, color: st.color, w: width() * (st.tool === 'marker' ? 3.2 : 1), anchor: a, pts: [p], last: [e.clientX, e.clientY] };
   }
   function move(e) {
     if (!st.on) return;
     moveDot(e);
     if (st.tool === 'laser') { laser.push({ x: e.clientX, y: e.clientY, t: performance.now() }); return; }
     if (!cur) return;
-    var p = pt(e);
-    if (cur.kind === 'erase') { eraseAt(p); return; }
-    if (cur.kind === 'arrow') { cur.to = p; drawLive(); return; }
-    var last = cur.pts[cur.pts.length - 1];
-    if (Math.abs(p.x - last.x) + Math.abs(p.y - last.y) < 1.5) return;
+    if (cur.kind === 'erase') { eraseAt(e.clientX, e.clientY); return; }
+    if (!cur.anchor || (cur.anchor.el && !cur.anchor.el.isConnected)) return;
+    var p = toAnchor(cur.anchor, e.clientX, e.clientY, pressure(e));
+    if (cur.kind === 'arrow') { cur.to = p; cur.c1 = [e.clientX, e.clientY]; drawLive(); return; }
+    if (Math.abs(e.clientX - cur.last[0]) + Math.abs(e.clientY - cur.last[1]) < 1.5) return;
+    cur.last = [e.clientX, e.clientY];
     cur.pts.push(p); drawLive();
   }
   function up() {
     if (!cur) return;
     if (cur.kind !== 'erase') {
-      var ok = cur.kind === 'arrow' ? Math.hypot(cur.to.x - cur.from.x, cur.to.y - cur.from.y) > 8 : cur.pts.length > 0;
-      if (ok) { cur.born = performance.now(); strokes.push(cur); }
+      var ok = cur.kind === 'arrow' ? Math.hypot(cur.c1[0] - cur.c0[0], cur.c1[1] - cur.c0[1]) > 8 : cur.pts.length > 0;
+      if (ok) { cur.born = performance.now(); delete cur.last; strokes.push(cur); }
     }
     cur = null; clearLive(); redraw();
   }
-  function eraseAt(p) {
+  // Колесо — тому, что под холстом: карта приближается, окно прокручивается.
+  function wheel(e) {
+    live.style.pointerEvents = 'none';
+    var t = document.elementFromPoint(e.clientX, e.clientY);
+    live.style.pointerEvents = '';
+    if (!t || mine(t)) return;
+    e.preventDefault();
+    var ev = new WheelEvent('wheel', { bubbles: true, cancelable: true, clientX: e.clientX, clientY: e.clientY, screenX: e.screenX, screenY: e.screenY,
+      deltaX: e.deltaX, deltaY: e.deltaY, deltaZ: e.deltaZ, deltaMode: e.deltaMode, ctrlKey: e.ctrlKey, shiftKey: e.shiftKey, altKey: e.altKey, metaKey: e.metaKey });
+    // Подставной обработчик (зум карты) сам гасит событие; иначе — прокрутка вручную,
+    // синтетическое колесо браузер сам не прокручивает.
+    if (t.dispatchEvent(ev)) { var s = scrollable(t); var k = e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? H : 1; (s || window).scrollBy(e.deltaX * k, e.deltaY * k); }
+  }
+  function eraseAt(cx, cy) {
     var r = 14, before = strokes.length;
     strokes = strokes.filter(function (s) {
-      if (s.kind === 'stamp') return Math.hypot(s.x - p.x, s.y - p.y) > r + 16;
-      if (s.kind === 'arrow') return distSeg(p, s.from, s.to) > r;
-      for (var i = 0; i < s.pts.length; i++) if (Math.abs(s.pts[i].x - p.x) < r && Math.abs(s.pts[i].y - p.y) < r) return false;
+      var f = frameOf(s.anchor); if (!f) return true;
+      if (s.kind === 'stamp') { var q = f.fx(s.at); return Math.hypot(q.x - cx, q.y - cy) > r + 16 * f.k; }
+      if (s.kind === 'arrow') return distSeg({ x: cx, y: cy }, f.fx(s.from), f.fx(s.to)) > r;
+      for (var i = 0; i < s.pts.length; i++) { var c = f.fx(s.pts[i]); if (Math.abs(c.x - cx) < r && Math.abs(c.y - cy) < r) return false; }
       return true;
     });
     if (strokes.length !== before) redraw();
@@ -233,6 +357,7 @@
     if (tool) { eat(); setTool(tool); return; }
     if (code === 'S') { eat(); if (st.tool === 'stamp') st.stamp = (st.stamp + 1) % STAMPS.length; setTool('stamp'); return; }
     if (code === 'C') { eat(); clearAll(); return; }
+    if (code === 'T') { eat(); toggleStage(); return; }
     if (code === 'BracketLeft') { eat(); st.size = Math.max(0, st.size - 1); savePrefs(); renderBar(); cursorDot(); }
     if (code === 'BracketRight') { eat(); st.size = Math.min(SIZES.length - 1, st.size + 1); savePrefs(); renderBar(); cursorDot(); }
   }
@@ -244,7 +369,7 @@
       if (typeof window.generateTable !== 'function') { if (tries++ < 40) setTimeout(wrap, 500); return; }
       if (window.generateTable._dm) return;
       var orig = window.generateTable;
-      var wrapped = function () { var r = orig.apply(this, arguments); if (st.autoClear && strokes.length) clearAll(); return r; };
+      var wrapped = function () { var r = orig.apply(this, arguments); if (st.autoClear && strokes.length) clearAll(); applyStage(); return r; };
       wrapped._dm = true;
       window.generateTable = wrapped;
     })();
@@ -255,35 +380,38 @@
   function redraw() {
     if (!bctx) return;
     bctx.setTransform(1, 0, 0, 1, 0, 0); bctx.clearRect(0, 0, base.width, base.height);
-    bctx.setTransform(dpr, 0, 0, dpr, -sx() * dpr, -sy() * dpr);
+    bctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     var now = performance.now();
     strokes.forEach(function (s) { paint(bctx, s, now); });
   }
   function drawLive() {
     clearLive();
     if (!cur || cur.kind === 'erase') return;
-    lctx.setTransform(dpr, 0, 0, dpr, -sx() * dpr, -sy() * dpr);
+    lctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     paint(lctx, cur, performance.now());
   }
   function paint(c, s, now) {
+    var f = frameOf(s.anchor || { type: 'page' });
+    if (!f) return;
     c.save();
+    if (f.clip) { c.beginPath(); c.rect(f.clip.left, f.clip.top, f.clip.width, f.clip.height); c.clip(); }
     c.lineCap = 'round'; c.lineJoin = 'round';
     if (s.kind === 'pen' || s.kind === 'marker') {
       c.strokeStyle = s.color;
       if (s.kind === 'marker') { c.globalAlpha = 0.38; c.lineCap = 'butt'; }
       else { c.shadowColor = s.color; c.shadowBlur = 7; }   // неоновый отсвет — на стриме смотрится сочно
-      var pts = s.pts;
-      if (pts.length === 1) { c.fillStyle = s.color; c.beginPath(); c.arc(pts[0].x, pts[0].y, s.w / 2 + 1, 0, 7); c.fill(); }
+      var pts = s.pts.map(function (p) { var q = f.fx(p); q.p = p.p; return q; });
+      if (pts.length === 1) { c.fillStyle = s.color; c.beginPath(); c.arc(pts[0].x, pts[0].y, s.w * f.k / 2 + 1, 0, 7); c.fill(); }
       for (var i = 1; i < pts.length; i++) {
         var a = pts[i - 1], b = pts[i], m0 = i > 1 ? mid(pts[i - 2], a) : a, m1 = mid(a, b);
-        c.lineWidth = s.kind === 'pen' ? s.w * (0.55 + b.p * 0.9) : s.w;
+        c.lineWidth = (s.kind === 'pen' ? s.w * (0.55 + b.p * 0.9) : s.w) * f.k;
         c.beginPath(); c.moveTo(m0.x, m0.y); c.quadraticCurveTo(a.x, a.y, m1.x, m1.y); c.stroke();
       }
     } else if (s.kind === 'arrow') {
-      arrow(c, s.from, s.to, s.color, s.w);
+      arrow(c, f.fx(s.from), f.fx(s.to), s.color, s.w * f.k);
     } else if (s.kind === 'stamp') {
-      var age = now - (s.born || 0), k = age < 260 ? 1 + 0.7 * Math.pow(1 - age / 260, 2) : 1;
-      stamp(c, s.stamp, s.x, s.y, 22 + s.w * 2.2, s.color, k);
+      var age = now - (s.born || 0), kk = age < 260 ? 1 + 0.7 * Math.pow(1 - age / 260, 2) : 1, q = f.fx(s.at);
+      stamp(c, s.stamp, q.x, q.y, (22 + s.w * 2.2) * f.k, s.color, kk);
     }
     c.restore();
   }
@@ -323,8 +451,10 @@
 
   function tick() {
     var now = performance.now();
-    // Анимация «удара» свежих штампов.
-    if (strokes.some(function (s) { return s.kind === 'stamp' && now - s.born < 280; })) redraw();
+    // Якоря-карты и окна двигаются без событий (зум — это transform): пока есть
+    // такие штрихи или свежий штамп «бьёт», перерисовываем каждый кадр.
+    if (strokes.some(function (s) { return (s.anchor && s.anchor.type !== 'page') || (s.kind === 'stamp' && now - s.born < 280); })) redraw();
+    if (cur && cur.anchor && cur.anchor.type !== 'page') drawLive();
     // Плавное «очистить».
     if (fading) {
       var f = (now - fading) / 260;
@@ -367,6 +497,14 @@
   }
   function moveDot(e) { if (dot && dot.style.display === 'block') { dot.style.opacity = '1'; dot.style.transform = 'translate(' + e.clientX + 'px,' + e.clientY + 'px)'; } }
 
-  window.DrawMode = { toggle: toggle, clear: function () { clearAll(true); }, isOn: function () { return st.on; } };
+  // debug() — для проверки якорей из консоли: к чему привязан каждый штрих и где он сейчас.
+  function debug() {
+    return strokes.map(function (s) {
+      var f = frameOf(s.anchor), a = s.anchor, p0 = s.pts ? s.pts[0] : s.from || s.at, pN = s.pts ? s.pts[s.pts.length - 1] : s.to || s.at;
+      return { kind: s.kind, anchor: a.type + (a.el ? ':' + a.el.tagName + '.' + String(a.el.className || '').split(' ')[0] : ''),
+        shown: !!f, from: f ? f.fx(p0) : null, to: f ? f.fx(pN) : null, k: f ? f.k : null };
+    });
+  }
+  window.DrawMode = { toggle: toggle, stage: toggleStage, clear: function () { clearAll(true); }, isOn: function () { return st.on; }, debug: debug };
   if (document.body) build(); else document.addEventListener('DOMContentLoaded', build);
 })();

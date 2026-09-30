@@ -68,3 +68,39 @@ html.dm-laser, html.dm-laser * { cursor: none !important; }
   .dm-boom { display: none; }
 }
 @media (pointer: coarse), (max-width: 899px) { .dm-fab, .dm-bar, .dm-root { display: none; } }
+
+/* ── Сцена для стрима (кнопка на панели, клавиша T или ?stream=1) ─────────────
+   Задание — почти на весь экран, вместо затемнённого лобби фирменный фон,
+   сверху плашка «что это и где взять». Всё крупнее: Tailwind считает от rem,
+   поэтому достаточно поднять корневой кегль — перетаскивание не ломается
+   (в отличие от CSS zoom). */
+html.dm-stage { font-size: 17px; }
+@media (min-width: 1500px) { html.dm-stage { font-size: 18.5px; } }
+html.dm-stage body.in-game #lobby-area.hidden { display: none; }
+html.dm-stage body.in-game::before {
+  background:
+    radial-gradient(900px 600px at 12% 8%, rgba(168, 85, 247, .38), transparent 62%),
+    radial-gradient(900px 620px at 92% 96%, rgba(56, 189, 248, .30), transparent 60%),
+    radial-gradient(700px 480px at 70% 20%, rgba(255, 59, 92, .18), transparent 60%),
+    linear-gradient(140deg, #0a0f24, #141a3d 55%, #1d1033);
+  -webkit-backdrop-filter: none; backdrop-filter: none;
+}
+html.dm-stage body.in-game #game-container {
+  top: 62px; left: 84px; right: 22px; bottom: 18px; transform: none;
+  width: auto; max-height: none; padding: 18px;
+}
+.dm-brand { display: none; }
+html.dm-stage body.in-game .dm-brand {
+  display: flex; align-items: center; gap: 12px; position: fixed; z-index: 62; top: 14px; left: 84px; right: 22px; height: 36px;
+  color: #fff; font-weight: 900; pointer-events: none; white-space: nowrap;
+}
+.dm-brand-logo { font-size: 20px; letter-spacing: .02em; background: linear-gradient(90deg, #ffd23f, #ff3b5c 45%, #a855f7);
+  -webkit-background-clip: text; background-clip: text; color: transparent; filter: drop-shadow(0 2px 6px rgba(0, 0, 0, .35)); }
+.dm-brand-sub { font-size: 13px; font-weight: 700; color: #c7cbe6; }
+.dm-brand-mode { font-size: 12px; font-weight: 900; letter-spacing: .12em; text-transform: uppercase; color: #fff; padding: 5px 12px;
+  border-radius: 999px; background: rgba(255, 255, 255, .1); border: 1px solid rgba(255, 255, 255, .18); }
+.dm-brand-mode:empty { display: none; }
+.dm-brand-url { margin-left: auto; font-size: 15px; font-weight: 900; color: #fff; padding: 5px 14px; border-radius: 999px;
+  background: linear-gradient(135deg, #ff3b5c, #a855f7); }
+/* Строки таблицы на сцене повыше — на стриме таблица заполняет экран, а не жмётся кверху. */
+html.dm-stage body.in-game #task-table-body td { padding-top: .95rem; padding-bottom: .95rem; }
