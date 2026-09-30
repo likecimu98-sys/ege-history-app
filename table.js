@@ -2519,8 +2519,10 @@ window.onChipClick = function(chip, e) {
        («3-1-4»), а не переписывает варианты. Номер даётся один раз, когда пул собран
        новой таблицей, и остаётся при фишке — и в ячейке, и при возврате в пул. */
     (function numberPool() {
+        // Без браузера (стенды тестов грузят table.js с урезанным document) — молча выходим.
+        if (typeof document === 'undefined' || typeof document.getElementById !== 'function' || typeof MutationObserver !== 'function') return;
         const pool = document.getElementById('pool-container');
-        if (!pool || typeof MutationObserver !== 'function') return;
+        if (!pool) return;
         const assign = () => {
             const chips = Array.prototype.slice.call(pool.querySelectorAll('.dnd-chip'));
             if (!chips.length || chips.every(c => c.dataset.n)) return;
