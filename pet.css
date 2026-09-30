@@ -936,3 +936,20 @@ div.pn-card { cursor: default; }
 .pn-txt .pn-hl { display: block; color: var(--rc); font-size: 14px; font-weight: 900; }
 .pn-txt i { display: block; font-style: normal; font-size: 11px; color: var(--pet-mute, #6b7280); }
 .pn-card em { font-style: normal; font-size: 20px; color: var(--pet-mute, #9ca3af); }
+
+/* Эпики (30.09.2026): пять новых движений под фирменные эффекты эпических вещей. */
+.pet-svg.act-march .pet-body { transform-box: view-box; transform-origin: 100px 190px; animation: ep-march .3s ease-in-out 6 alternate; }
+@keyframes ep-march { from { transform: translateY(0) rotate(-2deg); } to { transform: translateY(-4px) rotate(2deg); } }
+.pet-svg.act-float .pet-body { transform-box: view-box; transform-origin: 100px 190px; animation: ep-float 1.8s ease-in-out; }
+.pet-svg.act-float .pet-shadow { transform-box: fill-box; transform-origin: 50% 50%; animation: ep-float-shadow 1.8s ease-in-out; }
+@keyframes ep-float { 0%, 100% { transform: translateY(0) rotate(0); } 45% { transform: translateY(-12px) rotate(-4deg); } 70% { transform: translateY(-8px) rotate(3deg); } }
+@keyframes ep-float-shadow { 0%, 100% { transform: scale(1); opacity: .13; } 45% { transform: scale(.7); opacity: .06; } }
+.pet-svg.act-nod .pet-head { transform-box: view-box; transform-origin: 100px 104px; animation: ep-nod 1.8s ease-in-out; }
+@keyframes ep-nod { 0%, 100% { transform: rotate(0); } 30% { transform: rotate(7deg) translateY(2px); } 60% { transform: rotate(-3deg); } }
+.pet-svg.act-clank .pet-head { transform-box: view-box; transform-origin: 100px 104px; animation: ep-clank .07s linear 12 alternate; }
+.pet-svg.act-clank .slot-head { animation: flash 1.2s ease-in-out; }
+@keyframes ep-clank { from { transform: rotate(-5deg); } to { transform: rotate(5deg); } }
+.pet-svg.act-sneak .pet-head { transform-box: view-box; transform-origin: 100px 104px; animation: ep-sneak 1.6s ease-in-out; }
+.pet-svg.act-sneak .slot-hand { animation: flash 1.6s ease-in-out; }
+@keyframes ep-sneak { 0%, 100% { transform: translateX(0); } 20% { transform: translateX(-5px) rotate(-4deg); } 55% { transform: translateX(5px) rotate(4deg); } 80% { transform: translateX(0); } }
+@media (prefers-reduced-motion: reduce) { .pet-svg.act-march .pet-body, .pet-svg.act-float .pet-body, .pet-svg.act-nod .pet-head, .pet-svg.act-clank .pet-head, .pet-svg.act-sneak .pet-head { animation: none; } }

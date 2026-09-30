@@ -284,7 +284,8 @@
   // Частицы — цветные кусочки, а не эмодзи: новые эмодзи на Windows 10 и старых
   // телефонах рисуются пустыми квадратами (так было с «бревном» у бензопилы).
   Stage.prototype.sigAct = function (sig, big) {
-    if (Math.random() < 0.45) {
+    // Эпик — реже легенды: своё движение примерно в каждом четвёртом такте.
+    if (Math.random() < (sig.tier === 'epic' ? 0.28 : 0.45)) {
       this.act(sig.act, 1800);
       if (sig.fx) this.chips(sig.fx, 10);
       if (big || Math.random() < 0.3) this.say(pick(sig.say), 2400);
@@ -322,7 +323,9 @@
     var acts = ['wave', 'scratch', 'look', 'tail', 'ears', 'look', 'hop'];
     if (p.state === 'happy') acts.push('dance', 'dance', 'wave');
     // Легендарная вещь даёт своё движение — и оно частое: это и есть «видно, что круто».
-    var sig = mySigs().filter(function (x) { return x.act; })[0];
+    // Легенда главнее эпика; из нескольких эпиков — случайный, чтобы каждая вещь жила.
+    var sigs = mySigs().filter(function (x) { return x.act; });
+    var sig = sigs.filter(function (x) { return x.tier !== 'epic'; })[0] || sigs[Math.floor(Math.random() * sigs.length)];
     if (sig) { this.sigAct(sig, big); return; }
     // Бурундай сам по себе «гигачад»: время от времени медленно поворачивает
     // голову в профиль, как на том самом фото.
