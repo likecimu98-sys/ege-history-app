@@ -571,16 +571,25 @@ window.recordMistake = function(fact, task, answer) {
 // правды с factStreaks и лекарство от «воскрешения»: облачный merge объединяет
 // mistakesPool союзом (см. mergeCloudStates), и выученные ошибки возвращались из
 // устаревших копий — теперь их отсекает эта чистка. Возвращает, сколько удалено.
+// Ошибка закрыта, если факт выучен ИЛИ после неё был верный ответ: у невыученного
+// факта неверный ответ обнуляет очки, верный — добавляет, так что points > 0 при
+// lastUpdated позже самой ошибки = «исправил». Раньше закрывало только «выучил»
+// (три верных), и ошибка, решённая один раз, возвращалась из облачной копии при
+// слиянии (объединение пулов) — «решаю те же ошибки который день» (30.09).
+// Ошибки без отметки времени (старые) — по-прежнему только «выучил».
+window.mistakeResolved = function (m, fs) {
+    if (!m || !m.fact) return true;
+    const d = fs[factKey(m.fact, m.task)];
+    if (window.isFactLearned(d)) return true;
+    const at = Number(m.answer && m.answer.at) || 0;
+    return !!(at && d && typeof d === 'object' && (d.points || 0) > 0 && (Number(d.lastUpdated) || 0) > at);
+};
 window.pruneLearnedMistakes = function() {
     const fs = (window.state.stats && window.state.stats.factStreaks) || {};
     const pool = window.state.mistakesPool;
     if (!Array.isArray(pool) || !pool.length) return 0;
     const before = pool.length;
-    window.state.mistakesPool = pool.filter(m => {
-        if (!m || !m.fact) return false;
-        const d = fs[factKey(m.fact, m.task)];
-        return !window.isFactLearned(d);   // держим только НЕ выученные ошибки
-    });
+    window.state.mistakesPool = pool.filter(m => !window.mistakeResolved(m, fs));
     return before - window.state.mistakesPool.length;
 };
 

@@ -177,6 +177,8 @@ assert.match(table, /const steps = \[\s*\[Math\.min\(a0, lesson\.cumFrom\)/, 'у
 assert.ok(table.indexOf('const steps = [') < table.indexOf('validateTable({ allowShort: true })'), 'короткая таблица раньше расширения лет урока');
 assert.match(read('state.js'), /window\.factStreakNewer = function/, 'слияние фактов снова «по лучшему уровню»');
 assert.match(read('cloud-sync.js'), /window\.factStreakNewer\(v, cur\)/, 'облачное слияние не по свежести');
+assert.match(read('state.js'), /window\.mistakeResolved = function/, 'ошибка снова закрывается только выучиванием');
+assert.match(read('cloud-sync.js'), /!window\.mistakeResolved\(m, st\.factStreaks\)/, 'облачное слияние воскрешает исправленные ошибки');
 assert.match(read('index.html'), /<script src="lesson-plan\.js\?v=[^"]+" defer><\/script>\s*<script src="ui\.js/, 'lesson-plan.js не подключён перед ui.js');
 assert.match(read('service-worker.js'), /\.\/lesson-plan\.js\?v=/, 'lesson-plan.js не в прекэше SW');
 

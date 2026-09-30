@@ -7,14 +7,14 @@
             signInWithCredential, signOut, initializeFirestore, collection, doc, setDoc, getDoc,
             getDocs, addDoc, updateDoc, deleteDoc, deleteField, onSnapshot, query, where,
             orderBy, limit, runTransaction, arrayUnion, arrayRemove, vpsApiFetch, refreshVpsAuth
-        } from "./vps-sync-compat.js?v=20260930-16";
+        } from "./vps-sync-compat.js?v=20260930-17";
 
         // jsPDF грузился с cdnjs.cloudflare.com без SRI — то есть посторонний скрипт
         // исполнялся с полными правами страницы, а при недоступности CDN (у части
         // нашей аудитории это обычное дело) экспорт PDF просто не работал. Довод тот
         // же, что и для telegram-web-app.js: своя копия с того же origin.
         // Версия совпадает с прежней CDN-ной — 2.5.1, лежит в vendor/.
-        const VENDOR_JSPDF = 'vendor/jspdf.umd.min.js?v=20260930-16';
+        const VENDOR_JSPDF = 'vendor/jspdf.umd.min.js?v=20260930-17';
 
         const cloudConfig = { projectId: 'vps-postgresql' };
         
@@ -4124,11 +4124,10 @@
             // Союз mistakesPool воскрешал ошибки из устаревших копий даже после того,
             // как факт был выучен. factStreaks здесь уже слит по ЛУЧШЕМУ уровню, поэтому
             // отсекаем ошибки, чей факт уже выучен (level≥1) — единый источник правды.
-            if (typeof factKey === 'function' && typeof window.isFactLearned === 'function') {
-                merged.mistakesPool = merged.mistakesPool.filter(m => {
-                    if (!m || !m.fact) return false;
-                    return !window.isFactLearned(st.factStreaks[factKey(m.fact, m.task)]);
-                });
+            if (typeof factKey === 'function' && typeof window.isFactLearned === 'function' && typeof window.mistakeResolved === 'function') {
+                // Выученные и исправленные после ошибки (верный ответ позже неё) —
+                // закрыты; см. window.mistakeResolved в state.js.
+                merged.mistakesPool = merged.mistakesPool.filter(m => !window.mistakeResolved(m, st.factStreaks));
             }
             merged.hideLearned = states.some(s => s.hideLearned === false) ? false : true;
             return merged;
