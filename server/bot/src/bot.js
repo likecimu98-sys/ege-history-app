@@ -82,6 +82,9 @@ db.exec(`CREATE TABLE IF NOT EXISTS parent_tokens (
 )`);
 // Глобальные выключатели рассылок (админка /admin). Нет строки = ВКЛ.
 db.exec(`CREATE TABLE IF NOT EXISTS flags (key TEXT PRIMARY KEY, value INTEGER NOT NULL)`);
+// Пересылка владельцу (support relay): какое сообщение в чате владельца — от какого
+// ученика. По нему ответ реплаем уходит ученику и после перезапуска бота.
+db.exec(`CREATE TABLE IF NOT EXISTS support_relay (admin_msg_id INTEGER PRIMARY KEY, user_id INTEGER NOT NULL, at INTEGER NOT NULL)`);
 function flagOn(key) { const r = db.prepare('SELECT value FROM flags WHERE key = ?').get(key); return !r || r.value === 1; }
 function setFlag(key, v) { db.prepare('INSERT INTO flags (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value').run(key, v ? 1 : 0); }
 
@@ -2088,7 +2091,57 @@ try {
 // в порядке регистрации; этот catch-all матчит ЛЮБОЕ сообщение и не вызывает next(),
 // поэтому команды, зарегистрированные ПОСЛЕ него (например из engage.js),
 // никогда не выполнялись бы — их всегда перехватывал catch-all первым.
+// 💬 Всё, что ученики пишут боту в личку (не команды): текст, фото, видео, голосовые,
+// кружочки, файлы — копией владельцу (решение владельца 30.09.2026: аудитория 18–25,
+// предупреждены на стриме). Над копией — строка «кто», ответ реплаем на неё или на
+// копию уходит ученику от имени бота. Альбом — одна подпись на весь альбом.
+const relaySave = db.prepare('INSERT OR REPLACE INTO support_relay (admin_msg_id, user_id, at) VALUES (?, ?, ?)');
+const relayFind = db.prepare('SELECT user_id FROM support_relay WHERE admin_msg_id=?');
+const relayAlbums = new Map(); // media_group_id → message_id подписи (на минуту)
+async function relayToOwner(ctx) {
+    const m = ctx.message;
+    if (!ADMIN_ID || !m || !ctx.chat || ctx.chat.type !== 'private' || ctx.from.id === ADMIN_ID) return false;
+    const u = ctx.from;
+    try {
+        let headId = m.media_group_id ? relayAlbums.get(m.media_group_id) : null;
+        if (!headId) {
+            const who = [u.first_name, u.last_name].filter(Boolean).join(' ') || 'без имени';
+            const head = await bot.api.sendMessage(ADMIN_ID,
+                `💬 ${who}${u.username ? ' @' + u.username : ''} · id ${u.id}
+↩️ Ответь реплаем — уйдёт ученику`);
+            headId = head.message_id;
+            relaySave.run(headId, u.id, Date.now());
+            if (m.media_group_id) {
+                relayAlbums.set(m.media_group_id, headId);
+                setTimeout(() => relayAlbums.delete(m.media_group_id), 60 * 1000);
+            }
+        }
+        const copy = await bot.api.copyMessage(ADMIN_ID, ctx.chat.id, m.message_id, { reply_to_message_id: headId, allow_sending_without_reply: true });
+        relaySave.run(copy.message_id, u.id, Date.now());
+        return true;
+    } catch (e) { console.error('relay:', e.description || e.message); return false; }
+}
+// Ответ владельца реплаем на пересланное — ученику. true — сообщение обработано.
+async function relayReplyFromOwner(ctx) {
+    const m = ctx.message;
+    if (!m || ctx.from.id !== ADMIN_ID || !m.reply_to_message) return false;
+    const r = m.reply_to_message;
+    let target = null;
+    const row = relayFind.get(r.message_id);
+    if (row) target = row.user_id;
+    else { const mm = /· id (\d+)/.exec(r.text || ''); if (mm) target = Number(mm[1]); }
+    if (!target) return false;
+    try {
+        await bot.api.copyMessage(target, ADMIN_ID, m.message_id);
+        await ctx.reply('✅ Отправлено ученику', { reply_to_message_id: m.message_id });
+    } catch (e) {
+        await ctx.reply('❌ Не дошло: ' + (e.description || e.message));
+    }
+    return true;
+}
+
 bot.on('message', async (ctx) => {
+    if (await relayReplyFromOwner(ctx)) return;
     const pend = awaitingInput.get(ctx.from.id);
     const text = ctx.message && ctx.message.text;
     if (pend && pend.type === 'classname' && text && !text.startsWith('/')) {
@@ -2125,6 +2178,16 @@ bot.on('message', async (ctx) => {
     }
     // Неизвестная слэш-команда — говорим честно, а не «вся тренировка в приложении»
     if (text && text.startsWith('/')) return ctx.reply('Не знаю такую команду 🤔 Список — по кнопке «/» или /menu');
+    if (await relayToOwner(ctx)) {
+        // На альбом отвечаем один раз, а не на каждую картинку.
+        const g = ctx.message.media_group_id;
+        if (g) {
+            if (relayAlbums.has('ok:' + g)) return;
+            relayAlbums.set('ok:' + g, 1);
+            setTimeout(() => relayAlbums.delete('ok:' + g), 60 * 1000);
+        }
+        return ctx.reply('✉️ Получили — ответим здесь. А вся тренировка — в приложении 👇', { reply_markup: appKb() });
+    }
     await ctx.reply('Вся тренировка — в приложении 👇 Меню: /menu', { reply_markup: appKb() });
 });
 
