@@ -270,6 +270,16 @@ async function handleSocial(req, res, url, session, deps) {
       return json(res, 200, { students: await store.classStudents(userId, classId, {}) });
     }
 
+    // 🔴 Как живёт класс ВООБЩЕ, а не «кто сдал вот эту работу». Весь кабинет
+    // отвечал только про домашки, и класс, который решает сам, выглядел
+    // мёртвым. Отдельный лёгкий маршрут: он грузится при открытии класса, и
+    // тащить ради него список учеников с тридцатью выборками незачем.
+    const summaryMatch = path.match(/^\/teacher\/classes\/([^/]+)\/summary$/);
+    if (summaryMatch && method === 'GET') {
+      const classId = uuid(decodeURIComponent(summaryMatch[1]), 'class_not_found');
+      return json(res, 200, await store.classSummary(userId, classId, {}));
+    }
+
     // Ученик целиком: все его работы в этом классе и номера бланка, на которых
     // он спотыкается. Отдельный маршрут, а не поле в списке учеников: класс на
     // тридцать человек не должен тащить тридцать таких выборок ради одной.

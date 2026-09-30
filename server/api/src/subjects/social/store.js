@@ -629,6 +629,92 @@ async function rotateJoinCode(teacherUserId, classId, { db = pool } = {}) {
   });
 }
 
+// 🔴 Класс ЦЕЛИКОМ, а не по одной домашке. Весь кабинет отвечал только на
+// вопрос «кто сдал вот эту работу», и класс, который занимается сам, выглядел
+// мёртвым: у ученицы с 2 597 ответами в списке стояли нули, потому что домашек
+// ей не выдавали. Здесь — сколько класс работает, сколько человек живы и кто
+// выпал совсем.
+//
+// Только агрегаты: полного снимка прогресса ученика тут нет и быть не может.
+async function classSummary(teacherUserId, classId, { db = pool } = {}) {
+  await ownedClass(teacherUserId, classId, { db });
+
+  const totals = await db.query(
+    `WITH members AS (
+       SELECT user_id FROM social_class_members
+       WHERE class_id = $1 AND status = 'active')
+     SELECT
+       (SELECT COUNT(*)::int FROM members) AS students,
+       COUNT(*)::int AS answers,
+       COUNT(*) FILTER (WHERE e.attempted_at > now() - interval '7 days')::int AS answers_week,
+       COUNT(DISTINCT e.user_id)::int AS ever_active,
+       COUNT(DISTINCT e.user_id) FILTER (WHERE e.attempted_at > now() - interval '7 days')::int AS active_week,
+       COUNT(DISTINCT e.user_id) FILTER (WHERE e.attempted_at > now() - interval '30 days')::int AS active_month,
+       COALESCE(SUM(e.earned), 0)::int AS earned,
+       COALESCE(SUM(e.possible), 0)::int AS possible,
+       COALESCE(SUM(LEAST(e.elapsed_ms, 600000)), 0)::bigint AS elapsed_ms
+     FROM members m
+     LEFT JOIN social_attempt_events e ON e.user_id = m.user_id`, [classId]);
+  const t = totals.rows[0] || {};
+
+  const activity = await db.query(
+    `SELECT e.week_start, COUNT(*)::int AS answers,
+            COUNT(DISTINCT e.user_id)::int AS students
+     FROM social_class_members m
+     JOIN social_attempt_events e ON e.user_id = m.user_id
+     WHERE m.class_id = $1 AND m.status = 'active'
+       AND e.attempted_at > now() - interval '9 weeks'
+     GROUP BY e.week_start ORDER BY e.week_start`, [classId]);
+
+  const kinds = await db.query(
+    `SELECT e.kind, COUNT(*)::int AS answers
+     FROM social_class_members m
+     JOIN social_attempt_events e ON e.user_id = m.user_id
+     WHERE m.class_id = $1 AND m.status = 'active'
+     GROUP BY e.kind`, [classId]);
+
+  // 🔴 Два разных «не работает», и путать их нельзя: один не начинал вовсе —
+  // с ним говорят о том, как войти; второй занимался и перестал — с ним о том,
+  // почему бросил. Совет им нужен разный, поэтому и считаем порознь.
+  const idle = await db.query(
+    `SELECT
+       COUNT(*) FILTER (WHERE last_at IS NULL)::int AS never_started,
+       COUNT(*) FILTER (WHERE last_at IS NOT NULL
+                          AND last_at < now() - interval '14 days')::int AS quiet_two_weeks
+     FROM (
+       SELECT m.user_id,
+              (SELECT MAX(e.attempted_at) FROM social_attempt_events e WHERE e.user_id = m.user_id) AS last_at
+       FROM social_class_members m
+       WHERE m.class_id = $1 AND m.status = 'active') z`, [classId]);
+  const i = idle.rows[0] || {};
+
+  return {
+    totals: {
+      students: numeric(t.students),
+      answers: numeric(t.answers),
+      answersWeek: numeric(t.answers_week),
+      everActive: numeric(t.ever_active),
+      activeWeek: numeric(t.active_week),
+      activeMonth: numeric(t.active_month),
+      accuracy: numeric(t.possible) > 0 ? Math.round((numeric(t.earned) / numeric(t.possible)) * 100) : 0,
+      elapsedMs: numeric(t.elapsed_ms),
+    },
+    activity: activity.rows.map(row => ({
+      weekStart: new Date(row.week_start).getTime(),
+      answers: numeric(row.answers),
+      students: numeric(row.students),
+    })),
+    kinds: kinds.rows.reduce((acc, row) => {
+      acc[String(row.kind || 'practice')] = numeric(row.answers);
+      return acc;
+    }, {}),
+    idle: {
+      neverStarted: numeric(i.never_started),
+      quietTwoWeeks: numeric(i.quiet_two_weeks),
+    },
+  };
+}
+
 // Учителю отдаём агрегаты, а не состояние ученика. Полного снимка прогресса
 // здесь нет и появиться не должно: план запрещает учителю читать и тем более
 // перезаписывать state ученика.
@@ -1444,6 +1530,90 @@ async function studentOverview(teacherUserId, classId, studentUserId, { db = poo
   const gradedPossible = rows.reduce((sum, row) => sum + row.possible, 0);
   const gradedEarned = rows.reduce((sum, row) => sum + row.earned, 0);
 
+  // 🔴 Работа ученика НЕ СВОДИТСЯ к домашкам. Карточка показывала только их, и
+  // ученик, решивший триста заданий сам, выглядел в ней как бездельник, если
+  // учитель ничего не задавал. Здесь — всё, что он делал в приложении.
+  //
+  // Вклад одной попытки во время ограничен десятью минутами: время меряет
+  // клиент, и забытая открытая вкладка на двух заданиях давала час работы.
+  const practice = await db.query(
+    `SELECT count(*)::int AS answers,
+            count(DISTINCT task_id)::int AS tasks,
+            count(*) FILTER (WHERE correct)::int AS correct,
+            count(DISTINCT msk_day)::int AS days,
+            COALESCE(SUM(LEAST(elapsed_ms, 600000)), 0)::bigint AS elapsed_ms,
+            MIN(attempted_at) AS first_at,
+            MAX(attempted_at) AS last_at,
+            COALESCE(SUM(earned), 0)::int AS earned,
+            COALESCE(SUM(possible), 0)::int AS possible
+     FROM social_attempt_events WHERE user_id = $1`, [studentUserId]);
+  const p = practice.rows[0] || {};
+
+  // 🔴 Темы, а не только блоки. Блок «Право» на 46% не говорит, что повторять:
+  // в нём девятнадцать тем. КЭС отвечает на вопрос «открой параграф такой-то».
+  // Порог в три задания — ниже доля считается по одному-двум ответам и скачет
+  // от 0 до 100 на каждом новом.
+  const weakTopics = await db.query(
+    `WITH first_try AS (
+       SELECT DISTINCT ON (task_id) task_id, topic_codes, (earned >= possible) AS took
+       FROM social_attempt_events WHERE user_id = $1
+       ORDER BY task_id, attempted_at)
+     SELECT code, COUNT(*)::int AS tasks,
+            COUNT(*) FILTER (WHERE NOT took)::int AS missed
+     FROM first_try, unnest(topic_codes) AS code
+     GROUP BY code HAVING COUNT(*) >= 3
+     ORDER BY (COUNT(*) FILTER (WHERE NOT took))::numeric / COUNT(*) DESC, COUNT(*) DESC
+     LIMIT 8`, [studentUserId]);
+
+  // Когда и сколько занимался. Неделя, а не день: по дням картина рассыпается
+  // на шум, а учителю нужен ответ «занимается ли он вообще в последнее время».
+  const activity = await db.query(
+    `SELECT week_start, COUNT(*)::int AS answers, COUNT(DISTINCT msk_day)::int AS days
+     FROM social_attempt_events
+     WHERE user_id = $1 AND attempted_at > now() - interval '9 weeks'
+     GROUP BY week_start ORDER BY week_start`, [studentUserId]);
+
+  // Откуда берётся его работа: задали или сам сел.
+  const kinds = await db.query(
+    `SELECT kind, COUNT(*)::int AS answers FROM social_attempt_events
+     WHERE user_id = $1 GROUP BY kind`, [studentUserId]);
+
+  // 🔴 Работа над ошибками — отдельный вопрос, и ответ на него не выводится из
+  // точности. Ученик с 70% может быть тем, кто ни разу не вернулся ни к одной
+  // ошибке, и тем, кто разобрал все до единой; для учителя это разные ученики.
+  // «Исправил» — позже взял по этому заданию полный балл, «не возвращался» —
+  // после неудачной первой попытки не открывал его ни разу.
+  const mistakes = await db.query(
+    `WITH first_try AS (
+       SELECT DISTINCT ON (task_id) task_id, attempted_at AS first_at, (earned >= possible) AS took
+       FROM social_attempt_events WHERE user_id = $1
+       ORDER BY task_id, attempted_at)
+     SELECT
+       COUNT(*) FILTER (WHERE NOT took)::int AS total,
+       COUNT(*) FILTER (WHERE NOT took AND EXISTS (
+         SELECT 1 FROM social_attempt_events e
+         WHERE e.user_id = $1 AND e.task_id = first_try.task_id
+           AND e.attempted_at > first_try.first_at AND e.earned >= e.possible))::int AS fixed,
+       COUNT(*) FILTER (WHERE NOT took AND NOT EXISTS (
+         SELECT 1 FROM social_attempt_events e
+         WHERE e.user_id = $1 AND e.task_id = first_try.task_id
+           AND e.attempted_at > first_try.first_at))::int AS never_retried
+     FROM first_try`, [studentUserId]);
+  const m = mistakes.rows[0] || {};
+
+  // Персонально трудные: первая попытка по заданию без полного балла. Именно
+  // первая — в разборе ошибок он решает то же второй раз, уже зная ответ.
+  const personal = await db.query(
+    `WITH first_try AS (
+       SELECT DISTINCT ON (task_id) task_id, task_type, exam_line, topic_codes,
+              earned, possible, attempted_at
+       FROM social_attempt_events WHERE user_id = $1
+       ORDER BY task_id, attempted_at)
+     SELECT task_id, task_type, exam_line, topic_codes, earned, possible, attempted_at
+     FROM first_try WHERE earned < possible
+     ORDER BY (possible - earned) DESC, attempted_at DESC
+     LIMIT 8`, [studentUserId]);
+
   return {
     student: {
       studentId: studentUserId,
@@ -1461,6 +1631,45 @@ async function studentOverview(teacherUserId, classId, studentUserId, { db = poo
       possible: gradedPossible,
       percent: gradedPossible > 0 ? Math.round((gradedEarned / gradedPossible) * 100) : 0,
     },
+    practice: {
+      answers: numeric(p.answers),
+      tasks: numeric(p.tasks),
+      correct: numeric(p.correct),
+      accuracy: numeric(p.possible) > 0 ? Math.round((numeric(p.earned) / numeric(p.possible)) * 100) : 0,
+      days: numeric(p.days),
+      elapsedMs: numeric(p.elapsed_ms),
+      firstAt: p.first_at ? new Date(p.first_at).getTime() : null,
+      lastAt: p.last_at ? new Date(p.last_at).getTime() : null,
+    },
+    weakTopics: weakTopics.rows.map(row => ({
+      code: row.code,
+      tasks: numeric(row.tasks),
+      missed: numeric(row.missed),
+      percent: numeric(row.tasks) > 0 ? Math.round((numeric(row.missed) / numeric(row.tasks)) * 100) : 0,
+    })),
+    activity: activity.rows.map(row => ({
+      weekStart: new Date(row.week_start).getTime(),
+      answers: numeric(row.answers),
+      days: numeric(row.days),
+    })),
+    kinds: kinds.rows.reduce((acc, row) => {
+      acc[String(row.kind || 'practice')] = numeric(row.answers);
+      return acc;
+    }, {}),
+    mistakes: {
+      total: numeric(m.total),
+      fixed: numeric(m.fixed),
+      neverRetried: numeric(m.never_retried),
+    },
+    personalHard: personal.rows.map(row => ({
+      taskId: row.task_id,
+      taskType: row.task_type,
+      examLine: row.exam_line || 0,
+      topicCodes: row.topic_codes || [],
+      earned: numeric(row.earned),
+      possible: numeric(row.possible),
+      attemptedAt: new Date(row.attempted_at).getTime(),
+    })),
   };
 }
 
@@ -2187,7 +2396,7 @@ module.exports = {
   activeAssignmentsFor,
   taskDifficulty, rankHardest, quotaState, consumeQuota,
   weeklyLeaderboard,
-  createClass, listClasses, ownedClass, updateClass, rotateJoinCode, classStudents, removeClassStudent,
+  createClass, listClasses, ownedClass, updateClass, rotateJoinCode, classStudents, classSummary, removeClassStudent,
   joinClass, myClasses,
   createAssignment, listAssignments, ownedAssignment, updateAssignment, cancelAssignment,
   assignmentResults, assignmentStudentDetail, studentOverview, weakSpots,
