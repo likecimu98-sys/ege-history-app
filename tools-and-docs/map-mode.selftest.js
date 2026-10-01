@@ -97,3 +97,24 @@ console.log('map-mode.selftest: ok', JSON.stringify(kinds));
 }
 console.log('map-mode: личности по эпохе карты — ok');
 
+
+// Правитель карты атласа правил в её годы (владелец 01.10: «в карте по XX веку
+// меня исправили — ситуация сложилась при Петре I»). У «Образования СССР» стоял
+// «Петр I», у Транссиба — «Иван IV; Ермак». Каждая запись должна разбираться
+// справочником REIGNS и пересекаться с годами карты; иначе — сюда, в справочник
+// или в данные, но не мимо.
+{
+  const bad = [];
+  for (const m of atlas) {
+    if (!String(m.ruler || '').trim()) continue;
+    const rs = ctx.MapMode.rulerReigns(m.ruler);
+    if (!rs) { bad.push(m.id + ': правитель «' + m.ruler + '» не в справочнике'); continue; }
+    const [a, b] = m._span;
+    rs.forEach(r => { if (!(r.from <= b + 2 && r.to >= a - 2)) bad.push(m.id + ' (' + a + '–' + b + '): ' + r.name + ' правил ' + r.from + '–' + r.to); });
+  }
+  assert.deepStrictEqual(bad, [], 'правитель не из времени карты');
+  const ussr = atlas.find(m => m.id === 'map:obrazovanie-sssr');
+  assert.ok(ussr && ctx.MapMode.rulerFits(ussr), 'Образование СССР: правитель должен быть Ленин');
+  assert.ok(!ctx.MapMode.rulerFits(Object.assign({}, ussr, { ruler: 'Петр I' })), 'Пётр I на карте 1922 года не должен проходить');
+}
+console.log('map-mode: правители по годам карт — ok');

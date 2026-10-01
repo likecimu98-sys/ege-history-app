@@ -69,8 +69,44 @@
         if (pool.length < 3) return null;
         return { kind: 'when', q: 'Когда происходят события на карте?', answer: m._yearsText, options: _shuffle([m._yearsText].concat(pool)) };
     }
+    // Годы правления (или деятельности) всех, кто записан правителем карты атласа.
+    // Зачем: у «Образования СССР» (1922) стоял «Петр I», у Транссиба — «Иван IV;
+    // Ермак», и вопрос «кто правил» засчитывал Петра ошибкой ученика, ответившего
+    // «Ленин» (владелец 01.10). Вопрос задаём, только если каждый названный
+    // правитель правил в годы карты; map-mode.selftest проверяет весь атлас.
+    const REIGNS = [
+        ['олег', 879, 912], ['игорь', 912, 945], ['ольга', 945, 962], ['святослав', 945, 972],
+        ['владимир i', 978, 1015], ['ярослав мудрый', 1016, 1054], ['батый', 1227, 1255],
+        ['александр невский', 1236, 1263], ['дмитрий донской', 1359, 1389], ['иван iii', 1462, 1505],
+        ['иван iv', 1533, 1584], ['ермак', 1577, 1585], ['василий шуйский', 1606, 1610], ['иван болотников', 1606, 1607],
+        ['минин', 1611, 1613], ['пожарский', 1611, 1613], ['михаил федорович', 1613, 1645], ['алексей михайлович', 1645, 1676],
+        ['богдан хмельницкий', 1648, 1657], ['степан разин', 1667, 1671], ['петр i', 1682, 1725],
+        ['анна иоанновна', 1730, 1740], ['елизавета петровна', 1741, 1761], ['екатерина ii', 1762, 1796],
+        ['александр i', 1801, 1825], ['николай i', 1825, 1855], ['александр ii', 1855, 1881], ['александр iii', 1881, 1894],
+        ['николай ii', 1894, 1917], ['ленин', 1917, 1924], ['сталин', 1924, 1953], ['путин', 2000, 2026]
+    ];
+    // Части записи «А, Б; В» → годы каждой. null — в записи есть имя, которого нет
+    // в справочнике (тогда вопрос не задаём: проверить его нечем).
+    function _rulerReigns(ruler) {
+        const parts = String(ruler || '').split(/[,;]/).map(p => _norm(p).replace(/^(хан|князь|царь|император|императрица) /, '')).filter(Boolean);
+        const out = [];
+        for (const p of parts) {
+            if (/^(смутное время|русские князья|руководители)/.test(p)) continue;
+            const words = p.split(' ');
+            const hit = REIGNS.find(([name]) => name.split(' ').every(w => words.includes(w)) && (name.includes(' ') || words.length <= 3));
+            if (!hit) return null;
+            out.push({ name: p, from: hit[1], to: hit[2] });
+        }
+        return out;
+    }
+    function _rulerFits(m) {
+        const rs = _rulerReigns(m.ruler);
+        if (!rs || !rs.length) return false;
+        const [a, b] = m._span || _span(m);
+        return rs.every(r => r.from <= b + 2 && r.to >= a - 2);
+    }
     function _qRuler(m, all) {
-        if (!m._ruler) return null;
+        if (!m._ruler || !_rulerFits(m)) return null;
         const mineWords = _norm(m._ruler).split(' ').filter(w => w.length > 2);
         const near = all.filter(x => x !== m && x._ruler).sort((x, y) => Math.abs(x._span[0] - m._span[0]) - Math.abs(y._span[0] - m._span[0]));
         const pool = [];
@@ -597,5 +633,6 @@
     window.MapMode = {
         atlas: () => _prepAtlas(), fipi: () => _prepFipi(),
         atlasQuestions: m => _atlasQuestions(m, _prepAtlas()), fipiQuestions: g => _fipiQuestions(g, _prepFipi()),
+        rulerReigns: _rulerReigns, rulerFits: m => _rulerFits(m),
     };
 })();
