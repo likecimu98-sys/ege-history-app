@@ -36,8 +36,10 @@ const TASK_CONFIG = {
     },
     task3: {
         prefix:    't3_',
-        keyFn:     f => 't3_' + f.process + '|' + f.fact,
-        matchFn:   (a, b) => a.process === b.process && a.fact === b.fact,
+        // kp — прежняя формулировка процесса: её переименовали (01.10.2026, «первых русских
+        // князей» → конкретный князь), а прогресс ученика лежит под старым ключом.
+        keyFn:     f => 't3_' + (f.kp || f.process) + '|' + f.fact,
+        matchFn:   (a, b) => (a.kp || a.process) === (b.kp || b.process) && a.fact === b.fact,
         dedupeKey: f => f.process + '|' + f.fact,
         data:      () => window.task3Data || [],
         emoji:     '🔗',

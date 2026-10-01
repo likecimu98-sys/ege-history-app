@@ -815,4 +815,32 @@ assert.doesNotMatch(tableSource, /_selectHomeworkTargets\('task4', TASK_CONFIG\.
         'Откат на всю историю снова может оставить период «вся история» навсегда');
 }
 
+// Жалоба 01.10: в «Главе 2» к «внешней политике первых русских князей» подходили
+// несколько вариантов, а «Любечский съезд» — к «распаду Руси на самостоятельные земли».
+assert.equal(
+  tableContext._task3Conflicts(
+    { process: 'организация совместной обороны Руси против половцев', fact: 'Любечский съезд князей', year: 1097 },
+    { process: 'распад Руси на самостоятельные земли', fact: 'установление республиканского правления в Новгороде', year: 1136 }
+  ),
+  true,
+  'Любечский съезд подходит к «распаду Руси» — в одной таблице им нельзя'
+);
+assert.equal(
+  tableContext._task3Conflicts(
+    { process: 'внешняя политика князя Олега Вещего', fact: 'подписание договора между Русью и Византией', year: 911 },
+    { process: 'формирование территории Древнерусского государства', fact: 'захват Олегом Вещим Киева', year: 882 }
+  ),
+  true,
+  'Захват Киева Олегом приходится на правление Олега — рядом с его внешней политикой нельзя'
+);
+{
+  const dataSrc = fs.readFileSync(path.join(__dirname, '..', 'data.js'), 'utf8');
+  assert.doesNotMatch(dataSrc, /process: "[^"]*первых русских князей/,
+    'Процесс «… первых русских князей» вернулся: к нему подходит полвека фактов');
+  assert.ok(tableSource.includes("j > i && _task3Conflicts(a, b)))) return false;"),
+    'Приёмка таблицы задания 3 перестала проверять конфликты строк');
+  assert.ok(tableSource.includes("if (task === 'task5' && target.length < rowsCount && t5Deferred.length)"),
+    'Задание 3 снова добирает таблицу конфликтными строками');
+}
+
 console.log('Homework, table uniqueness and silent duel self-test passed.');
