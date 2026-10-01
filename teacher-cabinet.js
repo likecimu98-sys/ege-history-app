@@ -20,7 +20,7 @@
         ['task1', '№1', 'Хронология'], ['task3', '№3', 'Процессы'], ['task4', '№4', 'География'],
         ['task5', '№5', 'Личности'], ['task7', '№7', 'Культура']
     ];
-    const TASK_SHORT = { task1: '№1', task3: '№3', task4: '№4', task5: '№5', task7: '№7', cram: 'Зубрёжка', match: 'Подбор' };
+    const TASK_SHORT = { task1: '№1', task3: '№3', task4: '№4', task5: '№5', task7: '№7', cram: 'Зубрёжка', match: 'Подбор', tsar: 'Правители' };
     const DAY = 86400000;
 
     const st = {
@@ -122,7 +122,7 @@
     function itemsText(items) {
         if (!Array.isArray(items) || !items.length) return '';
         return items.map(it => {
-            const unit = it.task === 'match' ? 'пар' : it.metric === 'points' ? 'баллов' : it.metric === 'learned' ? 'фактов' : 'строк';
+            const unit = it.task === 'match' ? 'пар' : it.task === 'tsar' ? 'правителей' : it.metric === 'points' ? 'баллов' : it.metric === 'learned' ? 'фактов' : 'строк';
             return `${TASK_SHORT[it.task] || it.task} — ${num(it.goal)} ${unit}`;
         }).join(', ');
     }

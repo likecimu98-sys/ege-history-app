@@ -7,14 +7,14 @@
             signInWithCredential, signOut, initializeFirestore, collection, doc, setDoc, getDoc,
             getDocs, addDoc, updateDoc, deleteDoc, deleteField, onSnapshot, query, where,
             orderBy, limit, runTransaction, arrayUnion, arrayRemove, vpsApiFetch, refreshVpsAuth
-        } from "./vps-sync-compat.js?v=20261001-9";
+        } from "./vps-sync-compat.js?v=20261001-10";
 
         // jsPDF грузился с cdnjs.cloudflare.com без SRI — то есть посторонний скрипт
         // исполнялся с полными правами страницы, а при недоступности CDN (у части
         // нашей аудитории это обычное дело) экспорт PDF просто не работал. Довод тот
         // же, что и для telegram-web-app.js: своя копия с того же origin.
         // Версия совпадает с прежней CDN-ной — 2.5.1, лежит в vendor/.
-        const VENDOR_JSPDF = 'vendor/jspdf.umd.min.js?v=20261001-9';
+        const VENDOR_JSPDF = 'vendor/jspdf.umd.min.js?v=20261001-10';
 
         const cloudConfig = { projectId: 'vps-postgresql' };
         
@@ -1770,7 +1770,12 @@
                 const live = cramLearnedCount(it);
                 return typeof live === 'number' ? live : (Number(it.progress) || 0);
             };
-            const itemRemaining = (it) => it.task === 'cram'
+            // «Годы правления»: выученные в тренажёре правители этапа (или сохранённый счёт).
+            const tsarProgress = (it) => Math.max(Number(it.progress) || 0,
+                window.tsarKnownCount ? window.tsarKnownCount(it.rulers, stats.tsarTinder) : 0);
+            const itemRemaining = (it) => it.task === 'tsar'
+                ? Math.max(0, Math.min(it.goal || 0, Array.isArray(it.rulers) ? it.rulers.length : (it.goal || 0)) - tsarProgress(it))
+                : it.task === 'cram'
                 ? Math.max(0, (it.goal || 0) - cramProgress(it))
                 : (it.metric === 'learned'
                     ? Math.max(0, (it.goal || 0) - learnedCountFor(it.task, it.period))
@@ -3197,6 +3202,8 @@
                     // Зубрёжка и подбор задаются годами без period='custom' — список задач
                     // с диапазоном лежит в state.js (HW_RANGE_TASKS), одна точка правды.
                     else if ((window.HW_RANGE_TASKS || new Set(['cram'])).has(o.task) && it.yearStart && it.yearEnd) { o.yearStart = Number(it.yearStart); o.yearEnd = Number(it.yearEnd); }
+                    // «Годы правления»: правители рамки фиксируются при выдаче.
+                    if (o.task === 'tsar') { o.metric = 'learned'; o.rulers = window.tsarRulerIds ? window.tsarRulerIds(it.rulers) : []; }
                     return o;
                 }),
                 deadline: deadline || null,
@@ -3251,6 +3258,8 @@
                     // Зубрёжка и подбор задаются годами без period='custom' — список задач
                     // с диапазоном лежит в state.js (HW_RANGE_TASKS), одна точка правды.
                     else if ((window.HW_RANGE_TASKS || new Set(['cram'])).has(o.task) && it.yearStart && it.yearEnd) { o.yearStart = Number(it.yearStart); o.yearEnd = Number(it.yearEnd); }
+                    // «Годы правления»: правители рамки фиксируются при выдаче.
+                    if (o.task === 'tsar') { o.metric = 'learned'; o.rulers = window.tsarRulerIds ? window.tsarRulerIds(it.rulers) : []; }
                     return o;
                 }),
                 deadline: deadline || null,

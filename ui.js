@@ -128,10 +128,11 @@ const HWC_TASKS = [
     { v: 'task5', t: '👤 №5 Личности' },
     { v: 'task7', t: '🎨 №7 Культура' },
     { v: 'cram',  t: '⚡ Зубрёжка дат' },
-    { v: 'match', t: '🧩 Подбор дат (№1)' }
+    { v: 'match', t: '🧩 Подбор дат (№1)' },
+    { v: 'tsar',  t: '👑 Годы правления (Тиндер)' }
 ];
 // Этапы, охват которых задаётся годами (поля «Годы от—до»), а не селектором периода.
-const HWC_RANGE_TASKS = ['cram', 'match'];
+const HWC_RANGE_TASKS = ['cram', 'match', 'tsar'];
 const HWC_PERIODS = [
     { v: 'all', t: 'Вся история' }, { v: 'early', t: 'До XVIII в.' },
     { v: '18th', t: 'XVIII век' }, { v: '19th', t: 'XIX век' }, { v: '20th', t: 'XX век' },
@@ -207,10 +208,10 @@ window.openHwComposer = function(target) {
 // ─── Список выданных ДЗ + отмена (вариант А): весь класс или конкретный ученик ───
 let _hwListCache = [];
 let _hwlCtx = { mode: 'class', code: '', uid: '', name: '' };
-const _HWL_TASK = { task1: '⏳№1', task3: '🔗№3', task4: '📍№4', task5: '👤№5', task7: '🎨№7', cram: '⚡Зубрёжка', match: '🧩Подбор' };
+const _HWL_TASK = { task1: '⏳№1', task3: '🔗№3', task4: '📍№4', task5: '👤№5', task7: '🎨№7', cram: '⚡Зубрёжка', match: '🧩Подбор', tsar: '👑Правители' };
 const _HWL_UNIT = { lines: 'строк', points: 'баллов', learned: 'фактов' };
 // Подбор считает пары, а не строки: «20 строк» в списке ДЗ вводило бы в заблуждение.
-function _hwUnit(it) { return it.task === 'match' ? 'пар' : (_HWL_UNIT[it.metric] || ''); }
+function _hwUnit(it) { return it.task === 'match' ? 'пар' : it.task === 'tsar' ? 'правителей' : (_HWL_UNIT[it.metric] || ''); }
 function _hwlEsc(s) { return String(s == null ? '' : s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c])); }
 function _hwlItemSummary(it) {
     const scope = HWC_RANGE_TASKS.indexOf(it.task) !== -1
@@ -487,6 +488,11 @@ function _hwcAvail() {
     const metricRow = document.getElementById('hwc-metric-row');
     if (periodRow) periodRow.style.display = byYears ? 'none' : '';
     if (metricRow) metricRow.style.display = byYears ? 'none' : '';
+    const erasRow = document.getElementById('hwc-eras');
+    if (erasRow) erasRow.style.display = task === 'tsar' ? 'flex' : 'none';
+    const goalInp = document.getElementById('hwc-goal');
+    if (goalInp) goalInp.placeholder = task === 'tsar' ? 'всех' : 'N';
+    if (task === 'tsar') { _hwcTsarHint(); return; }
     // Год-диапазон («Годы от—до») показываем И для зубрёжки/подбора — это выбор дат для ДЗ.
     if (isMatch) {
         c.draft.metric = 'lines';   // пары накапливаются как строки — прогресс этапа
@@ -543,10 +549,57 @@ function _hwcAvail() {
 }
 window._hwcAvail = _hwcAvail;
 
+// «Годы правления»: кнопки эпох и подсказка, кто попадает в рамку. Список
+// правителей живёт в tsar-data.js — догружаем его при первом выборе этапа.
+function _hwcTsarHint() {
+    const c = window._hwComposer; if (!c) return;
+    const hint = document.getElementById('hwc-avail');
+    const erasRow = document.getElementById('hwc-eras');
+    const T = window.TsarMode;
+    if (!T) { if (hint) { hint.style.display = ''; hint.textContent = '👑 Тренажёр правителей недоступен — обновите страницу'; } return; }
+    if (!window.TSAR_DATA) {
+        if (hint) { hint.style.display = ''; hint.textContent = '👑 Загружаю список правителей…'; }
+        T.loadData().then(ok => { if (ok && window._hwComposer && window._hwComposer.draft.task === 'tsar') _hwcTsarHint(); });
+        return;
+    }
+    let ys = Number(c.draft.yearStart) || 862, ye = Number(c.draft.yearEnd) || 2026;
+    if (ys > ye) { const t = ys; ys = ye; ye = t; }
+    if (erasRow) erasRow.innerHTML = T.eras.map(e => {
+        const on = e.ys === ys && e.ye === ye, n = T.inRange(e.ys, e.ye).length;
+        return `<button type="button" onclick="window._hwcTsarEra(${e.ys},${e.ye})" style="padding:6px 10px;border-radius:999px;font-size:11px;font-weight:800;cursor:pointer;border:1px solid ${on ? 'var(--a-tsar)' : 'rgba(128,128,128,0.3)'};background:${on ? 'color-mix(in srgb,var(--a-tsar) 12%,transparent)' : 'var(--card,#fff)'};color:${on ? 'var(--a-tsar)' : '#6b7280'}">${e.t} · ${n}</button>`;
+    }).join('');
+    if (!hint) return;
+    const list = T.inRange(ys, ye);
+    hint.style.display = '';
+    hint.textContent = list.length
+        ? `👑 ${ys}–${ye}: ${list.length} ${_hwcPlural(list.length, 'правитель', 'правителя', 'правителей')} — ${list.length > 8 ? list.slice(0, 2).map(r => r.name).join(', ') + ' … ' + list[list.length - 1].name : list.map(r => r.name).join(', ')}. Цель — сколько выучить (пусто = всех).`
+        : `👑 В ${ys}–${ye} нет правителей из тренажёра — выберите эпоху выше.`;
+}
+window._hwcTsarEra = function(ys, ye) {
+    const c = window._hwComposer; if (!c) return;
+    _hwcSyncDraft();
+    c.draft.yearStart = ys; c.draft.yearEnd = ye; c.draft.period = 'custom';
+    _renderHwComposer();
+};
+
 window._hwcAddItem = function() {
     const c = window._hwComposer; if (!c) return;
     _hwcSyncDraft();
     const { task, period, metric } = c.draft;
+    // «Годы правления»: рамка лет → список правителей фиксируется в этапе, чтобы
+    // ученик и кабинет учителя считали одно и то же без данных тренажёра.
+    if (task === 'tsar') {
+        const T = window.TsarMode;
+        if (!T || !window.TSAR_DATA) return showToast('👑', 'Список правителей ещё грузится — секунду', 'bg-amber-500', 'border-amber-700');
+        const ys = Math.min(c.draft.yearStart || 862, c.draft.yearEnd || 2026), ye = Math.max(c.draft.yearStart || 862, c.draft.yearEnd || 2026);
+        const list = T.inRange(ys, ye);
+        if (!list.length) return showToast('⚠️', `В ${ys}–${ye} нет правителей из тренажёра`, 'bg-rose-500', 'border-rose-700');
+        let g = parseInt(c.draft.goal);
+        if (isNaN(g) || g <= 0 || g > list.length) g = list.length;
+        c.items.push({ task: 'tsar', period: 'all', metric: 'learned', goal: g, yearStart: ys, yearEnd: ye, rulers: list.map(r => r.id) });
+        c.draft.goal = '';
+        return _renderHwComposer();
+    }
     let goal = parseInt(c.draft.goal);
     if (isNaN(goal) || goal <= 0) return showToast('⚠️', 'Укажите цель (> 0)', 'bg-rose-500', 'border-rose-700');
     // Зубрёжка и подбор — этапы без периода: охват задаётся годами.
@@ -663,7 +716,7 @@ function _renderHwComposer() {
                      color:${on ? 'var(--c-brand-strong)' : '#6b7280'}">${on ? '✓ ' : ''}${_hwlEsc(g.name || g.code)}${tail}</button>`;
         }).join('')}
       </div>`;
-    const taskShort = { task1: '⏳№1', task3: '🔗№3', task4: '📍№4', task5: '👤№5', task7: '🎨№7', cram: '⚡Зубрёжка', match: '🧩Подбор' };
+    const taskShort = { task1: '⏳№1', task3: '🔗№3', task4: '📍№4', task5: '👤№5', task7: '🎨№7', cram: '⚡Зубрёжка', match: '🧩Подбор', tsar: '👑Правители' };
     const periodShort = Object.fromEntries(HWC_PERIODS.map(p => [p.v, p.t]));
     const itemScope = it => HWC_RANGE_TASKS.indexOf(it.task) !== -1
         ? (it.yearStart && it.yearEnd ? `${it.yearStart}–${it.yearEnd} гг.` : (it.task === 'cram' ? 'даты (любые блоки)' : 'вся история'))
@@ -702,6 +755,7 @@ function _renderHwComposer() {
       <div style="background:var(--card,#fff);border:1px solid rgba(128,128,128,0.18);border-radius:14px;padding:12px;margin:10px 0" class="dark:bg-[#1e1e1e]">
         <div style="margin-bottom:8px">${sel('hwc-task', HWC_TASKS, 'window._hwcAvail()', d.task)}</div>
         <div id="hwc-period-row" style="margin-bottom:8px">${sel('hwc-period', HWC_PERIODS, 'window._hwcPeriodChange()', d.period)}</div>
+        <div id="hwc-eras" style="display:none;flex-wrap:wrap;gap:6px;margin-bottom:8px"></div>
         <div id="hwc-year-row">
           <label style="display:block;font-size:10px;color:#9ca3af;font-weight:700;margin-bottom:4px">Годы (от — до)</label>
           <div style="display:grid;grid-template-columns:1fr auto 1fr;gap:6px;align-items:center;margin-bottom:8px">
@@ -1397,7 +1451,8 @@ const HW_TASK_META = {
     task5: { emoji: '👤', name: 'Задание №5 — Личности' },
     task7: { emoji: '🎨', name: 'Задание №7 — Культура' },
     cram:  { emoji: '⚡', name: 'Зубрёжка дат' },
-    match: { emoji: '🧩', name: 'Подбор дат' }
+    match: { emoji: '🧩', name: 'Подбор дат' },
+    tsar:  { emoji: '👑', name: 'Годы правления' }
 };
 const HW_PERIOD_LABEL = { all: 'Вся история', early: 'До XVIII в.', '18th': 'XVIII век', '19th': 'XIX век', '20th': 'XX век', custom: 'Свои годы' };
 const HW_METRIC_META = {
@@ -1724,7 +1779,7 @@ function _hwItemRow(it, idx, kind, assignmentId) {
         ? (it.yearStart && it.yearEnd ? `${it.yearStart}–${it.yearEnd} гг.` : (it.task === 'cram' ? 'тренажёр дат' : 'вся история'))
         : (it.period === 'custom' ? (it.yearStart || '?') + '–' + (it.yearEnd || '?') + ' гг.' : (HW_PERIOD_LABEL[it.period] || ''));
     // Подбор считает пары: «решить 20 строк» в карточке ученика было бы неправдой.
-    const unit = it.task === 'match' ? 'пар' : mm.unit;
+    const unit = it.task === 'match' ? 'пар' : it.task === 'tsar' ? 'правителей' : mm.unit;
     const verb = it.task === 'match' ? 'Собрать' : mm.verb;
     const tick = done ? '✅' : '▢';
     // Кликабельны этапы активного и просроченного ДЗ. У сданного тоже — но там кнопки
@@ -1936,6 +1991,15 @@ window.startHwItem = function(id, idx) {
     // Подбор дат: свой полноэкранный режим с рамками учителя. Глобальный селектор
     // периода не трогаем — рамки едут параметрами, чтобы выбор ученика в лобби
     // не подменил диапазон ДЗ.
+    // Годы правления: Тиндер правителей с колодой из правителей этапа.
+    if (it.task === 'tsar') {
+        const total = (a.items || []).length;
+        const rangeTxt = (it.yearStart && it.yearEnd) ? ` (${it.yearStart}–${it.yearEnd})` : '';
+        const g = window.hwItemGoal(it);
+        showToast('👑', `Этап ${idx + 1} из ${total}: выучить ${g} ${plural(g, 'правителя', 'правителей', 'правителей')}${rangeTxt}`, 'bg-indigo-500', 'border-indigo-700');
+        if (window.openTsarMode) window.openTsarMode({ hw: true, rulers: it.rulers, goal: g, yearStart: it.yearStart, yearEnd: it.yearEnd });
+        return;
+    }
     if (it.task === 'match') {
         const total = (a.items || []).length;
         const rangeTxt = (it.yearStart && it.yearEnd) ? ` (${it.yearStart}–${it.yearEnd})` : '';

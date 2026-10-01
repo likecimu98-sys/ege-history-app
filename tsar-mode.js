@@ -11,6 +11,9 @@
 //     после первого раза подсказка размывается;
 //   • очки и комбо: годы 5 (+комбо/3), годы по памяти 10 (+комбо/2), событие 2 (+комбо/5);
 //   • «Режим Смерть» после прохождения курса — годы только вводом по памяти.
+// Домашка (01.10.2026): учитель выдаёт правителей хронологической рамкой (этап ДЗ
+// task:'tsar', список id в item.rulers). Колода тогда — только они; выученным
+// считается и тот, кого ученик усвоил раньше (p.known не стирается сбросом).
 // Отличия от оригинала: прогресс в state.stats.tsarTinder (синхронизируется как
 // остальной прогресс), рейтинга нет (был в старом Firebase-проекте), вид — в стиле
 // приложения, скример страшнее (звук и картинка), учтены «звук выкл.» и «меньше
@@ -42,6 +45,30 @@
     function haptic(t) { try { if (typeof window.haptic === 'function') window.haptic(t); } catch (e) {} }
     function sfx(name) { try { if (window.Sfx && window.Sfx.play) window.Sfx.play(name); } catch (e) {} }
     function rulers() { return window.TSAR_DATA || []; }
+    // Колода сессии: в домашке — только правители этапа, иначе все.
+    function pool() {
+        if (!_g || !_g.hw) return rulers();
+        const ids = new Set(_g.hw.rulers);
+        return rulers().filter(r => ids.has(r.id));
+    }
+    function span(r) { const m = String(r.correctYears).match(/(\d{3,4})\D+(\d{3,4})/); return m ? [+m[1], +m[2]] : null; }
+    // Правитель попадает в рамку, если правил внутри неё хоть год, а не только
+    // касался края: в «XIX век 1801–1894» Николай II (с 1894) не входит, а
+    // Александр III (1881–1894) входит.
+    function inRange(ys, ye) {
+        const a = Math.min(ys, ye), b = Math.max(ys, ye);
+        return rulers().filter(r => { const s = span(r); return s && ((s[0] < b && s[1] > a) || (s[0] >= a && s[1] <= b)); });
+    }
+    // Готовые рамки для учителя — по эпохам, без пересечений.
+    const ERAS = [
+        { t: 'Древняя Русь', ys: 862, ye: 1054 },
+        { t: 'XII–XV вв.', ys: 1054, ye: 1505 },
+        { t: 'XVI–XVII вв.', ys: 1505, ye: 1682 },
+        { t: 'Пётр и XVIII в.', ys: 1682, ye: 1801 },
+        { t: 'XIX век', ys: 1801, ye: 1894 },
+        { t: 'XX век', ys: 1894, ye: 1991 },
+    ];
+    function isKnown(p, id) { return p.known.includes(id) || p.mastered.includes(id); }
     function byId(id) { return rulers().find(r => r.id === id); }
     // «Похожие» годы: та же длина, концы сдвинуты на ±8 (оригинальная cI).
     function closeYears(correct) {
@@ -64,6 +91,10 @@
         const p = s.tsarTinder && typeof s.tsarTinder === 'object' ? s.tsarTinder : {};
         p.score = Number(p.score) || 0; p.cnt = p.cnt || {}; p.mastered = Array.isArray(p.mastered) ? p.mastered : [];
         p.wrong = p.wrong || {}; p.attempts = Number(p.attempts) || 0; p.time = Number(p.time) || 0; p.death = !!p.death;
+        // Кого ученик хоть раз усвоил — для зачёта домашки. Сброс и Режим Смерть
+        // обнуляют mastered, но выученное однажды из ДЗ не исчезает.
+        p.known = Array.isArray(p.known) ? p.known : [];
+        p.mastered.forEach(id => { if (!p.known.includes(id)) p.known.push(id); });
         s.tsarTinder = p;
         return p;
     }
@@ -74,8 +105,10 @@
         _saveT = setTimeout(() => { try { if (typeof saveProgress === 'function') saveProgress(); } catch (e) {} }, 400);
     }
     function percent() {
-        const p = prog(), n = rulers().length || 1;
-        const sum = Object.values(p.cnt).reduce((x, v) => x + Math.min(Number(v) || 0, 3), 0);
+        const p = prog(), list = pool(), n = list.length || 1;
+        const sum = _g && _g.hw
+            ? list.reduce((x, r) => x + (isKnown(p, r.id) ? 3 : Math.min(Number(p.cnt[r.id]) || 0, 3)), 0)
+            : Object.values(p.cnt).reduce((x, v) => x + Math.min(Number(v) || 0, 3), 0);
         return Math.min(100, Math.round(sum / (n * 3) * 100));
     }
 
@@ -170,7 +203,8 @@
         const p = prog();
         if (reset) { p.score = 0; p.cnt = {}; p.mastered = []; p.wrong = {}; p.attempts = 0; p.time = 0; }
         p.death = false;
-        const left = shuffle(rulers().filter(r => !p.mastered.includes(r.id)));
+        // В домашке колода — правители этапа, ещё не выученные ни разу.
+        const left = shuffle(_g.hw ? pool().filter(r => !isKnown(p, r.id)) : rulers().filter(r => !p.mastered.includes(r.id)));
         _g.active = left.slice(0, 4); _g.queue = left.slice(4); _g.combo = 0; _g.cur = null;
         save();
         nextRuler();
@@ -185,8 +219,9 @@
     }
     function nextRuler() {
         const p = prog();
+        if (_g.hw && !hwLeft()) { _g.screen = 'hwdone'; return render(); }
         if (!_g.active.length) {
-            if (!_g.queue.length) { _g.screen = 'result'; return render(); }
+            if (!_g.queue.length) { _g.screen = _g.hw ? 'hwdone' : 'result'; return render(); }
             _g.active = _g.queue.slice(0, 4); _g.queue = _g.queue.slice(4);
         }
         let r = _g.active[Math.floor(Math.random() * _g.active.length)];
@@ -280,11 +315,30 @@
             if (n >= 3) {
                 _g.active = _g.active.filter(r => r.id !== id);
                 if (!p.mastered.includes(id)) p.mastered.push(id);
+                if (!p.known.includes(id)) p.known.push(id);
+                if (_g.hw) hwTick();
                 if (_g.queue.length) { _g.active.push(_g.queue[0]); _g.queue = _g.queue.slice(1); }
             }
         }
         save();
         _g.screen = 'summary'; render();
+    }
+    // Домашка: свежий счёт сразу уходит в этап (и учителю) — не ждём выхода.
+    function hwTick() {
+        try {
+            if (window.refreshHwState) window.refreshHwState();
+            if (window.saveLocal) window.saveLocal();
+        } catch (e) {}
+    }
+    // Учитель может задать не всех правителей рамки, а «выучи 3 из 5»: колода —
+    // все невыученные, а этап закрывается, как только выучено нужное число.
+    function hwNeed() { const n = pool().length, g = Number(_g.hw.goal) || n; return Math.min(n, g); }
+    function hwKnown() { const p = prog(); return pool().filter(r => isKnown(p, r.id)).length; }
+    function hwLeft() { return Math.max(0, hwNeed() - hwKnown()); }
+    function hwFinish() {
+        window.closeTsarMode();
+        if (window.maybeAdvanceHw && window.maybeAdvanceHw()) return;
+        if (window.openHwTab) window.openHwTab();
     }
 
     // ── отрисовка ───────────────────────────────────────────────────────
@@ -303,7 +357,29 @@
         return '<div class="tt-top"><button class="tt-back" data-tt="' + (o.back || 'close') + '">' + ICO.back + (o.backLabel || 'Выйти') + '</button><div class="tt-title">Тиндер правителей</div><span class="tt-sp"></span></div>' +
             '<div class="tt-body' + (o.dark ? ' is-dark' : '') + '"><div class="tt-col">' + inner + '</div></div>';
     }
+    // Домашка: кто задан, кто уже выучен, сколько осталось.
+    function hwHomeHtml() {
+        const p = prog(), list = pool(), left = hwLeft(), done = Math.min(hwKnown(), hwNeed()), need = hwNeed();
+        const rows = list.map(r => {
+            const ok = isKnown(p, r.id), n = Number(p.cnt[r.id]) || 0;
+            return '<div class="tt-row' + (ok ? ' is-done' : '') + '"><span class="tt-ava">' + esc(r.avatar) + '</span><span class="tt-row-t"><b>' + esc(r.name) + '</b><i>' + esc(r.correctYears) + '</i></span>' + dots(ok ? 3 : n) + '</div>';
+        }).join('');
+        const frame = _g.hw.ys && _g.hw.ye ? _g.hw.ys + '–' + _g.hw.ye + ' гг.' : 'правители этапа';
+        return '<div class="tt-hw-head"><span class="tt-hw-tag">Домашнее задание</span><h2>Годы правления</h2><p>' + esc(frame) + ' · выучено ' + done + ' из ' + need + '</p>' +
+            (need < list.length ? '<p class="tt-hw-note">Выучи любых ' + need + ' из ' + list.length + '</p>' : '') +
+            '<div class="tt-bar"><i style="width:' + Math.round(done / (need || 1) * 100) + '%"></i></div></div>' +
+            '<div class="tt-list">' + rows + '</div>' +
+            (left
+                ? '<button class="tt-btn is-primary" data-tt="start">' + (done || p.score ? 'Продолжить' : 'Начать') + ' · осталось ' + left + '</button>'
+                : '<button class="tt-btn is-primary" data-tt="hwdone">Этап выполнен — дальше</button>');
+    }
+    function hwDoneHtml() {
+        const n = hwNeed();
+        return '<div class="tt-explain is-gold"><div class="tt-big-ava">🎓</div><h2>Домашка сделана</h2><p>Выучено правителей: ' + n + '. Каждый — трижды без ошибки в годах.</p>' +
+            '<button class="tt-btn is-primary" data-tt="hwdone">Дальше</button></div>';
+    }
     function homeHtml() {
+        if (_g.hw) return hwHomeHtml();
         const p = prog(), total = rulers().length, started = p.mastered.length > 0 || p.score > 0;
         const tabs = '<div class="tt-tabs"><button class="tt-tab" aria-selected="' + (_g.tab !== 'progress') + '" data-tt="tab" data-v="main">Главная</button><button class="tt-tab" aria-selected="' + (_g.tab === 'progress') + '" data-tt="tab" data-v="progress">Прогресс</button></div>';
         if (_g.tab === 'progress') {
@@ -332,7 +408,9 @@
         const p = prog(), r = _g.cur, n = Number(p.cnt[r.id]) || 0;
         const bar = p.death
             ? '<div class="tt-meta"><span class="tt-death">Режим Смерть</span>'
-            : '<div class="tt-meta"><span>Прогресс ' + percent() + '%</span>';
+            : _g.hw
+                ? '<div class="tt-meta"><span>ДЗ · выучено ' + Math.min(hwKnown(), hwNeed()) + ' из ' + hwNeed() + '</span>'
+                : '<div class="tt-meta"><span>Прогресс ' + percent() + '%</span>';
         return bar + '<span class="tt-chip' + (_g.combo > 2 ? ' is-hot' : '') + '">' + ICO.bolt + 'Комбо ×' + _g.combo + '</span><span class="tt-chip">' + p.score + '</span></div>' +
             '<div class="tt-bar"><i style="width:' + (p.death ? 100 : percent()) + '%"' + (p.death ? ' class="is-death"' : '') + '></i></div>' +
             '<div class="tt-profile' + (p.death ? ' is-death' : '') + '"><div class="tt-big-ava">' + esc(r.avatar) + '</div><h2>' + esc(r.name) + '</h2><p>«' + esc(r.status) + '»</p>' + dots(n) + '</div>';
@@ -385,6 +463,7 @@
         if (_g.screen === 'home') { inner = homeHtml(); back = 'close'; backLabel = 'Выйти'; }
         else if (_g.screen === 'penance') { inner = penanceHtml(); dark = true; }
         else if (_g.screen === 'result') inner = resultHtml();
+        else if (_g.screen === 'hwdone') { inner = hwDoneHtml(); back = 'close'; backLabel = 'Выйти'; }
         else inner = gameHtml();
         ov.className = dark ? 'is-dark' : '';
         ov.innerHTML = shell(inner, { back, backLabel, dark });
@@ -430,6 +509,7 @@
             return;
         }
         if (a === 'result') { _g.screen = 'result'; return render(); }
+        if (a === 'hwdone') return hwFinish();
         if (a === 'death') return startDeath();
         if (a === 'year') return chooseYear(v);
         if (a === 'typed') { const i = document.getElementById('tt-typed'); _g.typed = i ? i.value : ''; return typedYear(); }
@@ -449,6 +529,7 @@
             if (_g.screen === 'years' && prog().death) { e.preventDefault(); const i = document.getElementById('tt-typed'); _g.typed = i ? i.value : ''; return typedYear(); }
             if (_g.screen === 'explain') { e.preventDefault(); return nextEvent(); }
             if (_g.screen === 'summary') { e.preventDefault(); return nextRuler(); }
+            if (_g.screen === 'hwdone') { e.preventDefault(); return hwFinish(); }
         }
     }
     // Годы по памяти — без вставки: иначе «наказание» и Режим Смерть проходятся копипастой.
@@ -467,8 +548,12 @@
         return _dataLoading;
     }
 
-    window.openTsarMode = async function () {
-        if (window.canSolveMore) {
+    // opts: { hw: true, rulers: [id…], yearStart, yearEnd } — этап домашки.
+    window.openTsarMode = async function (opts) {
+        const hw = opts && opts.hw && Array.isArray(opts.rulers) && opts.rulers.length
+            ? { rulers: opts.rulers.map(Number), goal: Number(opts.goal) || 0, ys: Number(opts.yearStart) || 0, ye: Number(opts.yearEnd) || 0 } : null;
+        // Домашка идёт без дневного лимита — как и остальные этапы ДЗ.
+        if (!hw && window.canSolveMore) {
             const lim = window.canSolveMore();
             if (!lim.ok) { if (window.showDailyLimitModal) window.showDailyLimitModal(); return; }
         }
@@ -487,7 +572,11 @@
             ov.addEventListener('input', e => { if (e.target.id === 'tt-pen' && _g) _g.penanceInput = e.target.value; if (e.target.id === 'tt-typed' && _g) _g.typed = e.target.value; });
             document.body.appendChild(ov);
         }
-        _g = { screen: 'home', tab: 'main', active: [], queue: [], combo: 0 };
+        _g = { screen: 'home', tab: 'main', active: [], queue: [], combo: 0, hw };
+        if (hw && !pool().length) {
+            if (typeof showToast === 'function') showToast('👑', 'В этом этапе нет правителей — попроси учителя выдать заново', 'bg-amber-500', 'border-amber-700');
+            _g = null; return;
+        }
         _lastAct = Date.now();
         document.addEventListener('keydown', onKey, true);
         clearInterval(_timer);
@@ -548,7 +637,7 @@
 .tt-row{display:flex;align-items:center;gap:12px;padding:10px 14px;border-top:1px solid var(--c-border)}
 .tt-row:first-child{border-top:0}
 .tt-row.is-done{background:color-mix(in srgb,var(--c-success) 8%,var(--c-card))}
-.tt-ava{font-size:26px;width:44px;text-align:center;flex:0 0 auto}
+.tt-ava{font-size:20px;min-width:52px;white-space:nowrap;text-align:center;flex:0 0 auto}
 .tt-row-t{flex:1;min-width:0;display:flex;flex-direction:column}
 .tt-row-t b{font-weight:650;font-size:var(--t-label)}
 .tt-row-t i{font-style:normal;font-size:var(--t-caption);color:var(--c-muted-2);font-variant-numeric:tabular-nums}
@@ -638,6 +727,11 @@
 @media (prefers-reduced-motion:reduce){
   #tt-scream,#tt-scream .tt-face,#tt-scream .tt-pupil,.tt-noise,.tt-scream-txt,.tt-glitch{animation:none!important}
 }
+#tt-overlay .tt-hw-head{text-align:center;margin:4px 0 12px}
+#tt-overlay .tt-hw-head h2{font-size:22px;font-weight:900;margin:6px 0 2px}
+#tt-overlay .tt-hw-head p{font-size:13px;color:var(--c-muted-2);margin:0 0 10px}
+#tt-overlay .tt-hw-head .tt-hw-note{font-size:12px;font-weight:700;color:var(--a-tsar);margin:-6px 0 10px}
+#tt-overlay .tt-hw-tag{display:inline-block;font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.06em;color:var(--a-tsar);background:color-mix(in srgb,var(--a-tsar) 12%,transparent);border-radius:999px;padding:4px 10px}
 @media (max-width:380px){.tt-opt{font-size:16px}.tt-big-ava{font-size:52px}}
 `;
         document.head.appendChild(st);
@@ -645,7 +739,7 @@
 
     // Для самотеста: сборка круга без экрана (render без оверлея ничего не делает).
     window.TsarMode = {
-        closeYears: closeYears, shared: SHARED,
+        closeYears: closeYears, shared: SHARED, eras: ERAS, inRange: inRange, loadData: loadData,
         buildRound: function (rulerId, progress) {
             const st = window.state && window.state.stats, keep = st ? st.tsarTinder : undefined;
             if (st && progress) st.tsarTinder = progress;

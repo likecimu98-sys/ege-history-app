@@ -61,6 +61,35 @@ for (const r of R) for (let k = 0; k < 40; k++) {
   }
 }
 
+// ── домашка: эпохи-рамки ──
+// Каждая эпоха — посильная порция (3–8 правителей), и вместе они покрывают всех
+// ровно по разу: учитель, выдавая эпохи по очереди, не повторит и не пропустит никого.
+const seen = new Map();
+for (const e of T.eras) {
+  const list = T.inRange(e.ys, e.ye);
+  assert.ok(list.length >= 3 && list.length <= 8, e.t + ': правителей ' + list.length);
+  list.forEach(r => seen.set(r.id, (seen.get(r.id) || 0) + 1));
+}
+for (const r of R) assert.strictEqual(seen.get(r.id), 1, r.name + ': в эпохах ' + (seen.get(r.id) || 0) + ' раз');
+// Край рамки не тянет соседа: в XIX век (1801–1894) не входит Николай II, а Александр III входит.
+const xix = T.inRange(1801, 1894).map(r => r.name).join();
+assert.ok(/Александр III/.test(xix) && !/Николай II/.test(xix), 'рамка 1801–1894: ' + xix);
+assert.ok(T.inRange(1700, 1700).some(r => /Петр I/.test(r.name)), 'год внутри правления Петра не находит его');
+
+// Этап ДЗ «tsar» проходит все места, где этап собирают, хранят и считают.
+const stateSrc = read('state.js'), uiSrc = read('ui.js'), csSrc = read('cloud-sync.js');
+assert.match(stateSrc, /RANGE_TASKS = new Set\(\[[^\]]*'tsar'/, 'tsar не в RANGE_TASKS — рамки сотрутся при нормализации');
+assert.ok(stateSrc.includes("if (o.task === 'tsar') { o.metric = 'learned'; o.rulers = tsarRulerIds(it.rulers); }"), 'нормализация теряет список правителей');
+assert.strictEqual(csSrc.split("if (o.task === 'tsar') { o.metric = 'learned'; o.rulers = ").length - 1, 2, 'выдача ученику/классу теряет список правителей');
+assert.match(csSrc, /itemRemaining = \(it\) => it\.task === 'tsar'/, 'кабинет учителя не считает этап правителей');
+assert.ok(uiSrc.includes("{ v: 'tsar',"), 'нет этапа в конструкторе ДЗ');
+assert.ok(uiSrc.includes('window.openTsarMode({ hw: true, rulers: it.rulers'), 'этап ДЗ не открывает тренажёр с колодой');
+// Счёт этапа — функция из state.js: выученные хоть раз (known) и нынешние (mastered), без повторов.
+const sctx = { window: {} }; sctx.window.window = sctx.window; vm.createContext(sctx);
+vm.runInContext(stateSrc.match(/function tsarKnownCount[\s\S]*?\n\}/)[0] + ';window.f = tsarKnownCount;', sctx);
+assert.strictEqual(sctx.window.f([16, 161, 17], { known: [16], mastered: [16, 17, 5] }), 2, 'счёт выученных правителей этапа');
+assert.strictEqual(sctx.window.f([16], null), 0, 'пустой прогресс тренажёра');
+
 // ── подключение ──
 const html = read('index.html');
 assert.match(html, /<script src="tsar-mode\.js\?v=[^"]+" defer><\/script>/, 'tsar-mode.js не подключён');

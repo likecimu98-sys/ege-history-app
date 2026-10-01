@@ -789,8 +789,20 @@ const HW_EPOCHS = ['early', '18th', '19th', '20th'];
 // Этапы, у которых охват задаётся годами (yearStart/yearEnd), а не селектором периода.
 // Одна точка правды: тот же список нужен нормализации в state.js и санитайзерам выдачи
 // в cloud-sync.js, и разъехавшись, он молча стирал бы рамки при выдаче ДЗ.
-const RANGE_TASKS = new Set(['cram', 'match']);
+const RANGE_TASKS = new Set(['cram', 'match', 'tsar']);
 window.HW_RANGE_TASKS = RANGE_TASKS;
+
+// «Годы правления» (Тиндер правителей): этап несёт список правителей рамки
+// (item.rulers — id из tsar-data.js, фиксируется при выдаче), прогресс — сколько
+// из них ученик выучил в тренажёре. Считаем по прогрессу тренажёра без его
+// данных: known — кого усвоил хоть раз (сброс не стирает), mastered — нынешние.
+function tsarKnownCount(rulers, tt) {
+    if (!Array.isArray(rulers) || !rulers.length) return 0;
+    const p = tt && typeof tt === 'object' ? tt : {};
+    const known = new Set([].concat(Array.isArray(p.known) ? p.known : [], Array.isArray(p.mastered) ? p.mastered : []).map(Number));
+    return rulers.filter(id => known.has(Number(id))).length;
+}
+window.tsarKnownCount = tsarKnownCount;
 
 function hwIsOnTime(deadline, whenMs) {
     if (!deadline) return true;
@@ -829,6 +841,10 @@ function hwItemProgress(item) {
     // Считать это нулём НЕЛЬЗЯ: галочка слетала с давно сделанного этапа, а у
     // активного ДЗ ноль записывался в it.done и уезжал учителю (жалоба 09.08.2026).
     // Пока ответа нет — держим последнее известное значение из item.progress.
+    if (item.task === 'tsar') {
+        const live = tsarKnownCount(item.rulers, window.state && window.state.stats && window.state.stats.tsarTinder);
+        return Math.min(hwItemGoal(item), Math.max(live, Number(item.progress) || 0));
+    }
     if (item.task === 'cram') {
         const live = window.cramLearnedCount ? window.cramLearnedCount(item.yearStart, item.yearEnd) : null;
         const known = typeof live === 'number' ? live : (Number(item.progress) || 0);
@@ -861,6 +877,7 @@ window.hwItemProgress = hwItemProgress;
 // Ноль означает «данные ещё не загрузились» — тогда цель не трогаем.
 function hwItemAvailable(item) {
     if (!item) return 0;
+    if (item.task === 'tsar') return Array.isArray(item.rulers) ? item.rulers.length : 0;
     // 🔴 Зубрёжка запирала ученика ровно так же, просто дольше оставалась без
     // потолка: даты живут не в TASK_CONFIG, а в колоде тренажёра, и здесь
     // стояло «return 0» — то есть «цель не трогаем никогда».
@@ -924,6 +941,12 @@ window.getActiveHwRange = function () {
 };
 
 // Нормализуем входящую запись в ДЗ с items (поддержка старого плоского формата {task,total}).
+// Список правителей этапа «Годы правления»: только числа, без повторов, с потолком.
+function tsarRulerIds(list) {
+    if (!Array.isArray(list)) return [];
+    return [...new Set(list.map(Number).filter(n => Number.isFinite(n) && n > 0))].slice(0, 60);
+}
+window.tsarRulerIds = tsarRulerIds;
 function normalizeAssignmentRec(rec) {
     let items = Array.isArray(rec.items) ? rec.items : null;
     if (!items) {
@@ -944,6 +967,7 @@ function normalizeAssignmentRec(rec) {
         // их диапазон обязан пережить нормализацию, иначе ДЗ «даты XX века»
         // молча превращается в «вся история».
         else if (RANGE_TASKS.has(o.task) && it.yearStart && it.yearEnd) { o.yearStart = Number(it.yearStart); o.yearEnd = Number(it.yearEnd); }
+        if (o.task === 'tsar') { o.metric = 'learned'; o.rulers = tsarRulerIds(it.rulers); }
         return o;
     });
     return {
@@ -1162,6 +1186,11 @@ function refreshHwState() {
         // Только вверх: счёт бывает временно недоступен, и просадка тут означала бы
         // ту же потерю галочки, от которой мы и уходим.
         (a.items || []).forEach(it => {
+            if (it && it.task === 'tsar') {
+                const n = tsarKnownCount(it.rulers, s.tsarTinder);
+                it.progress = Math.max(Number(it.progress) || 0, n);
+                return;
+            }
             if (!it || it.task !== 'cram') return;
             const live = window.cramLearnedCount ? window.cramLearnedCount(it.yearStart, it.yearEnd) : null;
             if (typeof live === 'number') it.progress = Math.max(Number(it.progress) || 0, live);

@@ -318,7 +318,7 @@ assert.match(matchSource, /if \(_m\.duel\) \{[\s\S]*?\} else \{\s*\n\s*if \(wind
 assert.match(matchSource, /if \(_m\.hw && window\.creditActiveHwItem\) \{\s*\n\s*window\.creditActiveHwItem\('match', 1, 0\);/,
   'match homework progress is not credited');
 // Рамки учителя обязаны переживать нормализацию задания и оба санитайзера выдачи.
-assert.match(stateSource, /const RANGE_TASKS = new Set\(\['cram', 'match'\]\)/, 'HW range-task list changed');
+assert.match(stateSource, /const RANGE_TASKS = new Set\(\['cram', 'match', 'tsar'\]\)/, 'HW range-task list changed');
 assert.equal((cloudSource.match(/window\.HW_RANGE_TASKS \|\| new Set\(\['cram'\]\)/g) || []).length, 2,
   'both assignment sanitizers must keep year ranges for range-tasks');
 assert.match(uiSource, /window\.openMatchMode\(\{ hw: true, yearStart: it\.yearStart, yearEnd: it\.yearEnd \}\)/,
