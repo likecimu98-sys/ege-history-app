@@ -1,7 +1,7 @@
 'use strict';
 
-const APP_VERSION = '2026-10-01-vps-183';
-const RELEASE_ASSET_VERSION = '20261001-8';
+const APP_VERSION = '2026-10-01-vps-184';
+const RELEASE_ASSET_VERSION = '20261001-9';
 // ⚠️ Версия НАБОРА КАРТИНОК, а не версия приложения. Поднимай её ТОЛЬКО когда
 // меняется состав offline-assets.json — добавились, удалились или переснялись
 // файлы. От бампа APP_VERSION она не зависит и зависеть не должна.
@@ -62,6 +62,8 @@ const CORE_URLS = [
     `./order-data.js?v=${RELEASE_ASSET_VERSION}`,
     `./tetris-mode.js?v=${RELEASE_ASSET_VERSION}`,
     `./map-mode.js?v=${RELEASE_ASSET_VERSION}`,
+    `./tsar-mode.js?v=${RELEASE_ASSET_VERSION}`,
+    `./tsar-data.js?v=${RELEASE_ASSET_VERSION}`,
     `./duel-react.js?v=${RELEASE_ASSET_VERSION}`,
     `./vov-mode.js?v=${RELEASE_ASSET_VERSION}`,
     `./visual-trainer.js?v=${RELEASE_ASSET_VERSION}`,

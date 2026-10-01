@@ -7,14 +7,14 @@
             signInWithCredential, signOut, initializeFirestore, collection, doc, setDoc, getDoc,
             getDocs, addDoc, updateDoc, deleteDoc, deleteField, onSnapshot, query, where,
             orderBy, limit, runTransaction, arrayUnion, arrayRemove, vpsApiFetch, refreshVpsAuth
-        } from "./vps-sync-compat.js?v=20261001-8";
+        } from "./vps-sync-compat.js?v=20261001-9";
 
         // jsPDF грузился с cdnjs.cloudflare.com без SRI — то есть посторонний скрипт
         // исполнялся с полными правами страницы, а при недоступности CDN (у части
         // нашей аудитории это обычное дело) экспорт PDF просто не работал. Довод тот
         // же, что и для telegram-web-app.js: своя копия с того же origin.
         // Версия совпадает с прежней CDN-ной — 2.5.1, лежит в vendor/.
-        const VENDOR_JSPDF = 'vendor/jspdf.umd.min.js?v=20261001-8';
+        const VENDOR_JSPDF = 'vendor/jspdf.umd.min.js?v=20261001-9';
 
         const cloudConfig = { projectId: 'vps-postgresql' };
         
@@ -3523,6 +3523,10 @@
             // «ВОВ» (задание 8): выученные задания — союз (выучил на любом устройстве → выучено).
             st.vovLearned = {};
             states.forEach(s => Object.entries(s.stats?.vovLearned || {}).forEach(([id, v]) => { if (v) st.vovLearned[id] = true; }));
+            // «Тиндер правителей»: прогресс — один объект; берём самую свежую копию (at),
+            // при равенстве — с большими очками. Сервер сливает так же (state-merge.js).
+            { const tt = states.map(s => s.stats?.tsarTinder).filter(x => x && typeof x === 'object');
+              if (tt.length) st.tsarTinder = tt.reduce((a, b) => ((Number(b.at) || 0) > (Number(a.at) || 0) || ((Number(b.at) || 0) === (Number(a.at) || 0) && (Number(b.score) || 0) > (Number(a.score) || 0))) ? b : a); }
             // Пробники: завершённая попытка важнее активной с тем же id; историю
             // объединяем по id, активной считаем самую свежую копию.
             {
@@ -3655,7 +3659,7 @@
             'visualArchitectureProgress','visualArchitectureSolved','visualArchitectureResetAt',
             'visualPaintingProgress','visualPaintingSolved','visualPaintingResetAt',
             'duelElo','duelGames','duelWins','duelLosses','duelDraws',
-            'matchBestMs','matchGames','orderBest','orderGames','tetrisBest','tetrisGames','vovLearned','mockExams','mockExamMistakes',
+            'matchBestMs','matchGames','orderBest','orderGames','tetrisBest','tetrisGames','vovLearned','tsarTinder','mockExams','mockExamMistakes',
             // Круг по банку ФИПИ. Без записи в этом списке поле не уезжает в облако
             // вовсе — и ротация работала бы только на одном устройстве.
             'examSolved',

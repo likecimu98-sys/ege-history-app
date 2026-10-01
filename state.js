@@ -38,6 +38,7 @@ window.state = {
         mocksDone: 0,      // сколько пробников сдано
         perfectTables: 0,  // таблиц, решённых целиком без единой ошибки
         vovLearned: {},                  // режим «ВОВ» (задание 8, старый образец): id задания → true (выучено)
+        tsarTinder: null,                // «Тиндер правителей» (tsar-mode.js): {score, cnt, mastered, wrong, attempts, time, death, at}
         mockExams: { active: null, history: [] }, // пробник 1–12: незавершённая попытка + история
         mockExamMistakes: [],            // долговечная история ошибок в пробниках и цельных заданиях ФИПИ
         examSolved: [],                  // круг по банку ФИПИ: id верно решённых (и 'g:<groupId>' для карт)
@@ -551,7 +552,7 @@ const SAVE_FIELDS = [
     'visualPaintingProgress', 'visualPaintingSolved', 'visualPaintingResetAt',
     'bestSpeedrunScore', 'dailyStats', 'achievements', 'achievementsData',
     'duelElo', 'duelGames', 'duelWins', 'duelLosses', 'duelDraws',
-    'matchBestMs', 'matchGames', 'orderBest', 'orderGames', 'tetrisBest', 'tetrisGames', 'vovLearned', 'mockExams', 'mockExamMistakes',
+    'matchBestMs', 'matchGames', 'orderBest', 'orderGames', 'tetrisBest', 'tetrisGames', 'vovLearned', 'tsarTinder', 'mockExams', 'mockExamMistakes',
     // Счётчики «Летописчика» — монотонные, сервер платит за их прирост.
     'factsLearned', 'fipiPoints', 'mockPoints', 'mocksDone', 'perfectTables',
     // Круг по банку ФИПИ: id верно решённых заданий (и 'g:<groupId>' для карт 9–12).

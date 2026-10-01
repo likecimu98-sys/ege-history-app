@@ -143,6 +143,12 @@ function mergeStateValues(values) {
     const counts = (aware.length ? aware : states).map(s => Number(s.stats[solvedKey]) || 0);
     st[solvedKey] = counts.length ? Math.max(...counts) : 0;
   }
+  // «Тиндер правителей» (tsar-mode.js): один объект прогресса — самая свежая копия
+  // (at), при равенстве — с большими очками. Клиент сливает так же (cloud-sync.js).
+  {
+    const tt = states.map(s => s.stats.tsarTinder).filter(x => x && typeof x === 'object');
+    if (tt.length) st.tsarTinder = tt.reduce((a, b) => ((Number(b.at) || 0) > (Number(a.at) || 0) || ((Number(b.at) || 0) === (Number(a.at) || 0) && (Number(b.score) || 0) > (Number(a.score) || 0))) ? b : a);
+  }
   st.vovLearned = {};
   for (const state of states) for (const [id, learned] of Object.entries(state.stats.vovLearned || {})) {
     if (learned) st.vovLearned[id] = true;
