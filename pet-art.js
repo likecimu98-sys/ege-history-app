@@ -2522,7 +2522,7 @@
     torch: { pose: 'raise', tilt: 4 }, orb: { pose: 'front', palm: true, box: '-28 -60 56 66' }, sputnik: { pose: 'out', palm: true },
     slipper: { pose: 'up', tilt: -76, box: '-14 -64 96 76' }, seeds: { pose: 'front', tilt: 8 }, bagofbags: { pose: 'side', tilt: 0, box: '-24 -18 48 64' },
     cheatsheet: { pose: 'front', tilt: -6 }, calculator: { pose: 'front', tilt: -6 }, shawarma: { pose: 'front', tilt: -14 },
-    mughist: { pose: 'front', tilt: 0, box: '-40 -48 54 74' }, bandage: { pose: 'side', over: true, box: '-14 -22 52 36' }, chainsaw: { pose: 'out', tilt: -8, box: '-26 -40 96 56' },
+    mughist: { pose: 'front', tilt: 0, box: '-50 -58 64 86' }, bandage: { pose: 'side', over: true, box: '-14 -22 52 36' }, chainsaw: { pose: 'out', tilt: -8, box: '-26 -40 96 56' },
     bluefire: { pose: 'front', palm: true },
   };
   // Плечо (ось поворота руки) и лапа в координатах каждой анатомии.
@@ -2808,18 +2808,21 @@
       '<path d="M-11 -18 L11 -22 L10 6 Q0 10 -10 6Z" fill="' + foil + '" ' + HS + '/>' +
       '<path d="M-8 -14 l6 3 M0 -16 l6 4 M-6 -4 l8 2" stroke="#fff" stroke-width="1.2"/><path d="M-6 -30 q3 2 6 0" stroke="#c9a07a" stroke-width="1.2" fill="none"/>');
   };
-  // Кружка «Лучший историк»: держат за ручку (она в лапе), надпись в две
-  // строки подогнана по ширине кружки — не вылезает ни в одном шрифте.
+  // Кружка «Лучший историк»: держат за ручку (она в лапе). Надпись была кеглем 6
+  // и сжата по ширине почти на треть — на экране выходили сплюснутые 6–8 px,
+  // «мыло» (владелец 01.10). Кружка шире, вся вещь на 20% крупнее, сжатие лёгкое.
   T.mughist = function (c) {
     var m = c0(c, 0, '#ffffff'), t = c0(c, 1, '#b3262d');
-    return hold('<path d="M-6 -10 q12 0 12 10 q0 10 -12 10" fill="none" stroke="' + OUT + '" stroke-width="6.4"/><path d="M-6 -10 q12 0 12 10 q0 10 -12 10" fill="none" stroke="' + m + '" stroke-width="3.2"/>' +
-      '<path d="M-32 -20 L-31 18 Q-19 23 -7 18 L-6 -20Z" fill="' + m + '" ' + HS + '/>' +
-      '<ellipse cx="-19" cy="-20" rx="13" ry="3.4" fill="#6b3f22" stroke="' + OUT + '" stroke-width="1.6"/>' +
-      '<text x="-19" y="-4" text-anchor="middle" font-size="6" font-weight="900" fill="' + t + '" font-family="Arial, sans-serif" textLength="20" lengthAdjust="spacingAndGlyphs">ЛУЧШИЙ</text>' +
-      '<text x="-19" y="5" text-anchor="middle" font-size="6" font-weight="900" fill="' + t + '" font-family="Arial, sans-serif" textLength="21" lengthAdjust="spacingAndGlyphs">ИСТОРИК</text>' +
-      '<path d="M-24 10 l5 4 5 -4" stroke="' + t + '" stroke-width="1.4" fill="none"/>' +
-      '<path d="M-28 -14 V12" stroke="#fff" stroke-width="2" opacity=".6"/>' +
-      '<g class="it-steam"><path d="M-23 -26 q-3 -5 0 -9 q3 -4 0 -8 M-14 -27 q-3 -5 0 -9" fill="none" stroke="#c9ced6" stroke-width="2" stroke-linecap="round"/></g>');
+    var txt = 'text-anchor="middle" font-size="6.6" font-weight="800" fill="' + t + '" font-family="Arial, Helvetica, sans-serif" lengthAdjust="spacingAndGlyphs"';
+    return hold('<g transform="scale(1.2)">' +
+      '<path d="M-6 -10 q12 0 12 10 q0 10 -12 10" fill="none" stroke="' + OUT + '" stroke-width="6.4"/><path d="M-6 -10 q12 0 12 10 q0 10 -12 10" fill="none" stroke="' + m + '" stroke-width="3.2"/>' +
+      '<path d="M-38 -21 L-37 19 Q-22 24 -7 19 L-6 -21Z" fill="' + m + '" ' + HS + '/>' +
+      '<ellipse cx="-22" cy="-21" rx="16" ry="3.6" fill="#6b3f22" stroke="' + OUT + '" stroke-width="1.6"/>' +
+      '<text x="-22" y="-5" ' + txt + ' textLength="26">ЛУЧШИЙ</text>' +
+      '<text x="-22" y="4.5" ' + txt + ' textLength="28">ИСТОРИК</text>' +
+      '<path d="M-27 9.5 l5 4 5 -4" stroke="' + t + '" stroke-width="1.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/>' +
+      '<path d="M-34 -15 V13" stroke="#fff" stroke-width="2" opacity=".6"/>' +
+      '<g class="it-steam"><path d="M-27 -27 q-3 -5 0 -9 q3 -4 0 -8 M-17 -28 q-3 -5 0 -9" fill="none" stroke="#c9ced6" stroke-width="2" stroke-linecap="round"/></g></g>');
   };
   // Бинты: намотаны на кисть и запястье, свободный конец развевается.
   T.bandage = function (c) {
@@ -3015,7 +3018,10 @@
 
   function extras(state) {
     if (state === 'sleep') return '<g class="pet-zzz" font-family="Arial" font-weight="900" fill="#6b7cff"><text x="140" y="56" font-size="16">z</text><text x="152" y="40" font-size="20">z</text><text x="166" y="22" font-size="24">Z</text></g>';
-    if (state === 'hungry') return '<g class="pet-bowl" transform="translate(150 178)"><path d="M-15 0 Q0 15 15 0Z" fill="#c9b89a" ' + SW + '/><path d="M-17 0 H17" ' + SW + '/></g>' +
+    // Пустая миска голодного — у ног, по центру. Стояла справа (150, 178), ровно
+    // там, где висит вещь из правой лапы: у пакета появлялась непонятная
+    // «тарелка» (владелец 01.10). Обод с тёмным дном — чтобы читалась миской.
+    if (state === 'hungry') return '<g class="pet-bowl" transform="translate(100 191)"><path d="M-16 -2 Q-14 10 0 10 Q14 10 16 -2Z" fill="#e9dcc2" ' + SW + '/><ellipse cx="0" cy="-2" rx="16" ry="3.6" fill="#9c8463" ' + SW + '/><path d="M-11 3 Q-9 7 -4 8" stroke="#fff" stroke-width="1.6" fill="none" opacity=".8"/></g>' +
       '<g class="pet-think"><circle cx="146" cy="58" r="3" fill="#fff" ' + SW + '/><circle cx="154" cy="46" r="5" fill="#fff" ' + SW + '/><ellipse cx="170" cy="26" rx="18" ry="14" fill="#fff" ' + SW + '/><text x="170" y="32" text-anchor="middle" font-size="16">🍲</text></g>';
     if (state === 'sad') return '<g class="pet-think"><circle cx="146" cy="58" r="3" fill="#fff" ' + SW + '/><circle cx="154" cy="46" r="5" fill="#fff" ' + SW + '/><ellipse cx="170" cy="26" rx="18" ry="14" fill="#fff" ' + SW + '/><text x="170" y="32" text-anchor="middle" font-size="16">🎲</text></g>';
     if (state === 'happy') return '<g class="pet-hearts"><path d="M156 60 c-3 -6 -12 -3 -8 4 l8 7 8 -7 c4 -7 -5 -10 -8 -4Z" fill="#ff6b8a"/></g>';
@@ -3525,6 +3531,14 @@
     return '<g class="fitted-head" data-head="'+sp+'-'+stage+'" transform="translate(100 '+y+') scale('+sx+' '+sy+') translate(-100 '+(-a[0])+')">'+svg+'</g>';
   }
   function fitFaceArt(svg,kind,sp,stage){
+    // Усы нарисованы под мордочку малыша (нос 100–104). У подростка и взрослого
+    // нос ниже (102–108), рот на 114 — усы ложились прямо на нос (владелец 01.10).
+    // Сдвигаем под нос; у людей, Сквидварда и бурундука своё лицо — не трогаем.
+    if(kind==='mustache'){
+      if(sp==='squid'||HUMAN[sp]||sp==='burunday')return svg;
+      var dy=sp==='owl'?(stage==='baby'?8:14):(stage==='baby'?3:8);   // у совы клюв длиннее носа
+      return '<g class="fitted-face" transform="translate(0 '+dy+')">'+svg+'</g>';
+    }
     if(['roundglasses','shades','pincenez','monocle','goggles','thug','eyepatch'].indexOf(kind)<0)return svg;
     var sq=sp==='squid',human=!!HUMAN[sp]||sp==='burunday';
     var eyeY=sq?92:human?92:stage==='baby'?91:90;
