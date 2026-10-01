@@ -1,14 +1,14 @@
 {
   "updated": "2026-10-01",
   "counts": {
-    "radius": 127,
+    "radius": 121,
     "font-too-small": 154,
-    "shadow-literal": 62
+    "shadow-literal": 53
   },
   "byFile": {
     "radius": {
       "cloud-sync.js": 6,
-      "cram.html": 7,
+      "cram.html": 1,
       "exam-mode.js": 15,
       "index.html": 2,
       "styles.css": 17,
@@ -35,7 +35,7 @@
     },
     "shadow-literal": {
       "cloud-sync.js": 1,
-      "cram.html": 12,
+      "cram.html": 3,
       "exam-mode.js": 10,
       "index.html": 2,
       "styles.css": 20,
