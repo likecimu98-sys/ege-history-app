@@ -104,29 +104,32 @@ body.skin-classic #table-head {
   background: var(--a-s3) !important;
 }
 
+/* Единый дизайн (01.10.2026): кнопки — сплошной цвет, как «Начать» в лобби.
+   Градиенты сине-фиолетовые и зелёные были разными на каждом экране. Смысл
+   цветов прежний: зелёный — «уверен», индиго — «сомневаюсь», синий — действие. */
 body.skin-classic #check-btn-sure {
-  background: linear-gradient(135deg,#059669,#10b981) !important;
-  box-shadow: 0 4px 16px rgba(16,185,129,.3) !important;
+  background: #059669 !important;
+  box-shadow: var(--e-1) !important;
 }
 
 body.skin-classic #check-btn-doubt {
-  background: linear-gradient(135deg,#4f46e5,#8b5cf6) !important;
-  box-shadow: 0 4px 16px rgba(139,92,246,.3) !important;
+  background: #4f46e5 !important;
+  box-shadow: var(--e-1) !important;
 }
 
 body.skin-classic #next-btn {
-  background: linear-gradient(135deg,var(--a-b1),var(--a-b2)) !important;
-  box-shadow: 0 4px 20px rgba(0,0,0,.2) !important;
+  background: var(--c-brand) !important;
+  box-shadow: var(--e-1) !important;
 }
 
 body.skin-classic .bg-emerald-500 {
-  background: linear-gradient(135deg,#059669,#10b981) !important;
-  box-shadow: 0 4px 12px rgba(16,185,129,.25) !important;
+  background: #059669 !important;
+  box-shadow: var(--e-1) !important;
 }
 
 body.skin-classic .bg-blue-600 {
-  background: linear-gradient(135deg,var(--a-b1),var(--a-b2)) !important;
-  box-shadow: 0 4px 12px rgba(0,0,0,.15) !important;
+  background: var(--c-brand) !important;
+  box-shadow: var(--e-1) !important;
 }
 
 body.skin-classic [data-action="startDuelSearch"] {
@@ -147,8 +150,8 @@ body.skin-classic [data-action="startDuelSearch"] p {
 
 body.skin-classic [data-action="nextOnbStep"],
 body.skin-classic [data-action="finishOnboarding"].bg-emerald-500 {
-  background: linear-gradient(135deg,var(--a-b1),var(--a-b2)) !important;
-  box-shadow: 0 4px 16px rgba(0,0,0,.15) !important;
+  background: var(--c-brand) !important;
+  box-shadow: var(--e-1) !important;
 }
 
 /* Тёмные правила для .dnd-chip тоже удалены 26.07.2026: они дублировали

@@ -1271,7 +1271,7 @@ function generateDetectiveTable() {
     window.state.tableHasMistake = false;
     window.state.answersRevealed = false;
 
-    $('pool-title').innerHTML = '<span>🔎</span> УЛИКИ';
+    $('pool-title').textContent = 'Улики';
     $('check-buttons').classList.remove('hidden');
     $('check-buttons').classList.add('flex');
     $('check-btn-sure').innerHTML = '✅ Вынести вердикт';

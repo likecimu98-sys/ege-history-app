@@ -1,9 +1,9 @@
 {
-  "updated": "2026-09-30",
+  "updated": "2026-10-01",
   "counts": {
     "radius": 127,
-    "font-too-small": 168,
-    "shadow-literal": 68
+    "font-too-small": 154,
+    "shadow-literal": 62
   },
   "byFile": {
     "radius": {
@@ -24,7 +24,7 @@
     "font-too-small": {
       "cloud-sync.js": 9,
       "exam-mode.js": 7,
-      "index.html": 88,
+      "index.html": 74,
       "match-mode.js": 3,
       "modes.js": 10,
       "styles.css": 11,
@@ -40,7 +40,7 @@
       "index.html": 2,
       "styles.css": 20,
       "swipe-mode.js": 2,
-      "theme-classic.css": 10,
+      "theme-classic.css": 4,
       "tools-and-docs/tools/fipi-parser/constructor.js": 1,
       "ui.js": 7,
       "vov-mode.js": 3

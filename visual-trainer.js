@@ -323,7 +323,7 @@ window.selectVisualCategory = function(category) {
     window._visualHistory = [];
     window._visualMultiStep = null;
     const cfg = visualCategoryConfig(category);
-    $('game-title-display').innerText = `${cfg.icon} ${cfg.label}`;
+    $('game-title-display').innerText = cfg.label;
     window.renderVisualTrainer(true);
 };
 
@@ -333,7 +333,7 @@ window.backToVisualCategoryPicker = function() {
     window.state.currentVisualId = null;
     window._visualHistory = [];
     window._visualMultiStep = null;
-    $('game-title-display').innerText = '🏛️ Визуал ЕГЭ';
+    $('game-title-display').innerText = 'Визуал ЕГЭ';
     window.renderVisualTrainer(true);
 };
 
@@ -356,7 +356,7 @@ window.startVisualTrainer = async function() {
     window.state.currentVisualId = null;
     window._visualHistory = [];
     window._visualMultiStep = null;
-    $('game-title-display').innerText = '🏛️ Визуал ЕГЭ';
+    $('game-title-display').innerText = 'Визуал ЕГЭ';
     $('lobby-area').classList.add('hidden');
     $('game-container').classList.remove('hidden');
     $('game-container').classList.add('flex');

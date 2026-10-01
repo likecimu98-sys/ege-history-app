@@ -120,10 +120,10 @@ window.quickStartGame = async function(task, mode) {
 
     const cfg = TASK_CONFIG[task] || TASK_CONFIG.task4;
     const titles = {
-        'normal': `${cfg.emoji} ${cfg.label}`,
-        'solve': '🎲 Решать', 'flashcards': '🃏 Флеш-карточки',
-        'mistakes': '🔥 Ошибки', 'study': '📖 Сюжеты',
-        'detective': '🕵️ Секретный архив', 'redpencil': '🖍️ Красный карандаш'
+        'normal': cfg.label,
+        'solve': 'Решать', 'flashcards': 'Флеш-карточки',
+        'mistakes': 'Ошибки', 'study': 'Сюжеты',
+        'detective': 'Секретный архив', 'redpencil': 'Красный карандаш'
     };
     $('pre-game-title').innerText = titles[mode];
     $('game-title-display').innerText = titles[mode];
@@ -551,7 +551,7 @@ function checkAnswers(isSure, auto) {
         $('check-buttons').classList.remove('flex');
         $('reveal-btn').classList.add('hidden');
         $('next-btn').classList.remove('hidden');
-        $('next-btn').innerHTML = isDet ? '📂 Следующее дело' : '➡️ Дальше';
+        $('next-btn').innerHTML = isDet ? 'Следующее дело' : 'Дальше';
 
         if (window.state.isHomeworkMode && window.state.hwTargetIndices?.length > 0) {
             window.state.hwCurrentPool.splice(0, rows.length);
@@ -614,7 +614,7 @@ function toggleAnswers() {
         $('check-buttons').classList.add('hidden');
         $('check-buttons').classList.remove('flex');
         $('next-btn').classList.remove('hidden');
-        $('next-btn').innerHTML = isDet ? '📂 Следующее дело' : '➡️ Дальше';
+        $('next-btn').innerHTML = isDet ? 'Следующее дело' : 'Дальше';
         updateGlobalUI();
         saveLocal();
     } else {
@@ -658,7 +658,7 @@ function checkURLForHomework() {
         updateText($('hw-remaining'), window.state.hwCurrentPool.length);
         $('game-container').classList.remove('hidden');
         $('game-container').classList.add('flex');
-        $('game-title-display').innerText = "📚 ДОМАШНЕЕ ЗАДАНИЕ";
+        $('game-title-display').innerText = "Домашнее задание";
         document.body.classList.add('in-game');
         $('bottom-nav').classList.add('hide-nav');
         toggleMode('normal');
@@ -682,7 +682,7 @@ function checkURLForHomework() {
             $('game-container').classList.add('flex');
             document.body.classList.add('in-game');
             $('bottom-nav').classList.add('hide-nav');
-            $('game-title-display').innerText = "📚 ДОМАШНЕЕ ЗАДАНИЕ";
+            $('game-title-display').innerText = "Домашнее задание";
             toggleMode('normal');
         }, 500);
     }

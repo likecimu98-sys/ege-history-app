@@ -2270,7 +2270,7 @@ function generateTask4Table() {
 // Сброс UI таблицы
 function resetTableUI() {
     const poolTitle = DOM['pool-title'] || $('pool-title');
-    if (poolTitle) poolTitle.innerHTML = '<span>🧩</span> ВАРИАНТЫ';
+    if (poolTitle) poolTitle.textContent = 'Варианты';
     const stamp = DOM['detective-stamp'] || $('detective-stamp');
     if (stamp) stamp.classList.add('hidden');
 
@@ -2278,12 +2278,12 @@ function resetTableUI() {
     if (checkBtns) { checkBtns.classList.remove('hidden'); checkBtns.classList.add('flex'); }
 
     const btnSure = DOM['check-btn-sure'] || $('check-btn-sure');
-    if (btnSure) btnSure.innerHTML = '✅ Проверить';
+    if (btnSure) btnSure.textContent = 'Проверить';
 
     const revealBtn = DOM['reveal-btn'] || $('reveal-btn');
     if (revealBtn) {
         revealBtn.className = "hidden text-gray-500 hover:text-orange-500 dark:text-gray-400 font-bold py-2 active:scale-95 text-[11px] sm:text-xs w-full transition-colors underline uppercase tracking-wider mt-2";
-        revealBtn.innerHTML = '👀 Сдаюсь, покажи ответы';
+        revealBtn.textContent = 'Сдаюсь, покажи ответы';
     }
 
     const nextBtn = DOM['next-btn'] || $('next-btn');

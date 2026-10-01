@@ -99,15 +99,15 @@
     <link rel="manifest" href="manifest.webmanifest">
     <link rel="icon" type="image/png" href="assets/icons/icon-192.png">
     <link rel="apple-touch-icon" href="assets/icons/icon-180.png">
-    <link rel="stylesheet" href="tokens.css?v=20261001-6">
-    <link rel="stylesheet" href="output.css?v=20261001-6">
-    <link rel="stylesheet" href="theme-classic.css?v=20261001-6">
-    <link rel="stylesheet" href="styles.css?v=20261001-6">
+    <link rel="stylesheet" href="tokens.css?v=20261001-7">
+    <link rel="stylesheet" href="output.css?v=20261001-7">
+    <link rel="stylesheet" href="theme-classic.css?v=20261001-7">
+    <link rel="stylesheet" href="styles.css?v=20261001-7">
     
     <!-- Самохостинг telegram-web-app.js: telegram.org часто недоступен (сеть/VPN),
          тогда window.Telegram не создавался → known_tg_id не считывался → случайный id «через раз».
          Локальная копия отдаётся с того же origin и кэшируется service worker'ом. -->
-    <script src="vendor/telegram-web-app.js?v=20261001-6" defer></script>
+    <script src="vendor/telegram-web-app.js?v=20261001-7" defer></script>
 
     <style>
         /* Этот inline-блок намеренно МИНИМАЛЕН: только то, что должно сработать на
@@ -333,7 +333,7 @@
 
     <script>
       (function() {
-      var BOOT_RELEASE = '20261001-6';
+      var BOOT_RELEASE = '20261001-7';
         var bootT0 = Date.now();
         // 🔴 Диагностика загрузки НЕ должна зависеть только от fetch.
         // 30.07 два айфона скачали страницу и ВСЕ 20 скриптов (200 в логе), но не
@@ -591,31 +591,31 @@
          диагностика поломок сама стала способом их устроить.
          Единственное, что теряется с defer, — ошибки инлайн-скриптов ВЫШЕ по
          документу. Они уже покрыты своим отчётом (bootSignal('error')). -->
-    <script src="telemetry.js?v=20261001-6" defer></script>
+    <script src="telemetry.js?v=20261001-7" defer></script>
 
     <!-- JS разбит на модули: config → utils → state → table → ui → modes → app -->
     <!-- Порядок defer гарантирован браузером: выполняются строго по порядку в DOM -->
-    <script src="config.js?v=20261001-6" defer></script>
-    <script src="utils.js?v=20261001-6" defer></script>
-    <script src="exam-scoring.js?v=20261001-6" defer></script>
-    <script src="state.js?v=20261001-6" defer></script>
-    <script src="table.js?v=20261001-6" defer></script>
-    <script src="lesson-plan.js?v=20261001-6" defer></script>
-    <script src="ui.js?v=20261001-6" defer></script>
-    <script src="teacher-cabinet.js?v=20261001-6" defer></script>
-    <script src="modes.js?v=20261001-6" defer></script>
-    <script src="swipe-data.js?v=20261001-6" defer></script>
-    <script src="swipe-mode.js?v=20261001-6" defer></script>
-    <script src="match-mode.js?v=20261001-6" defer></script>
-    <script src="order-mode.js?v=20261001-6" defer></script>
-    <script src="order-data.js?v=20261001-6" defer></script>
-    <script src="tetris-mode.js?v=20261001-6" defer></script>
-    <script src="map-mode.js?v=20261001-6" defer></script>
-    <script src="duel-react.js?v=20261001-6" defer></script>
-    <script src="vov-mode.js?v=20261001-6" defer></script>
-    <script src="visual-trainer.js?v=20261001-6" defer></script>
-    <script src="exam-mode.js?v=20261001-6" defer></script>
-    <script src="app.js?v=20261001-6" defer></script>
+    <script src="config.js?v=20261001-7" defer></script>
+    <script src="utils.js?v=20261001-7" defer></script>
+    <script src="exam-scoring.js?v=20261001-7" defer></script>
+    <script src="state.js?v=20261001-7" defer></script>
+    <script src="table.js?v=20261001-7" defer></script>
+    <script src="lesson-plan.js?v=20261001-7" defer></script>
+    <script src="ui.js?v=20261001-7" defer></script>
+    <script src="teacher-cabinet.js?v=20261001-7" defer></script>
+    <script src="modes.js?v=20261001-7" defer></script>
+    <script src="swipe-data.js?v=20261001-7" defer></script>
+    <script src="swipe-mode.js?v=20261001-7" defer></script>
+    <script src="match-mode.js?v=20261001-7" defer></script>
+    <script src="order-mode.js?v=20261001-7" defer></script>
+    <script src="order-data.js?v=20261001-7" defer></script>
+    <script src="tetris-mode.js?v=20261001-7" defer></script>
+    <script src="map-mode.js?v=20261001-7" defer></script>
+    <script src="duel-react.js?v=20261001-7" defer></script>
+    <script src="vov-mode.js?v=20261001-7" defer></script>
+    <script src="visual-trainer.js?v=20261001-7" defer></script>
+    <script src="exam-mode.js?v=20261001-7" defer></script>
+    <script src="app.js?v=20261001-7" defer></script>
 
     <!-- ШАПКА -->
     <header id="main-header" class="sticky top-0 z-50 no-print transition-colors duration-400 pt-2 pb-2 sm:pt-3 sm:pb-3 px-4">
@@ -627,7 +627,7 @@
                 <!-- Левая часть: лого и балл -->
                 <div class="flex items-center gap-2 sm:gap-3 shrink-0">
                     <div class="flex items-center justify-center w-8 h-8 sm:w-10 sm:h-10 hover:bg-white/10 rounded-lg sm:rounded-xl cursor-pointer active:scale-95 transition-all" data-action="handleLogoClick">
-                        <span class="text-lg sm:text-xl drop-shadow-md">🏛️</span>
+                        <span class="ui-logo"><svg class="ui-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 21h18M3 10h18M5 6l7-3 7 3M4 10v11M20 10v11M8 14v3M12 14v3M16 14v3"/></svg></span>
                     </div>
                     
                     <!-- Кольцо цели дня (заполняется решёнными строками), в центре — стрик.
@@ -660,14 +660,14 @@
 
                     <div class="flex flex-col items-center min-w-[38px] sm:min-w-[60px]" title="Выучено фактов">
                         <span class="text-[15px] sm:text-[18px] font-black text-[#93C5FD] leading-none mb-1 drop-shadow-sm" id="stat-learned">0</span>
-                        <span class="text-[7px] sm:text-[9px] font-black text-white/50 uppercase tracking-widest">выучено</span>
+                        <span class="ui-stat-lb">выучено</span>
                     </div>
 
                     <div class="w-px h-6 bg-white/10 hidden sm:block"></div>
 
                     <div class="flex flex-col items-center min-w-[38px] sm:min-w-[60px]" title="Баллов за задания">
                         <span class="text-[15px] sm:text-[18px] font-black text-[#C4B5FD] leading-none mb-1 drop-shadow-sm" id="stat-solved">0</span>
-                        <span class="text-[7px] sm:text-[9px] font-black text-white/50 uppercase tracking-widest">баллов</span>
+                        <span class="ui-stat-lb">баллов</span>
                     </div>
 
                     <div class="w-px h-6 bg-white/10 hidden sm:block"></div>
@@ -675,7 +675,7 @@
                     <!-- Дни до ЕГЭ показываем только когда их ≤150 (иначе это шум, а не мотивация) -->
                     <div id="stat-days-box" class="hidden flex-col items-center min-w-[38px] sm:min-w-[60px]" title="Дней до ЕГЭ">
                         <span class="text-[15px] sm:text-[18px] font-black text-[#FB7185] leading-none mb-1 drop-shadow-sm" id="stat-days">—</span>
-                        <span class="text-[7px] sm:text-[9px] font-black text-gray-400 dark:text-white/50 uppercase tracking-widest">дней</span>
+                        <span class="ui-stat-lb">дней</span>
                     </div>
                     
                 </div>
@@ -684,9 +684,9 @@
 
                 <!-- Правая часть: Кнопки -->
                 <div class="flex items-center gap-1 sm:gap-2 shrink-0">
-                    <button class="hdr-tap w-8 h-8 sm:w-9 sm:h-9 flex items-center justify-center bg-white/10 hover:bg-white/20 rounded-md sm:rounded-lg transition-all cursor-pointer active:scale-95 text-[12px] sm:text-[14px]" title="Достижения" data-action="openGlobalTopModal">🏆</button>
-                    <button class="hdr-tap w-8 h-8 sm:w-9 sm:h-9 flex items-center justify-center bg-white/10 hover:bg-white/20 rounded-md sm:rounded-lg transition-all cursor-pointer active:scale-95 text-[12px] sm:text-[14px]" title="Дзен режим" data-action="toggleFocusMode">🧘</button>
-                    <button class="hdr-tap w-8 h-8 sm:w-9 sm:h-9 flex items-center justify-center bg-white/10 hover:bg-white/20 rounded-md sm:rounded-lg transition-all cursor-pointer active:scale-95 text-[12px] sm:text-[14px]" title="Сменить тему" data-action="toggleTheme">🌙</button>
+                    <button class="hdr-tap w-8 h-8 sm:w-9 sm:h-9 flex items-center justify-center bg-white/10 hover:bg-white/20 rounded-md sm:rounded-lg transition-all cursor-pointer active:scale-95 text-[12px] sm:text-[14px]" title="Рейтинг" aria-label="Рейтинг" data-action="openGlobalTopModal"><svg class="ui-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 21h8M12 17v4M7 4h10M17 4v8a5 5 0 0 1-10 0V4M3 7a2 2 0 0 0 2 2h2M21 7a2 2 0 0 1-2 2h-2"/></svg></button>
+                    <button class="hdr-tap w-8 h-8 sm:w-9 sm:h-9 flex items-center justify-center bg-white/10 hover:bg-white/20 rounded-md sm:rounded-lg transition-all cursor-pointer active:scale-95 text-[12px] sm:text-[14px]" title="Режим без отвлечений" aria-label="Режим без отвлечений" data-action="toggleFocusMode"><svg class="ui-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M11 12a1 1 0 1 0 2 0a1 1 0 1 0-2 0M7 12a5 5 0 1 0 10 0a5 5 0 1 0-10 0M12 3v2M3 12h2M12 19v2M19 12h2"/></svg></button>
+                    <button class="hdr-tap w-8 h-8 sm:w-9 sm:h-9 flex items-center justify-center bg-white/10 hover:bg-white/20 rounded-md sm:rounded-lg transition-all cursor-pointer active:scale-95 text-[12px] sm:text-[14px]" title="Сменить тему" aria-label="Сменить тему" data-action="toggleTheme"><svg class="ui-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3h.39a7.5 7.5 0 0 0 7.92 12.45A9 9 0 1 1 12 3z"/></svg></button>
                 </div>
                 
             </div>
@@ -885,8 +885,8 @@
             <div id="game-header" class="flex justify-between items-center gap-2 mb-2 sm:mb-3 bg-white/60 dark:bg-[#1e1e1e]/80 backdrop-blur-md p-1.5 sm:p-2 rounded-xl shadow-sm border border-gray-100 dark:border-[#2c2c2c] shrink-0">
                 <button data-action="backToLobby" class="shrink-0 flex items-center gap-1.5 text-gray-500 hover:text-examBlue dark:text-gray-400 dark:hover:text-blue-400 font-bold transition-colors text-xs sm:text-sm px-2 py-1 rounded-lg hover:bg-white dark:hover:bg-[#2c2c2c]"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path></svg><span class="hidden sm:inline">Назад</span></button>
                 <div class="flex flex-col items-center flex-1 min-w-0 px-1"><h2 id="game-title-display" class="font-black text-gray-800 dark:text-gray-300 uppercase tracking-widest text-xs sm:text-sm truncate max-w-full">Режим</h2><div id="game-timer-display" class="hidden text-rose-500 font-black text-xs animate-pulse">03:00</div></div>
-                <button id="game-settings-btn" data-action="openGlobalSettings" class="shrink-0 text-gray-400 hover:text-gray-700 dark:text-gray-500 dark:hover:text-gray-300 text-base p-1.5 bg-white dark:bg-[#2c2c2c] rounded-lg transition-colors shadow-sm">⚙️</button>
-                <button id="game-period-chip" data-action="openGlobalSettings" class="hidden shrink-0 items-center gap-1.5 text-[11px] sm:text-xs font-black px-2.5 py-1.5 rounded-lg transition-transform shadow-sm active:scale-95 max-w-[48%]" style="background:#6366f1;color:#fff;border:1px solid #4f46e5;"><span>📅</span><span id="game-period-chip-text" class="truncate" style="color:#fff;">Вся история</span></button>
+                <button id="game-settings-btn" data-action="openGlobalSettings" class="shrink-0 text-gray-400 hover:text-gray-700 dark:text-gray-500 dark:hover:text-gray-300 text-base p-1.5 bg-white dark:bg-[#2c2c2c] rounded-lg transition-colors shadow-sm" aria-label="Настройки"><svg class="ui-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M14 6a2 2 0 1 0 4 0a2 2 0 1 0-4 0M4 6h10M18 6h2M6 12a2 2 0 1 0 4 0a2 2 0 1 0-4 0M4 12h2M10 12h10M15 18a2 2 0 1 0 4 0a2 2 0 1 0-4 0M4 18h11M19 18h1"/></svg></button>
+                <button id="game-period-chip" data-action="openGlobalSettings" class="hidden shrink-0 items-center gap-1.5 text-[11px] sm:text-xs font-black px-2.5 py-1.5 rounded-lg transition-transform shadow-sm active:scale-95 max-w-[48%]" ><svg class="ui-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2zM16 3v4M8 3v4M4 11h16"/></svg><span id="game-period-chip-text" class="truncate">Вся история</span></button>
             </div>
 
             <!-- Прогресс режима выучивания (learned-ДЗ) -->
@@ -925,7 +925,7 @@
                 </div>
 
                 <div id="pool-panel" class="w-full lg:w-[45%] bg-gray-50 dark:bg-[#181818] lg:bg-white lg:dark:bg-[#1e1e1e] flex flex-col z-[45] p-3 sm:p-4 border border-gray-200 dark:border-[#2c2c2c] rounded-b-2xl lg:rounded-2xl shadow-sm transition-all duration-400">
-                    <div class="flex justify-between items-center mb-2 lg:mb-4 px-2 shrink-0"><h3 id="pool-title" class="font-black text-gray-800 dark:text-gray-300 flex items-center gap-2 text-[11px] sm:text-base uppercase tracking-widest"><span>🧩</span> Варианты</h3></div>
+                    <div class="flex justify-between items-center mb-2 lg:mb-4 px-2 shrink-0"><h3 id="pool-title" class="font-black text-gray-800 dark:text-gray-300 flex items-center gap-2 text-[11px] sm:text-base uppercase tracking-widest">Варианты</h3></div>
                     <div id="pool-content-wrapper" class="flex flex-col flex-1">
                         <div id="pool-container" class="flex flex-wrap justify-center content-start gap-1.5 sm:gap-2 flex-1 pb-2 px-1"></div>
                         <div class="mt-4 pt-4 border-t border-gray-200 dark:border-[#2c2c2c] flex flex-col gap-1.5 sm:gap-3 px-1 shrink-0">
@@ -935,9 +935,9 @@
                                          принимается сам, и спрашивать об уверенности не у чего.
                                          Оставалась она только для неполного ответа, где выбор
                                          «уверен/не уверен» ничего не значит. -->
-                                    <button id="check-btn-sure" data-action="checkAnswersTrue" class="bg-emerald-500 hover:bg-emerald-600 text-white font-black py-2.5 sm:py-4 px-2 rounded-xl sm:rounded-2xl shadow-lg active:scale-95 text-[11px] sm:text-sm w-full uppercase tracking-widest transition-transform flex justify-center items-center gap-1">✅ Проверить</button>
+                                    <button id="check-btn-sure" data-action="checkAnswersTrue" class="bg-emerald-500 hover:bg-emerald-600 text-white font-black py-2.5 sm:py-4 px-2 rounded-xl sm:rounded-2xl shadow-lg active:scale-95 text-[11px] sm:text-sm w-full uppercase tracking-widest transition-transform flex justify-center items-center gap-1">Проверить</button>
                                 </div>
-                                <button id="next-btn" data-action="generateTable" class="hidden bg-blue-600 hover:bg-blue-700 text-white font-black py-3 sm:py-4 px-6 rounded-xl sm:rounded-2xl shadow-lg active:scale-95 text-[11px] sm:text-base w-full uppercase tracking-widest transition-transform">➡️ Дальше</button>
+                                <button id="next-btn" data-action="generateTable" class="hidden bg-blue-600 hover:bg-blue-700 text-white font-black py-3 sm:py-4 px-6 rounded-xl sm:rounded-2xl shadow-lg active:scale-95 text-[11px] sm:text-base w-full uppercase tracking-widest transition-transform">Дальше</button>
                             </div>
                             <button id="reveal-btn" data-action="toggleAnswers" class="hidden text-gray-500 hover:text-orange-500 dark:text-gray-400 dark:hover:text-orange-400 font-bold py-1.5 sm:py-2 active:scale-95 text-[10px] sm:text-xs w-full transition-colors underline uppercase tracking-wider">👀 Сдаюсь, покажи ответы</button>
                         </div>
@@ -970,9 +970,9 @@
 
     <!-- Нижнее меню -->
     <nav id="bottom-nav" class="fixed bottom-0 left-0 w-full bg-white dark:bg-[#121212] border-t border-gray-200 dark:border-[#2c2c2c] flex justify-around items-center z-[9999] shadow-[0_-5px_15px_rgba(0,0,0,0.08)] dark:shadow-[0_-5px_15px_rgba(0,0,0,0.5)] !opacity-100 transition-transform">
-        <button data-action="openHwTab" class="relative flex flex-col items-center justify-center w-full h-full text-gray-500 dark:text-gray-400 hover:text-red-500 active:text-red-500 transition-colors group"><span class="relative text-2xl mb-1 group-active:scale-110 transition-transform">📚<!-- Значок висит на САМОЙ иконке, а не на кнопке. Раньше он позиционировался от края кнопки (right-1/4), а кнопка тянется на треть экрана: на телефоне выходило рядом, на ПК — в 75 пикселях правее книжки, посреди пустоты. --><span id="hw-nav-badge" class="hidden absolute -top-0.5 -right-2.5 min-w-[16px] h-[16px] px-1 rounded-full bg-rose-500 text-white text-[9px] font-black flex items-center justify-center leading-none">0</span></span><span class="text-[10px] font-black uppercase tracking-widest">ДЗ</span></button>
-        <button data-action="openGlobalSettings" class="flex flex-col items-center justify-center w-full h-full text-gray-500 dark:text-gray-400 hover:text-blue-500 active:text-blue-500 transition-colors group"><span class="text-2xl mb-1 group-active:-translate-y-1 transition-transform">⚙️</span><span class="text-[10px] font-black uppercase tracking-widest">Настройки</span></button>
-        <button data-action="openStatsModal" class="flex flex-col items-center justify-center w-full h-full text-gray-500 dark:text-gray-400 hover:text-purple-500 active:text-purple-500 transition-colors group"><span class="text-2xl mb-1 group-active:-translate-y-1 transition-transform">📊</span><span class="text-[10px] font-black uppercase tracking-widest">Профиль</span></button>
+        <button data-action="openHwTab" class="relative flex flex-col items-center justify-center w-full h-full text-gray-500 dark:text-gray-400 hover:text-blue-500 active:text-blue-500 transition-colors group"><span class="relative mb-1 transition-transform"><svg class="ui-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 19a9 9 0 0 1 9 0a9 9 0 0 1 9 0M3 6a9 9 0 0 1 9 0a9 9 0 0 1 9 0M3 6v13M12 6v13M21 6v13"/></svg><!-- Значок висит на САМОЙ иконке, а не на кнопке. Раньше он позиционировался от края кнопки (right-1/4), а кнопка тянется на треть экрана: на телефоне выходило рядом, на ПК — в 75 пикселях правее книжки, посреди пустоты. --><span id="hw-nav-badge" class="hidden absolute -top-0.5 -right-2.5 min-w-[16px] h-[16px] px-1 rounded-full bg-rose-500 text-white text-[9px] font-black flex items-center justify-center leading-none">0</span></span><span class="ui-nav-lb">ДЗ</span></button>
+        <button data-action="openGlobalSettings" class="flex flex-col items-center justify-center w-full h-full text-gray-500 dark:text-gray-400 hover:text-blue-500 active:text-blue-500 transition-colors group"><span class="mb-1"><svg class="ui-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M14 6a2 2 0 1 0 4 0a2 2 0 1 0-4 0M4 6h10M18 6h2M6 12a2 2 0 1 0 4 0a2 2 0 1 0-4 0M4 12h2M10 12h10M15 18a2 2 0 1 0 4 0a2 2 0 1 0-4 0M4 18h11M19 18h1"/></svg></span><span class="ui-nav-lb">Настройки</span></button>
+        <button data-action="openStatsModal" class="flex flex-col items-center justify-center w-full h-full text-gray-500 dark:text-gray-400 hover:text-purple-500 active:text-purple-500 transition-colors group"><span class="mb-1"><svg class="ui-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 7a4 4 0 1 0 8 0a4 4 0 1 0-8 0M6 21v-2a4 4 0 0 1 4-4h4a4 4 0 0 1 4 4v2"/></svg></span><span class="ui-nav-lb">Профиль</span></button>
     </nav>
 
     <!-- Полноэкранный режим «Зубрёжка» (изолированный iframe, свой яркий стиль).
@@ -1010,7 +1010,7 @@
             <div id="pg-case-container" class="flex flex-col gap-2"><label class="text-[10px] font-black text-gray-500 dark:text-gray-400 uppercase tracking-widest px-1">Материалы дела <span class="text-rose-400 font-bold lowercase tracking-normal text-[9px]">(только для режима детектив)</span></label><div class="relative"><select id="pg-filter-case" class="w-full bg-stone-100 dark:bg-[#2a2722] border-2 border-stone-300 dark:border-[#4a4235] text-stone-900 dark:text-[#dcd6c7] rounded-2xl p-4 text-sm font-bold outline-none shadow-sm appearance-none font-mono"><option value="early_rus">🏛️ Древняя Русь</option><option value="culture">🎨 Культура Руси</option><option value="mongols">🐎 Ордынское иго</option><option value="muscovy">👑 Московское царство (Иван III, Иван IV)</option><option value="expansion">🌄 Освоение Сибири и Д. Востока</option><option value="smuta">⚔️ Смутное время</option><option value="early_romanovs">📜 Первые Романовы</option><option value="poland">🛡️ Русско-польские отношения</option><option value="sweden">🌊 Борьба за Балтику</option><option value="revolts">🔥 Бунташный век</option><option value="peter_internal">⚙️ Реформы Петра I</option><option value="palace">👑 Дворцовые перевороты</option><option value="rtw">⚔️ Русско-турецкие войны</option><option value="alexander_1">🎩 Александр I</option><option value="napoleon">🔥 Отечественная 1812 г.</option><option value="decembrists">❄️ Декабристы</option><option value="nicholas_1">🎖️ Николай I</option><option value="empire_19th">⚖️ Великие реформы Александра II</option><option value="rus_jap_1905">🚢 Русско-японская и 1-я революция</option><option value="ww1">💥 Первая мировая война</option><option value="revolutions">🚩 Революции 1917 года</option><option value="civil_war">⚔️ Гражданская война</option><option value="ussr_1920s">🔴 НЭП и создание СССР</option><option value="ussr_internal">🏭 Индустриализация и репрессии</option><option value="ww2">🎖️ ВОВ</option><option value="coldwar">🌐 Холодная война</option><option value="ussr_late">🕊️ Перестройка и Новая Россия</option></select><div class="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-stone-400">▼</div></div></div>
             
             <label id="pg-hide-learned-container" class="flex items-center gap-4 bg-white dark:bg-[#2c2c2c] p-4 rounded-2xl shadow-sm border border-gray-200 dark:border-[#3f3f46] cursor-pointer mt-2 group active:scale-95 transition-transform shrink-0"><div class="relative flex items-center justify-center"><input type="checkbox" id="pg-hide-learned" class="peer appearance-none w-6 h-6 border-2 border-gray-300 dark:border-gray-600 rounded-lg checked:bg-blue-500 checked:border-blue-500 transition-colors"><svg class="absolute w-4 h-4 text-white opacity-0 peer-checked:opacity-100 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"></path></svg></div><div><span class="block text-sm font-black text-gray-800 dark:text-gray-300 uppercase tracking-wide">Скрывать выученное</span><span class="block text-[10px] text-gray-400 font-bold mt-0.5">Убирает свежие факты из пула</span></div></label>
-            <button data-action="applyGlobalSettings" class="w-full bg-blue-600 text-white font-black text-lg py-5 rounded-2xl mt-2 shadow-[0_8px_20px_rgba(37,99,235,0.3)] active:scale-95 transition-transform uppercase tracking-widest flex items-center justify-center gap-2 shrink-0">СОХРАНИТЬ 💾</button>
+            <button data-action="applyGlobalSettings" class="w-full bg-blue-600 text-white font-black text-lg py-5 rounded-2xl mt-2 shadow-[0_8px_20px_rgba(37,99,235,0.3)] active:scale-95 transition-transform uppercase tracking-widest flex items-center justify-center gap-2 shrink-0">Сохранить</button>
         </div>
     </div>
 
@@ -1264,21 +1264,21 @@
 
     <div id="achievements-modal" class="fixed inset-0 bg-black/80 z-[10006] hidden flex-col items-center justify-center backdrop-blur-sm opacity-0 transition-opacity no-print modal-content-hidden">
         <div class="bg-white dark:bg-[#1e1e1e] rounded-2xl w-[95%] max-w-4xl max-h-[90vh] flex flex-col shadow-2xl overflow-hidden">
-            <div class="p-4 border-b border-gray-200 dark:border-[#2c2c2c] flex justify-between items-center bg-gray-50 dark:bg-[#181818] shrink-0"><div><h2 class="text-lg sm:text-xl font-black text-gray-800 dark:text-gray-300 flex items-center gap-2">🏆 Ачивки</h2></div><button data-action="hideModal" data-arg="achievements-modal" class="text-3xl text-gray-400 hover:text-rose-500 transition-colors leading-none">&times;</button></div>
+            <div class="p-4 border-b border-gray-200 dark:border-[#2c2c2c] flex justify-between items-center bg-gray-50 dark:bg-[#181818] shrink-0"><div><h2 class="text-lg sm:text-xl font-black text-gray-800 dark:text-gray-300 flex items-center gap-2">Ачивки</h2></div><button data-action="hideModal" data-arg="achievements-modal" class="text-3xl text-gray-400 hover:text-rose-500 transition-colors leading-none">&times;</button></div>
             <div class="flex-grow p-4 overflow-y-auto custom-scroll bg-gray-100 dark:bg-[#121212]"><div class="ach-grid" id="achievements-grid"></div></div>
         </div>
     </div>
     
     <div id="mistakes-list-modal" class="fixed inset-0 bg-black/80 z-[10006] hidden flex-col items-center justify-center backdrop-blur-sm opacity-0 transition-opacity no-print modal-content-hidden">
         <div class="bg-white dark:bg-[#1e1e1e] rounded-2xl w-[95%] max-w-lg max-h-[80vh] flex flex-col shadow-2xl overflow-hidden">
-            <div class="p-4 border-b border-gray-200 dark:border-[#2c2c2c] flex justify-between items-center bg-rose-50 dark:bg-rose-900/10 shrink-0"><div><h2 class="text-lg font-black text-rose-600 dark:text-rose-400 flex items-center gap-2">🔥 Мои ошибки</h2></div><button data-action="hideModal" data-arg="mistakes-list-modal" class="text-3xl text-gray-400 hover:text-rose-500 transition-colors leading-none">&times;</button></div>
+            <div class="p-4 border-b border-gray-200 dark:border-[#2c2c2c] flex justify-between items-center shrink-0"><div><h2 class="ui-modal-title">Мои ошибки</h2></div><button data-action="hideModal" data-arg="mistakes-list-modal" class="text-3xl text-gray-400 hover:text-rose-500 transition-colors leading-none">&times;</button></div>
             <div class="flex-grow p-4 overflow-y-auto custom-scroll bg-gray-50 dark:bg-[#121212]" id="mistakes-list-container"></div>
         </div>
     </div>
 
     <div id="global-top-modal" class="fixed inset-0 bg-black/80 z-[10006] hidden flex-col items-center justify-center backdrop-blur-sm opacity-0 transition-opacity no-print modal-content-hidden">
         <div class="bg-white dark:bg-[#1e1e1e] rounded-2xl w-[95%] max-w-lg max-h-[85vh] flex flex-col shadow-2xl overflow-hidden">
-            <div class="p-4 border-b border-gray-200 dark:border-[#2c2c2c] flex justify-between items-center bg-blue-50 dark:bg-blue-900/10 shrink-0"><div><h2 class="text-lg font-black text-blue-600 dark:text-blue-400 flex items-center gap-2">🏆 Глобальный Топ</h2></div><button data-action="hideModal" data-arg="global-top-modal" class="text-3xl text-gray-400 hover:text-blue-500 transition-colors leading-none">&times;</button></div>
+            <div class="p-4 border-b border-gray-200 dark:border-[#2c2c2c] flex justify-between items-center shrink-0"><div><h2 class="ui-modal-title">Рейтинг</h2></div><button data-action="hideModal" data-arg="global-top-modal" class="text-3xl text-gray-400 hover:text-blue-500 transition-colors leading-none">&times;</button></div>
             <div class="flex-grow p-4 overflow-y-auto custom-scroll bg-gray-50 dark:bg-[#121212]" id="global-top-container"><p class="text-[10px] font-bold text-gray-500 uppercase tracking-widest text-center py-4">⏳ Загрузка...</p></div>
         </div>
     </div>
@@ -1344,7 +1344,7 @@
 
     <div id="profile-modal" class="fixed inset-0 bg-black/80 z-[10005] hidden flex-col items-center justify-center backdrop-blur-sm opacity-0 transition-opacity no-print modal-content-hidden">
         <div class="bg-white dark:bg-[#1e1e1e] rounded-3xl p-5 w-[90%] max-w-sm flex flex-col gap-4 shadow-2xl max-h-[92vh] overflow-y-auto custom-scroll">
-            <h3 class="font-black text-xl dark:text-gray-300 text-center uppercase tracking-widest shrink-0">👤 Профиль</h3>
+            <h3 class="font-black text-xl dark:text-gray-300 text-center uppercase tracking-widest shrink-0">Профиль</h3>
             <div class="bg-gray-50 dark:bg-[#181818] rounded-2xl p-3 border border-gray-200 dark:border-[#2c2c2c] flex flex-col gap-2 shrink-0">
                 <label class="hidden text-[10px] font-black text-gray-500 uppercase tracking-widest">Аккаунт Google</label>
                 <div id="profile-google-status" class="hidden text-[11px] font-bold text-gray-400">Не привязан</div>
@@ -1377,20 +1377,20 @@
             </div>
             <!-- Выбор темы удалён (2026-07-18): единственная тема — классика (skin-classic на body) -->
             <!-- PIN -->
-            <div class="shrink-0 bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-200 dark:border-indigo-800/40 rounded-2xl p-3 flex flex-col gap-2">
+            <div class="shrink-0 ui-panel p-3 flex flex-col gap-2">
                 <div class="flex items-center justify-between">
-                    <span class="text-[10px] font-black text-indigo-700 dark:text-indigo-400 uppercase tracking-wide">🔐 Привязка по PIN</span>
-                    <span class="text-[9px] text-gray-400 dark:text-gray-500">для смены устройства</span>
+                    <span class="ui-panel-title">Привязка по PIN</span>
+                    <span class="ui-hint">для смены устройства</span>
                 </div>
                 <div class="flex items-center gap-2">
-                    <div id="sync-pin-display" class="flex-1 min-w-0 bg-white dark:bg-[#181818] border border-indigo-200 dark:border-indigo-700/40 rounded-xl px-2 py-2 font-mono text-center text-[11px] text-gray-400 overflow-hidden">— нажми →</div>
-                    <button id="sync-pin-btn" onclick="window.showSyncPin&&window.showSyncPin()" class="shrink-0 bg-indigo-600 hover:bg-indigo-700 active:scale-95 text-white px-3 py-2 rounded-xl text-[10px] font-black uppercase transition-transform">📋 Мой PIN</button>
+                    <div id="sync-pin-display" class="flex-1 min-w-0 bg-white dark:bg-[#181818] border border-gray-200 dark:border-[#2c2c2c] rounded-xl px-2 py-2 font-mono text-center text-[11px] text-gray-400 overflow-hidden">— нажми →</div>
+                    <button id="sync-pin-btn" onclick="window.showSyncPin&&window.showSyncPin()" class="shrink-0 ui-btn">Мой PIN</button>
                 </div>
                 <div class="flex items-center gap-2">
                     <input type="text" id="sync-pin-input" maxlength="8" inputmode="numeric" placeholder="12345678" class="flex-1 min-w-0 bg-white dark:bg-[#181818] border border-gray-200 dark:border-[#2c2c2c] rounded-xl px-2 py-2 font-mono text-center font-black text-sm text-blue-600 dark:text-blue-400 outline-none">
-                    <button onclick="window.linkByPin&&window.linkByPin()" class="shrink-0 bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white px-3 py-2 rounded-xl text-[10px] font-black uppercase transition-transform">✅ Привязать</button>
+                    <button onclick="window.linkByPin&&window.linkByPin()" class="shrink-0 ui-btn is-primary">Привязать</button>
                 </div>
-                <p class="text-[9px] text-gray-400 dark:text-gray-500 leading-tight">Получи PIN на одном устройстве → введи на другом. Прогресс объединится.</p>
+                <p class="ui-hint">Получи PIN на одном устройстве и введи на другом — прогресс объединится.</p>
             </div>
             <!-- Документы и удаление аккаунта. Право на удаление, заявленное в
                  политике, обязано иметь кнопку — иначе политика фикция. -->
@@ -1404,7 +1404,7 @@
                     <a href="/ege/" target="_blank" rel="noopener" class="text-[11px] font-bold text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 underline">Банк заданий ФИПИ</a>
                 </div>
                 <button data-action="deleteAccount" class="w-full bg-white dark:bg-[#2c2c2c] border border-rose-200 dark:border-rose-900 rounded-xl py-2.5 font-black text-[11px] text-rose-600 dark:text-rose-400 active:scale-95 transition-transform hover:bg-rose-50 dark:hover:bg-rose-950">
-                    🗑 Удалить аккаунт и все данные
+                    Удалить аккаунт и все данные
                 </button>
             </div>
             <div class="flex gap-3 shrink-0"><button data-action="hideModal" data-arg="profile-modal" class="flex-1 bg-gray-100 hover:bg-gray-200 dark:bg-[#2c2c2c] dark:hover:bg-zinc-700 text-gray-800 dark:text-gray-300 py-3.5 rounded-2xl font-black uppercase tracking-wider transition-colors text-sm">Отмена</button><button data-action="saveProfileName" class="flex-1 bg-blue-600 hover:bg-blue-700 text-white py-3.5 rounded-2xl font-black uppercase tracking-wider transition-colors shadow-md active:scale-95 text-sm">Сохранить</button></div>
@@ -1413,7 +1413,7 @@
 
     <div id="stats-modal" class="fixed inset-0 bg-black/70 z-[10001] hidden flex-col items-center justify-center backdrop-blur-md opacity-0 transition-opacity no-print modal-content-hidden">
         <div class="bg-gray-50 dark:bg-[#121212] rounded-3xl w-[90%] max-w-md p-6 flex flex-col shadow-2xl overflow-hidden max-h-[90vh]">
-            <div class="flex justify-between items-center mb-6 shrink-0"><h2 class="text-xl font-black text-gray-800 dark:text-gray-300 uppercase tracking-widest">📊 Статистика</h2><button data-action="hideModal" data-arg="stats-modal" class="text-3xl text-gray-400 hover:text-gray-800 dark:hover:text-gray-300 leading-none">&times;</button></div>
+            <div class="flex justify-between items-center mb-6 shrink-0"><h2 class="text-xl font-black text-gray-800 dark:text-gray-300 uppercase tracking-widest">Статистика</h2><button data-action="hideModal" data-arg="stats-modal" class="text-3xl text-gray-400 hover:text-gray-800 dark:hover:text-gray-300 leading-none">&times;</button></div>
             <div class="flex-grow overflow-y-auto custom-scroll pr-2 pb-4">
                 <!-- Навигация, а не показатели: раньше «Профиль» и «Ачивки» стояли
                      такими же карточками, как цифры, и спорили с ними за внимание. -->
@@ -1466,11 +1466,11 @@
     <!-- jsPDF грузится лениво (см. loadJsPDFOnDemand в cloud-sync.js) — не нужен при старте -->
 
     <!-- === PWA + first-party cloud sync loader === -->
-    <script src="pwa.js?v=20261001-6" defer></script>
+    <script src="pwa.js?v=20261001-7" defer></script>
 
     <!-- Ядро (факты, ~659 КБ): нужно для лобби и заданий. Приложение ОТКРЫВАЕТСЯ сразу
          после него — defer парсит HTML параллельно, порядок выполнения гарантирован. -->
-    <script src="data.js?v=20261001-6" defer></script>
+    <script src="data.js?v=20261001-7" defer></script>
     <!-- app:ready диспатчит инлайн-вотчер готовности в начале <body> (см. watchBoot):
          отдельный boot-ready.js убран — свежий файл не лежал в старом SW-кэше и на
          моргнувшей сети вис, не давая снять заставку. -->
