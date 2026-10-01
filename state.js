@@ -165,6 +165,11 @@ function unifyTask7Applies(rows) {
         // Успенский собор, Покрова на Нерли и Золотые ворота созданы при
         // Андрее Боголюбском: формулировки «по указу»/«в правление» взаимны.
         [/андрея боголюбского/i, [8, 9, 12]],
+        // Белокаменной резьбой славятся все владимиро-суздальские храмы: Дмитриевский,
+        // Покрова на Нерли, Успенский (жалоба 01.10: «такой памятник разве один?»).
+        // Характеристика Дмитриевского теперь называет Всеволода, но и общая
+        // «белокаменная резьба» не должна ставить их рядом.
+        [/белокаменн[а-я]* резьб/i, [7, 8, 9]],
         // Автор «Поучения» и авторы летописно-житийных текстов жили в одну
         // эпоху; рядом с общей характеристикой о современнике Мономаха
         // не оставляем второй защитимый памятник.
@@ -383,7 +388,10 @@ function getFilteredPool(period, limit) {
         if (lessonNow && lessonNow.segTo && window.state._lessonPoolRelax) return pool;
         if (lessonNow && lessonNow.segTo && !window.state._lessonPoolRelax && window.state.currentMode === 'normal' && !window.state.isHomeworkMode
             && !window.state.mistakeFocus && !window.state.reviewFocus) {
-            const inSeg = f => { const y = getYearFromFact(f); return y >= lessonNow.segFrom && y <= lessonNow.segTo; };
+            // «Год урока» (lesson-plan.js): редкие факты задания из главы, где его нет,
+            // относятся к следующей — Десятинная церковь (996) входит в «Русь XI–XII».
+            const ly = f => (window.LessonPlan && window.LessonPlan.lessonYear) ? window.LessonPlan.lessonYear(f, window.state.currentTask) : getYearFromFact(f);
+            const inSeg = f => { const y = ly(f); return y >= lessonNow.segFrom && y <= lessonNow.segTo; };
             const seg = pool.filter(inSeg);
             const unseen = seg.filter(f => !fs[factKey(f)]);
             const pri = unseen.length ? unseen : seg.filter(f => { const d = fs[factKey(f)]; return d && !(d.level >= 1); });
@@ -437,7 +445,8 @@ function _lessonReviewPool(lesson, limit, now) {
     const inBase = new Set(base.map(f => factKey(f)));
     const mist = (window.state.mistakesPool || []).filter(m => m.task === task && inBase.has(factKey(m.fact))).map(m => m.fact);
     const due = base.filter(f => { const d = fs[factKey(f)]; return d && d.level > 0 && d.nextReview <= now; });
-    const earlier = base.filter(f => getYearFromFact(f) < lesson.segFrom);
+    const ly = f => (window.LessonPlan && window.LessonPlan.lessonYear) ? window.LessonPlan.lessonYear(f, task) : getYearFromFact(f);
+    const earlier = base.filter(f => ly(f) < lesson.segFrom);
     const gapSeen = earlier.filter(f => { const d = fs[factKey(f)]; return d && !(d.level >= 1); });
     const gapNew = earlier.filter(f => !fs[factKey(f)]);
     const want = Math.max(limit || 1, 1) * 2;

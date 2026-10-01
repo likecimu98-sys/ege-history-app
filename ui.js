@@ -2419,17 +2419,20 @@ function _unlearnedCountsByTask(wp) {
 const NEW_ROTATION = ['task4', 'task1', 'task3', 'task5', 'task7'];
 const LINES_PER_TASK = 16;
 function _dtSolvedKey(t) { return 'solved' + t.charAt(0).toUpperCase() + t.slice(1); }
+// Задание 7 — реже и короче остальных (владелец 01.10: «7-го должно быть меньше,
+// оно бесит»): его строки за день считаются вдвое, и подход к нему — 8 строк, не 16.
+// Итог: на два подхода к другим номерам — примерно один короткий к 7-му.
+const TASK_WEIGHT = { task7: 2 };
+const linesPerTask = t => t === 'task7' ? LINES_PER_TASK / 2 : LINES_PER_TASK;
 function _pickNewTask(unlearned) {
     const today = (window.state.stats.dailyStats && window.state.stats.dailyStats[getTodayString()]) || {};
     const cand = NEW_ROTATION.filter(t => (unlearned.by[t] || 0) > 0);
     if (!cand.length) return null;
-    let best = cand[0], bestLines = today[_dtSolvedKey(cand[0])] || 0;
-    for (const t of cand) {
-        const lines = today[_dtSolvedKey(t)] || 0;
-        if (lines < bestLines) { best = t; bestLines = lines; } // строгое < → при равенстве раньше по порядку
-    }
-    let rem = LINES_PER_TASK - (bestLines % LINES_PER_TASK);
-    if (rem === LINES_PER_TASK && bestLines > 0) rem = LINES_PER_TASK; // ровно кратно — новый цикл
+    const load = t => (today[_dtSolvedKey(t)] || 0) * (TASK_WEIGHT[t] || 1);
+    let best = cand[0];
+    for (const t of cand) if (load(t) < load(best)) best = t; // строгое < → при равенстве раньше по порядку
+    const per = linesPerTask(best), bestLines = today[_dtSolvedKey(best)] || 0;
+    const rem = per - (bestLines % per);
     const left = Math.max(1, Math.min(rem, unlearned.by[best] || 1));
     return { task: best, left };
 }

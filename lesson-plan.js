@@ -62,24 +62,52 @@
     function index() {
         const sig = TASKS.map(function (t) { return _data(t).length; }).join(',');
         if (_idx && sig === _sig) return _idx;
-        const byTask = {}, all = new Map();
+        const byTask = {}, all = new Map(), real = new Map();
         TASKS.forEach(function (t) {
-            const m = new Map();
+            const raw = new Map();
             _data(t).forEach(function (f) {
                 const y = _year(f);
                 if (!(y >= MIN_YEAR && y <= MAX_YEAR)) return;
                 let k;
                 try { k = factKey(f, t); } catch (e) { return; }
-                if (!k || m.has(k)) return;
-                m.set(k, y);
-                if (!all.has(k)) all.set(k, { y: y, t: t });
+                if (!k || raw.has(k)) return;
+                raw.set(k, y);
+            });
+            // «Год урока»: если в главе фактов задания меньше NATIVE_MIN, задания в
+            // этой главе нет вовсе, а её редкие факты относятся к СЛЕДУЮЩЕЙ главе, где
+            // оно есть (после последней такой главы — к предыдущей). Владелец 01.10:
+            // «в 1 главе нет фактов по 7-му — пусть 7-е начинается со 2-й главы, без
+            // костылей». Так Десятинная церковь (996) — часть «Руси XI–XII» по
+            // культуре, а не одинокий факт, который глава 1 то требовала, то нет.
+            const cnt = CHAPTERS.map(function () { return 0; });
+            raw.forEach(function (y) { const i = chapterOf(y); if (i >= 0) cnt[i]++; });
+            const owner = CHAPTERS.map(function (c, i) {
+                if (cnt[i] >= NATIVE_MIN) return i;
+                for (let j = i + 1; j < CHAPTERS.length; j++) if (cnt[j] >= NATIVE_MIN) return j;
+                for (let j = i - 1; j >= 0; j--) if (cnt[j] >= NATIVE_MIN) return j;
+                return i;
+            });
+            const m = new Map();
+            raw.forEach(function (y, k) {
+                const i = chapterOf(y), j = i < 0 ? i : owner[i];
+                const ly = (i < 0 || j === i) ? y : (j > i ? CHAPTERS[j].from : CHAPTERS[j].to);
+                m.set(k, ly);
+                if (!all.has(k)) { all.set(k, { y: ly, t: t }); real.set(k, y); }
             });
             byTask[t] = m;
         });
-        _idx = { byTask: byTask, all: all };
+        _idx = { byTask: byTask, all: all, real: real };
         _sig = sig;
         _probeCache.clear(); // данные поменялись — пробы сборки таблиц устарели
         return _idx;
+    }
+
+    // Год факта для урока (см. «год урока» в index): настоящий, если факт в своей главе.
+    function lessonYear(f, t) {
+        let k;
+        try { k = factKey(f, t); } catch (e) { return _year(f); }
+        const m = index().byTask[t];
+        return m && m.has(k) ? m.get(k) : _year(f);
     }
 
     // «Свои» задания главы — те, по которым в ней хватает фактов хотя бы на таблицу.
@@ -259,6 +287,15 @@
         while (!_enough(t, a, b) && ci > 0 && CHAPTERS[ci - 1].to >= floor) { ci--; a = Math.max(floor, CHAPTERS[ci].from); }
         while (!_enough(t, a, b) && cj < CHAPTERS.length - 1) { cj++; b = CHAPTERS[cj].to; }
         while (!_enough(t, a, b) && ci > 0) { ci--; a = CHAPTERS[ci].from; }
+        // Перенесённые в главу факты (Десятинная церковь, 996 — в «Руси XI–XII»)
+        // живут в своих настоящих годах: окно таблиц должно их захватывать.
+        const idx = index();
+        idx.byTask[t].forEach(function (ly, k) {
+            if (ly < a || ly > b) return;
+            const ry = idx.real.has(k) ? idx.real.get(k) : ly;
+            if (ry < a) a = ry;
+            if (ry > b) b = ry;
+        });
         return { from: a, to: b };
     }
 
@@ -456,6 +493,7 @@
         linesToClose: linesToClose,
         progress: progress,
         nativeTypes: nativeTypes,
+        lessonYear: lessonYear,
         setProbe: setProbe,
         stripHtml: stripHtml,
         openPath: openPath,

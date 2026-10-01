@@ -182,4 +182,25 @@ assert.match(read('cloud-sync.js'), /!window\.mistakeResolved\(m, st\.factStreak
 assert.match(read('index.html'), /<script src="lesson-plan\.js\?v=[^"]+" defer><\/script>\s*<script src="ui\.js/, 'lesson-plan.js не подключён перед ui.js');
 assert.match(read('service-worker.js'), /\.\/lesson-plan\.js\?v=/, 'lesson-plan.js не в прекэше SW');
 
+// Владелец 01.10: «в 1-й главе нет фактов по 7-му — пусть 7-е начинается со 2-й
+// главы, без костылей» и «7-го должно быть меньше». Редкие факты задания уходят в
+// следующую главу, где оно есть; окно таблиц захватывает их настоящие годы.
+{
+  const dest = ctx.task7Data.find(f => /Десятинная/.test(f.culture));
+  assert.ok(dest, 'нет Десятинной церкви в задании 7');
+  assert.ok(!LP.nativeTypes(CH[0].from, CH[0].to).has('task7'), 'в «Руси IX–X» снова есть задание 7');
+  assert.ok(LP.nativeTypes(CH[1].from, CH[1].to).has('task7'), 'в «Руси XI–XII» нет задания 7');
+  assert.strictEqual(LP.lessonYear(dest, 'task7'), CH[1].from, 'Десятинная церковь не перенесена в главу 2');
+  assert.strictEqual(LP.unlearnedByTask({}, CH[0].from, CH[0].to).by.task7, 0, 'урок главы 1 предлагает задание 7');
+  const w7 = LP.taskWindow({ from: CH[1].from, to: CH[1].to }, 'task7', 862);
+  assert.ok(w7.from <= 996, 'окно таблиц главы 2 не захватывает Десятинную церковь: ' + w7.from);
+  // Ни у одного задания в главе не остаётся 1–3 «сиротских» фактов.
+  ['task1', 'task3', 'task4', 'task5', 'task7'].forEach(t => CH.forEach(c => {
+    let n = 0; idx.byTask[t].forEach(y => { if (y >= c.from && y <= c.to) n++; });
+    assert.ok(n === 0 || n >= 4, t + ' в главе «' + c.name + '»: ' + n + ' факт(а) — меньше таблицы');
+  }));
+  assert.ok(ui.includes("const TASK_WEIGHT = { task7: 2 };"), 'задание 7 снова выпадает наравне с остальными');
+  assert.ok(ui.includes("t === 'task7' ? LINES_PER_TASK / 2"), 'подход к заданию 7 снова 16 строк');
+}
+
 console.log('lesson-plan: OK — 23 главы, ' + idx.all.size + ' фактов, сценарии: новичок, закрытие, «знаю с первого раза», граница класса, свой период, вразброс, выбор главы, монотонность, окна таблиц, долг');
